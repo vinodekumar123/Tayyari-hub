@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { getAuth, onAuthStateChanged } from "firebase/auth";
 import { Menu, X } from "lucide-react";
-import app from "../../app/firebase"; // Make sure your Firebase app is initialized here
+import { app } from '../../app/firebase';
 
 const Navbar = () => {
   const [mobileOpen, setMobileOpen] = useState(false);
