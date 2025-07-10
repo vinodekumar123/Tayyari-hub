@@ -52,7 +52,7 @@ export default function StudentDashboard() {
   const studentData = {
     name: 'Ahmad Hassan',
     course: 'MDCAT',
-    profilePicture: '/api/placeholder/150/150',
+    profilePicture: '',
     overallProgress: 78,
     currentStreak: 15,
     totalQuizzes: 45,
