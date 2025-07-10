@@ -12,7 +12,6 @@ import { useRouter } from 'next/navigation';
 
 export default function AdminDashboard() {
   const router = useRouter();
-  const [userRole, setUserRole] = useState<'student' | 'admin'>('admin');
   const [adminUser, setAdminUser] = useState<any>(null);
   const [students, setStudents] = useState<any[]>([]);
 
