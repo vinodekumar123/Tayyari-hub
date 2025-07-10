@@ -28,17 +28,11 @@ import { useRouter } from 'next/navigation';
 
 export default function CompletedQuizzes() {
   const router = useRouter();
-  const [userRole, setUserRole] = useState<'student' | 'admin'>('student');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCourse, setSelectedCourse] = useState('all');
   const [sortBy, setSortBy] = useState('recent');
 
-  const handleRoleSwitch = (role: 'student' | 'admin') => {
-    setUserRole(role);
-    if (role === 'admin') {
-      router.push('/dashboard/admin');
-    }
-  };
+
 
   const completedQuizzes = [
     {
@@ -161,7 +155,7 @@ export default function CompletedQuizzes() {
 
   return (
     <div className="flex h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-purple-50">
-      <Sidebar userRole={userRole} onRoleSwitch={handleRoleSwitch} />
+      <Sidebar />
 
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Header */}

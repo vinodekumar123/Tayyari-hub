@@ -39,7 +39,6 @@ export default function StudentDashboard() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState('overview');
   const [greeting, setGreeting] = useState('');
-  const [userRole, setUserRole] = useState<'student' | 'admin'>('student');
   
   useEffect(() => {
     const hour = new Date().getHours();
@@ -48,12 +47,7 @@ export default function StudentDashboard() {
     else setGreeting('Good Evening');
   }, []);
 
-  const handleRoleSwitch = (role: 'student' | 'admin') => {
-    setUserRole(role);
-    if (role === 'admin') {
-      router.push('/dashboard/admin');
-    }
-  };
+ 
   
   const studentData = {
     name: 'Ahmad Hassan',
