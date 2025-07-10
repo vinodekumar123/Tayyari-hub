@@ -56,12 +56,14 @@ const [chapters, setChapters] = useState<string[]>([]);
     accessType: 'free',
     resultVisibility: 'immediate',
     selectedQuestions: [] as any[],
-    questionFilters: {
-      subject: '',
-      chapter: '',
-      difficulty: '',
-      searchTerm: ''
-    }
+questionFilters: {
+  subject: '',
+  chapter: '',
+  difficulty: '',
+  searchTerm: '',
+  topic: '' // ✅ Add this line
+}
+
   });
 
   useEffect(() => {
