@@ -6,9 +6,9 @@ import { Sidebar } from '@/components/ui/sidebar';
 import { useState } from 'react';
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
-  const [userRole, setUserRole] = useState<'admin' | 'editor' | 'viewer'>('admin');
+  const [userRole, setUserRole] = useState<'admin'>('admin');
 
-  const handleRoleSwitch = (newRole: 'admin' | 'editor' | 'viewer') => {
+  const handleRoleSwitch = (newRole: 'admin') => {
     setUserRole(newRole);
   };
 
