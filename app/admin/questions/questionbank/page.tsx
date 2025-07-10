@@ -55,16 +55,17 @@ const [filtered, setFiltered] = useState<Question[]>([]);
 }, []);
 
 
-  const handleSearch = (e) => {
-    const keyword = e.target.value.toLowerCase();
-    setSearch(keyword);
-    const filtered = questions.filter((q) =>
-      q.course?.toLowerCase().includes(keyword) ||
-      q.subject?.toLowerCase().includes(keyword) ||
-      q.chapter?.toLowerCase().includes(keyword)
-    );
-    setFiltered(filtered);
-  };
+  const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const keyword = e.target.value.toLowerCase();
+  setSearch(keyword);
+  const filtered = questions.filter((q) =>
+    q.course?.toLowerCase().includes(keyword) ||
+    q.subject?.toLowerCase().includes(keyword) ||
+    q.chapter?.toLowerCase().includes(keyword)
+  );
+  setFiltered(filtered);
+};
+
 
   const handleDelete = async (id) => {
     const confirm = window.confirm("Are you sure you want to delete this question?");
