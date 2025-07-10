@@ -67,15 +67,16 @@ const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
 };
 
 
-  const handleDelete = async (id) => {
-    const confirm = window.confirm("Are you sure you want to delete this question?");
-    if (!confirm) return;
+const handleDelete = async (id: string) => {
+  const confirm = window.confirm("Are you sure you want to delete this question?");
+  if (!confirm) return;
 
-    await deleteDoc(doc(db, "questions", id));
-    const updated = questions.filter((q) => q.id !== id);
-    setQuestions(updated);
-    setFiltered(updated);
-  };
+  await deleteDoc(doc(db, "questions", id));
+  const updated = questions.filter((q) => q.id !== id);
+  setQuestions(updated);
+  setFiltered(updated);
+};
+
 
   return (
     <div className="p-6 max-w-7xl mx-auto">

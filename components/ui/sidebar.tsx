@@ -10,6 +10,19 @@ import {
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
+type MenuItem = {
+  icon: React.ElementType;
+  label: string;
+  href: string;
+  badge?: string | null;
+};
+
+type Section = {
+  section: string;
+  title: string;
+  items: MenuItem[];
+};
+
 export function Sidebar() {
   const pathname = usePathname();
   const [expandedSections, setExpandedSections] = useState<string[]>(['main']);
@@ -22,7 +35,7 @@ export function Sidebar() {
     );
   };
 
-  const adminMenuItems = [
+  const adminMenuItems: Section[] = [
     {
       section: 'main',
       title: 'Main',
@@ -36,24 +49,24 @@ export function Sidebar() {
       title: 'Content Management',
       items: [
         { icon: BookOpen, label: 'Courses', href: '/admin/courses', badge: null },
-        { icon: Database, label: 'Question Bank', href: '/admin/questions/questionbank' },
-        { icon: Plus, label: 'Add Question', href: '/admin/questions/create' },
-        { icon: Trophy, label: 'Quizzes', href: '/admin/quizzes/quizebank' },
-        { icon: Plus, label: 'Create Quiz', href: '/admin/quizzes/create' },
+        { icon: Database, label: 'Question Bank', href: '/admin/questions/questionbank', badge: null },
+        { icon: Plus, label: 'Add Question', href: '/admin/questions/create', badge: null },
+        { icon: Trophy, label: 'Quizzes', href: '/admin/quizzes/quizebank', badge: null },
+        { icon: Plus, label: 'Create Quiz', href: '/admin/quizzes/create', badge: null },
       ]
     },
     {
       section: 'users',
       title: 'User Management',
       items: [
-        { icon: Users, label: 'Students', href: '/admin/students' },
+        { icon: Users, label: 'Students', href: '/admin/students', badge: null },
       ]
     },
     {
       section: 'system',
       title: 'Profile',
       items: [
-        { icon: Settings, label: 'Settings', href: '/admin/settings' },
+        { icon: Settings, label: 'Settings', href: '/admin/settings', badge: null },
       ]
     }
   ];
@@ -96,15 +109,21 @@ export function Sidebar() {
                 <div className="space-y-1">
                   {section.items.map((item) => (
                     <Link key={item.href} href={item.href}>
-                      <div className={`flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-all duration-200 group ${
-                        isActive(item.href)
-                          ? 'bg-gradient-to-r from-purple-100 to-blue-100 text-purple-700 shadow-sm'
-                          : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
-                      }`}>
+                      <div
+                        className={`flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-all duration-200 group ${
+                          isActive(item.href)
+                            ? 'bg-gradient-to-r from-purple-100 to-blue-100 text-purple-700 shadow-sm'
+                            : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+                        }`}
+                      >
                         <div className="flex items-center space-x-3">
-                          <item.icon className={`h-4 w-4 ${
-                            isActive(item.href) ? 'text-purple-600' : 'text-gray-400 group-hover:text-gray-600'
-                          }`} />
+                          <item.icon
+                            className={`h-4 w-4 ${
+                              isActive(item.href)
+                                ? 'text-purple-600'
+                                : 'text-gray-400 group-hover:text-gray-600'
+                            }`}
+                          />
                           <span className="font-medium">{item.label}</span>
                         </div>
                         {item.badge && (

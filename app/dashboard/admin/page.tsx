@@ -32,12 +32,7 @@ export default function AdminDashboard() {
     return () => unsubscribeFirestore();
   }, []);
 
-  const handleRoleSwitch = (role: 'student' | 'admin') => {
-    setUserRole(role);
-    if (role === 'student') {
-      router.push('/dashboard/student');
-    }
-  };
+ 
 
   const dashboardStats = {
     totalStudents: students.length,
@@ -48,7 +43,7 @@ export default function AdminDashboard() {
   return (
     <div className="flex h-screen bg-gray-50">
       {/* Sidebar */}
-      <Sidebar userRole={userRole} onRoleSwitch={handleRoleSwitch} />
+      <Sidebar  />
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col overflow-hidden">

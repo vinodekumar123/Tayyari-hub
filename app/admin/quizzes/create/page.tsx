@@ -85,14 +85,27 @@ questionFilters: {
 
   fetchCourses();
 }, []);
-const [availableQuestions, setAvailableQuestions] = useState([]);
+const [availableQuestions, setAvailableQuestions] = useState<Question[]>([]);
+
+type Question = {
+  id: string;
+  questionText: string;
+  options: string[];
+  correctAnswer: string;
+  course?: string;
+  subject?: string;
+  chapter?: string;
+  difficulty?: string;
+  topic?: string;
+  usedInQuizzes?: number;
+};
 
 useEffect(() => {
   const fetchQuestions = async () => {
     const snapshot = await getDocs(collection(db, "questions"));
-    const questions = snapshot.docs.map(doc => ({
+    const questions: Question[] = snapshot.docs.map((doc) => ({
       id: doc.id,
-      ...doc.data()
+      ...(doc.data() as Omit<Question, 'id'>),
     }));
     setAvailableQuestions(questions);
   };
@@ -126,14 +139,14 @@ useEffect(() => {
 
 
 
-  const handleInputChange = (field: string, value: any) => {
+const handleInputChange = (field: string, value: any) => {
     setQuizConfig(prev => ({
       ...prev,
       [field]: value
     }));
   };
 
-  const handleQuestionSelection = (question: any) => {
+const handleQuestionSelection = (question: Question) => {
     setQuizConfig(prev => ({
       ...prev,
       selectedQuestions: prev.selectedQuestions.some(q => q.id === question.id)
@@ -147,8 +160,10 @@ useEffect(() => {
       const matchesSubject = !quizConfig.questionFilters.subject || q.subject === quizConfig.questionFilters.subject;
       const matchesChapter = !quizConfig.questionFilters.chapter || q.chapter === quizConfig.questionFilters.chapter;
       const matchesDifficulty = !quizConfig.questionFilters.difficulty || q.difficulty === quizConfig.questionFilters.difficulty;
-      const matchesSearch = !quizConfig.questionFilters.searchTerm || 
-        q.question.toLowerCase().includes(quizConfig.questionFilters.searchTerm.toLowerCase());
+      const matchesSearch =
+  !quizConfig.questionFilters.searchTerm ||
+  (q.questionText?.toLowerCase().includes(quizConfig.questionFilters.searchTerm.toLowerCase()) ?? false);
+
       
       return matchesSubject && matchesChapter && matchesDifficulty && matchesSearch;
     });
@@ -593,13 +608,20 @@ useEffect(() => {
       <SelectValue placeholder="All topics" />
     </SelectTrigger>
     <SelectContent>
-      <SelectItem value="__all-topics__">All topics</SelectItem>
-      {[...new Set(availableQuestions.map((q) => q.topic).filter(Boolean))].map((topic) => (
-        <SelectItem key={topic} value={topic}>
-          {topic}
-        </SelectItem>
-      ))}
-    </SelectContent>
+  <SelectItem value="__all-topics__">All topics</SelectItem>
+  {Array.from(
+    new Set(
+      availableQuestions
+        .map((q) => q.topic)
+        .filter((topic): topic is string => typeof topic === 'string')
+    )
+  ).map((topic) => (
+    <SelectItem key={topic} value={topic}>
+      {topic}
+    </SelectItem>
+  ))}
+</SelectContent>
+
   </Select>
 </div>
 
@@ -643,9 +665,10 @@ useEffect(() => {
                   <div className="flex items-center space-x-2">
                     <Badge variant="outline">{question.subject}</Badge>
                     <Badge variant="outline">{question.chapter}</Badge>
-                    <Badge className={getDifficultyColor(question.difficulty)}>
-                      {question.difficulty}
-                    </Badge>
+                  <Badge className={getDifficultyColor(question.difficulty ?? 'Easy')}>
+  {question.difficulty ?? 'Easy'}
+</Badge>
+
                     <span className="text-sm text-gray-500">
                       Used in {question.usedInQuizzes || 0} quizzes
                     </span>

@@ -42,26 +42,57 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 
-export default function enrollment() {
+export default function Enrollment() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCourse, setSelectedCourse] = useState('all');
   const [selectedStatus, setSelectedStatus] = useState('all');
-  const [students, setStudents] = useState([]);
+const [students, setStudents] = useState<Student[]>([]);
   const [editModal, setEditModal] = useState(false);
-  const [currentStudent, setCurrentStudent] = useState(null);
-  const [editData, setEditData] = useState({});
+const [currentStudent, setCurrentStudent] = useState<Student | null>(null);
+const [editData, setEditData] = useState<Partial<Student>>({});
+type Student = {
+  id: string;
+  fullName: string;
+  email: string;
+  phone: string;
+  course?: string;
+  university?: string;
+  campus?: string;
+  city?: string;
+  degree?: string;
+  plan?: string;
+  uid?: string;
+  premium?: boolean;
+  [key: string]: any; // ✅ index signature
+};
 
-  useEffect(() => {
-    const unsubscribe = onSnapshot(collection(db, 'users'), (snapshot) => {
-      const data = snapshot.docs.map(doc => ({
+useEffect(() => {
+  const unsubscribe = onSnapshot(collection(db, 'users'), (snapshot) => {
+    const data: Student[] = snapshot.docs.map(doc => {
+      const raw = doc.data();
+      return {
         id: doc.id,
-        ...doc.data(),
-        profileImage: `https://ui-avatars.com/api/?name=${encodeURIComponent(doc.data().fullName || '')}&background=random&size=128`
-      }));
-      setStudents(data);
+        fullName: raw.fullName || '',
+        email: raw.email || '',
+        phone: raw.phone || '',
+        course: raw.course || '',
+        university: raw.university,
+        campus: raw.campus,
+        city: raw.city,
+        degree: raw.degree,
+        plan: raw.plan,
+        uid: raw.uid,
+        premium: raw.premium,
+        status: raw.status,
+        profileImage: `https://ui-avatars.com/api/?name=${encodeURIComponent(raw.fullName || '')}&background=random&size=128`,
+      };
     });
-    return () => unsubscribe();
-  }, []);
+    setStudents(data);
+  });
+
+  return () => unsubscribe();
+}, []);
+
 
 
   const filteredStudents = students.filter(student => {
@@ -72,30 +103,32 @@ export default function enrollment() {
     return matchesSearch && matchesCourse && matchesStatus;
   });
 
-  const handleEditClick = (student) => {
-    setCurrentStudent(student);
-    setEditData({ ...student });
-    setEditModal(true);
-  };
+ const handleEditClick = (student: Student) => {
+  setCurrentStudent(student);
+  setEditData({ ...student });
+  setEditModal(true);
+};
+const handleEditChange = <K extends keyof Student>(key: K, value: Student[K]) => {
+  setEditData((prev) => ({ ...prev, [key]: value }));
+};
 
-  const handleEditChange = (key, value) => {
-    setEditData(prev => ({ ...prev, [key]: value }));
-  };
+const handleEditSave = async () => {
+  if (!editData.fullName?.trim() || !editData.phone?.trim()) {
+    alert('Full name and phone are required.');
+    return;
+  }
 
-  const handleEditSave = async () => {
-    if (!editData.fullName?.trim() || !editData.phone?.trim()) {
-      alert('Full name and phone are required.');
-      return;
-    }
-
-    try {
-      await updateDoc(doc(db, 'users', currentStudent.id), editData);
+  try {
+    if (currentStudent?.id) {
+      const { id, ...dataToUpdate } = editData; // remove id before saving
+      await updateDoc(doc(db, 'users', currentStudent.id), dataToUpdate);
       setEditModal(false);
-    } catch (err) {
-      console.error('Error updating student:', err);
-      alert('Failed to save changes.');
     }
-  };
+  } catch (err) {
+    console.error('Error updating student:', err);
+    alert('Failed to save changes.');
+  }
+};
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -170,14 +203,15 @@ export default function enrollment() {
           </DialogHeader>
           {currentStudent && (
             <div className="space-y-3">
-              {['fullName', 'email', 'phone', 'course', 'university', 'campus', 'city', 'degree', 'plan', 'uid'].map((field) => (
-                <Input
-                  key={field}
-                  placeholder={field.charAt(0).toUpperCase() + field.slice(1)}
-                  value={editData[field] || ''}
-                  onChange={(e) => handleEditChange(field, e.target.value)}
-                />
-              ))}
+             {['fullName', 'email', 'phone', 'course', 'university', 'campus', 'city', 'degree', 'plan', 'uid'].map((field) => (
+  <Input
+    key={field}
+    placeholder={field.charAt(0).toUpperCase() + field.slice(1)}
+    value={String(editData[field] ?? '')}
+    onChange={(e) => handleEditChange(field, e.target.value)}
+  />
+))}
+
             </div>
           )}
           <DialogFooter className="mt-4">
