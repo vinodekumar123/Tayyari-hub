@@ -78,7 +78,7 @@ export default function OnboardingPage() {
       });
 
       if (choice === 'free') {
-        router.push('/dashboard/student');
+        router.push('/dashboard/admin');
       } else {
         router.push('/premium');
       }

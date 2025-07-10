@@ -41,7 +41,7 @@ export default function LoginPage() {
     setIsLoading(true);
     try {
       await signInWithEmailAndPassword(auth, email, password);
-        router.push('/dashboard/student');
+        router.push('/dashboard/admin');
     } catch (error) {
       console.error('Login error:', error);
     } finally {
