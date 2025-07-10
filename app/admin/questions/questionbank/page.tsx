@@ -17,8 +17,20 @@ import { Pencil, Trash, Plus, Loader2 } from "lucide-react";
 
 const QuestionBankPage = () => {
   const router = useRouter();
-  const [questions, setQuestions] = useState([]);
-  const [filtered, setFiltered] = useState([]);
+ type Question = {
+  id: string;
+  questionText: string;
+  options: string[];
+  correctAnswer: string;
+  course?: string;
+  subject?: string;
+  chapter?: string;
+  difficulty?: string;
+};
+
+const [questions, setQuestions] = useState<Question[]>([]);
+const [filtered, setFiltered] = useState<Question[]>([]);
+
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
 
