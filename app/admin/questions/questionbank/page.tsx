@@ -55,7 +55,7 @@ const [filtered, setFiltered] = useState<Question[]>([]);
 }, []);
 
 
-  const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
+const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
   const keyword = e.target.value.toLowerCase();
   setSearch(keyword);
   const filtered = questions.filter((q) =>
