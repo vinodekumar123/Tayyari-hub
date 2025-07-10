@@ -482,13 +482,14 @@ const availableTopics = Array.isArray(selectedChapter) ? selectedChapter : [];
                       <SelectTrigger className={errors.subject ? 'border-red-500' : ''}>
                         <SelectValue placeholder="Select subject" />
                       </SelectTrigger>
-                  <SelectContent>
-  {availableSubjects.map(subject => (
+    <SelectContent>
+  {availableSubjects.map((subject: string) => (
     <SelectItem key={subject} value={subject}>
       {subject}
     </SelectItem>
   ))}
 </SelectContent>
+
 
                     </Select>
                     {errors.subject && (
