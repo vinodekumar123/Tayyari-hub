@@ -427,7 +427,6 @@ useEffect(() => {
                       <SelectContent>
                         <SelectItem value="free">Free</SelectItem>
                         <SelectItem value="paid">Paid</SelectItem>
-                        <SelectItem value="enrollment">Enrollment Required</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
