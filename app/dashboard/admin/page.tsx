@@ -43,7 +43,6 @@ export default function AdminDashboard() {
     totalStudents: students.length,
     activeQuizzes: 0,
     totalQuestions: 0,
-    pendingEnrollments: 0
   };
 
   return (
@@ -125,19 +124,7 @@ export default function AdminDashboard() {
               </CardContent>
             </Card>
 
-            <Card className="hover:shadow-lg transition-shadow">
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-600">Pending Enrollments</p>
-                    <p className="text-2xl font-bold text-gray-900">{dashboardStats.pendingEnrollments}</p>
-                  </div>
-                  <div className="p-3 bg-orange-100 rounded-full">
-                    <AlertCircle className="h-6 w-6 text-orange-600" />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+   
           </div>
 
           {/* Quick Actions */}
