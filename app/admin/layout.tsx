@@ -1,18 +1,21 @@
-// app/dashboard/layout.tsx or app/(app)/layout.tsx
-import { Sidebar } from '../.././components/ui/sidebar';
+// app/admin/layout.tsx
 
-export default function DashboardLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+'use client';
+
+import { Sidebar } from '@/components/ui/sidebar';
+import { useState } from 'react';
+
+export default function AdminLayout({ children }: { children: React.ReactNode }) {
+  const [userRole, setUserRole] = useState<'admin' | 'editor' | 'viewer'>('admin');
+
+  const handleRoleSwitch = (newRole: 'admin' | 'editor' | 'viewer') => {
+    setUserRole(newRole);
+  };
+
   return (
     <div className="flex h-screen">
-      <Sidebar
-      />
-      <main className="flex-1 overflow-y-auto bg-gray-50 p-6">
-        {children}
-      </main>
+      <Sidebar userRole={userRole} onRoleSwitch={handleRoleSwitch} />
+      <main className="flex-1 overflow-y-auto bg-gray-50 p-6">{children}</main>
     </div>
   );
 }
