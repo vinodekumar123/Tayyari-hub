@@ -42,7 +42,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 
-export default function AdminStudents() {
+export default function enrollment() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCourse, setSelectedCourse] = useState('all');
   const [selectedStatus, setSelectedStatus] = useState('all');
