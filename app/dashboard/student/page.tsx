@@ -171,7 +171,7 @@ export default function StudentDashboard() {
   return (
     <div className="flex h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-purple-50">
       {/* Sidebar */}
-      <Sidebar userRole={userRole} onRoleSwitch={handleRoleSwitch} />
+      <Sidebar  />
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col overflow-hidden">
