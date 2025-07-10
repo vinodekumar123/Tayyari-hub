@@ -115,7 +115,6 @@ export function Sidebar({ userRole, onRoleSwitch }: SidebarProps) {
       title: 'User Management',
       items: [
         { icon: Users, label: 'Students', href: '/admin/students' },
-        { icon: UserPlus, label: 'Enrollments', href: '/admin/enrollments' },
       ]
     },
     {
