@@ -34,25 +34,26 @@ const [filtered, setFiltered] = useState<Question[]>([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const fetchQuestions = async () => {
-      try {
-        const snapshot = await getDocs(collection(db, "questions"));
-        const fetched = snapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        }));
-        setQuestions(fetched);
-        setFiltered(fetched);
-      } catch (error) {
-        console.error("Error fetching questions:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
+ useEffect(() => {
+  const fetchQuestions = async () => {
+    try {
+      const snapshot = await getDocs(collection(db, "questions"));
+      const fetched: Question[] = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...(doc.data() as Omit<Question, 'id'>),
+      }));
+      setQuestions(fetched);
+      setFiltered(fetched);
+    } catch (error) {
+      console.error("Error fetching questions:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    fetchQuestions();
-  }, []);
+  fetchQuestions();
+}, []);
+
 
   const handleSearch = (e) => {
     const keyword = e.target.value.toLowerCase();
