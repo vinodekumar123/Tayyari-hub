@@ -1,50 +1,52 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
-import { collection, getDocs } from "firebase/firestore";
-import { db } from "../../../firebase"; // Adjust your path if different
+import { collection, getDocs, addDoc, Timestamp, updateDoc, getDoc, doc } from "firebase/firestore";
+import { db } from "../../../firebase";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { useEffect } from 'react';
-import { addDoc, Timestamp } from "firebase/firestore";
-
+import { useSearchParams, useRouter } from 'next/navigation';
 import { 
   BookOpen, 
-  Settings, 
   Plus, 
-  Minus, 
   Calendar, 
   Clock, 
-  Users, 
   Eye,
   Search,
-  Filter,
+  Save as SaveIcon,
   X
 } from 'lucide-react';
-import { useRouter } from 'next/navigation';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 
 export default function CreateQuiz() {
   const router = useRouter();
   const [currentStep, setCurrentStep] = useState(1);
-  const [courses, setCourses] = useState<any[]>([]);
-const [subjects, setSubjects] = useState<string[]>([]);
-const [chapters, setChapters] = useState<string[]>([]);
+  const [courses, setCourses] = useState([]);
+  const [subjects, setSubjects] = useState([]);
+  const [chapters, setChapters] = useState([]);
+  const params = useSearchParams();
+  const quizId = params.get('id');
+  const isEditMode = Boolean(quizId);
 
   const [quizConfig, setQuizConfig] = useState({
     title: '',
     description: '',
     course: '',
-    subject: '',
-    chapter: '',
+    subjects: [],
+    chapters: [],
     totalQuestions: 20,
     duration: 60,
+    questionsPerPage: 1,
     maxAttempts: 1,
     shuffleQuestions: true,
     shuffleOptions: true,
@@ -55,147 +57,328 @@ const [chapters, setChapters] = useState<string[]>([]);
     endTime: '',
     accessType: 'free',
     resultVisibility: 'immediate',
-    selectedQuestions: [] as any[],
-questionFilters: {
-  subject: '',
-  chapter: '',
-  difficulty: '',
-  searchTerm: '',
-  topic: '' // ✅ Add this line
-}
-
+    selectedQuestions: [],
+    questionFilters: {
+      subjects: [],
+      chapters: [],
+      difficulty: '',
+      searchTerm: '',
+      topic: '',
+    },
   });
 
   useEffect(() => {
-  const fetchCourses = async () => {
-    const snapshot = await getDocs(collection(db, "courses"));
-    const courseList: any[] = [];
-    snapshot.forEach(doc => {
-      const data = doc.data();
-      courseList.push({
-        id: doc.id,
-        name: data.name,
-        description: data.description,
-        subjects: data.subjects || [],
-        chapters: data.chapters || {}
-      });
-    });
-    setCourses(courseList);
-  };
+    const fetchQuiz = async () => {
+      if (!quizId) return;
+      try {
+        const docRef = doc(db, 'quizzes', quizId);
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          setQuizConfig((prev) => ({
+            ...prev,
+            ...data,
+            course: data.course?.name || '',
+            subjects: Array.isArray(data.subjects) 
+              ? data.subjects.map(s => s.name || s).filter(name => name)
+              : data.subject?.name 
+                ? [data.subject.name] 
+                : [],
+            chapters: Array.isArray(data.chapters) 
+              ? data.chapters.map(c => c.name || c).filter(name => name)
+              : data.chapter?.name 
+                ? [data.chapter.name] 
+                : [],
+            selectedQuestions: Array.isArray(data.selectedQuestions) ? data.selectedQuestions : [],
+          }));
+        } else {
+          alert("Could not load quiz for editing.");
+        }
+      } catch (error) {
+        console.error("Failed to fetch quiz:", error);
+        alert("Could not load quiz for editing.");
+      }
+    };
 
-  fetchCourses();
-}, []);
-const [availableQuestions, setAvailableQuestions] = useState<Question[]>([]);
+    fetchQuiz();
+  }, [quizId]);
 
-type Question = {
-  id: string;
-  questionText: string;
-  options: string[];
-  correctAnswer: string;
-  course?: string;
-  subject?: string;
-  chapter?: string;
-  difficulty?: string;
-  topic?: string;
-  usedInQuizzes?: number;
-};
+  useEffect(() => {
+    const fetchCourses = async () => {
+      try {
+        const snapshot = await getDocs(collection(db, "courses"));
+        const courseList = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data(),
+        }));
+        setCourses(courseList);
+      } catch (error) {
+        console.error("Failed to fetch courses:", error);
+      }
+    };
 
-useEffect(() => {
-  const fetchQuestions = async () => {
-    const snapshot = await getDocs(collection(db, "questions"));
-    const questions: Question[] = snapshot.docs.map((doc) => ({
-      id: doc.id,
-      ...(doc.data() as Omit<Question, 'id'>),
-    }));
-    setAvailableQuestions(questions);
-  };
+    fetchCourses();
+  }, []);
 
-  fetchQuestions();
-}, []);
+  const [availableQuestions, setAvailableQuestions] = useState([]);
 
-useEffect(() => {
-  const selected = courses.find(c => c.name === quizConfig.course);
-  if (selected) {
-    setSubjects(selected.subjects || []);
-  } else {
-    setSubjects([]);
-  }
-}, [quizConfig.course, courses]);
+  useEffect(() => {
+    const fetchQuestions = async () => {
+      try {
+        const snapshot = await getDocs(collection(db, "questions"));
+        const questions = snapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...(doc.data()),
+          usedInQuizzes: doc.data().usedInQuizzes || 0,
+        }));
+        setAvailableQuestions(questions);
+      } catch (error) {
+        console.error("Failed to fetch questions:", error);
+      }
+    };
 
-useEffect(() => {
-  const selected = courses.find(c => c.name === quizConfig.course);
+    fetchQuestions();
+  }, []);
 
-  let subjectChapters: string[] = [];
+  useEffect(() => {
+    const fetchSubjectsByCourse = async () => {
+      const selectedCourse = courses.find(c => c.name === quizConfig.course);
+      if (!selectedCourse || !selectedCourse.subjectIds) {
+        setSubjects([]);
+        return;
+      }
 
-  if (selected?.chapters && typeof selected.chapters === 'object') {
-    const chapterObj = selected.chapters[quizConfig.subject];
-    if (chapterObj && typeof chapterObj === 'object') {
-      subjectChapters = Object.keys(chapterObj);
-    }
-  }
+      const subjectList = [];
+      for (const subjectId of selectedCourse.subjectIds) {
+        const subjectRef = doc(db, 'subjects', subjectId);
+        const subjectSnap = await getDoc(subjectRef);
+        if (subjectSnap.exists()) {
+          subjectList.push({ id: subjectId, name: subjectSnap.data().name });
+        }
+      }
+      setSubjects(subjectList);
+    };
 
-  setChapters(subjectChapters);
-}, [quizConfig.subject, quizConfig.course, courses]);
+    if (quizConfig.course) fetchSubjectsByCourse();
+    else if (isEditMode && quizConfig.course) fetchSubjectsByCourse();
+  }, [quizConfig.course, courses, isEditMode]);
 
-
-
-const handleInputChange = (field: string, value: any) => {
-    setQuizConfig(prev => ({
-      ...prev,
-      [field]: value
-    }));
-  };
-
-const handleQuestionSelection = (question: Question) => {
-    setQuizConfig(prev => ({
-      ...prev,
-      selectedQuestions: prev.selectedQuestions.some(q => q.id === question.id)
-        ? prev.selectedQuestions.filter(q => q.id !== question.id)
-        : [...prev.selectedQuestions, question]
-    }));
-  };
-
-  const handleAutoSelectQuestions = () => {
-    const filteredQuestions = availableQuestions.filter(q => {
-      const matchesSubject = !quizConfig.questionFilters.subject || q.subject === quizConfig.questionFilters.subject;
-      const matchesChapter = !quizConfig.questionFilters.chapter || q.chapter === quizConfig.questionFilters.chapter;
-      const matchesDifficulty = !quizConfig.questionFilters.difficulty || q.difficulty === quizConfig.questionFilters.difficulty;
-      const matchesSearch =
-  !quizConfig.questionFilters.searchTerm ||
-  (q.questionText?.toLowerCase().includes(quizConfig.questionFilters.searchTerm.toLowerCase()) ?? false);
-
+  useEffect(() => {
+    const fetchChapters = async () => {
+      let allChapters = new Set();
       
-      return matchesSubject && matchesChapter && matchesDifficulty && matchesSearch;
-    });
+      if (quizConfig.subjects.includes('all-subjects') || quizConfig.subjects.length === 0) {
+        for (const s of subjects) {
+          const subjectRef = doc(db, 'subjects', s.id);
+          const subjectSnap = await getDoc(subjectRef);
+          if (subjectSnap.exists()) {
+            const data = subjectSnap.data();
+            const chaptersList = data.chapters
+              ? Object.keys(data.chapters).filter(ch => ch && ch.trim() !== '')
+              : [];
+            chaptersList.forEach((ch) => allChapters.add(ch));
+          }
+        }
+      } else {
+        for (const subjectName of quizConfig.subjects) {
+          const subject = subjects.find(s => s.name === subjectName);
+          if (subject) {
+            const subjectRef = doc(db, 'subjects', subject.id);
+            const subjectSnap = await getDoc(subjectRef);
+            if (subjectSnap.exists()) {
+              const data = subjectSnap.data();
+              const chaptersList = data.chapters
+                ? Object.keys(data.chapters).filter(ch => ch && ch.trim() !== '')
+                : [];
+              chaptersList.forEach((ch) => allChapters.add(ch));
+            }
+          }
+        }
+      }
+      
+      setChapters(Array.from(allChapters));
+    };
 
-    const selectedQuestions = filteredQuestions.slice(0, quizConfig.totalQuestions);
+    fetchChapters();
+  }, [quizConfig.subjects, subjects]);
+
+  const handleInputChange = (field, value) => {
     setQuizConfig(prev => ({
       ...prev,
-      selectedQuestions
+      [field]: value,
     }));
   };
 
- const handleCreateQuiz = async () => {
-  if (!quizConfig.title || !quizConfig.course || quizConfig.selectedQuestions.length === 0) {
-    alert("Please fill in all required fields and select questions");
-    return;
-  }
-
-  const quizPayload = {
-    ...quizConfig,
-    createdAt: Timestamp.now()
+  const handleMultiSelectChange = (field, value) => {
+    setQuizConfig(prev => ({
+      ...prev,
+      [field]: Array.isArray(value) ? value : [value],
+      ...(field === 'subjects' ? { chapters: [] } : {}),
+    }));
   };
 
-  try {
-    await addDoc(collection(db, "quizzes"), quizPayload);
-    alert("Quiz created successfully!");
-    router.push("/dashboard/admin");
-  } catch (error) {
-    console.error("Failed to create quiz:", error);
-    alert("Error creating quiz.");
-  }
-};
-  const getDifficultyColor = (difficulty: string) => {
+  const handleQuestionFilterChange = (field, value) => {
+    setQuizConfig(prev => ({
+      ...prev,
+      questionFilters: {
+        ...prev.questionFilters,
+        [field]: Array.isArray(value) ? value : [value],
+        ...(field === 'subjects' ? { chapters: [] } : {}),
+      },
+    }));
+  };
+
+  const handleQuestionSelection = async (question) => {
+    setQuizConfig((prev) => {
+      const isSelected = prev.selectedQuestions.some(q => q.id === question.id);
+      const updatedQuestions = isSelected
+        ? prev.selectedQuestions.filter(q => q.id !== question.id)
+        : [...prev.selectedQuestions, question];
+
+      return {
+        ...prev,
+        selectedQuestions: updatedQuestions,
+      };
+    });
+
+    try {
+      const questionRef = doc(db, 'questions', question.id);
+      if (question.usedInQuizzes === undefined) {
+        question.usedInQuizzes = 0;
+      }
+      await updateDoc(questionRef, {
+        usedInQuizzes: question.usedInQuizzes + (quizConfig.selectedQuestions.some(q => q.id === question.id) ? -1 : 1)
+      });
+    } catch (error) {
+      console.error("Error updating question usage:", error);
+    }
+  };
+
+  const handleAutoSelectQuestions = async () => {
+    const alreadySelected = quizConfig.selectedQuestions.length > 0;
+
+    if (alreadySelected) {
+      for (const question of quizConfig.selectedQuestions) {
+        try {
+          const questionRef = doc(db, 'questions', question.id);
+          await updateDoc(questionRef, {
+            usedInQuizzes: Math.max((question.usedInQuizzes || 1) - 1, 0),
+          });
+        } catch (error) {
+          console.error("Error decrementing usage count:", error);
+        }
+      }
+
+      setQuizConfig((prev) => ({
+        ...prev,
+        selectedQuestions: [],
+      }));
+      return;
+    }
+
+    const { subjects, chapters } = quizConfig.questionFilters;
+    const filtered = availableQuestions.filter((q) => {
+      return (
+        (subjects.length === 0 || subjects.includes('all-subjects') || subjects.includes(q.subject)) &&
+        (chapters.length === 0 || chapters.includes('all-chapters') || chapters.includes(q.chapter))
+      );
+    });
+
+    const shuffled = [...filtered].sort(() => 0.5 - Math.random());
+    const selected = shuffled.slice(0, Math.min(quizConfig.totalQuestions, filtered.length));
+
+    setQuizConfig((prev) => ({
+      ...prev,
+      selectedQuestions: selected,
+    }));
+
+    for (const question of selected) {
+      try {
+        const questionRef = doc(db, 'questions', question.id);
+        await updateDoc(questionRef, {
+          usedInQuizzes: (question.usedInQuizzes || 0) + 1,
+        });
+      } catch (error) {
+        console.error("Error incrementing usage count:", error);
+      }
+    }
+  };
+
+  const handleCreateOrUpdateQuiz = async () => {
+    if (
+      !quizConfig.title ||
+      !quizConfig.course ||
+      (quizConfig.subjects.length === 0 && !quizConfig.subjects.includes('all-subjects')) ||
+      quizConfig.selectedQuestions.length === 0
+    ) {
+      alert("Please fill in all required fields, select at least one subject, and select questions");
+      return;
+    }
+
+    const selectedCourse = courses.find(c => c.name === quizConfig.course);
+    const selectedSubjects = quizConfig.subjects.includes('all-subjects') 
+      ? subjects 
+      : subjects.filter(s => quizConfig.subjects.includes(s.name));
+
+    const quizPayload = {
+      ...quizConfig,
+      course: {
+        id: selectedCourse?.id || '',
+        name: selectedCourse?.name || '',
+      },
+      subjects: selectedSubjects.map(s => ({
+        id: s.id,
+        name: s.name,
+      })),
+      chapters: quizConfig.chapters.includes('all-chapters') 
+        ? chapters.map(ch => ({ id: ch, name: ch }))
+        : quizConfig.chapters.map(ch => ({ id: ch, name: ch })),
+      updatedAt: Timestamp.now(),
+    };
+
+    if (!isEditMode) {
+      quizPayload.createdAt = Timestamp.now();
+    }
+
+    try {
+      if (isEditMode) {
+        const quizRef = doc(db, 'quizzes', quizId);
+        await updateDoc(quizRef, quizPayload);
+        alert("Quiz updated successfully!");
+      } else {
+        await addDoc(collection(db, "quizzes"), quizPayload);
+        alert("Quiz created successfully!");
+      }
+
+      router.push("/dashboard/admin");
+    } catch (error) {
+      console.error("Error saving quiz:", error);
+      alert("Failed to save quiz.");
+    }
+  };
+
+  const handleSaveToMockQuestions = async () => {
+    try {
+      const selectedQuestionIds = quizConfig.selectedQuestions.map(q => q.id);
+      const existingQuestions = await getDocs(collection(db, "mock-questions"));
+      const existingIds = new Set(existingQuestions.docs.map(doc => doc.id));
+
+      for (const question of quizConfig.selectedQuestions) {
+        if (!existingIds.has(question.id)) {
+          await addDoc(collection(db, "mock-questions"), {
+            ...question,
+            createdAt: Timestamp.now(),
+          });
+        }
+      }
+      alert("Selected questions saved to Mock Questions successfully!");
+    } catch (error) {
+      console.error("Error saving to mock-questions:", error);
+      alert("Failed to save questions to Mock Questions.");
+    }
+  };
+
+  const getDifficultyColor = (difficulty) => {
     switch (difficulty) {
       case 'Easy': return 'bg-green-100 text-green-800';
       case 'Medium': return 'bg-yellow-100 text-yellow-800';
@@ -204,169 +387,223 @@ const handleQuestionSelection = (question: Question) => {
     }
   };
 
- const filteredQuestions = availableQuestions.filter((q) => {
-  const { subject, chapter, difficulty, topic, searchTerm } = quizConfig.questionFilters;
+  const filteredQuestions = availableQuestions.filter((q) => {
+    const { subjects, chapters, difficulty, topic, searchTerm } = quizConfig.questionFilters;
+    const cleanQuestionText = q.questionText ? q.questionText.replace(/<[^>]+>/g, '') : '';
+    const matchesSubject = subjects.length === 0 || subjects.includes('all-subjects') || subjects.includes(q.subject);
+    const matchesChapter = chapters.length === 0 || chapters.includes('all-chapters') || chapters.includes(q.chapter);
+    const matchesDifficulty = !difficulty || difficulty === '__all-difficulties__' || q.difficulty === difficulty;
+    const matchesTopic = !topic || topic === '__all-topics__' || q.topic === topic;
+    const matchesSearch = !searchTerm || cleanQuestionText.toLowerCase().includes(searchTerm.toLowerCase());
+    return matchesSubject && matchesChapter && matchesDifficulty && matchesTopic && matchesSearch;
+  });
 
-  const matchesSubject =
-    !subject || subject === "__all-subjects__" || q.subject === subject;
+  const groupedQuestions = filteredQuestions.reduce((acc, question) => {
+    const subject = question.subject || 'Uncategorized';
+    if (!acc[subject]) {
+      acc[subject] = [];
+    }
+    acc[subject].push(question);
+    return acc;
+  }, {});
 
-  const matchesChapter =
-    !chapter || chapter === "__all-chapters__" || q.chapter === chapter;
+  const MultiSelect = ({ value, onChange, options, placeholder, disabled }) => {
+    const displayValue = value.includes('all-subjects') || value.includes('all-chapters')
+      ? value.includes('all-subjects') ? 'All Subjects' : 'All Chapters'
+      : value.length > 0 
+        ? value.join(', ') 
+        : placeholder;
 
-  const matchesDifficulty =
-    !difficulty || difficulty === "__all-difficulties__" || q.difficulty === difficulty;
-
-  const matchesTopic =
-    !topic || topic === "__all-topics__" || q.topic === topic;
-
-  const matchesSearch =
-    !searchTerm || (q.questionText || "").toLowerCase().includes(searchTerm.toLowerCase());
-
-  return (
-    matchesSubject &&
-    matchesChapter &&
-    matchesDifficulty &&
-    matchesTopic &&
-    matchesSearch
-  );
-});
-
-
-  return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex items-center space-x-4">
-              <div className="flex items-center space-x-2">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600">
-                  <BookOpen className="h-5 w-5 text-white" />
-                </div>
-                <span className="text-xl font-bold text-gray-900">Create Quiz</span>
+    return (
+      <Popover>
+        <PopoverTrigger asChild>
+          <Button
+            variant="outline"
+            className="w-full justify-between border-gray-300 focus:border-blue-500 rounded-xl"
+            disabled={disabled}
+          >
+            <span className="truncate">{displayValue}</span>
+            <span>▼</span>
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-full max-h-60 overflow-y-auto">
+          <div className="space-y-2">
+            {options.map((option) => (
+              <div key={option.value} className="flex items-center">
+                <Checkbox
+                  checked={value.includes(option.value)}
+                  onCheckedChange={(checked) => {
+                    if (checked) {
+                      if (option.value === 'all-subjects' || option.value === 'all-chapters') {
+                        onChange([option.value]);
+                      } else {
+                        onChange([
+                          ...value.filter(v => v !== 'all-subjects' && v !== 'all-chapters'),
+                          option.value
+                        ]);
+                      }
+                    } else {
+                      onChange(value.filter(v => v !== option.value));
+                    }
+                  }}
+                  className="mr-2"
+                />
+                <span>{option.label}</span>
               </div>
+            ))}
+          </div>
+        </PopoverContent>
+      </Popover>
+    );
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
+      <header className="bg-white/90 shadow-lg backdrop-blur-md border-b border-gray-200">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex items-center justify-between">
+          <div className="flex items-center space-x-4">
+            <div className="h-12 w-12 bg-gradient-to-r from-blue-600 to-indigo-700 rounded-xl flex items-center justify-center">
+              <BookOpen className="h-6 w-6 text-white" />
             </div>
-            
-            <Button variant="outline" onClick={() => router.back()}>
-              Back to Dashboard
-            </Button>
+            <h1 className="text-3xl font-bold text-gray-900 tracking-tight">
+              {isEditMode ? 'Edit Quiz' : 'Create Quiz'}
+            </h1>
           </div>
         </div>
       </header>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <Tabs defaultValue="basic" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-4">
-            <TabsTrigger value="basic">Basic Info</TabsTrigger>
-            <TabsTrigger value="settings">Settings</TabsTrigger>
-            <TabsTrigger value="questions">Questions</TabsTrigger>
-            <TabsTrigger value="schedule">Schedule</TabsTrigger>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+        <Tabs defaultValue="basic" className="space-y-8">
+          <TabsList className="grid w-full grid-cols-4 bg-white/80 backdrop-blur-md rounded-xl p-1 shadow-md">
+            <TabsTrigger
+              value="basic"
+              className="data-[state=active]:bg-blue-600 data-[state=active]:text-white rounded-lg transition-all duration-200"
+            >
+              Basic Info
+            </TabsTrigger>
+            <TabsTrigger
+              value="settings"
+              className="data-[state=active]:bg-blue-600 data-[state=active]:text-white rounded-lg transition-all duration-200"
+            >
+              Settings
+            </TabsTrigger>
+            <TabsTrigger
+              value="questions"
+              className="data-[state=active]:bg-blue-600 data-[state=active]:text-white rounded-lg transition-all duration-200"
+            >
+              Questions
+            </TabsTrigger>
+            <TabsTrigger
+              value="schedule"
+              className="data-[state=active]:bg-blue-600 data-[state=active]:text-white rounded-lg transition-all duration-200"
+            >
+              Schedule
+            </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="basic" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Basic Information</CardTitle>
+          <TabsContent value="basic" className="space-y-8">
+            <Card className="bg-white/90 backdrop-blur-md shadow-lg hover:shadow-xl transition-shadow duration-300 rounded-xl">
+              <CardHeader className="border-b border-gray-200">
+                <CardTitle className="text-2xl font-semibold text-gray-900">Basic Information</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="space-y-2">
-                  <Label htmlFor="title">Quiz Title *</Label>
+              <CardContent className="space-y-6 pt-6">
+                <div className="space-y-4">
+                  <Label htmlFor="title" className="text-lg font-medium text-gray-700">Quiz Title *</Label>
                   <Input
                     id="title"
                     placeholder="Enter quiz title"
                     value={quizConfig.title}
                     onChange={(e) => handleInputChange('title', e.target.value)}
+                    className="border-gray-300 focus:border-blue-500 focus:ring-blue-500 rounded-xl"
                   />
                 </div>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="description">Description</Label>
+                <div className="space-y-4">
+                  <Label htmlFor="description" className="text-lg font-medium text-gray-700">Description</Label>
                   <Textarea
                     id="description"
                     placeholder="Enter quiz description"
                     value={quizConfig.description}
                     onChange={(e) => handleInputChange('description', e.target.value)}
-                    rows={3}
+                    rows={4}
+                    className="border-gray-300 focus:border-blue-500 focus:ring-blue-500 rounded-xl"
                   />
                 </div>
-
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  <div className="space-y-2">
-               <Label htmlFor="course">Course *</Label>
-<Select 
-  value={quizConfig.course} 
-  onValueChange={(value) => handleInputChange('course', value)}
->
-  <SelectTrigger>
-    <SelectValue placeholder="Select course" />
-  </SelectTrigger>
-  <SelectContent>
-    {courses.map(course => (
-      <SelectItem key={course.name} value={course.name}>
-        {course.name}
-      </SelectItem>
-    ))}
-  </SelectContent>
-</Select>
-
+                  <div className="space-y-4">
+                    <Label htmlFor="course" className="text-lg font-medium text-gray-700">Course *</Label>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          className="w-full justify-between border-gray-300 focus:border-blue-500 rounded-xl"
+                        >
+                          <span>{quizConfig.course || 'Select course'}</span>
+                          <span>▼</span>
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-full">
+                        <div className="space-y-2">
+                          {courses.map(course => (
+                            <div
+                              key={course.name}
+                              className="flex items-center cursor-pointer hover:bg-blue-100 p-2 rounded"
+                              onClick={() => {
+                                handleInputChange('course', course.name);
+                                handleMultiSelectChange('subjects', []);
+                                handleMultiSelectChange('chapters', []);
+                              }}
+                            >
+                              {course.name}
+                            </div>
+                          ))}
+                        </div>
+                      </PopoverContent>
+                    </Popover>
                   </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="subject">Subject</Label>
-<Select 
-  value={quizConfig.subject} 
-  onValueChange={(value) => handleInputChange('subject', value)}
-  disabled={!quizConfig.course}
->
-  <SelectTrigger>
-    <SelectValue placeholder="Select subject" />
-  </SelectTrigger>
-  <SelectContent>
-    {subjects.map(subject => (
-      <SelectItem key={subject} value={subject}>
-        {subject}
-      </SelectItem>
-    ))}
-  </SelectContent>
-</Select>
-
+                  <div className="space-y-4">
+                    <Label htmlFor="subjects" className="text-lg font-medium text-gray-700">Subjects *</Label>
+                    <MultiSelect
+                      value={quizConfig.subjects}
+                      onChange={(value) => handleMultiSelectChange('subjects', value)}
+                      options={[
+                        { value: 'all-subjects', label: 'All Subjects' },
+                        ...subjects
+                          .filter(s => s && s.name && s.name.trim() !== '')
+                          .map(s => ({ value: s.name, label: s.name }))
+                      ]}
+                      placeholder="Select subjects"
+                      disabled={!quizConfig.course}
+                    />
                   </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="chapter">Chapter</Label>
-<Select 
-  value={quizConfig.chapter} 
-  onValueChange={(value) => handleInputChange('chapter', value)}
-  disabled={!quizConfig.subject}
->
-  <SelectTrigger>
-    <SelectValue placeholder="Select chapter" />
-  </SelectTrigger>
-<SelectContent>
-  {Array.isArray(chapters) && chapters.map((chap) => (
-    <SelectItem key={chap} value={chap}>
-      {chap}
-    </SelectItem>
-  ))}
-</SelectContent>
-
-</Select>
-
+                  <div className="space-y-4">
+                    <Label htmlFor="chapters" className="text-lg font-medium text-gray-700">Chapters</Label>
+                    <MultiSelect
+                      value={quizConfig.chapters}
+                      onChange={(value) => handleMultiSelectChange('chapters', value)}
+                      options={[
+                        { value: 'all-chapters', label: 'All Chapters' },
+                        ...chapters
+                          .filter(ch => ch && ch.trim() !== '')
+                          .map(ch => ({ value: ch, label: ch }))
+                      ]}
+                      placeholder="Select chapters"
+                      disabled={!quizConfig.subjects.length}
+                    />
                   </div>
                 </div>
               </CardContent>
             </Card>
           </TabsContent>
 
-          <TabsContent value="settings" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Quiz Settings</CardTitle>
+          <TabsContent value="settings" className="space-y-8">
+            <Card className="bg-white/90 backdrop-blur-md shadow-lg hover:shadow-xl transition-shadow duration-300 rounded-xl">
+              <CardHeader className="border-b border-gray-200">
+                <CardTitle className="text-2xl font-semibold text-gray-900">Quiz Settings</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  <div className="space-y-2">
-                    <Label htmlFor="totalQuestions">Total Questions</Label>
+              <CardContent className="space-y-6 pt-6">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                  <div className="space-y-4">
+                    <Label htmlFor="totalQuestions" className="text-lg font-medium text-gray-700">Total Questions</Label>
                     <Input
                       id="totalQuestions"
                       type="number"
@@ -374,11 +611,23 @@ const handleQuestionSelection = (question: Question) => {
                       max="100"
                       value={quizConfig.totalQuestions}
                       onChange={(e) => handleInputChange('totalQuestions', parseInt(e.target.value))}
+                      className="border-gray-300 focus:border-blue-500 focus:ring-blue-500 rounded-xl"
                     />
                   </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="duration">Duration (minutes)</Label>
+                  <div className="space-y-4">
+                    <Label htmlFor="questionsPerPage" className="text-lg font-medium text-gray-700">Questions Per Page</Label>
+                    <Input
+                      id="questionsPerPage"
+                      type="number"
+                      min="1"
+                      max={quizConfig.totalQuestions}
+                      value={quizConfig.questionsPerPage}
+                      onChange={(e) => handleInputChange('questionsPerPage', parseInt(e.target.value))}
+                      className="border-gray-300 focus:border-blue-500 focus:ring-blue-500 rounded-xl"
+                    />
+                  </div>
+                  <div className="space-y-4">
+                    <Label htmlFor="duration" className="text-lg font-medium text-gray-700">Duration (minutes)</Label>
                     <Input
                       id="duration"
                       type="number"
@@ -386,11 +635,11 @@ const handleQuestionSelection = (question: Question) => {
                       max="300"
                       value={quizConfig.duration}
                       onChange={(e) => handleInputChange('duration', parseInt(e.target.value))}
+                      className="border-gray-300 focus:border-blue-500 focus:ring-blue-500 rounded-xl"
                     />
                   </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="maxAttempts">Max Attempts</Label>
+                  <div className="space-y-4">
+                    <Label htmlFor="maxAttempts" className="text-lg font-medium text-gray-700">Max Attempts</Label>
                     <Input
                       id="maxAttempts"
                       type="number"
@@ -398,366 +647,398 @@ const handleQuestionSelection = (question: Question) => {
                       max="10"
                       value={quizConfig.maxAttempts}
                       onChange={(e) => handleInputChange('maxAttempts', parseInt(e.target.value))}
+                      className="border-gray-300 focus:border-blue-500 focus:ring-blue-500 rounded-xl"
                     />
                   </div>
                 </div>
-
                 <div className="space-y-4">
-                  <div className="flex items-center space-x-2">
+                  <div className="flex items-center space-x-3">
                     <Checkbox
                       id="shuffleQuestions"
                       checked={quizConfig.shuffleQuestions}
                       onCheckedChange={(checked) => handleInputChange('shuffleQuestions', checked)}
+                      className="h-5 w-5 border-gray-300"
                     />
-                    <Label htmlFor="shuffleQuestions">Shuffle Questions</Label>
+                    <Label htmlFor="shuffleQuestions" className="text-lg font-medium text-gray-700">Shuffle Questions</Label>
                   </div>
-                  
-                  <div className="flex items-center space-x-2">
+                  <div className="flex items-center space-x-3">
                     <Checkbox
                       id="shuffleOptions"
                       checked={quizConfig.shuffleOptions}
                       onCheckedChange={(checked) => handleInputChange('shuffleOptions', checked)}
+                      className="h-5 w-5 border-gray-300"
                     />
-                    <Label htmlFor="shuffleOptions">Shuffle Answer Options</Label>
+                    <Label htmlFor="shuffleOptions" className="text-lg font-medium text-gray-700">Shuffle Answer Options</Label>
                   </div>
-                  
-                  <div className="flex items-center space-x-2">
+                  <div className="flex items-center space-x-3">
                     <Checkbox
                       id="showExplanation"
                       checked={quizConfig.showExplanation}
                       onCheckedChange={(checked) => handleInputChange('showExplanation', checked)}
+                      className="h-5 w-5 border-gray-300"
                     />
-                    <Label htmlFor="showExplanation">Show Explanations</Label>
+                    <Label htmlFor="showExplanation" className="text-lg font-medium text-gray-700">Show Explanations</Label>
                   </div>
                 </div>
-
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-2">
-                    <Label htmlFor="accessType">Access Type</Label>
-                    <Select 
-                      value={quizConfig.accessType} 
-                      onValueChange={(value) => handleInputChange('accessType', value)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="free">Free</SelectItem>
-                        <SelectItem value="paid">Paid</SelectItem>
-                      </SelectContent>
-                    </Select>
+                  <div className="space-y-4">
+                    <Label htmlFor="accessType" className="text-lg font-medium text-gray-700">Access Type</Label>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          className="w-full justify-between border-gray-300 focus:border-blue-500 rounded-xl"
+                        >
+                          <span>{quizConfig.accessType || 'Select access type'}</span>
+                          <span>▼</span>
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-full">
+                        <div className="space-y-2">
+                          {['free', 'paid'].map(type => (
+                            <div
+                              key={type}
+                              className="flex items-center cursor-pointer hover:bg-blue-100 p-2 rounded"
+                              onClick={() => handleInputChange('accessType', type)}
+                            >
+                              {type.charAt(0).toUpperCase() + type.slice(1)}
+                            </div>
+                          ))}
+                        </div>
+                      </PopoverContent>
+                    </Popover>
                   </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="resultVisibility">Result Visibility</Label>
-                    <Select 
-                      value={quizConfig.resultVisibility} 
-                      onValueChange={(value) => handleInputChange('resultVisibility', value)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="immediate">Immediate</SelectItem>
-                        <SelectItem value="manual">Manual Publishing</SelectItem>
-                        <SelectItem value="scheduled">Scheduled</SelectItem>
-                      </SelectContent>
-                    </Select>
+                  <div className="space-y-4">
+                    <Label htmlFor="resultVisibility" className="text-lg font-medium text-gray-700">Result Visibility</Label>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          className="w-full justify-between border-gray-300 focus:border-blue-500 rounded-xl"
+                        >
+                          <span>{quizConfig.resultVisibility || 'Select visibility'}</span>
+                          <span>▼</span>
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-full">
+                        <div className="space-y-2">
+                          {['immediate', 'manual', 'scheduled'].map(visibility => (
+                            <div
+                              key={visibility}
+                              className="flex items-center cursor-pointer hover:bg-blue-100 p-2 rounded"
+                              onClick={() => handleInputChange('resultVisibility', visibility)}
+                            >
+                              {visibility.charAt(0).toUpperCase() + visibility.slice(1)}
+                            </div>
+                          ))}
+                        </div>
+                      </PopoverContent>
+                    </Popover>
                   </div>
                 </div>
               </CardContent>
             </Card>
           </TabsContent>
-<TabsContent value="questions" className="space-y-6">
-  <Card>
-    <CardHeader>
-      <div className="flex justify-between items-center">
-        <CardTitle>Question Selection</CardTitle>
-        <div className="flex space-x-2">
-          <Button variant="outline" onClick={handleAutoSelectQuestions}>
-            Auto Select ({quizConfig.totalQuestions})
-          </Button>
-          <Badge variant="secondary">
-            {quizConfig.selectedQuestions.length} / {quizConfig.totalQuestions} Selected
-          </Badge>
-        </div>
-      </div>
-    </CardHeader>
-    <CardContent>
-      {/* Question Filters */}
-      <div className="space-y-4 mb-6">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="space-y-2">
-            <Label>Search</Label>
-            <div className="relative">
-              <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-              <Input
-                placeholder="Search questions..."
-                value={quizConfig.questionFilters.searchTerm}
-                onChange={(e) =>
-                  setQuizConfig((prev) => ({
-                    ...prev,
-                    questionFilters: {
-                      ...prev.questionFilters,
-                      searchTerm: e.target.value,
-                    },
-                  }))
-                }
-                className="pl-10"
-              />
-            </div>
-          </div>
 
-          <div className="space-y-2">
-            <Label>Subject</Label>
-            <Select
-              value={quizConfig.questionFilters.subject}
-              onValueChange={(value) =>
-                setQuizConfig((prev) => ({
-                  ...prev,
-                  questionFilters: {
-                    ...prev.questionFilters,
-                    subject: value,
-                  },
-                }))
-              }
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="All subjects" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__all-subjects__">All subjects</SelectItem>
-                {subjects.map((subject) => (
-                  <SelectItem key={subject} value={subject}>
-                    {subject}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-2">
-            <Label>Chapter</Label>
-            <Select
-              value={quizConfig.questionFilters.chapter}
-              onValueChange={(value) =>
-                setQuizConfig((prev) => ({
-                  ...prev,
-                  questionFilters: {
-                    ...prev.questionFilters,
-                    chapter: value,
-                  },
-                }))
-              }
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="All chapters" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__all-chapters__">All chapters</SelectItem>
-                {Array.isArray(chapters) &&
-                  chapters.map((chap) => (
-                    <SelectItem key={chap} value={chap}>
-                      {chap}
-                    </SelectItem>
-                  ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-2">
-            <Label>Difficulty</Label>
-            <Select
-              value={quizConfig.questionFilters.difficulty}
-              onValueChange={(value) =>
-                setQuizConfig((prev) => ({
-                  ...prev,
-                  questionFilters: {
-                    ...prev.questionFilters,
-                    difficulty: value,
-                  },
-                }))
-              }
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="All difficulties" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__all-difficulties__">All difficulties</SelectItem>
-                <SelectItem value="Easy">Easy</SelectItem>
-                <SelectItem value="Medium">Medium</SelectItem>
-                <SelectItem value="Hard">Hard</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-2">
-  <Label>Topic</Label>
-  <Select
-    value={quizConfig.questionFilters.topic}
-    onValueChange={(value) =>
-      setQuizConfig((prev) => ({
-        ...prev,
-        questionFilters: {
-          ...prev.questionFilters,
-          topic: value,
-        },
-      }))
-    }
-  >
-    <SelectTrigger>
-      <SelectValue placeholder="All topics" />
-    </SelectTrigger>
-    <SelectContent>
-  <SelectItem value="__all-topics__">All topics</SelectItem>
-  {Array.from(
-    new Set(
-      availableQuestions
-        .map((q) => q.topic)
-        .filter((topic): topic is string => typeof topic === 'string')
-    )
-  ).map((topic) => (
-    <SelectItem key={topic} value={topic}>
-      {topic}
-    </SelectItem>
-  ))}
-</SelectContent>
-
-  </Select>
-</div>
-
-        </div>
-      </div>
-
-      {/* Question List */}
-      <div className="space-y-4">
-        {filteredQuestions.map((question) => (
-          <Card
-            key={question.id}
-            className={`cursor-pointer transition-all ${
-              quizConfig.selectedQuestions.some((q) => q.id === question.id)
-                ? 'ring-2 ring-blue-500 bg-blue-50'
-                : 'hover:shadow-md'
-            }`}
-          >
-            <CardContent className="p-4">
-              <div className="flex items-start space-x-4">
-                <Checkbox
-                  checked={quizConfig.selectedQuestions.some((q) => q.id === question.id)}
-                  onCheckedChange={() => handleQuestionSelection(question)}
-                />
-                <div className="flex-1 space-y-2">
-                  <div className="flex items-start justify-between">
-<p className="font-medium text-gray-900">
-  {question.questionText || 'Untitled Question'}
-</p>
+          <TabsContent value="questions" className="space-y-8">
+            <Card className="bg-white/90 backdrop-blur-md shadow-lg hover:shadow-xl transition-shadow duration-300 rounded-xl">
+              <CardHeader className="border-b border-gray-200">
+                <div className="flex justify-between items-center">
+                  <CardTitle className="text-2xl font-semibold text-gray-900">Question Selection</CardTitle>
+                  <div className="flex space-x-3">
                     <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        // Add preview toggle logic here
-                      }}
+                      variant="outline"
+                      className="border-gray-300 hover:bg-gray-100 transition-all duration-200"
+                      onClick={handleAutoSelectQuestions}
                     >
-                      <Eye className="h-4 w-4" />
+                      <Plus className="h-5 w-5 mr-2" /> Auto Select ({quizConfig.totalQuestions})
+                    </Button>
+                    <Badge
+                      variant="secondary"
+                      className="bg-gray-200 hover:bg-gray-300 transition-all duration-200 cursor-pointer"
+                      onClick={handleAutoSelectQuestions}
+                    >
+                      {quizConfig.selectedQuestions.length > 0 ? 'Clear Selection' : `Auto (${quizConfig.totalQuestions})`}
+                    </Badge>
+                    <Button
+                      variant="secondary"
+                      className="bg-green-600 hover:bg-green-700 text-white transition-all duration-200"
+                      onClick={handleSaveToMockQuestions}
+                    >
+                      <SaveIcon className="h-5 w-5 mr-2" /> Save to Mock Questions
                     </Button>
                   </div>
-
-                  <div className="flex items-center space-x-2">
-                    <Badge variant="outline">{question.subject}</Badge>
-                    <Badge variant="outline">{question.chapter}</Badge>
-                  <Badge className={getDifficultyColor(question.difficulty ?? 'Easy')}>
-  {question.difficulty ?? 'Easy'}
-</Badge>
-
-                    <span className="text-sm text-gray-500">
-                      Used in {question.usedInQuizzes || 0} quizzes
-                    </span>
-                  </div>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-    </CardContent>
-  </Card>
-</TabsContent>
-
-
-          <TabsContent value="schedule" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Schedule Quiz</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-2">
-                    <Label htmlFor="startDate">Start Date</Label>
-                    <Input
-                      id="startDate"
-                      type="date"
-                      value={quizConfig.startDate}
-                      onChange={(e) => handleInputChange('startDate', e.target.value)}
-                    />
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label htmlFor="endDate">End Date</Label>
-                    <Input
-                      id="endDate"
-                      type="date"
-                      value={quizConfig.endDate}
-                      onChange={(e) => handleInputChange('endDate', e.target.value)}
-                    />
+              <CardContent className="space-y-6 pt-6">
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+                    <div className="space-y-2">
+                      <Label className="text-lg font-medium text-gray-700">Search</Label>
+                      <div className="relative">
+                        <Search className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
+                        <Input
+                          placeholder="Search questions..."
+                          value={quizConfig.questionFilters.searchTerm}
+                          onChange={(e) =>
+                            setQuizConfig((prev) => ({
+                              ...prev,
+                              questionFilters: {
+                                ...prev.questionFilters,
+                                searchTerm: e.target.value,
+                              },
+                            }))
+                          }
+                          className="pl-12 pr-4 py-2 border-gray-300 focus:border-blue-500 focus:ring-blue-500 rounded-xl"
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-lg font-medium text-gray-700">Subjects</Label>
+                      <MultiSelect
+                        value={quizConfig.questionFilters.subjects}
+                        onChange={(value) => handleQuestionFilterChange('subjects', value)}
+                        options={[
+                          { value: 'all-subjects', label: 'All Subjects' },
+                          ...subjects.map(s => ({ value: s.name, label: s.name }))
+                        ]}
+                        placeholder="All subjects"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-lg font-medium text-gray-700">Chapters</Label>
+                      <MultiSelect
+                        value={quizConfig.questionFilters.chapters}
+                        onChange={(value) => handleQuestionFilterChange('chapters', value)}
+                        options={[
+                          { value: 'all-chapters', label: 'All Chapters' },
+                          ...chapters.map(ch => ({ value: ch, label: ch }))
+                        ]}
+                        placeholder="All chapters"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-lg font-medium text-gray-700">Difficulty</Label>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            className="w-full justify-between border-gray-300 focus:border-blue-500 rounded-xl"
+                          >
+                            <span>{quizConfig.questionFilters.difficulty || 'All difficulties'}</span>
+                            <span>▼</span>
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-full">
+                          <div className="space-y-2">
+                            {['__all-difficulties__', 'Easy', 'Medium', 'Hard'].map(difficulty => (
+                              <div
+                                key={difficulty}
+                                className="flex items-center cursor-pointer hover:bg-blue-100 p-2 rounded"
+                                onClick={() => setQuizConfig(prev => ({
+                                  ...prev,
+                                  questionFilters: {
+                                    ...prev.questionFilters,
+                                    difficulty,
+                                  },
+                                }))}
+                              >
+                                {difficulty === '__all-difficulties__' ? 'All difficulties' : difficulty}
+                              </div>
+                            ))}
+                          </div>
+                        </PopoverContent>
+                      </Popover>
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-lg font-medium text-gray-700">Topic</Label>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            className="w-full justify-between border-gray-300 focus:border-blue-500 rounded-xl"
+                          >
+                            <span>{quizConfig.questionFilters.topic || 'All topics'}</span>
+                            <span>▼</span>
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-full">
+                          <div className="space-y-2">
+                            {['__all-topics__', ...new Set(availableQuestions.map(q => q.topic).filter(t => t && t.trim() !== ''))].map(topic => (
+                              <div
+                                key={topic}
+                                className="flex items-center cursor-pointer hover:bg-blue-100 p-2 rounded"
+                                onClick={() => setQuizConfig(prev => ({
+                                  ...prev,
+                                  questionFilters: {
+                                    ...prev.questionFilters,
+                                    topic,
+                                  },
+                                }))}
+                              >
+                                {topic === '__all-topics__' ? 'All topics' : topic}
+                              </div>
+                            ))}
+                          </div>
+                        </PopoverContent>
+                      </Popover>
+                    </div>
                   </div>
                 </div>
+                <div className="space-y-8">
+                  {Object.entries(groupedQuestions).map(([subject, questions]) => (
+                    <div key={subject} className="space-y-4">
+                      <div className="border-b-2 border-blue-500 pb-2">
+                        <h3 className="text-xl font-semibold text-gray-900">{subject}</h3>
+                      </div>
+                      {questions.map((question) => (
+                        <Card
+                          key={question.id}
+                          className={`cursor-pointer transition-all duration-200 ${
+                            quizConfig.selectedQuestions.some((q) => q.id === question.id)
+                              ? 'ring-2 ring-blue-500 bg-blue-50 shadow-lg'
+                              : 'hover:shadow-md'
+                          }`}
+                        >
+                          <CardContent className="p-5 flex items-start space-x-4">
+                            <Checkbox
+                              checked={quizConfig.selectedQuestions.some((q) => q.id === question.id)}
+                              onCheckedChange={() => handleQuestionSelection(question)}
+                              className="h-5 w-5 mt-1 border-gray-300"
+                            />
+                            <div className="flex-1 space-y-2">
+                              <div className="flex items-start justify-between">
+                                <p className="font-medium text-gray-900 text-lg">
+                                  {question.questionText ? question.questionText.replace(/<[^>]+>/g, '') : 'Untitled Question'}
+                                </p>
+                                {/* <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="hover:text-blue-600 transition-colors"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    // Add preview toggle logic here
+                                  }}
+                                >
+                                  <Eye className="h-5 w-5" />
+                                </Button> */}
+                              </div>
+                              <div className="flex items-center flex-wrap gap-2">
+                                <Badge variant="outline" className="border-gray-300 text-gray-700">
+                                  {question.chapter}
+                                </Badge>
+                                <Badge className={getDifficultyColor(question.difficulty ?? 'Easy')}>
+                                  {question.difficulty ?? 'Easy'}
+                                </Badge>
+                                <span className="text-sm text-gray-500">
+                                  Used in {question.usedInQuizzes || 0} quizzes
+                                </span>
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
 
+          <TabsContent value="schedule" className="space-y-8">
+            <Card className="bg-white/90 backdrop-blur-md shadow-lg hover:shadow-xl transition-shadow duration-300 rounded-xl">
+              <CardHeader className="border-b border-gray-200">
+                <CardTitle className="text-2xl font-semibold text-gray-900">Schedule Quiz</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-6 pt-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-2">
-                    <Label htmlFor="startTime">Start Time</Label>
-                    <Input
-                      id="startTime"
-                      type="time"
-                      value={quizConfig.startTime}
-                      onChange={(e) => handleInputChange('startTime', e.target.value)}
-                    />
+                  <div className="space-y-4">
+                    <Label htmlFor="startDate" className="text-lg font-medium text-gray-700">Start Date</Label>
+                    <div className="relative">
+                      <Calendar className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
+                      <Input
+                        id="startDate"
+                        type="date"
+                        value={quizConfig.startDate}
+                        onChange={(e) => handleInputChange('startDate', e.target.value)}
+                        className="pl-12 border-gray-300 focus:border-blue-500 focus:ring-blue-500 rounded-xl"
+                      />
+                    </div>
                   </div>
-                  
-                  <div className="space-y-2">
-                    <Label htmlFor="endTime">End Time</Label>
-                    <Input
-                      id="endTime"
-                      type="time"
-                      value={quizConfig.endTime}
-                      onChange={(e) => handleInputChange('endTime', e.target.value)}
-                    />
+                  <div className="space-y-4">
+                    <Label htmlFor="endDate" className="text-lg font-medium text-gray-700">End Date</Label>
+                    <div className="relative">
+                      <Calendar className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
+                      <Input
+                        id="endDate"
+                        type="date"
+                        value={quizConfig.endDate}
+                        onChange={(e) => handleInputChange('endDate', e.target.value)}
+                        className="pl-12 border-gray-300 focus:border-blue-500 focus:ring-blue-500 rounded-xl"
+                      />
+                    </div>
                   </div>
                 </div>
-
-                <div className="bg-gray-50 p-4 rounded-lg">
-                  <h4 className="font-medium mb-2">Quiz Summary</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-4">
+                    <Label htmlFor="startTime" className="text-lg font-medium text-gray-700">Start Time</Label>
+                    <div className="relative">
+                      <Clock className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
+                      <Input
+                        id="startTime"
+                        type="time"
+                        value={quizConfig.startTime}
+                        onChange={(e) => handleInputChange('startTime', e.target.value)}
+                        className="pl-12 border-gray-300 focus:border-blue-500 focus:ring-blue-500 rounded-xl"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-4">
+                    <Label htmlFor="endTime" className="text-lg font-medium text-gray-700">End Time</Label>
+                    <div className="relative">
+                      <Clock className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
+                      <Input
+                        id="endTime"
+                        type="time"
+                        value={quizConfig.endTime}
+                        onChange={(e) => handleInputChange('endTime', e.target.value)}
+                        className="pl-12 border-gray-300 focus:border-blue-500 focus:ring-blue-500 rounded-xl"
+                      />
+                    </div>
+                  </div>
+                </div>
+                <div className="bg-gray-50/80 p-6 rounded-xl shadow-inner">
+                  <h4 className="text-xl font-medium text-gray-900 mb-4">Quiz Summary</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-lg">
                     <div>
-                      <p><strong>Title:</strong> {quizConfig.title || 'Not set'}</p>
-                      <p><strong>Course:</strong> {quizConfig.course || 'Not selected'}</p>
-                      <p><strong>Questions:</strong> {quizConfig.selectedQuestions.length} / {quizConfig.totalQuestions}</p>
-                      <p><strong>Duration:</strong> {quizConfig.duration} minutes</p>
+                      <p className="text-gray-700"><strong>Title:</strong> {quizConfig.title || 'Not set'}</p>
+                      <p className="text-gray-700"><strong>Course:</strong> {quizConfig.course || 'Not selected'}</p>
+                      <p className="text-gray-700"><strong>Subjects:</strong> {Array.isArray(quizConfig.subjects) ? (quizConfig.subjects.includes('all-subjects') ? 'All Subjects' : quizConfig.subjects.join(', ') || 'Not selected') : 'Not selected'}</p>
+                      <p className="text-gray-700"><strong>Chapters:</strong> {Array.isArray(quizConfig.chapters) ? (quizConfig.chapters.includes('all-chapters') ? 'All Chapters' : quizConfig.chapters.join(', ') || 'None selected') : 'None selected'}</p>
+                      <p className="text-gray-700"><strong>Questions:</strong> {quizConfig.selectedQuestions.length} / {quizConfig.totalQuestions}</p>
+                      <p className="text-gray-700"><strong>Duration:</strong> {quizConfig.duration} minutes</p>
                     </div>
                     <div>
-                      <p><strong>Access:</strong> {quizConfig.accessType}</p>
-                      <p><strong>Result Visibility:</strong> {quizConfig.resultVisibility}</p>
-                      <p><strong>Max Attempts:</strong> {quizConfig.maxAttempts}</p>
-                      <p><strong>Shuffle Questions:</strong> {quizConfig.shuffleQuestions ? 'Yes' : 'No'}</p>
+                      <p className="text-gray-700"><strong>Access:</strong> {quizConfig.accessType}</p>
+                      <p className="text-gray-700"><strong>Result Visibility:</strong> {quizConfig.resultVisibility}</p>
+                      <p className="text-gray-700"><strong>Max Attempts:</strong> {quizConfig.maxAttempts}</p>
+                      <p className="text-gray-700"><strong>Shuffle Questions:</strong> {quizConfig.shuffleQuestions ? 'Yes' : 'No'}</p>
                     </div>
                   </div>
                 </div>
-
                 <div className="flex justify-end space-x-4">
-                  <Button variant="outline" onClick={() => router.back()}>
-                    Cancel
+                  <Button
+                    variant="outline"
+                    className="border-gray-300 hover:bg-gray-100 transition-all duration-200"
+                    onClick={() => router.back()}
+                  >
+                    <X className="h-5 w-5 mr-2" /> Cancel
                   </Button>
-                  <Button onClick={handleCreateQuiz} className="bg-blue-600 hover:bg-blue-700">
-                    Create Quiz
+                  <Button
+                    onClick={handleCreateOrUpdateQuiz}
+                    className="bg-gradient-to-r from-blue-600 to-indigo-700 hover:from-blue-700 hover:to-indigo-800 text-white transition-all duration-200"
+                  >
+                    {isEditMode ? 'Update Quiz' : 'Create Quiz'}
                   </Button>
                 </div>
               </CardContent>

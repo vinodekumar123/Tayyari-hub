@@ -1,20 +1,21 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { auth, provider } from '../../firebase';
+import { auth, provider, db } from '../../firebase';
 import {
   signInWithEmailAndPassword,
   signInWithPopup,
-  sendPasswordResetEmail
+  sendPasswordResetEmail,
+  onAuthStateChanged
 } from 'firebase/auth';
+import { doc, getDoc } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle
 } from '@/components/ui/card';
@@ -36,12 +37,43 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        const userRef = doc(db, 'users', user.uid);
+        const userSnap = await getDoc(userRef);
+
+        if (userSnap.exists()) {
+          const userData = userSnap.data();
+
+          if (userData.admin === true) {
+            router.push('/dashboard/admin');
+          } else {
+            const requiredFields = [
+              'fullName', 'email', 'phone', 'city', 'university', 'campus', 'degree', 'course'
+            ];
+            const isIncomplete = requiredFields.some(field => !userData[field]);
+
+            if (isIncomplete) {
+              router.push('/auth/register'); // Onboarding page
+            } else {
+              router.push('/dashboard/student');
+            }
+          }
+        } else {
+          router.push('/auth/register'); // No user doc, redirect to onboarding
+        }
+      }
+    });
+
+    return () => unsubscribe();
+  }, [router]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     try {
       await signInWithEmailAndPassword(auth, email, password);
-        router.push('/dashboard/admin');
     } catch (error) {
       console.error('Login error:', error);
     } finally {
@@ -51,8 +83,31 @@ export default function LoginPage() {
 
   const handleGoogleLogin = async () => {
     try {
-      await signInWithPopup(auth, provider);
-      router.push('/');
+      const result = await signInWithPopup(auth, provider);
+      const user = result.user;
+      const userRef = doc(db, 'users', user.uid);
+      const userSnap = await getDoc(userRef);
+
+      if (userSnap.exists()) {
+        const userData = userSnap.data();
+
+        if (userData.admin === true) {
+          router.push('/dashboard/admin');
+        } else {
+          const requiredFields = [
+            'fullName', 'email', 'phone', 'city', 'university', 'campus', 'degree', 'course'
+          ];
+          const isIncomplete = requiredFields.some(field => !userData[field]);
+
+          if (isIncomplete) {
+            router.push('/auth/register');
+          } else {
+            router.push('/dashboard/student');
+          }
+        }
+      } else {
+        router.push('/auth/register');
+      }
     } catch (error) {
       console.error('Google Sign-In Error:', error);
     }
@@ -89,7 +144,6 @@ export default function LoginPage() {
         </div>
 
         <Card className="glass-card border shadow-2xl">
-      
           <CardContent className="space-y-6">
             <form onSubmit={handleSubmit} className="space-y-6">
               <div className="space-y-2">
@@ -199,8 +253,6 @@ export default function LoginPage() {
             </div>
           </CardContent>
         </Card>
-
-      
       </div>
     </div>
   );

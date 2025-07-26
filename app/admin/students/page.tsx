@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   Card,
   CardContent,
@@ -10,12 +10,16 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { db } from '../../firebase';
+import { db, auth } from '../../firebase';
 import {
   collection,
   onSnapshot,
   doc,
-  updateDoc
+  updateDoc,
+  query,
+  orderBy,
+  limit,
+  startAfter
 } from 'firebase/firestore';
 import {
   Tabs,
@@ -38,18 +42,20 @@ import {
   Edit,
   Phone,
   BookOpen,
-  ArrowLeft
+  ArrowLeft,
+  BarChart2
 } from 'lucide-react';
 import Link from 'next/link';
+import { onAuthStateChanged } from 'firebase/auth';
+import { useRouter } from 'next/navigation';
 
-export default function Enrollment() {
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedCourse, setSelectedCourse] = useState('all');
-  const [selectedStatus, setSelectedStatus] = useState('all');
-const [students, setStudents] = useState<Student[]>([]);
-  const [editModal, setEditModal] = useState(false);
-const [currentStudent, setCurrentStudent] = useState<Student | null>(null);
-const [editData, setEditData] = useState<Partial<Student>>({});
+type Course = {
+  id: string;
+  name: string;
+  description: string;
+  subjectIds: string[];
+};
+
 type Student = {
   id: string;
   fullName: string;
@@ -63,37 +69,114 @@ type Student = {
   plan?: string;
   uid?: string;
   premium?: boolean;
-  [key: string]: any; // ✅ index signature
+  admin?: boolean;
+  superadmin?: boolean;
+  status?: string;
+  profileImage?: string;
+  [key: string]: any;
 };
 
-useEffect(() => {
-  const unsubscribe = onSnapshot(collection(db, 'users'), (snapshot) => {
-    const data: Student[] = snapshot.docs.map(doc => {
-      const raw = doc.data();
-      return {
-        id: doc.id,
-        fullName: raw.fullName || '',
-        email: raw.email || '',
-        phone: raw.phone || '',
-        course: raw.course || '',
-        university: raw.university,
-        campus: raw.campus,
-        city: raw.city,
-        degree: raw.degree,
-        plan: raw.plan,
-        uid: raw.uid,
-        premium: raw.premium,
-        status: raw.status,
-        profileImage: `https://ui-avatars.com/api/?name=${encodeURIComponent(raw.fullName || '')}&background=random&size=128`,
-      };
+export default function Enrollment() {
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedCourse, setSelectedCourse] = useState('all');
+  const [selectedStatus, setSelectedStatus] = useState('all');
+  const [students, setStudents] = useState<Student[]>([]);
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [editModal, setEditModal] = useState(false);
+  const [currentStudent, setCurrentStudent] = useState<Student | null>(null);
+  const [editData, setEditData] = useState<Partial<Student>>({});
+  const [isSuperadmin, setIsSuperadmin] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [lastDoc, setLastDoc] = useState<any>(null);
+  const [hasMore, setHasMore] = useState(true);
+  const observer = useRef<IntersectionObserver | null>(null);
+  const router = useRouter();
+  const unsubscribeRef = useRef<(() => void) | null>(null);
+  const fetchTrigger = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        const userDoc = await doc(db, 'users', user.uid);
+        onSnapshot(userDoc, (doc) => {
+          const data = doc.data();
+          setIsSuperadmin(data?.superadmin === true);
+        });
+      } else {
+        setIsSuperadmin(false);
+      }
     });
-    setStudents(data);
-  });
 
-  return () => unsubscribe();
-}, []);
+    const unsubscribeCourses = onSnapshot(collection(db, 'courses'), (snapshot) => {
+      const data: Course[] = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      } as Course));
+      setCourses(data);
+    });
 
+    fetchStudents();
 
+    return () => {
+      unsubscribeAuth();
+      unsubscribeCourses();
+      if (unsubscribeRef.current) unsubscribeRef.current();
+      if (observer.current) observer.current.disconnect();
+      if (fetchTrigger.current) clearTimeout(fetchTrigger.current);
+    };
+  }, []);
+
+  const fetchStudents = async (append = false) => {
+    if (!hasMore && !append) return;
+    setLoading(true);
+
+    if (unsubscribeRef.current) unsubscribeRef.current();
+
+    const studentsQuery = query(
+      collection(db, 'users'),
+      orderBy('fullName'),
+      limit(10),
+      ...(append && lastDoc ? [startAfter(lastDoc)] : [])
+    );
+    const unsubscribe = onSnapshot(studentsQuery, (snapshot) => {
+      const newData: Student[] = snapshot.docs.map(doc => ({
+        id: doc.id,
+        fullName: doc.data().fullName || '',
+        email: doc.data().email || '',
+        phone: doc.data().phone || '',
+        course: doc.data().course || '',
+        university: doc.data().university,
+        campus: doc.data().campus,
+        city: doc.data().city,
+        degree: doc.data().degree,
+        plan: doc.data().plan,
+        uid: doc.data().uid,
+        premium: doc.data().premium,
+        admin: doc.data().admin || false,
+        superadmin: doc.data().superadmin || false,
+        status: doc.data().status,
+        profileImage: `https://ui-avatars.com/api/?name=${encodeURIComponent(doc.data().fullName || '')}&background=random&size=128`,
+      }));
+
+      if (!append) {
+        setStudents(newData);
+      } else {
+        const uniqueData = newData.filter(newStudent => !students.some(existing => existing.id === newStudent.id));
+        if (uniqueData.length > 0) {
+          setStudents(prev => [...prev, ...uniqueData]);
+        }
+      }
+
+      setLastDoc(snapshot.docs[snapshot.docs.length - 1]);
+      setHasMore(newData.length === 10);
+      setLoading(false);
+    }, (error) => {
+      console.error('Error fetching students:', error);
+      setLoading(false);
+    });
+
+    unsubscribeRef.current = unsubscribe;
+  };
 
   const filteredStudents = students.filter(student => {
     const matchesSearch = (student.fullName?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
@@ -103,41 +186,63 @@ useEffect(() => {
     return matchesSearch && matchesCourse && matchesStatus;
   });
 
- const handleEditClick = (student: Student) => {
-  setCurrentStudent(student);
-  setEditData({ ...student });
-  setEditModal(true);
-};
-const handleEditChange = <K extends keyof Student>(key: K, value: Student[K]) => {
-  setEditData((prev) => ({ ...prev, [key]: value }));
-};
+  const handleEditClick = (student: Student) => {
+    setCurrentStudent(student);
+    setEditData({ ...student });
+    setEditModal(true);
+  };
 
-const handleEditSave = async () => {
-  if (!editData.fullName?.trim() || !editData.phone?.trim()) {
-    alert('Full name and phone are required.');
-    return;
-  }
+  const handleEditChange = <K extends keyof Student>(key: K, value: Student[K]) => {
+    setEditData((prev) => ({ ...prev, [key]: value }));
+  };
 
-  try {
-    if (currentStudent?.id) {
-      const { id, ...dataToUpdate } = editData; // remove id before saving
-      await updateDoc(doc(db, 'users', currentStudent.id), dataToUpdate);
-      setEditModal(false);
+  const handleEditSave = async () => {
+    if (!editData.fullName?.trim() || !editData.phone?.trim()) {
+      alert('Full name and phone are required.');
+      return;
     }
-  } catch (err) {
-    console.error('Error updating student:', err);
-    alert('Failed to save changes.');
-  }
+
+    try {
+      if (currentStudent?.id) {
+        const { id, ...dataToUpdate } = editData;
+        await updateDoc(doc(db, 'users', currentStudent.id), dataToUpdate);
+        setEditModal(false);
+      }
+    } catch (err) {
+      console.error('Error updating student:', err);
+      alert('Failed to save changes.');
+    }
+  };
+
+const handleCheckResults = (studentId: string) => {
+  router.push(`/admin/students/foradmin?studentId=${studentId}`);
 };
+
+
+  useEffect(() => {
+    const handleObserver = (entries: IntersectionObserverEntry[]) => {
+      if (entries[0].isIntersecting && hasMore && !loading) {
+        if (fetchTrigger.current) clearTimeout(fetchTrigger.current);
+        fetchTrigger.current = setTimeout(() => {
+          fetchStudents(true);
+        }, 300); // Debounce by 300ms to prevent rapid triggers
+      }
+    };
+    observer.current = new IntersectionObserver(handleObserver, { threshold: 1 });
+    if (observer.current) {
+      const target = document.querySelector('#load-more-trigger');
+      if (target) observer.current.observe(target);
+    }
+    return () => {
+      if (observer.current) observer.current.disconnect();
+      if (fetchTrigger.current) clearTimeout(fetchTrigger.current);
+    };
+  }, [hasMore, loading, students]);
 
   return (
     <div className="min-h-screen bg-slate-50">
-
-      {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 py-6">
         <Tabs defaultValue="students">
-       
-          {/* All Students */}
           <TabsContent value="students">
             <Card className="mb-6">
               <CardContent className="p-4 space-y-4">
@@ -149,9 +254,9 @@ const handleEditSave = async () => {
                 <div className="flex flex-col md:flex-row gap-4">
                   <select value={selectedCourse} onChange={(e) => setSelectedCourse(e.target.value)} className="border border-gray-300 rounded-md px-4 py-2">
                     <option value="all">All Courses</option>
-                    <option value="MDCAT">MDCAT</option>
-                    <option value="ECAT">ECAT</option>
-                    <option value="LAT">LAT</option>
+                    {courses.map(course => (
+                      <option key={course.id} value={course.name}>{course.name}</option>
+                    ))}
                   </select>
                   <select value={selectedStatus} onChange={(e) => setSelectedStatus(e.target.value)} className="border border-gray-300 rounded-md px-4 py-2">
                     <option value="all">All Status</option>
@@ -164,38 +269,69 @@ const handleEditSave = async () => {
             </Card>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filteredStudents.map((student) => (
-                <Card key={student.id} className="shadow-xl">
-                  <CardContent className="p-4 space-y-3">
-                    <div className="flex justify-between items-center">
-                      <div className="flex items-center space-x-3">
-                        <img src={student.profileImage} alt="Profile" className="w-12 h-12 rounded-full" />
-                        <div>
-                          <h3 className="text-lg font-bold">{student.fullName}</h3>
-                          <p className="text-sm text-gray-600">{student.email}</p>
+              {loading && !students.length ? (
+                Array(6).fill(0).map((_, index) => (
+                  <Card key={index} className="shadow-xl animate-pulse">
+                    <CardContent className="p-4 space-y-3">
+                      <div className="flex justify-between items-center">
+                        <div className="flex items-center space-x-3">
+                          <div className="w-12 h-12 bg-gray-300 rounded-full"></div>
+                          <div>
+                            <div className="h-6 bg-gray-300 rounded w-32"></div>
+                            <div className="h-4 bg-gray-300 rounded w-24 mt-1"></div>
+                          </div>
+                        </div>
+                        <div className="h-6 bg-gray-300 rounded w-16"></div>
+                      </div>
+                      <div className="h-4 bg-gray-300 rounded w-20"></div>
+                      <div className="h-4 bg-gray-300 rounded w-24"></div>
+                      <div className="h-8 bg-gray-300 rounded w-20 ml-auto"></div>
+                    </CardContent>
+                  </Card>
+                ))
+              ) : (
+                filteredStudents.map((student) => (
+                  <Card key={student.id} className="shadow-xl">
+                    <CardContent className="p-4 space-y-3">
+                      <div className="flex justify-between items-center">
+                        <div className="flex items-center space-x-3">
+                          <img src={student.profileImage} alt="Profile" className="w-12 h-12 rounded-full" />
+                          <div>
+                            <h3 className="text-lg font-bold">{student.fullName}</h3>
+                            <p className="text-sm text-gray-600">{student.email}</p>
+                          </div>
+                        </div>
+                        <div className="flex flex-col items-end space-y-1">
+                          <Badge className={`mt-1 ${student.premium ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'}`}>
+                            {student.premium ? 'Active' : 'Inactive'}
+                          </Badge>
+                          {student.admin && (
+                            <Badge className="bg-blue-100 text-blue-700">
+                              Admin
+                            </Badge>
+                          )}
                         </div>
                       </div>
-                      <Badge className={`mt-1 ${student.premium ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'}`}>
-                        {student.premium ? 'Active' : 'Inactive'}
-                      </Badge>
-                    </div>
-                    <p className="text-sm text-gray-600"><Phone className="inline h-4 w-4 mr-1" /> {student.phone}</p>
-                    <p className="text-sm text-gray-600"><BookOpen className="inline h-4 w-4 mr-1" /> {student.course}</p>
-                    <div className="text-right">
-                      <Button variant="outline" size="sm" onClick={() => handleEditClick(student)}>
-                        <Edit className="h-4 w-4 mr-1" /> Edit
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
+                      <p className="text-sm text-gray-600"><Phone className="inline h-4 w-4 mr-1" /> {student.phone}</p>
+                      <p className="text-sm text-gray-600"><BookOpen className="inline h-4 w-4 mr-1" /> {student.course}</p>
+                      <div className="text-right space-x-2">
+                        <Button variant="outline" size="sm" onClick={() => handleEditClick(student)}>
+                          <Edit className="h-4 w-4 mr-1" /> Edit
+                        </Button>
+                        <Button variant="outline" size="sm" onClick={() => handleCheckResults(student.id)}>
+                          <BarChart2 className="h-4 w-4 mr-1" /> Check Results
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))
+              )}
+              {hasMore && <div id="load-more-trigger" className="h-1"></div>}
             </div>
           </TabsContent>
-
         </Tabs>
       </main>
 
-      {/* Edit Student Dialog */}
       <Dialog open={editModal} onOpenChange={setEditModal}>
         <DialogContent>
           <DialogHeader>
@@ -203,15 +339,25 @@ const handleEditSave = async () => {
           </DialogHeader>
           {currentStudent && (
             <div className="space-y-3">
-             {['fullName', 'email', 'phone', 'course', 'university', 'campus', 'city', 'degree', 'plan', 'uid'].map((field) => (
-  <Input
-    key={field}
-    placeholder={field.charAt(0).toUpperCase() + field.slice(1)}
-    value={String(editData[field] ?? '')}
-    onChange={(e) => handleEditChange(field, e.target.value)}
-  />
-))}
-
+              {['fullName', 'email', 'phone', 'course', 'university', 'campus', 'city', 'degree', 'plan', 'uid'].map((field) => (
+                <Input
+                  key={field}
+                  placeholder={field.charAt(0).toUpperCase() + field.slice(1)}
+                  value={String(editData[field] ?? '')}
+                  onChange={(e) => handleEditChange(field, e.target.value)}
+                />
+              ))}
+              {isSuperadmin && (
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    checked={editData.admin ?? false}
+                    onChange={(e) => handleEditChange('admin', e.target.checked)}
+                    className="h-4 w-4"
+                  />
+                  <label>Admin</label>
+                </div>
+              )}
             </div>
           )}
           <DialogFooter className="mt-4">

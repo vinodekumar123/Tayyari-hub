@@ -37,7 +37,7 @@ const QuestionBankPage = () => {
   useEffect(() => {
     const fetchQuestions = async () => {
       try {
-        const snapshot = await getDocs(collection(db, "questions"));
+        const snapshot = await getDocs(collection(db, "mock-questions"));
         const fetched: Question[] = snapshot.docs.map((doc) => ({
           id: doc.id,
           ...(doc.data() as Omit<Question, "id">),
@@ -69,7 +69,7 @@ const QuestionBankPage = () => {
     const confirm = window.confirm("Are you sure you want to delete this question?");
     if (!confirm) return;
 
-    await deleteDoc(doc(db, "questions", id));
+    await deleteDoc(doc(db, "mock-questions", id));
     const updated = questions.filter((q) => q.id !== id);
     setQuestions(updated);
     setFiltered(updated);
@@ -89,7 +89,7 @@ const QuestionBankPage = () => {
         </div>
         <Button
           className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white transition-colors"
-          onClick={() => router.push("/admin/questions/create")}
+          onClick={() => router.push("/admin/mockquestions/create")}
         >
           <Plus className="h-5 w-5 mr-2" />
           New Question
@@ -145,7 +145,7 @@ const QuestionBankPage = () => {
                 className="p-4 bg-white shadow-md hover:shadow-lg transition-shadow duration-300 rounded-xl"
               >
                 <div className="flex flex-col sm:flex-row justify-between sm:items-start gap-3 mb-4">
-                 <h2 className="text-base sm:text-lg font-semibold text-gray-800 flex items-start gap-1">
+              <h2 className="text-base sm:text-lg font-semibold text-gray-800 flex items-start gap-1">
   {idx + 1}.{' '}
   <span
     className="prose max-w-prose inline"
@@ -181,7 +181,7 @@ const QuestionBankPage = () => {
                     variant="outline"
                     size="sm"
                     className="border-gray-300 hover:bg-gray-100 text-gray-700"
-                    onClick={() => router.push(`/admin/questions/create?id=${id}`)}
+                    onClick={() => router.push(`/admin/mockquestions/create?id=${id}`)}
                   >
                     <Pencil className="h-4 w-4 mr-1" /> Edit
                   </Button>

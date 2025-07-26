@@ -1,9 +1,10 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { getAuth, onAuthStateChanged } from "firebase/auth";
+import { getFirestore, doc, getDoc } from "firebase/firestore";
 import { Menu, X } from "lucide-react";
 import { app } from '../../app/firebase';
 
@@ -11,21 +12,41 @@ const Navbar = () => {
   const [mobileOpen, setMobileOpen] = useState(false);
   const router = useRouter();
   const auth = getAuth(app);
+  const db = getFirestore(app);
 
   const toggleMenu = () => {
     setMobileOpen(!mobileOpen);
   };
 
-  // 🔐 Redirect authenticated users
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (user) {
-        router.push("/dashboard/student");
-      }
-    });
+  const handleLoginClick = async () => {
+    const user = auth.currentUser;
+    if (user) {
+      const userRef = doc(db, 'users', user.uid);
+      const userSnap = await getDoc(userRef);
 
-    return () => unsubscribe();
-  }, [auth, router]);
+      if (userSnap.exists()) {
+        const data = userSnap.data();
+        if (data.admin === true) {
+          router.push('/dashboard/admin');
+        } else {
+          const requiredFields = [
+            'fullName', 'email', 'phone', 'city', 'university', 'campus', 'degree', 'course'
+          ];
+          const incomplete = requiredFields.some(field => !data[field]);
+
+          if (incomplete) {
+            router.push('/auth/register');
+          } else {
+            router.push('/dashboard/student');
+          }
+        }
+      } else {
+        router.push('/auth/register');
+      }
+    } else {
+      router.push('/auth/login');
+    }
+  };
 
   return (
     <header className="fixed top-0 left-0 w-full z-50 backdrop-blur-md bg-white/70 shadow-sm transition-all">
@@ -37,9 +58,12 @@ const Navbar = () => {
           <a href="#courses" className="hover:text-blue-600 transition">Courses</a>
           <a href="#reviews" className="hover:text-blue-600 transition">Reviews</a>
           <a href="#pricing" className="hover:text-blue-600 transition">Pricing</a>
-          <Link href="/auth/login" className="ml-6 px-5 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition">
+          <button
+            onClick={handleLoginClick}
+            className="ml-6 px-5 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition"
+          >
             Sign In
-          </Link>
+          </button>
         </nav>
 
         {/* Mobile Menu Button */}
@@ -54,13 +78,15 @@ const Navbar = () => {
           <a href="#courses" onClick={toggleMenu} className="block hover:text-blue-600">Courses</a>
           <a href="#features" onClick={toggleMenu} className="block hover:text-blue-600">Features</a>
           <a href="#reviews" onClick={toggleMenu} className="block hover:text-blue-600">Reviews</a>
-          <Link
-            href="/auth/login"
-            className="block px-4 py-2 text-center bg-blue-600 text-white rounded-xl hover:bg-blue-700"
-            onClick={toggleMenu}
+          <button
+            onClick={() => {
+              toggleMenu();
+              handleLoginClick();
+            }}
+            className="block w-full px-4 py-2 text-center bg-blue-600 text-white rounded-xl hover:bg-blue-700"
           >
             Sign In
-          </Link>
+          </button>
         </div>
       )}
     </header>

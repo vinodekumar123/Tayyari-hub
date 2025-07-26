@@ -1,3 +1,5 @@
+          import Link from 'next/link'; // Make sure this is at the top of the file
+
 const PricingSection = () => {
   return (
     <section id="pricing" className="bg-gray-50 py-20 px-6">
@@ -39,13 +41,14 @@ const PricingSection = () => {
               <li>✅ Create custom quizzes</li>
               <li>✅ Full progress tracking</li>
             </ul>
-            <div className="text-3xl font-bold mb-4">PKR 1000</div>
-            <a
-              href="#"
-              className="block text-center px-6 py-3 bg-white text-blue-600 font-semibold rounded-xl hover:bg-blue-100 transition"
-            >
-              Upgrade Now
-            </a>
+            <div className="text-3xl font-bold mb-4">PKR 2000</div>
+<Link
+  href="/pricing"
+  className="block text-center px-6 py-3 bg-white text-blue-600 font-semibold rounded-xl hover:bg-blue-100 transition"
+>
+  Upgrade Now
+</Link>
+
           </div>
         </div>
       </div>
