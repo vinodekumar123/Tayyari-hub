@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { auth, db } from '../../firebase';
-import { doc, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, setDoc, updateDoc, serverTimestamp, getDoc } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -32,10 +32,27 @@ export default function OnboardingPage() {
   });
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
         setUserId(user.uid);
         setForm((prev) => ({ ...prev, email: user.email || '' }));
+
+        const userSnap = await getDoc(doc(db, 'users', user.uid));
+        if (userSnap.exists()) {
+          const data = userSnap.data();
+
+          if (data.admin === true) {
+            router.push('/dashboard/admin');
+            return;
+          }
+
+          const required = ['fullName', 'email', 'phone', 'city', 'university', 'campus', 'degree', 'course'];
+          const incomplete = required.some((field) => !data[field]);
+
+          if (!incomplete) {
+            router.push('/dashboard/student');
+          }
+        }
       } else {
         router.push('/auth/login');
       }
@@ -57,7 +74,7 @@ export default function OnboardingPage() {
         ...form,
         uid: userId,
         createdAt: serverTimestamp(),
-        plan: 'free', // default in case user closes modal unexpectedly
+        plan: 'free',
       });
 
       setLoading(false);
@@ -69,7 +86,6 @@ export default function OnboardingPage() {
     }
   };
 
-  // 🟦 Save user plan and navigate
   const handlePlanChoice = async (choice: 'free' | 'premium') => {
     if (!userId) return;
     try {
@@ -77,8 +93,15 @@ export default function OnboardingPage() {
         plan: choice,
       });
 
+      const userSnap = await getDoc(doc(db, 'users', userId));
+      const data = userSnap.exists() ? userSnap.data() : {};
+
       if (choice === 'free') {
-        router.push('/dashboard/admin');
+        if (data.admin) {
+          router.push('/dashboard/admin');
+        } else {
+          router.push('/dashboard/student');
+        }
       } else {
         router.push('/premium');
       }
@@ -90,8 +113,9 @@ export default function OnboardingPage() {
 
   return (
     <div className="min-h-screen bg-white flex items-center justify-center px-4 py-12 relative">
-          <div className="absolute top-20 left-20 w-72 h-72 bg-blue-300 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-pulse" />
+      <div className="absolute top-20 left-20 w-72 h-72 bg-blue-300 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-pulse" />
       <div className="absolute bottom-20 right-20 w-72 h-72 bg-blue-200 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-pulse delay-1000" />
+
       <Card className="w-full max-w-2xl shadow-xl">
         <CardHeader>
           <CardTitle className="text-2xl font-bold text-center">
@@ -240,7 +264,6 @@ export default function OnboardingPage() {
         </CardContent>
       </Card>
 
-      {/* ✅ Plan Choice Modal */}
       {showPlanModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white p-6 rounded-xl max-w-md w-full text-center shadow-2xl space-y-4">

@@ -2,32 +2,42 @@
 
 import { useState, useEffect } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
-import { db, auth } from '../.././firebase'; // adjust path if needed
+import { collection, doc, getDoc, getDocs, updateDoc } from 'firebase/firestore';
+import { db, auth } from '../../firebase';
 
-import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Label } from '@/components/ui/label';
+import * as RadixSelect from '@radix-ui/react-select';
 import { toast } from 'sonner';
 
-export default function UserProfilePage() {
+export default function TeacherProfilePage() {
   const [userId, setUserId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+
   const [form, setForm] = useState({
     fullName: '',
     email: '',
     phone: '',
-    city: '',
-    university: '',
-    campus: '',
-    degree: '',
-    course: '',
-    plan: '',
+    metadata: {
+      course: '',
+      courseId: '',
+      subject: '',
+      subjectId: '',
+      chapter: '',
+      chapterId: '',
+      topic: '',
+      difficulty: '',
+      year: '',
+      book: '',
+      teacher: '',
+    },
   });
 
-  // 🟡 Detect and set authenticated user
+  const [allCourses, setAllCourses] = useState<any[]>([]);
+  const [availableSubjects, setAvailableSubjects] = useState<string[]>([]);
+  const [availableChapters, setAvailableChapters] = useState<string[]>([]);
+  const difficulties = ['Easy', 'Medium', 'Hard'];
+  const years = Array.from({ length: new Date().getFullYear() - 2000 + 1 }, (_, i) => (2000 + i).toString());
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
@@ -37,91 +47,262 @@ export default function UserProfilePage() {
       }
     });
 
+    fetchCoursesFromFirestore();
     return () => unsubscribe();
   }, []);
 
-  // 🟢 Fetch user profile data
+  const fetchCoursesFromFirestore = async () => {
+    const snapshot = await getDocs(collection(db, 'courses'));
+    const courseData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    setAllCourses(courseData);
+  };
+
   const fetchUserData = async (uid: string) => {
     try {
       const userRef = doc(db, 'users', uid);
       const snapshot = await getDoc(userRef);
-
       if (snapshot.exists()) {
-        setForm(snapshot.data() as typeof form);
-      } else {
-        toast.warning('No profile data found.');
+        const data = snapshot.data();
+        setForm({
+          ...form,
+          ...data,
+          metadata: {
+            course: '',
+            courseId: '',
+            subject: '',
+            subjectId: '',
+            chapter: '',
+            chapterId: '',
+            topic: '',
+            difficulty: '',
+            year: '',
+            book: '',
+            teacher: '',
+            ...(data.metadata || {}),
+          },
+        });
       }
     } catch (err) {
-      console.error('Error fetching user data:', err);
       toast.error('Failed to load profile.');
     } finally {
       setLoading(false);
     }
   };
 
-  // 🟣 Handle form input
-  const handleChange = (field: string, value: string) => {
-    setForm(prev => ({ ...prev, [field]: value }));
+  const handleInputChange = (field: string, value: any) => {
+    setForm(prev => ({ ...prev, metadata: { ...(prev.metadata || {}), [field]: value } }));
   };
 
-  // 🔵 Save updated profile
   const handleSave = async () => {
     if (!userId) return;
-
     setSaving(true);
     try {
       await updateDoc(doc(db, 'users', userId), {
         ...form,
+        metadata: {
+          ...form.metadata,
+          teacher: form.fullName,
+        },
         updatedAt: new Date(),
       });
-      toast.success('Profile updated successfully!');
+      alert('✅ Info saved successfully!');
     } catch (err) {
-      console.error('Error updating profile:', err);
       toast.error('Failed to update profile.');
     } finally {
       setSaving(false);
     }
   };
 
+  const handleCourseSelect = async (courseName: string) => {
+    const selected = allCourses.find(c => c.name === courseName);
+    if (!selected) return;
+
+    handleInputChange('course', courseName);
+    handleInputChange('courseId', selected.id);
+    handleInputChange('subject', '');
+    handleInputChange('subjectId', '');
+    handleInputChange('chapter', '');
+    handleInputChange('chapterId', '');
+    setAvailableChapters([]);
+    setAvailableSubjects([]);
+
+    const subjectNames: string[] = [];
+    for (const subjectId of selected.subjectIds || []) {
+      const subjectRef = doc(db, 'subjects', subjectId);
+      const subjectSnap = await getDoc(subjectRef);
+      if (subjectSnap.exists()) {
+        const subjectData = subjectSnap.data();
+        subjectNames.push(subjectData.name);
+      }
+    }
+
+    setAvailableSubjects(subjectNames);
+  };
+
+  const handleSubjectSelect = async (subjectName: string) => {
+    handleInputChange('subject', subjectName);
+    handleInputChange('subjectId', '');
+    handleInputChange('chapter', '');
+    handleInputChange('chapterId', '');
+    setAvailableChapters([]);
+
+    const selectedCourse = allCourses.find(c => c.name === form.metadata?.course);
+    if (!selectedCourse || !selectedCourse.subjectIds) return;
+
+    for (const subjectId of selectedCourse.subjectIds) {
+      const subjectRef = doc(db, 'subjects', subjectId);
+      const subjectSnap = await getDoc(subjectRef);
+      if (subjectSnap.exists()) {
+        const subjectData = subjectSnap.data();
+        if (subjectData.name === subjectName) {
+          const chapters = subjectData.chapters || {};
+          setAvailableChapters(Object.keys(chapters));
+          handleInputChange('subjectId', subjectId);
+          break;
+        }
+      }
+    }
+  };
+
+  const handleChapterSelect = (chapterName: string) => {
+    handleInputChange('chapter', chapterName);
+    handleInputChange('chapterId', chapterName); // If chapter has its own ID, replace here
+  };
+
   if (loading) return <p className="text-center py-10">Loading profile...</p>;
 
   return (
-    <div className="min-h-screen bg-slate-50 py-8 px-4 flex justify-center">
-      <Card className="w-full max-w-3xl shadow-xl">
-        <CardHeader>
-          <CardTitle className="text-2xl font-bold text-center">👤 My Profile</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-5">
-          {[
-            { label: 'Full Name', key: 'fullName' },
-            { label: 'Email', key: 'email', readOnly: true },
-            { label: 'Phone', key: 'phone' },
-            { label: 'City', key: 'city' },
-            { label: 'University', key: 'university' },
-            { label: 'Campus', key: 'campus' },
-            { label: 'Course', key: 'course' },
-            { label: 'Degree', key: 'degree' },
-            { label: 'Plan', key: 'plan', readOnly: true }
-          ].map(({ label, key, readOnly }) => (
-            <div key={key} className="space-y-1">
-              <Label htmlFor={key}>{label}</Label>
-              <Input
-                id={key}
-                value={(form as any)[key] || ''}
-                readOnly={readOnly}
-                onChange={(e) => handleChange(key, e.target.value)}
-                className={readOnly ? 'bg-gray-100 cursor-not-allowed' : ''}
+    <div className="min-h-screen bg-slate-50 py-10 px-4 flex justify-center">
+      <div className="w-full  bg-white shadow-lg rounded-lg p-8 space-y-8">
+        <h2 className="text-2xl  font-bold text-left">👨‍🏫 Teacher Profile</h2>
+
+        {/* Basic Info */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <label className="block mb-1">Full Name</label>
+            <input
+              className="w-full border px-3 py-2 rounded"
+              value={form.fullName}
+              onChange={(e) => setForm(prev => ({ ...prev, fullName: e.target.value }))}
+            />
+          </div>
+          <div>
+            <label className="block mb-1">Email</label>
+            <input
+              className="w-full border px-3 py-2 rounded bg-gray-100 cursor-not-allowed"
+              value={form.email}
+              readOnly
+            />
+          </div>
+          <div>
+            <label className="block mb-1">Phone</label>
+            <input
+              className="w-full border px-3 py-2 rounded"
+              value={form.phone}
+              onChange={(e) => setForm(prev => ({ ...prev, phone: e.target.value }))}
+            />
+          </div>
+        </div>
+
+        {/* Metadata */}
+        <div className="space-y-6 border-t pt-6">
+          <h3 className="text-xl font-semibold">📘 Question Metadata Defaults</h3>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <RadixDropdown
+              label="Course"
+              value={form.metadata?.course || ''}
+              options={allCourses.map((c) => c.name)}
+              onChange={handleCourseSelect}
+            />
+            <RadixDropdown
+              label="Subject"
+              value={form.metadata?.subject || ''}
+              options={availableSubjects}
+              onChange={handleSubjectSelect}
+              disabled={!form.metadata?.course}
+            />
+            <RadixDropdown
+              label="Chapter"
+              value={form.metadata?.chapter || ''}
+              options={availableChapters}
+              onChange={handleChapterSelect}
+              disabled={!form.metadata?.subject}
+            />
+            <RadixDropdown
+              label="Difficulty"
+              value={form.metadata?.difficulty || ''}
+              options={difficulties}
+              onChange={(val) => handleInputChange('difficulty', val)}
+            />
+            <RadixDropdown
+              label="Year"
+              value={form.metadata?.year || ''}
+              options={years}
+              onChange={(val) => handleInputChange('year', val)}
+            />
+            <div>
+              <label className="block mb-1">Book</label>
+              <input
+                className="w-full border px-3 py-2 rounded"
+                value={form.metadata?.book || ''}
+                onChange={(e) => handleInputChange('book', e.target.value)}
               />
             </div>
-          ))}
-
-          <div className="flex justify-end pt-4">
-            <Button onClick={handleSave} disabled={saving}>
-              {saving ? 'Saving...' : 'Save Changes'}
-            </Button>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+
+        <div className="flex justify-end">
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="bg-blue-600 text-white px-5 py-2 rounded hover:bg-blue-700 disabled:opacity-50"
+          >
+            {saving ? 'Saving...' : 'Save Changes'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function RadixDropdown({
+  label,
+  value,
+  options,
+  onChange,
+  disabled = false,
+}: {
+  label: string;
+  value: string;
+  options: string[];
+  onChange: (val: string) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <div className={disabled ? 'opacity-50' : ''}>
+      <label className="block mb-1">{label}</label>
+      <RadixSelect.Root value={value} onValueChange={onChange} disabled={disabled}>
+        <RadixSelect.Trigger className="w-full border px-3 py-2 rounded text-left flex items-center justify-between">
+          <RadixSelect.Value>
+            {value || `Select ${label.toLowerCase()}`}
+          </RadixSelect.Value>
+          <RadixSelect.Icon className="ml-2">▼</RadixSelect.Icon>
+        </RadixSelect.Trigger>
+        <RadixSelect.Content className="bg-white border shadow rounded">
+          <RadixSelect.Viewport>
+            {options.map((opt) => (
+              <RadixSelect.Item
+                key={opt}
+                value={opt}
+                className="px-3 py-2 hover:bg-gray-100 cursor-pointer"
+              >
+                <RadixSelect.ItemText>{opt}</RadixSelect.ItemText>
+              </RadixSelect.Item>
+            ))}
+          </RadixSelect.Viewport>
+        </RadixSelect.Content>
+      </RadixSelect.Root>
     </div>
   );
 }

@@ -1,648 +1,677 @@
 'use client';
 
-import { useState } from 'react';
-import { db } from '../../../firebase'; // adjust path if needed
-import {
-  collection,
-  getDocs,
-  addDoc
-} from 'firebase/firestore';
-import { useEffect } from 'react';
-import { useSearchParams } from "next/navigation";
-import { getDoc, doc } from "firebase/firestore";
-import { updateDoc } from "firebase/firestore";
+   import { useState, useEffect } from 'react';
+   import { useRouter, useSearchParams } from 'next/navigation';
+   import { onAuthStateChanged } from 'firebase/auth';
+   import {
+     db,
+     auth
+   } from '../../../firebase';
+   import {
+     collection,
+     getDoc,
+     doc,
+     addDoc,
+     updateDoc,
+     onSnapshot,
+     QuerySnapshot,
+     DocumentData
+   } from 'firebase/firestore';
+   import {
+     BookOpen,
+     Plus,
+     X,
+     Save,
+     Upload,
+     AlertCircle
+   } from 'lucide-react';
+   import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+   import { Textarea } from '@/components/ui/textarea';
+   import { Label } from '@/components/ui/label';
+   import { Button } from '@/components/ui/button';
+   import { Checkbox } from '@/components/ui/checkbox';
+   import { Input } from '@/components/ui/input';
+   import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+   import dynamic from 'next/dynamic';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Badge } from '@/components/ui/badge';
-import { Separator } from '@/components/ui/separator';
-import { 
-  BookOpen, 
-  Plus, 
-  Minus, 
-  Save, 
-  Upload,
-  Download,
-  Eye,
-  EyeOff,
-  AlertCircle,
-  CheckCircle,
-  X
-} from 'lucide-react';
-import { useRouter } from 'next/navigation';
+   // Dynamically import ReactQuill to avoid SSR issues
+   const ReactQuill = dynamic(() => import('react-quill'), { ssr: false });
 
-export default function CreateQuestion() {
-  const router = useRouter();
-const [firestoreCourses, setFirestoreCourses] = useState<any[]>([]);
-const searchParams = useSearchParams();
-const id = searchParams.get("id");
-const [isSaving, setIsSaving] = useState(false);
+   // TypeScript Interfaces
+   interface Course {
+     id: string;
+     name: string;
+     description: string;
+     subjectIds: string[];
+   }
 
-  const [questionData, setQuestionData] = useState({
-    questionText: '',
-    options: ['', '', '', ''],
-    correctAnswer: '',
-    explanation: '',
-    subject: '',
-    chapter: '',
-    topic: '',
-    difficulty: '',
-    year: '',
-    book: '',
-    teacher: '',
-    course: '',
-    enableExplanation: true
-  });
+   interface Subject {
+     id: string;
+     name: string;
+     chapters: { [chapter: string]: string[] };
+   }
 
-  const [previewMode, setPreviewMode] = useState(false);
-  const [errors, setErrors] = useState<{[key: string]: string}>({});
+   interface Question {
+     id?: string;
+     questionText: string;
+     options: string[];
+     correctAnswer: string;
+     explanation: string;
+     subject: string;
+     chapter: string;
+     topic: string;
+     difficulty: string;
+     year: string;
+     book: string;
+     teacher: string;
+     course: string;
+     enableExplanation: boolean;
+     createdAt?: Date;
+   }
 
-  const courses = [
-    { id: 'mdcat', name: 'MDCAT' },
-    { id: 'ecat', name: 'ECAT' },
-    { id: 'lat', name: 'LAT' }
-  ];
+   export default function CreateQuestion() {
+     const router = useRouter();
+     const searchParams = useSearchParams();
+     const id = searchParams.get("id");
 
-  const subjects = {
-    mdcat: ['Biology', 'Chemistry', 'Physics'],
-    ecat: ['Mathematics', 'Physics', 'Chemistry'],
-    lat: ['English', 'General Knowledge', 'Current Affairs']
-  };
+     const [firestoreCourses, setFirestoreCourses] = useState<Course[]>([]);
+     const [firestoreSubjects, setFirestoreSubjects] = useState<Subject[]>([]);
+     const [isSaving, setIsSaving] = useState<boolean>(false);
+     const [isLoading, setIsLoading] = useState<boolean>(true);
+     const [previewMode, setPreviewMode] = useState<boolean>(false);
+     const [errors, setErrors] = useState<{ [key: string]: string }>({});
+     const [questionData, setQuestionData] = useState<Question>({
+       questionText: '',
+       options: ['', '', '', ''],
+       correctAnswer: '',
+       explanation: '',
+       subject: '',
+       chapter: '',
+       topic: '',
+       difficulty: '',
+       year: '',
+       book: '',
+       teacher: '',
+       course: '',
+       enableExplanation: true
+     });
 
-  const chapters = {
-    'Biology': ['Cell Structure', 'Genetics', 'Evolution', 'Ecology', 'Human Biology'],
-    'Chemistry': ['Atomic Structure', 'Chemical Bonding', 'Organic Chemistry', 'Inorganic Chemistry'],
-    'Physics': ['Mechanics', 'Thermodynamics', 'Electromagnetism', 'Modern Physics'],
-    'Mathematics': ['Algebra', 'Calculus', 'Trigonometry', 'Statistics', 'Geometry']
-  };
-useEffect(() => {
-  const fetchCourses = async () => {
-    const snapshot = await getDocs(collection(db, 'courses'));
-    const courseList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as any[];
-    setFirestoreCourses(courseList);
-  };
+     // Fetch courses and subjects instantly with onSnapshot
+     useEffect(() => {
+       const unsubscribeCourses = onSnapshot(collection(db, 'courses'), (snapshot: QuerySnapshot<DocumentData>) => {
+         const coursesData: Course[] = snapshot.docs.map(doc => ({
+           id: doc.id,
+           name: doc.data().name as string,
+           description: doc.data().description as string,
+           subjectIds: (doc.data().subjectIds as string[]) || [],
+         }));
+         setFirestoreCourses(coursesData);
+         setIsLoading(false);
+       }, (error) => {
+         setErrors({ fetch: 'Failed to load courses' });
+         setIsLoading(false);
+       });
 
-  fetchCourses();
-}, []);
-useEffect(() => {
-  const fetchQuestion = async () => {
-    if (!id) return;
-    try {
-      const snapshot = await getDoc(doc(db, "questions", id));
-      if (snapshot.exists()) {
-        const data = snapshot.data();
-        setQuestionData({
-          ...questionData,
-          ...data
-        });
-      }
-    } catch (err) {
-      console.error("Failed to load question:", err);
-    }
-  };
+       const unsubscribeSubjects = onSnapshot(collection(db, 'subjects'), (snapshot: QuerySnapshot<DocumentData>) => {
+         const subjectsData: Subject[] = snapshot.docs.map(doc => ({
+           id: doc.id,
+           name: doc.data().name as string,
+           chapters: (doc.data().chapters as { [chapter: string]: string[] }) || {},
+         }));
+         setFirestoreSubjects(subjectsData);
+       }, (error) => {
+         setErrors({ fetch: 'Failed to load subjects' });
+       });
 
-  fetchQuestion();
-}, [id]);
-const handleSave = async () => {
-  if (!validateForm()) return;
-  setIsSaving(true);
+       return () => {
+         unsubscribeCourses();
+         unsubscribeSubjects();
+       };
+     }, []);
 
-  try {
-    if (id) {
-      await updateDoc(doc(db, "questions", id), questionData);
-    } else {
-      await addDoc(collection(db, "questions"), {
-        ...questionData,
-        createdAt: new Date()
-      });
-    }
-    router.push("/admin/questions/questionbank");
-  } catch (err) {
-    console.error("Failed to save question:", err);
-  } finally {
-    setIsSaving(false);
-  }
-};
+     // Fetch question if editing
+     useEffect(() => {
+       const fetchQuestion = async () => {
+         if (!id) return;
+         try {
+           const snapshot = await getDoc(doc(db, "questions", id));
+           if (snapshot.exists()) {
+             setQuestionData({ ...questionData, ...snapshot.data() } as Question);
+           }
+         } catch (err) {
+           setErrors({ fetch: 'Failed to load question' });
+         }
+       };
 
+       fetchQuestion();
+     }, [id]);
 
-  const difficulties = ['Easy', 'Medium', 'Hard'];
-  const years = Array.from({ length: 10 }, (_, i) => (new Date().getFullYear() - i).toString());
-const selectedFirestoreCourse = firestoreCourses.find(c => c.name === questionData.course);
+     // Fetch teacher profile metadata only on new question
+     useEffect(() => {
+       const unsubscribe = onAuthStateChanged(auth, async (user) => {
+         if (user && !id) {
+           const userDoc = await getDoc(doc(db, 'users', user.uid));
+           if (userDoc.exists()) {
+             const userData = userDoc.data();
+             const metadata = userData.metadata || {};
+             setQuestionData(prev => ({
+               ...prev,
+               course: metadata.course || '',
+               subject: metadata.subject || '',
+               chapter: metadata.chapter || '',
+               topic: metadata.topic || '',
+               difficulty: metadata.difficulty || '',
+               year: metadata.year?.toString() || '',
+               book: metadata.book || '',
+               teacher: userData.fullName || ''
+             }));
+           }
+         }
+       });
 
-const availableSubjects = selectedFirestoreCourse?.subjects || [];
+       return () => unsubscribe();
+     }, [id]);
 
-const availableChapters = selectedFirestoreCourse?.chapters?.[questionData.subject] 
-  ? Object.keys(selectedFirestoreCourse.chapters[questionData.subject])
-  : [];
+     const handleInputChange = (field: keyof Question, value: string | boolean) => {
+       setQuestionData(prev => ({ ...prev, [field]: value }));
+       if (errors[field]) {
+         setErrors(prev => ({ ...prev, [field]: '' }));
+       }
+     };
 
-const selectedChapter = selectedFirestoreCourse?.chapters?.[questionData.subject]?.[questionData.chapter];
-const availableTopics = Array.isArray(selectedChapter) ? selectedChapter : [];
+     const handleOptionChange = (index: number, value: string) => {
+       const newOptions = [...questionData.options];
+       newOptions[index] = value;
+       setQuestionData(prev => ({
+         ...prev,
+         options: newOptions
+       }));
+     };
 
+     const addOption = () => {
+       if (questionData.options.length < 6) {
+         setQuestionData(prev => ({
+           ...prev,
+           options: [...prev.options, '']
+         }));
+       }
+     };
 
+     const removeOption = (index: number) => {
+       if (questionData.options.length > 2) {
+         const newOptions = questionData.options.filter((_, i) => i !== index);
+         setQuestionData(prev => ({
+           ...prev,
+           options: newOptions,
+           correctAnswer: prev.correctAnswer === prev.options[index] ? '' : prev.correctAnswer
+         }));
+       }
+     };
 
-  const handleInputChange = (field: string, value: any) => {
-    setQuestionData(prev => ({
-      ...prev,
-      [field]: value
-    }));
-    
-    // Clear error when user starts typing
-    if (errors[field]) {
-      setErrors(prev => ({
-        ...prev,
-        [field]: ''
-      }));
-    }
-  };
+     const validateForm = () => {
+       const newErrors: { [key: string]: string } = {};
 
-  const handleOptionChange = (index: number, value: string) => {
-    const newOptions = [...questionData.options];
-    newOptions[index] = value;
-    setQuestionData(prev => ({
-      ...prev,
-      options: newOptions
-    }));
-  };
+       if (!questionData.questionText.trim()) {
+         newErrors.questionText = 'Question text is required';
+       }
 
-  const addOption = () => {
-    if (questionData.options.length < 6) {
-      setQuestionData(prev => ({
-        ...prev,
-        options: [...prev.options, '']
-      }));
-    }
-  };
+       if (questionData.options.some(option => !option.trim())) {
+         newErrors.options = 'All options must be filled';
+       }
 
-  const removeOption = (index: number) => {
-    if (questionData.options.length > 2) {
-      const newOptions = questionData.options.filter((_, i) => i !== index);
-      setQuestionData(prev => ({
-        ...prev,
-        options: newOptions,
-        correctAnswer: prev.correctAnswer === prev.options[index] ? '' : prev.correctAnswer
-      }));
-    }
-  };
+       if (!questionData.correctAnswer) {
+         newErrors.correctAnswer = 'Please select the correct answer';
+       }
 
-  const validateForm = () => {
-    const newErrors: {[key: string]: string} = {};
+       if (!questionData.course) {
+         newErrors.course = 'Course is required';
+       }
 
-    if (!questionData.questionText.trim()) {
-      newErrors.questionText = 'Question text is required';
-    }
+       if (!questionData.subject) {
+         newErrors.subject = 'Subject is required';
+       }
 
-    if (questionData.options.some(option => !option.trim())) {
-      newErrors.options = 'All options must be filled';
-    }
+       if (!questionData.difficulty) {
+         newErrors.difficulty = 'Difficulty level is required';
+       }
 
-    if (!questionData.correctAnswer) {
-      newErrors.correctAnswer = 'Please select the correct answer';
-    }
+       setErrors(newErrors);
+       return Object.keys(newErrors).length === 0;
+     };
 
-    if (!questionData.course) {
-      newErrors.course = 'Course is required';
-    }
+     const handleSave = async () => {
+       if (!validateForm()) return;
+       setIsSaving(true);
 
-    if (!questionData.subject) {
-      newErrors.subject = 'Subject is required';
-    }
+       try {
+         if (id) {
+           await updateDoc(doc(db, "questions", id), questionData);
+         } else {
+           await addDoc(collection(db, "questions"), {
+             ...questionData,
+             createdAt: new Date()
+           });
+         }
+         router.push("/admin/questions/questionbank");
+       } catch (err) {
+         setErrors({ save: 'Failed to save question' });
+       } finally {
+         setIsSaving(false);
+       }
+     };
 
-    if (!questionData.difficulty) {
-      newErrors.difficulty = 'Difficulty level is required';
-    }
+     const selectedCourse = firestoreCourses.find(c => c.name === questionData.course);
+     const availableSubjects = selectedCourse?.subjectIds
+       ? firestoreSubjects.filter(s => selectedCourse.subjectIds.includes(s.id)).map(s => s.name)
+       : [];
+     const selectedSubject = firestoreSubjects.find(s => s.name === questionData.subject);
+     const availableChapters = selectedSubject ? Object.keys(selectedSubject.chapters) : [];
+     const availableTopics = selectedSubject && questionData.chapter
+       ? selectedSubject.chapters[questionData.chapter] || []
+       : [];
+     const difficulties = ['Easy', 'Medium', 'Hard'];
+     const years = Array.from({ length: new Date().getFullYear() - 2000 + 1 }, (_, i) => (2000 + i).toString());
 
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
+     // Skeleton Loader Component
+     const SkeletonCard = () => (
+       <Card className="animate-pulse">
+         <CardHeader>
+           <div className="h-6 w-48 bg-gray-200 rounded"></div>
+         </CardHeader>
+         <CardContent className="space-y-4">
+           <div className="space-y-2">
+             <div className="h-4 w-24 bg-gray-200 rounded"></div>
+             <div className="h-20 w-full bg-gray-200 rounded"></div>
+           </div>
+           <div className="space-y-2">
+             <div className="h-4 w-24 bg-gray-200 rounded"></div>
+             <div className="space-y-2">
+               {[...Array(4)].map((_, idx) => (
+                 <div key={idx} className="h-10 w-full bg-gray-200 rounded"></div>
+               ))}
+             </div>
+           </div>
+         </CardContent>
+       </Card>
+     );
 
+     // ReactQuill toolbar configuration
+     const quillModules = {
+       toolbar: [
+         [{ 'header': [1, 2, false] }],
+         ['bold', 'italic', 'underline'],
+         [{ 'list': 'ordered' }, { 'list': 'bullet' }],
+         ['link', 'image'],
+         ['clean']
+       ]
+     };
 
+     return (
+       <div className="min-h-screen bg-white rounded-xl">
+         <header className="bg-white shadow-sm border-b">
+           <div className=" mx-auto px-4 sm:px-6 lg:px-8 py-6 flex flex-col sm:flex-row justify-between items-center gap-4">
+             <div className="flex items-center space-x-3">
+               <div className="h-10 w-10 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-full flex items-center justify-center">
+                 <BookOpen className="text-white h-6 w-6" />
+               </div>
+               <h1 className="text-2xl font-bold text-gray-900">
+                 {id ? "Edit Question" : "Create Question"}
+               </h1>
+             </div>
+             <div className="flex gap-3">
+              
+               <Button
+                 variant="outline"
+                 className="border-gray-300 hover:bg-gray-100 transition-colors"
+                 onClick={() => setPreviewMode(!previewMode)}
+               >
+                 {previewMode ? 'Edit Mode' : 'Preview Mode'}
+               </Button>
+             </div>
+           </div>
+         </header>
 
-  const handleBulkImport = () => {
-    // Bulk import logic
-    console.log('Bulk import triggered');
-  };
+         <main className=" mx-auto px-4 sm:px-6 lg:px-8 py-8">
+           {isLoading ? (
+             <div className="space-y-8">
+               <SkeletonCard />
+               <SkeletonCard />
+             </div>
+           ) : (
+             <div className="space-y-8">
+               {/* Error Alert */}
+               {(errors.fetch || errors.save) && (
+                 <Alert variant="destructive" className="animate-in fade-in">
+                   <AlertDescription className="flex items-center">
+                     <AlertCircle className="h-4 w-4 mr-2" />
+                     {errors.fetch || errors.save}
+                   </AlertDescription>
+                 </Alert>
+               )}
 
-  const selectedCourse = courses.find(c => c.id === questionData.course);
- 
+               {/* Question Content */}
+               <Card className="shadow-md hover:shadow-lg transition-shadow duration-300">
+                 <CardHeader>
+                   <CardTitle className="text-lg font-semibold text-gray-900">Question Content</CardTitle>
+                 </CardHeader>
+                 <CardContent className="space-y-6">
+                   {previewMode ? (
+                     <div className="p-4 bg-gray-100 rounded-lg">
+                       <div
+                         className="text-base font-medium text-gray-800 prose"
+                         dangerouslySetInnerHTML={{ __html: questionData.questionText || 'No question text' }}
+                       />
+                       <div className="mt-4 space-y-2">
+                         {questionData.options.map((option, index) => (
+                           <div
+                             key={index}
+                             className={`p-2 rounded-md ${
+                               option === questionData.correctAnswer
+                                 ? 'bg-green-100 text-green-800'
+                                 : 'bg-white text-gray-800'
+                             }`}
+                           >
+                             {String.fromCharCode(65 + index)}. {option || 'No option text'}
+                           </div>
+                         ))}
+                       </div>
+                       {questionData.enableExplanation && questionData.explanation && (
+                         <div className="mt-4">
+                           <p className="text-sm font-medium text-gray-700">Explanation:</p>
+                           <p className="text-sm text-gray-600">{questionData.explanation}</p>
+                         </div>
+                       )}
+                     </div>
+                   ) : (
+                     <>
+                       <div className="space-y-2">
+                         <Label htmlFor="questionText" className="text-sm font-medium text-gray-700">
+                           Question Text *
+                         </Label>
+                         <ReactQuill
+                           theme="snow"
+                           value={questionData.questionText}
+                           onChange={(value) => handleInputChange('questionText', value)}
+                           modules={quillModules}
+                           className={`bg-white ${errors.questionText ? 'border-red-500 border-2 rounded' : ''}`}
+                         />
+                         {errors.questionText && (
+                           <p className="text-sm text-red-600 flex items-center mt-1">
+                             <AlertCircle className="h-4 w-4 mr-1" />
+                             {errors.questionText}
+                           </p>
+                         )}
+                       </div>
 
-  return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex items-center space-x-4">
-              <div className="flex items-center space-x-2">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600">
-                  <BookOpen className="h-5 w-5 text-white" />
-                </div>
-<span className="text-xl font-bold text-gray-900">
-  {id ? "Edit Question" : "Create Question"}
-</span>
-              </div>
-            </div>
-            
-            <div className="flex items-center space-x-4">
-             
-              <Button variant="outline" onClick={handleBulkImport}>
-                <Upload className="h-4 w-4 mr-2" />
-                Bulk Import
-              </Button>
-             
-            </div>
-          </div>
-        </div>
-      </header>
+                       <div className="space-y-4">
+                         <div className="flex justify-between items-center">
+                           <Label className="text-sm font-medium text-gray-700">Answer Options *</Label>
+                           <Button
+                             variant="outline"
+                             size="sm"
+                             onClick={addOption}
+                             disabled={questionData.options.length >= 6}
+                             className="border-gray-300 hover:bg-gray-100"
+                           >
+                             <Plus className="h-4 w-4 mr-1" />
+                             Add Option
+                           </Button>
+                         </div>
 
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {previewMode ? (
-          /* Preview Mode */
-          <Card className="mb-8">
-            <CardHeader>
-              <CardTitle>Question Preview</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-6">
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                      {questionData.questionText || 'Question text will appear here...'}
-                    </h3>
-                    <div className="space-y-3">
-                      {questionData.options.map((option, index) => (
-                        <div key={index} className="flex items-center space-x-3">
-                          <input
-                            type="radio"
-                            name="preview-answer"
-                            id={`preview-option-${index}`}
-                            className="h-4 w-4 text-blue-600"
-                            disabled
-                          />
-                          <label htmlFor={`preview-option-${index}`} className="flex-1 p-3 border rounded-lg">
-                            <span className="font-medium mr-2">{String.fromCharCode(65 + index)}.</span>
-                            {option || `Option ${index + 1}`}
-                          </label>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="ml-6">
-                    <div className="space-y-2">
-                      {questionData.course && <Badge variant="secondary">{questionData.course}</Badge>}
-                      {questionData.subject && <Badge variant="outline">{questionData.subject}</Badge>}
-                      {questionData.difficulty && (
-                        <Badge variant={
-                          questionData.difficulty === 'Easy' ? 'secondary' :
-                          questionData.difficulty === 'Medium' ? 'default' : 'destructive'
-                        }>
-                          {questionData.difficulty}
-                        </Badge>
-                      )}
-                    </div>
-                  </div>
-                </div>
-                
-                {questionData.enableExplanation && questionData.explanation && (
-                  <div className="bg-blue-50 p-4 rounded-lg">
-                    <h4 className="font-medium text-blue-800 mb-2">Explanation</h4>
-                    <p className="text-blue-700">{questionData.explanation}</p>
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        ) : (
-          /* Edit Mode */
-          <div className="space-y-8">
-            {/* Question Content */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Question Content</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="space-y-2">
-                  <Label htmlFor="questionText">Question Text *</Label>
-                  <Textarea
-                    id="questionText"
-                    placeholder="Enter your question here..."
-                    value={questionData.questionText}
-                    onChange={(e) => handleInputChange('questionText', e.target.value)}
-                    rows={3}
-                    className={errors.questionText ? 'border-red-500' : ''}
-                  />
-                  {errors.questionText && (
-                    <p className="text-sm text-red-600 flex items-center">
-                      <AlertCircle className="h-4 w-4 mr-1" />
-                      {errors.questionText}
-                    </p>
-                  )}
-                </div>
+                         <div className="space-y-3">
+                           {questionData.options.map((option, index) => (
+                             <div key={index} className="flex items-center space-x-3">
+                               <span className="font-medium text-gray-600 w-8">{String.fromCharCode(65 + index)}.</span>
+                               <Input
+                                 placeholder={`Option ${index + 1}`}
+                                 value={option}
+                                 onChange={(e) => handleOptionChange(index, e.target.value)}
+                                 className="flex-1"
+                               />
+                               <Checkbox
+                                 checked={questionData.correctAnswer === option}
+                                 onCheckedChange={(checked) => {
+                                   if (checked) handleInputChange('correctAnswer', option);
+                                 }}
+                                 className="h-5 w-5"
+                               />
+                               {questionData.options.length > 2 && (
+                                 <Button
+                                   variant="ghost"
+                                   size="sm"
+                                   onClick={() => removeOption(index)}
+                                   className="text-red-600 hover:text-red-700"
+                                 >
+                                   <X className="h-4 w-4" />
+                                 </Button>
+                               )}
+                             </div>
+                           ))}
+                         </div>
 
-                <div className="space-y-4">
-                  <div className="flex justify-between items-center">
-                    <Label>Answer Options *</Label>
-                    <div className="flex space-x-2">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={addOption}
-                        disabled={questionData.options.length >= 6}
-                      >
-                        <Plus className="h-4 w-4 mr-1" />
-                        Add Option
-                      </Button>
-                    </div>
-                  </div>
-                  
-                  <div className="space-y-3">
-                    {questionData.options.map((option, index) => (
-                      <div key={index} className="flex items-center space-x-3">
-                        <span className="font-medium text-gray-600 w-8">
-                          {String.fromCharCode(65 + index)}.
-                        </span>
-                        <Input
-                          placeholder={`Option ${index + 1}`}
-                          value={option}
-                          onChange={(e) => handleOptionChange(index, e.target.value)}
-                          className="flex-1"
-                        />
-                        <div className="flex items-center space-x-2">
-                          <Checkbox
-                            checked={questionData.correctAnswer === option}
-                            onCheckedChange={(checked) => {
-                              if (checked) {
-                                handleInputChange('correctAnswer', option);
-                              }
-                            }}
-                          />
-                          <span className="text-sm text-gray-600">Correct</span>
-                          {questionData.options.length > 2 && (
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => removeOption(index)}
-                              className="text-red-600 hover:text-red-700"
-                            >
-                              <X className="h-4 w-4" />
-                            </Button>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  
-                  {errors.options && (
-                    <p className="text-sm text-red-600 flex items-center">
-                      <AlertCircle className="h-4 w-4 mr-1" />
-                      {errors.options}
-                    </p>
-                  )}
-                  
-                  {errors.correctAnswer && (
-                    <p className="text-sm text-red-600 flex items-center">
-                      <AlertCircle className="h-4 w-4 mr-1" />
-                      {errors.correctAnswer}
-                    </p>
-                  )}
-                </div>
+                         {errors.options && (
+                           <p className="text-sm text-red-600 flex items-center">
+                             <AlertCircle className="h-4 w-4 mr-1" />
+                             {errors.options}
+                           </p>
+                         )}
+                         {errors.correctAnswer && (
+                           <p className="text-sm text-red-600 flex items-center">
+                             <AlertCircle className="h-4 w-4 mr-1" />
+                             {errors.correctAnswer}
+                           </p>
+                         )}
+                       </div>
 
-                <div className="space-y-4">
-                  <div className="flex items-center space-x-2">
-                    <Checkbox
-                      id="enableExplanation"
-                      checked={questionData.enableExplanation}
-                      onCheckedChange={(checked) => handleInputChange('enableExplanation', checked)}
-                    />
-                    <Label htmlFor="enableExplanation">Enable Explanation</Label>
-                  </div>
-                  
-                  {questionData.enableExplanation && (
-                    <div className="space-y-2">
-                      <Label htmlFor="explanation">Explanation</Label>
-                      <Textarea
-                        id="explanation"
-                        placeholder="Provide an explanation for the correct answer..."
-                        value={questionData.explanation}
-                        onChange={(e) => handleInputChange('explanation', e.target.value)}
-                        rows={3}
-                      />
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
+                       <div className="space-y-4">
+                         <div className="flex items-center gap-3">
+                           <Checkbox
+                             checked={questionData.enableExplanation}
+                             onCheckedChange={(checked) => handleInputChange('enableExplanation', checked)}
+                             className="h-5 w-5"
+                           />
+                           <Label className="text-sm font-medium text-gray-700">Enable Explanation</Label>
+                         </div>
+                         {questionData.enableExplanation && (
+                           <Textarea
+                             placeholder="Provide explanation..."
+                             value={questionData.explanation}
+                             onChange={(e) => handleInputChange('explanation', e.target.value)}
+                             rows={3}
+                             className="mt-1"
+                           />
+                         )}
+                       </div>
+                     </>
+                   )}
+                 </CardContent>
+               </Card>
 
-            {/* Question Metadata */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Question Metadata</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-2">
-                    <Label htmlFor="course">Course *</Label>
-                    <Select 
-                      value={questionData.course} 
-                      onValueChange={(value) => handleInputChange('course', value)}
-                    >
-                      <SelectTrigger className={errors.course ? 'border-red-500' : ''}>
-                        <SelectValue placeholder="Select course" />
-                      </SelectTrigger>
-                      <SelectContent>
-                    {firestoreCourses.map(course => (
-  <SelectItem key={course.id} value={course.name}>
-    {course.name}
-  </SelectItem>
-))}
+               {/* Metadata */}
+               <Card className="shadow-md hover:shadow-lg transition-shadow duration-300">
+                 <CardHeader>
+                   <CardTitle className="text-lg font-semibold text-gray-900">Question Metadata</CardTitle>
+                 </CardHeader>
+                 <CardContent className="space-y-6">
+                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                     <div>
+                       <Label className="text-sm font-medium text-gray-700">Course *</Label>
+                       <Select value={questionData.course} onValueChange={(val) => handleInputChange('course', val)}>
+                         <SelectTrigger className={`mt-1 ${errors.course ? 'border-red-500' : ''}`}>
+                           <SelectValue placeholder="Select course" />
+                         </SelectTrigger>
+                         <SelectContent>
+                           {isLoading ? (
+                             <div className="h-8 w-full bg-gray-200 rounded animate-pulse"></div>
+                           ) : firestoreCourses.map(course => (
+                             <SelectItem key={course.id} value={course.name}>{course.name}</SelectItem>
+                           ))}
+                         </SelectContent>
+                       </Select>
+                       {errors.course && (
+                         <p className="text-sm text-red-600 flex items-center mt-1">
+                           <AlertCircle className="h-4 w-4 mr-1" />
+                           {errors.course}
+                         </p>
+                       )}
+                     </div>
 
-                      </SelectContent>
-                    </Select>
-                    {errors.course && (
-                      <p className="text-sm text-red-600 flex items-center">
-                        <AlertCircle className="h-4 w-4 mr-1" />
-                        {errors.course}
-                      </p>
-                    )}
-                  </div>
+                     <div>
+                       <Label className="text-sm font-medium text-gray-700">Subject *</Label>
+                       <Select
+                         value={questionData.subject}
+                         onValueChange={(val) => handleInputChange('subject', val)}
+                         disabled={!questionData.course || isLoading}
+                       >
+                         <SelectTrigger className={`mt-1 ${errors.subject ? 'border-red-500' : ''}`}>
+                           <SelectValue placeholder="Select subject" />
+                         </SelectTrigger>
+                         <SelectContent>
+                           {isLoading ? (
+                             <div className="h-8 w-full bg-gray-200 rounded animate-pulse"></div>
+                           ) : availableSubjects.map(sub => (
+                             <SelectItem key={sub} value={sub}>{sub}</SelectItem>
+                           ))}
+                         </SelectContent>
+                       </Select>
+                       {errors.subject && (
+                         <p className="text-sm text-red-600 flex items-center mt-1">
+                           <AlertCircle className="h-4 w-4 mr-1" />
+                           {errors.subject}
+                         </p>
+                       )}
+                     </div>
+                   </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="subject">Subject *</Label>
-                    <Select 
-                      value={questionData.subject} 
-                      onValueChange={(value) => handleInputChange('subject', value)}
-                      disabled={!questionData.course}
-                    >
-                      <SelectTrigger className={errors.subject ? 'border-red-500' : ''}>
-                        <SelectValue placeholder="Select subject" />
-                      </SelectTrigger>
-    <SelectContent>
-  {availableSubjects.map((subject: string) => (
-    <SelectItem key={subject} value={subject}>
-      {subject}
-    </SelectItem>
-  ))}
-</SelectContent>
+                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                     <div>
+                       <Label className="text-sm font-medium text-gray-700">Chapter</Label>
+                       <Select
+                         value={questionData.chapter}
+                         onValueChange={(val) => handleInputChange('chapter', val)}
+                         disabled={!questionData.subject || isLoading}
+                       >
+                         <SelectTrigger className="mt-1">
+                           <SelectValue placeholder="Select chapter" />
+                         </SelectTrigger>
+                         <SelectContent>
+                           {isLoading ? (
+                             <div className="h-8 w-full bg-gray-200 rounded animate-pulse"></div>
+                           ) : availableChapters.map(ch => (
+                             <SelectItem key={ch} value={ch}>{ch}</SelectItem>
+                           ))}
+                         </SelectContent>
+                       </Select>
+                     </div>
 
+                     <div>
+                       <Label className="text-sm font-medium text-gray-700">Topic</Label>
+                       <Select
+                         value={questionData.topic}
+                         onValueChange={(val) => handleInputChange('topic', val)}
+                         disabled={availableTopics.length === 0 || isLoading}
+                       >
+                         <SelectTrigger className="mt-1">
+                           <SelectValue placeholder="Select topic" />
+                         </SelectTrigger>
+                         <SelectContent>
+                           {isLoading ? (
+                             <div className="h-8 w-full bg-gray-200 rounded animate-pulse"></div>
+                           ) : availableTopics.map(topic => (
+                             <SelectItem key={topic} value={topic}>{topic}</SelectItem>
+                           ))}
+                         </SelectContent>
+                       </Select>
+                     </div>
+                   </div>
 
-                    </Select>
-                    {errors.subject && (
-                      <p className="text-sm text-red-600 flex items-center">
-                        <AlertCircle className="h-4 w-4 mr-1" />
-                        {errors.subject}
-                      </p>
-                    )}
-                  </div>
-                </div>
+                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                     <div>
+                       <Label className="text-sm font-medium text-gray-700">Difficulty *</Label>
+                       <Select
+                         value={questionData.difficulty}
+                         onValueChange={(val) => handleInputChange('difficulty', val)}
+                       >
+                         <SelectTrigger className={`mt-1 ${errors.difficulty ? 'border-red-500' : ''}`}>
+                           <SelectValue placeholder="Select difficulty" />
+                         </SelectTrigger>
+                         <SelectContent>
+                           {difficulties.map(diff => (
+                             <SelectItem key={diff} value={diff}>{diff}</SelectItem>
+                           ))}
+                         </SelectContent>
+                       </Select>
+                       {errors.difficulty && (
+                         <p className="text-sm text-red-600 flex items-center mt-1">
+                           <AlertCircle className="h-4 w-4 mr-1" />
+                           {errors.difficulty}
+                         </p>
+                       )}
+                     </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-2">
-                    <Label htmlFor="chapter">Chapter</Label>
-                    <Select 
-                      value={questionData.chapter} 
-                      onValueChange={(value) => handleInputChange('chapter', value)}
-                      disabled={!questionData.subject}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select chapter" />
-                      </SelectTrigger>
-<SelectContent>
-  {availableChapters.map((chapter) => (
-    <SelectItem key={chapter} value={chapter}>
-      {chapter}
-    </SelectItem>
-  ))}
-</SelectContent>
+                     <div>
+                       <Label className="text-sm font-medium text-gray-700">Year</Label>
+                       <Select value={questionData.year} onValueChange={(val) => handleInputChange('year', val)}>
+                         <SelectTrigger className="mt-1">
+                           <SelectValue placeholder="Select year" />
+                         </SelectTrigger>
+                         <SelectContent>
+                           {years.map(year => (
+                             <SelectItem key={year} value={year}>{year}</SelectItem>
+                           ))}
+                         </SelectContent>
+                       </Select>
+                     </div>
 
+                     <div>
+                       <Label className="text-sm font-medium text-gray-700">Book</Label>
+                       <Input
+                         value={questionData.book}
+                         onChange={(e) => handleInputChange('book', e.target.value)}
+                         placeholder="Reference book"
+                         className="mt-1"
+                       />
+                     </div>
+                   </div>
 
-                    </Select>
-                  </div>
+                   <div>
+                     <Label className="text-sm font-medium text-gray-700">Teacher</Label>
+                     <Input
+                       value={questionData.teacher}
+                       onChange={(e) => handleInputChange('teacher', e.target.value)}
+                       placeholder="Your name"
+                       className="mt-1"
+                     />
+                   </div>
+                 </CardContent>
+               </Card>
 
- <div className="space-y-2">
-  <Label htmlFor="topic">Topic</Label>
-  <Select
-    value={questionData.topic}
-    onValueChange={(value) => handleInputChange('topic', value)}
-    disabled={availableTopics.length === 0}
-  >
-    <SelectTrigger>
-      <SelectValue placeholder="Select topic" />
-    </SelectTrigger>
-    <SelectContent>
-      {availableTopics.map((topic) => (
-        <SelectItem key={topic} value={topic}>
-          {topic}
-        </SelectItem>
-      ))}
-    </SelectContent>
-  </Select>
-</div>
-
-
-
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  <div className="space-y-2">
-                    <Label htmlFor="difficulty">Difficulty *</Label>
-                    <Select 
-                      value={questionData.difficulty} 
-                      onValueChange={(value) => handleInputChange('difficulty', value)}
-                    >
-                      <SelectTrigger className={errors.difficulty ? 'border-red-500' : ''}>
-                        <SelectValue placeholder="Select difficulty" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {difficulties.map(difficulty => (
-                          <SelectItem key={difficulty} value={difficulty}>
-                            {difficulty}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {errors.difficulty && (
-                      <p className="text-sm text-red-600 flex items-center">
-                        <AlertCircle className="h-4 w-4 mr-1" />
-                        {errors.difficulty}
-                      </p>
-                    )}
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="year">Year</Label>
-                    <Select 
-                      value={questionData.year} 
-                      onValueChange={(value) => handleInputChange('year', value)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select year" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {years.map(year => (
-                          <SelectItem key={year} value={year}>
-                            {year}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="book">Book/Reference</Label>
-                    <Input
-                      id="book"
-                      placeholder="Enter book name"
-                      value={questionData.book}
-                      onChange={(e) => handleInputChange('book', e.target.value)}
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="teacher">Teacher/Source</Label>
-                  <Input
-                    id="teacher"
-                    placeholder="Enter teacher or source name"
-                    value={questionData.teacher}
-                    onChange={(e) => handleInputChange('teacher', e.target.value)}
-                  />
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Actions */}
-            <div className="flex justify-end space-x-4">
-              <Button variant="outline" onClick={() => router.back()}>
-                Cancel
-              </Button>
-           <Button
-  disabled={isSaving}
-  onClick={handleSave}
-  className="bg-blue-600 hover:bg-blue-700"
->
-  {isSaving ? (
-    <div className="flex items-center space-x-2">
-      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-      <span>Saving...</span>
-    </div>
-  ) : (
-    <>
-      <Save className="h-4 w-4 mr-2" />
-      Save Question
-    </>
-  )}
-</Button>
-
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
+               {/* Save Button */}
+               <div className="flex justify-end space-x-4">
+                 <Button
+                   variant="outline"
+                   className="border-gray-300 hover:bg-gray-100 transition-colors"
+                   onClick={() => router.back()}
+                 >
+                   Cancel
+                 </Button>
+                 <Button
+                   disabled={isSaving || isLoading}
+                   onClick={handleSave}
+                   className="bg-blue-600 hover:bg-blue-700 text-white transition-colors"
+                 >
+                   {isSaving ? 'Saving...' : (
+                     <>
+                       <Save className="h-4 w-4 mr-2" />
+                       Save Question
+                     </>
+                   )}
+                 </Button>
+               </div>
+             </div>
+           )}
+         </main>
+       </div>
+     );
+   }
