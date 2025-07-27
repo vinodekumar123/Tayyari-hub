@@ -4,7 +4,7 @@ import { getFirestore } from 'firebase/firestore';
 
 const firebaseConfig = {
   apiKey: 'AIzaSyD30ttpHoP4xaQEjuPgCbyguZ8yMDOw0RM',
-  authDomain: 'tayyari-hub.firebaseapp.com',
+  authDomain: 'tayyarihub.com',
   projectId: 'tayyari-hub',
   storageBucket: 'tayyari-hub.appspot.com',
   messagingSenderId: '476210572589',
