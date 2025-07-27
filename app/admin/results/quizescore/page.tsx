@@ -25,7 +25,6 @@ import {
 } from '@/components/ui/dialog';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
-import html2pdf from 'html2pdf.js';
 
 export default function QuizStudentScores() {
   const [scores, setScores] = useState<any[]>([]);
@@ -131,8 +130,11 @@ export default function QuizStudentScores() {
     fetchScores();
   }, [quizId, sortByScore]);
 
-  const exportToPDF = () => {
+  const exportToPDF = async () => {
     if (!pdfRef.current) return;
+
+    const html2pdf = (await import('html2pdf.js')).default;
+
     html2pdf(pdfRef.current, {
       margin: 10,
       filename: `${quizTitle.replace(/\s+/g, '_')}_Results.pdf`,
