@@ -10,6 +10,7 @@ import {
   getDoc,
   doc,
   getDocs,
+  where,
 } from 'firebase/firestore';
 import { getAuth, onAuthStateChanged } from 'firebase/auth';
 import { db } from '../../../firebase'; // Adjust the import path as needed
@@ -41,7 +42,7 @@ import {
 import Link from 'next/link';
 
 function getQuizStatus(startDate: string, endDate: string, startTime?: string, endTime?: string) {
-  const now = new Date('2025-07-21T14:55:00+05:00'); // 02:55 PM PKT, July 21, 2025
+  const now = new Date('2025-07-26T18:29:00+05:00'); // 06:29 PM PKT, July 26, 2025
   const start = new Date(`${startDate}T${startTime || '00:00'}`);
   const end = new Date(`${endDate}T${endTime || '23:59'}`);
   console.log(`Now: ${now}, Start: ${start}, End: ${end}`); // Debug log
@@ -55,6 +56,7 @@ export default function QuizBankPage() {
   const [loading, setLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [attemptedQuizzes, setAttemptedQuizzes] = useState<string[]>([]);
+  const [enrolledCourses, setEnrolledCourses] = useState<string[]>([]);
   const [filters, setFilters] = useState({
     course: '',
     subject: '',
@@ -68,22 +70,6 @@ export default function QuizBankPage() {
   const router = useRouter();
 
   useEffect(() => {
-    const q = query(collection(db, 'quizzes'), orderBy('createdAt', 'desc'));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const data = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-        course: doc.data().course?.name || (typeof doc.data().course === 'string' ? doc.data().course : '') || '',
-        subject: doc.data().subject?.name || (typeof doc.data().subject === 'string' ? doc.data().subject : '') || '',
-        chapter: doc.data().chapter?.name || (typeof doc.data().chapter === 'string' ? doc.data().chapter : '') || '',
-      }));
-      setQuizzes(data);
-      setLoading(false);
-    });
-    return () => unsubscribe();
-  }, []);
-
-  useEffect(() => {
     const auth = getAuth();
     const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
       if (user) {
@@ -91,6 +77,36 @@ export default function QuizBankPage() {
         const userSnap = await getDoc(userRef);
         const userData = userSnap.exists() ? userSnap.data() : {};
         const isAdmin = userData.admin === true;
+
+        // Fetch enrolled courses for non-admin users
+        let courseIds: string[] = [];
+        if (!isAdmin) {
+          const coursesSnapshot = await getDocs(collection(db, 'users', user.uid, 'courses'));
+          courseIds = coursesSnapshot.docs.map(doc => doc.id);
+          setEnrolledCourses(courseIds);
+        }
+
+        // Create query based on user role
+        const constraints = [orderBy('createdAt', 'desc')];
+        if (!isAdmin) {
+          constraints.push(where('published', '==', true));
+          if (courseIds.length > 0) {
+            constraints.push(where('course.id', 'in', courseIds));
+          }
+        }
+        const q = query(collection(db, 'quizzes'), ...constraints);
+
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+          const data = snapshot.docs.map((doc) => ({
+            id: doc.id,
+            ...doc.data(),
+            course: doc.data().course?.name || (typeof doc.data().course === 'string' ? doc.data().course : '') || '',
+            subject: doc.data().subject?.name || (typeof doc.data().subject === 'string' ? doc.data().subject : '') || '',
+            chapter: doc.data().chapter?.name || (typeof doc.data().chapter === 'string' ? doc.data().chapter : '') || '',
+          }));
+          setQuizzes(data);
+          setLoading(false);
+        });
 
         const attemptsSnapshot = await getDocs(
           collection(db, 'users', user.uid, 'quizAttempts')
@@ -101,10 +117,16 @@ export default function QuizBankPage() {
         setAttemptedQuizzes(attempted);
 
         setCurrentUser({ ...user, isAdmin });
+
+        return () => unsubscribe();
       } else {
+        // For non-authenticated users, show no quizzes
+        setQuizzes([]);
+        setLoading(false);
         setCurrentUser(null);
       }
     });
+
     return () => unsubscribeAuth();
   }, []);
 
@@ -201,19 +223,13 @@ export default function QuizBankPage() {
       </Card>
 
       {loading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <Card key={i} className="p-6 space-y-3 rounded-2xl">
-              <Skeleton className="h-7 w-3/4 rounded" />
-              <Skeleton className="h-5 w-1/2" />
-              <Skeleton className="h-4 w-full" />
-              <Skeleton className="h-12 w-full rounded" />
-            </Card>
-          ))}
+        <div className="flex flex-col items-center justify-center py-10 space-y-4">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-4 border-b-4 border-green-600"></div>
+          <p className="text-gray-600 text-lg animate-pulse">Fetching your quizzes...</p>
         </div>
       ) : filteredQuizzes.length === 0 ? (
         <p className="text-gray-500 text-center py-10">
-          No quizzes match your filters.
+          No quizzes available for your enrolled courses.
         </p>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -226,10 +242,11 @@ export default function QuizBankPage() {
             const chapterName = typeof quiz.chapter === 'object' && 'name' in quiz.chapter ? quiz.chapter.name : quiz.chapter || '';
 
             return (
-              <Card
-                key={quiz.id}
-                className="shadow-xl hover:shadow-2xl transition-all duration-300 transform hover:scale-[1.02] overflow-hidden"
-              >
+           <Card
+  key={quiz.id}
+  className="shadow-xl hover:shadow-2xl transition-all duration-300 transform hover:scale-[1.02] overflow-hidden min-h-[460px] flex flex-col justify-between"
+>
+
                 <CardHeader className="pb-3">
                   <CardTitle className="text-xl font-bold text-gray-900 mb-1 line-clamp-2">
                     {quiz.title}
@@ -275,55 +292,46 @@ export default function QuizBankPage() {
                     </div>
                   </div>
 
-                  <div className="pt-2">
-                    {currentUser?.isAdmin ? (
-                      <>
-                        <Button className="w-full h-12 bg-green-600 text-white" asChild>
-                          <Link href={`/quiz/start?id=${quiz.id}`}>
-                            <Play className="h-4 w-4 mr-2" />
-                            Start Quiz
-                            <ArrowRight className="h-4 w-4 ml-2" />
-                          </Link>
-                        </Button>
-                        {status === 'upcoming' && (
-                          <Button className="w-full h-10 mt-2 bg-blue-600 text-white" asChild>
-                            <Link href={`/quiz/start?id=${quiz.id}`}>
-                              <Eye className="h-4 w-4 mr-2" />
-                              Preview Quiz
-                              <ArrowRight className="h-4 w-4 ml-2" />
-                            </Link>
-                          </Button>
-                        )}
-                      </>
-                    ) : status === 'ended' ? (
-                      <Button variant="outline" disabled className="w-full h-12">
-                        Quiz Ended
-                      </Button>
-                    ) : isAttempted ? (
-                      <Button variant="outline" disabled className="w-full h-12">
-                        Attempted
-                      </Button>
-                    ) : status === 'upcoming' ? (
-                      <Button variant="outline" disabled className="w-full h-12">
-                        Upcoming
-                      </Button>
-                    ) : (
-                      <Button className="w-full h-12 bg-green-600 text-white" asChild>
-                        <Link href={`/quiz/start?id=${quiz.id}`}>
-                          <Play className="h-4 w-4 mr-2" />
-                          Start Quiz
-                          <ArrowRight className="h-4 w-4 ml-2" />
-                        </Link>
-                      </Button>
-                    )}
-                    {currentUser?.isAdmin && (
-                      <Button variant="secondary" className="w-full h-10 mt-2 rounded-xl" asChild>
-                        <Link href={`/admin/quizzes/create?id=${quiz.id}`}>
-                          <Pencil className="h-4 w-4 mr-2" /> Edit Quiz
-                        </Link>
-                      </Button>
-                    )}
-                  </div>
+  <div className="pt-2 mt-auto">
+  {currentUser?.isAdmin ? (
+    <Button className="w-full h-12 bg-blue-600 text-white" asChild>
+      <Link href={`/quiz/start?id=${quiz.id}`}>
+        <Eye className="h-4 w-4 mr-2" />
+        Preview Quiz
+        <ArrowRight className="h-4 w-4 ml-2" />
+      </Link>
+    </Button>
+  ) : status === 'ended' ? (
+    <Button variant="outline" disabled className="w-full h-12">
+      Quiz Ended
+    </Button>
+  ) : isAttempted ? (
+    <Button variant="outline" disabled className="w-full h-12">
+      Attempted
+    </Button>
+  ) : status === 'upcoming' ? (
+    <Button variant="outline" disabled className="w-full h-12">
+      Upcoming
+    </Button>
+  ) : (
+    <Button className="w-full h-12 bg-green-600 text-white" asChild>
+      <Link href={`/quiz/start?id=${quiz.id}`}>
+        <Play className="h-4 w-4 mr-2" />
+        Start Quiz
+        <ArrowRight className="h-4 w-4 ml-2" />
+      </Link>
+    </Button>
+  )}
+
+  {currentUser?.isAdmin && (
+    <Button variant="secondary" className="w-full h-10 mt-2 rounded-xl" asChild>
+      <Link href={`/admin/quizzes/create?id=${quiz.id}`}>
+        <Pencil className="h-4 w-4 mr-2" /> Edit Quiz
+      </Link>
+    </Button>
+  )}
+</div>
+
                 </CardContent>
               </Card>
             );

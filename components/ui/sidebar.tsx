@@ -1,16 +1,15 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
   BookOpen, Users, Trophy, BarChart3, Settings, Plus,
   Database, Home, ChevronDown, ChevronRight, LogOut,
-  ClipboardList, UserCircle, Menu, X,
-  FileBarChart
+  ClipboardList, UserCircle, Menu, X, FileBarChart
 } from 'lucide-react';
 
-import { getAuth, onAuthStateChanged } from 'firebase/auth';
+import { getAuth, onAuthStateChanged, signOut } from 'firebase/auth';
 import { getFirestore, doc, getDoc } from 'firebase/firestore';
 import { app } from '../../app/firebase';
 import { Button } from '@/components/ui/button';
@@ -31,11 +30,14 @@ type Section = {
 
 export function Sidebar() {
   const pathname = usePathname();
+  const router = useRouter();
+
   const [expandedSections, setExpandedSections] = useState<string[]>(['main']);
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [showSignOutDialog, setShowSignOutDialog] = useState(false);
 
-  const [isAdmin, setIsAdmin] = useState<boolean | null>(null); // null = loading
+  const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
 
   useEffect(() => {
     const auth = getAuth(app);
@@ -49,10 +51,10 @@ export function Sidebar() {
           const data = snap.data();
           setIsAdmin(data.admin === true);
         } else {
-          setIsAdmin(false); // fallback to student if no user doc
+          setIsAdmin(false);
         }
       } else {
-        setIsAdmin(false); // not logged in
+        setIsAdmin(false);
       }
     });
 
@@ -67,6 +69,12 @@ export function Sidebar() {
 
   const toggleCollapse = () => setCollapsed(prev => !prev);
   const isActive = (href: string) => pathname.includes(href);
+
+  const handleSignOut = async () => {
+    const auth = getAuth(app);
+    await signOut(auth);
+    router.push('/');
+  };
 
   const adminMenu: Section[] = [
     {
@@ -94,8 +102,7 @@ export function Sidebar() {
       title: 'User Management',
       items: [
         { icon: Users, label: 'Students', href: '/admin/students' },
-                { icon: FileBarChart, label: 'Results', href: '/admin/results' }
-
+        { icon: FileBarChart, label: 'Results', href: '/admin/results' }
       ]
     },
     {
@@ -117,13 +124,11 @@ export function Sidebar() {
         { icon: Trophy, label: 'Mock Quizzes', href: '/admin/mockquize/quizebank' },
         { icon: Plus, label: 'Create Mock Quiz', href: '/admin/mockquize/create' },
         { icon: ClipboardList, label: 'Results', href: '/admin/students/results' },
-        
         { icon: UserCircle, label: 'Profile Settings', href: '/admin/student-profile' },
       ]
     }
   ];
 
-  // ⏳ Wait until role is loaded
   if (isAdmin === null) return null;
 
   const menu = isAdmin ? adminMenu : studentMenu;
@@ -224,6 +229,7 @@ export function Sidebar() {
           <Button
             variant="ghost"
             size="sm"
+            onClick={() => setShowSignOutDialog(true)}
             className={`w-full justify-start text-gray-600 hover:text-red-600 ${collapsed ? 'px-2' : ''}`}
           >
             <LogOut className="h-5 w-4 mr-2" />
@@ -235,6 +241,24 @@ export function Sidebar() {
       {/* Backdrop */}
       {mobileOpen && (
         <div className="fixed inset-0 z-40 bg-black/30 md:hidden" onClick={() => setMobileOpen(false)} />
+      )}
+
+      {/* Sign-Out Confirmation Dialog */}
+      {showSignOutDialog && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-6">
+            <h2 className="text-lg font-semibold text-gray-900 mb-2">Are you sure?</h2>
+            <p className="text-sm text-gray-600 mb-4">Do you really want to sign out?</p>
+            <div className="flex justify-end space-x-2">
+              <Button variant="secondary" onClick={() => setShowSignOutDialog(false)}>
+                Cancel
+              </Button>
+              <Button variant="destructive" onClick={handleSignOut}>
+                Sign Out
+              </Button>
+            </div>
+          </div>
+        </div>
       )}
     </>
   );
