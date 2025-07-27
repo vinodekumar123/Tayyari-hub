@@ -22,6 +22,7 @@ export default function OnboardingPage() {
 
   const [form, setForm] = useState({
     fullName: '',
+    fatherName: '', // ✅ New field added
     email: '',
     phone: '',
     city: '',
@@ -46,7 +47,17 @@ export default function OnboardingPage() {
             return;
           }
 
-          const required = ['fullName', 'email', 'phone', 'city', 'university', 'campus', 'degree', 'course'];
+          const required = [
+            'fullName',
+            'fatherName', // ✅ Validate this field
+            'email',
+            'phone',
+            'city',
+            'university',
+            'campus',
+            'degree',
+            'course',
+          ];
           const incomplete = required.some((field) => !data[field]);
 
           if (!incomplete) {
@@ -135,6 +146,21 @@ export default function OnboardingPage() {
                       placeholder="Your full name"
                       value={form.fullName}
                       onChange={(e) => handleChange('fullName', e.target.value)}
+                      className="pl-10 h-12 rounded-xl"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="fatherName">Father's Name</Label>
+                  <div className="relative">
+                    <User className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
+                    <Input
+                      id="fatherName"
+                      placeholder="Your father's name"
+                      value={form.fatherName}
+                      onChange={(e) => handleChange('fatherName', e.target.value)}
                       className="pl-10 h-12 rounded-xl"
                       required
                     />

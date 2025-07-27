@@ -1,4 +1,3 @@
-// EnhancedStudentDashboard.tsx
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -46,6 +45,31 @@ export default function StudentResultsPage() {
   const router = useRouter();
   const auth = getAuth(app);
   const db = getFirestore(app);
+
+  const extractNames = (raw: any): string => {
+    if (!raw) return '';
+    if (Array.isArray(raw)) {
+      return raw
+        .map((s: any) => (typeof s === 'string' ? s : s?.name || ''))
+        .filter(Boolean)
+        .join(', ');
+    }
+    if (typeof raw === 'object' && raw?.name) return raw.name;
+    return typeof raw === 'string' ? raw : '';
+  };
+
+  const getFromSelectedQuestions = (quizMeta: any, key: 'subject' | 'chapter') => {
+    return Array.from(
+      new Set(
+        (quizMeta.selectedQuestions || [])
+          .map((q: any) => {
+            const val = q[key];
+            return typeof val === 'object' ? val?.name : val;
+          })
+          .filter(Boolean)
+      )
+    ).join(', ') || 'N/A';
+  };
 
   useEffect(() => {
     onAuthStateChanged(auth, async (user) => {
@@ -141,36 +165,18 @@ export default function StudentResultsPage() {
               const resultData = resultSnap.data();
               const quizMeta = quizSnap.data();
 
+              console.log("📘 Subject Raw:", quizMeta.subject, quizMeta.subjects);
+              console.log("📖 Chapter Raw:", quizMeta.chapter, quizMeta.chapters);
+
               const resolvedSubject =
-                quizMeta.subject === '__all__'
-                  ? Array.from(
-                      new Set(
-                        (quizMeta.selectedQuestions || [])
-                          .map((q: any) => typeof q.subject === 'object' ? q.subject.name : q.subject)
-                          .filter(Boolean)
-                      )
-                    ).join(', ')
-                  : typeof quizMeta.subject === 'object'
-                    ? quizMeta.subject.name
-                    : quizMeta.subject || 'N/A';
+                extractNames(quizMeta.subject || quizMeta.subjects) ||
+                getFromSelectedQuestions(quizMeta, 'subject');
 
               const resolvedChapter =
-                quizMeta.chapter === '__all__'
-                  ? Array.from(
-                      new Set(
-                        (quizMeta.selectedQuestions || [])
-                          .map((q: any) => typeof q.chapter === 'object' ? q.chapter.name : q.chapter)
-                          .filter(Boolean)
-                      )
-                    ).join(', ')
-                  : typeof quizMeta.chapter === 'object'
-                    ? quizMeta.chapter.name
-                    : quizMeta.chapter || 'N/A';
+                extractNames(quizMeta.chapter || quizMeta.chapters) ||
+                getFromSelectedQuestions(quizMeta, 'chapter');
 
-              const resolvedCourse =
-                typeof quizMeta.course === 'object'
-                  ? quizMeta.course?.name
-                  : quizMeta.course || 'Unknown';
+              const resolvedCourse = extractNames(quizMeta.course);
 
               allResults.push({
                 id: quizId,

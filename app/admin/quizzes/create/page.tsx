@@ -53,7 +53,8 @@ export default function CreateQuiz() {
     showExplanation: true,
     startDate: '',
     endDate: '',
-    startTime: '',
+    startTime: '',published: false,
+
     endTime: '',
     accessType: 'free',
     resultVisibility: 'immediate',
@@ -304,58 +305,59 @@ export default function CreateQuiz() {
     }
   };
 
-  const handleCreateOrUpdateQuiz = async () => {
-    if (
-      !quizConfig.title ||
-      !quizConfig.course ||
-      (quizConfig.subjects.length === 0 && !quizConfig.subjects.includes('all-subjects')) ||
-      quizConfig.selectedQuestions.length === 0
-    ) {
-      alert("Please fill in all required fields, select at least one subject, and select questions");
-      return;
-    }
+const handleCreateOrUpdateQuiz = async () => {
+  if (
+    !quizConfig.title ||
+    !quizConfig.course ||
+    (quizConfig.subjects.length === 0 && !quizConfig.subjects.includes('all-subjects')) ||
+    quizConfig.selectedQuestions.length === 0
+  ) {
+    alert("Please fill in all required fields, select at least one subject, and select questions");
+    return;
+  }
 
-    const selectedCourse = courses.find(c => c.name === quizConfig.course);
-    const selectedSubjects = quizConfig.subjects.includes('all-subjects') 
-      ? subjects 
-      : subjects.filter(s => quizConfig.subjects.includes(s.name));
+  const selectedCourse = courses.find(c => c.name === quizConfig.course);
+  const selectedSubjects = quizConfig.subjects.includes('all-subjects') 
+    ? subjects 
+    : subjects.filter(s => quizConfig.subjects.includes(s.name));
 
-    const quizPayload = {
-      ...quizConfig,
-      course: {
-        id: selectedCourse?.id || '',
-        name: selectedCourse?.name || '',
-      },
-      subjects: selectedSubjects.map(s => ({
-        id: s.id,
-        name: s.name,
-      })),
-      chapters: quizConfig.chapters.includes('all-chapters') 
-        ? chapters.map(ch => ({ id: ch, name: ch }))
-        : quizConfig.chapters.map(ch => ({ id: ch, name: ch })),
-      updatedAt: Timestamp.now(),
-    };
-
-    if (!isEditMode) {
-      quizPayload.createdAt = Timestamp.now();
-    }
-
-    try {
-      if (isEditMode) {
-        const quizRef = doc(db, 'quizzes', quizId);
-        await updateDoc(quizRef, quizPayload);
-        alert("Quiz updated successfully!");
-      } else {
-        await addDoc(collection(db, "quizzes"), quizPayload);
-        alert("Quiz created successfully!");
-      }
-
-      router.push("/dashboard/admin");
-    } catch (error) {
-      console.error("Error saving quiz:", error);
-      alert("Failed to save quiz.");
-    }
+  const quizPayload = {
+    ...quizConfig,
+    course: {
+      id: selectedCourse?.id || '',
+      name: selectedCourse?.name || '',
+    },
+    subjects: selectedSubjects.map(s => ({
+      id: s.id,
+      name: s.name,
+    })),
+    chapters: quizConfig.chapters.includes('all-chapters') 
+      ? chapters.map(ch => ({ id: ch, name: ch }))
+      : quizConfig.chapters.map(ch => ({ id: ch, name: ch })),
+    updatedAt: Timestamp.now(),
+    published: quizConfig.published || false, // Ensure published flag is included
   };
+
+  if (!isEditMode) {
+    quizPayload.createdAt = Timestamp.now();
+  }
+
+  try {
+    if (isEditMode) {
+      const quizRef = doc(db, 'quizzes', quizId);
+      await updateDoc(quizRef, quizPayload);
+      alert("Quiz updated successfully!");
+    } else {
+      await addDoc(collection(db, "quizzes"), quizPayload);
+      alert("Quiz created successfully!");
+    }
+
+    router.push("/dashboard/admin");
+  } catch (error) {
+    console.error("Error saving quiz:", error);
+    alert("Failed to save quiz.");
+  }
+};
 
   const handleSaveToMockQuestions = async () => {
     try {
@@ -1006,6 +1008,19 @@ export default function CreateQuiz() {
                       />
                     </div>
                   </div>
+
+                  <div className="flex items-center space-x-3">
+  <Checkbox
+    id="published"
+    checked={quizConfig.published}
+    onCheckedChange={(checked) => handleInputChange('published', checked)}
+    className="h-5 w-5 border-gray-300"
+  />
+  <Label htmlFor="published" className="text-lg font-medium text-gray-700">
+    Publish Quiz
+  </Label>
+</div>
+
                 </div>
                 <div className="bg-gray-50/80 p-6 rounded-xl shadow-inner">
                   <h4 className="text-xl font-medium text-gray-900 mb-4">Quiz Summary</h4>
@@ -1017,6 +1032,10 @@ export default function CreateQuiz() {
                       <p className="text-gray-700"><strong>Chapters:</strong> {Array.isArray(quizConfig.chapters) ? (quizConfig.chapters.includes('all-chapters') ? 'All Chapters' : quizConfig.chapters.join(', ') || 'None selected') : 'None selected'}</p>
                       <p className="text-gray-700"><strong>Questions:</strong> {quizConfig.selectedQuestions.length} / {quizConfig.totalQuestions}</p>
                       <p className="text-gray-700"><strong>Duration:</strong> {quizConfig.duration} minutes</p>
+                      <p className="text-gray-700">
+  <strong>Published:</strong> {quizConfig.published ? 'Yes' : 'No'}
+</p>
+
                     </div>
                     <div>
                       <p className="text-gray-700"><strong>Access:</strong> {quizConfig.accessType}</p>
