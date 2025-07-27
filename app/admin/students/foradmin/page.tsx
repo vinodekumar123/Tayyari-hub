@@ -1,4 +1,3 @@
-// foradmin/page.tsx
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -77,13 +76,40 @@ export default function ForAdminStudentResults() {
               totalScore += resultData.score || 0;
               totalMax += resultData.total || 0;
 
+              // Subject
+              let subjectNames = 'N/A';
+              if (quizMeta.questionFilters?.subjects?.length) {
+                subjectNames = quizMeta.questionFilters.subjects.join(', ');
+              } else if (quizMeta.subjects?.length) {
+                subjectNames = quizMeta.subjects.map((s: any) =>
+                  typeof s === 'string' ? s : s?.name || '[Invalid]'
+                ).join(', ');
+              } else if (quizMeta.subject?.name) {
+                subjectNames = quizMeta.subject.name;
+              } else if (typeof quizMeta.subject === 'string') {
+                subjectNames = quizMeta.subject;
+              }
+
+              // Chapter
+              let chapterNames = 'N/A';
+              if (quizMeta.questionFilters?.chapters?.length) {
+                chapterNames = quizMeta.questionFilters.chapters.join(', ');
+              } else if (quizMeta.chapter?.name) {
+                chapterNames = quizMeta.chapter.name;
+              } else if (typeof quizMeta.chapter === 'string') {
+                chapterNames = quizMeta.chapter;
+              }
+
+              // Course
+              const courseName = quizMeta.course?.name || quizMeta.course || 'Unknown';
+
               allResults.push({
                 id: quizId,
                 ...resultData,
                 title: quizMeta.title || 'Untitled Quiz',
-                subject: quizMeta.subject?.name || quizMeta.subject || 'N/A',
-                chapter: quizMeta.chapter?.name || quizMeta.chapter || 'N/A',
-                course: quizMeta.course?.name || quizMeta.course || 'Unknown',
+                subject: subjectNames,
+                chapter: chapterNames,
+                course: courseName,
                 isMock,
                 timestamp: resultData.timestamp,
               });
@@ -112,7 +138,9 @@ export default function ForAdminStudentResults() {
       <div className="flex justify-between items-center mb-6">
         <div>
           <h1 className="text-3xl font-bold text-gray-800">📊 {studentName}'s Results</h1>
-          <p className="text-gray-600">Performance Overview: {analytics.scored} / {analytics.total} ({analytics.average}%)</p>
+          <p className="text-gray-600">
+            Performance Overview: {analytics.scored} / {analytics.total} ({analytics.average}%)
+          </p>
         </div>
         <Button variant="outline" onClick={() => router.push('/admin/students/enrollment')}>
           ← Back to Students
@@ -121,7 +149,7 @@ export default function ForAdminStudentResults() {
 
       {loading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {[...Array(6)].map((_, i) => (
+          {Array.from({ length: 6 }).map((_, i) => (
             <Card key={i} className="p-6 w-full rounded-xl shadow-md">
               <CardHeader><Skeleton className="h-6 w-3/4 mb-2" /></CardHeader>
               <CardContent className="space-y-4">

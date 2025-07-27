@@ -46,31 +46,6 @@ export default function StudentResultsPage() {
   const auth = getAuth(app);
   const db = getFirestore(app);
 
-  const extractNames = (raw: any): string => {
-    if (!raw) return '';
-    if (Array.isArray(raw)) {
-      return raw
-        .map((s: any) => (typeof s === 'string' ? s : s?.name || ''))
-        .filter(Boolean)
-        .join(', ');
-    }
-    if (typeof raw === 'object' && raw?.name) return raw.name;
-    return typeof raw === 'string' ? raw : '';
-  };
-
-  const getFromSelectedQuestions = (quizMeta: any, key: 'subject' | 'chapter') => {
-    return Array.from(
-      new Set(
-        (quizMeta.selectedQuestions || [])
-          .map((q: any) => {
-            const val = q[key];
-            return typeof val === 'object' ? val?.name : val;
-          })
-          .filter(Boolean)
-      )
-    ).join(', ') || 'N/A';
-  };
-
   useEffect(() => {
     onAuthStateChanged(auth, async (user) => {
       if (!user) {
@@ -165,26 +140,40 @@ export default function StudentResultsPage() {
               const resultData = resultSnap.data();
               const quizMeta = quizSnap.data();
 
-              console.log("📘 Subject Raw:", quizMeta.subject, quizMeta.subjects);
-              console.log("📖 Chapter Raw:", quizMeta.chapter, quizMeta.chapters);
+              // Subject
+              let subjectNames = 'N/A';
+              if (quizMeta.questionFilters?.subjects?.length) {
+                subjectNames = quizMeta.questionFilters.subjects.join(', ');
+              } else if (quizMeta.subjects?.length) {
+                subjectNames = quizMeta.subjects.map((s: any) =>
+                  typeof s === 'string' ? s : s?.name || '[Invalid]'
+                ).join(', ');
+              } else if (quizMeta.subject?.name) {
+                subjectNames = quizMeta.subject.name;
+              } else if (typeof quizMeta.subject === 'string') {
+                subjectNames = quizMeta.subject;
+              }
 
-              const resolvedSubject =
-                extractNames(quizMeta.subject || quizMeta.subjects) ||
-                getFromSelectedQuestions(quizMeta, 'subject');
+              // Chapter
+              let chapterNames = 'N/A';
+              if (quizMeta.questionFilters?.chapters?.length) {
+                chapterNames = quizMeta.questionFilters.chapters.join(', ');
+              } else if (quizMeta.chapter?.name) {
+                chapterNames = quizMeta.chapter.name;
+              } else if (typeof quizMeta.chapter === 'string') {
+                chapterNames = quizMeta.chapter;
+              }
 
-              const resolvedChapter =
-                extractNames(quizMeta.chapter || quizMeta.chapters) ||
-                getFromSelectedQuestions(quizMeta, 'chapter');
-
-              const resolvedCourse = extractNames(quizMeta.course);
+              // Course
+              const courseName = quizMeta.course?.name || quizMeta.course || 'Unknown';
 
               allResults.push({
                 id: quizId,
                 ...resultData,
                 title: quizMeta.title || 'Untitled Quiz',
-                subject: resolvedSubject,
-                chapter: resolvedChapter,
-                course: resolvedCourse,
+                subject: subjectNames,
+                chapter: chapterNames,
+                course: courseName,
                 isMock,
                 timestamp: resultData.timestamp,
               });
@@ -278,7 +267,7 @@ export default function StudentResultsPage() {
 
       {loading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {[...Array(6)].map((_, i) => (
+          {Array.from({ length: 6 }).map((_, i) => (
             <Card key={i} className="p-6 w-full rounded-xl shadow-md">
               <CardHeader><Skeleton className="h-6 w-3/4 mb-2" /></CardHeader>
               <CardContent className="space-y-4">
