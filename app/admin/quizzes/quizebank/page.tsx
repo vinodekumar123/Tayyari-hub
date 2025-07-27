@@ -97,13 +97,52 @@ export default function QuizBankPage() {
         const q = query(collection(db, 'quizzes'), ...constraints);
 
         const unsubscribe = onSnapshot(q, (snapshot) => {
-          const data = snapshot.docs.map((doc) => ({
-            id: doc.id,
-            ...doc.data(),
-            course: doc.data().course?.name || (typeof doc.data().course === 'string' ? doc.data().course : '') || '',
-            subject: doc.data().subject?.name || (typeof doc.data().subject === 'string' ? doc.data().subject : '') || '',
-            chapter: doc.data().chapter?.name || (typeof doc.data().chapter === 'string' ? doc.data().chapter : '') || '',
-          }));
+       const data = snapshot.docs.map((doc) => {
+  const quizData = doc.data();
+
+  const subject = (() => {
+    if (quizData.questionFilters?.subjects?.length) {
+      return quizData.questionFilters.subjects.join(', ');
+    } else if (Array.isArray(quizData.subjects)) {
+      return quizData.subjects
+        .map((s: any) =>
+          typeof s === 'string' ? s : s?.name || '[Invalid]'
+        )
+        .join(', ');
+    } else if (quizData.subject?.name) {
+      return quizData.subject.name;
+    } else if (typeof quizData.subject === 'string') {
+      return quizData.subject;
+    } else {
+      return '';
+    }
+  })();
+
+  const chapter = (() => {
+    if (quizData.questionFilters?.chapters?.length) {
+      return quizData.questionFilters.chapters.join(', ');
+    } else if (quizData.chapter?.name) {
+      return quizData.chapter.name;
+    } else if (typeof quizData.chapter === 'string') {
+      return quizData.chapter;
+    } else {
+      return '';
+    }
+  })();
+
+  const course = quizData.course?.name ||
+    (typeof quizData.course === 'string' ? quizData.course : '') ||
+    '';
+
+  return {
+    id: doc.id,
+    ...quizData,
+    course,
+    subject,
+    chapter,
+  };
+});
+
           setQuizzes(data);
           setLoading(false);
         });
