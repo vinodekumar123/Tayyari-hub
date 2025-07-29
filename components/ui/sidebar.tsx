@@ -18,8 +18,9 @@ import { Badge } from '@/components/ui/badge';
 type MenuItem = {
   icon: React.ElementType;
   label: string;
-  href: string;
+  href?: string;
   badge?: string | null;
+  onClick?: () => void;
 };
 
 type Section = {
@@ -36,7 +37,6 @@ export function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [showSignOutDialog, setShowSignOutDialog] = useState(false);
-
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
 
   useEffect(() => {
@@ -68,7 +68,7 @@ export function Sidebar() {
   };
 
   const toggleCollapse = () => setCollapsed(prev => !prev);
-  const isActive = (href: string) => pathname.includes(href);
+  const isActive = (href?: string) => href && pathname.includes(href);
 
   const handleSignOut = async () => {
     const auth = getAuth(app);
@@ -111,7 +111,7 @@ export function Sidebar() {
       items: [
         { icon: Settings, label: 'Settings', href: '/admin/settings' }
       ]
-    },
+    }
   ];
 
   const studentMenu: Section[] = [
@@ -122,7 +122,7 @@ export function Sidebar() {
         { icon: Home, label: 'Dashboard', href: '/dashboard/student' },
         { icon: Trophy, label: 'Quizzes', href: '/admin/quizzes/quizebank' },
         { icon: Trophy, label: 'Mock Quizzes', href: '/admin/mockquize/quizebank' },
-        { icon: Plus, label: 'Create Mock Quiz', href: '/admin/mockquize/create' },
+        { icon: Plus, label: 'Create Your Own Quiz (Coming Soon)', href: '/dashboard/student' },
         { icon: ClipboardList, label: 'Results', href: '/admin/students/results' },
         { icon: UserCircle, label: 'Profile Settings', href: '/admin/student-profile' },
       ]
@@ -163,7 +163,7 @@ export function Sidebar() {
             <BookOpen className="h-6 w-6 text-purple-700" />
           )}
 
-          <div className="flex space-x-2">
+          <div className="flex items-center space-x-2">
             <Button variant="ghost" size="icon" onClick={toggleCollapse}>
               <Menu className="h-5 w-5" />
             </Button>
@@ -192,7 +192,7 @@ export function Sidebar() {
               {expandedSections.includes(section.section) && (
                 <div className="space-y-1">
                   {section.items.map((item) => (
-                    <Link key={item.href} href={item.href}>
+                    <Link key={item.href} href={item.href!}>
                       <div
                         className={`flex items-center justify-between px-3 py-2 rounded-sm text-sm transition-all duration-200 group ${
                           isActive(item.href)
@@ -222,20 +222,20 @@ export function Sidebar() {
               )}
             </div>
           ))}
-        </nav>
 
-        {/* Footer */}
-        <div className="p-4 border-t">
-          <Button
-            variant="ghost"
-            size="sm"
+          {/* Sign Out inside nav */}
+          <div
             onClick={() => setShowSignOutDialog(true)}
-            className={`w-full justify-start text-gray-600 hover:text-red-600 ${collapsed ? 'px-2' : ''}`}
+            className={`flex items-center justify-between px-3 py-2 rounded-sm text-sm cursor-pointer transition-all duration-200 group ${
+              'text-gray-600 hover:bg-red-100 hover:text-red-700'
+            }`}
           >
-            <LogOut className="h-5 w-4 mr-2" />
-            {!collapsed && 'Sign Out'}
-          </Button>
-        </div>
+            <div className="flex items-center space-x-3">
+              <LogOut className="h-5 w-5 text-red-500 group-hover:text-red-700" />
+              {!collapsed && <span className="font-semibold text-base">Sign Out</span>}
+            </div>
+          </div>
+        </nav>
       </div>
 
       {/* Backdrop */}

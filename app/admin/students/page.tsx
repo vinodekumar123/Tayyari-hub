@@ -24,8 +24,6 @@ import {
 import {
   Tabs,
   TabsContent,
-  TabsList,
-  TabsTrigger
 } from '@/components/ui/tabs';
 import {
   Dialog,
@@ -35,20 +33,17 @@ import {
   DialogFooter
 } from '@/components/ui/dialog';
 import {
-  Users,
-  Search,
-  Download,
-  UserPlus,
   Edit,
   Phone,
   BookOpen,
-  ArrowLeft,
-  BarChart2
+  BarChart2,
+  MapPin,
+  Search
 } from 'lucide-react';
-import Link from 'next/link';
 import { onAuthStateChanged } from 'firebase/auth';
 import { useRouter } from 'next/navigation';
 
+// Types
 type Course = {
   id: string;
   name: string;
@@ -64,7 +59,7 @@ type Student = {
   course?: string;
   university?: string;
   campus?: string;
-  city?: string;
+  district?: string;
   degree?: string;
   plan?: string;
   uid?: string;
@@ -78,8 +73,7 @@ type Student = {
 
 export default function Enrollment() {
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedCourse, setSelectedCourse] = useState('all');
-  const [selectedStatus, setSelectedStatus] = useState('all');
+  const [filteredStudents, setFilteredStudents] = useState<Student[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
   const [courses, setCourses] = useState<Course[]>([]);
   const [editModal, setEditModal] = useState(false);
@@ -135,40 +129,29 @@ export default function Enrollment() {
     const studentsQuery = query(
       collection(db, 'users'),
       orderBy('fullName'),
-      limit(10),
+      limit(3),
       ...(append && lastDoc ? [startAfter(lastDoc)] : [])
     );
     const unsubscribe = onSnapshot(studentsQuery, (snapshot) => {
       const newData: Student[] = snapshot.docs.map(doc => ({
         id: doc.id,
-        fullName: doc.data().fullName || '',
-        email: doc.data().email || '',
-        phone: doc.data().phone || '',
-        course: doc.data().course || '',
-        university: doc.data().university,
-        campus: doc.data().campus,
-        city: doc.data().city,
-        degree: doc.data().degree,
-        plan: doc.data().plan,
-        uid: doc.data().uid,
-        premium: doc.data().premium,
-        admin: doc.data().admin || false,
-        superadmin: doc.data().superadmin || false,
-        status: doc.data().status,
+        ...doc.data(),
         profileImage: `https://ui-avatars.com/api/?name=${encodeURIComponent(doc.data().fullName || '')}&background=random&size=128`,
       }));
 
       if (!append) {
         setStudents(newData);
+        setFilteredStudents(newData);
       } else {
         const uniqueData = newData.filter(newStudent => !students.some(existing => existing.id === newStudent.id));
         if (uniqueData.length > 0) {
           setStudents(prev => [...prev, ...uniqueData]);
+          setFilteredStudents(prev => [...prev, ...uniqueData]);
         }
       }
 
       setLastDoc(snapshot.docs[snapshot.docs.length - 1]);
-      setHasMore(newData.length === 10);
+      setHasMore(newData.length === 3);
       setLoading(false);
     }, (error) => {
       console.error('Error fetching students:', error);
@@ -178,13 +161,17 @@ export default function Enrollment() {
     unsubscribeRef.current = unsubscribe;
   };
 
-  const filteredStudents = students.filter(student => {
-    const matchesSearch = (student.fullName?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
-                          (student.email?.toLowerCase() || '').includes(searchTerm.toLowerCase());
-    const matchesCourse = selectedCourse === 'all' || student.course === selectedCourse;
-    const matchesStatus = selectedStatus === 'all' || (selectedStatus === 'active' ? student.premium : student.status === selectedStatus);
-    return matchesSearch && matchesCourse && matchesStatus;
-  });
+  // Handle search filtering
+  useEffect(() => {
+    const filtered = students.filter(student =>
+      student.fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      student.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      student.phone.includes(searchTerm) ||
+      student.course?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      student.district?.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+    setFilteredStudents(filtered);
+  }, [searchTerm, students]);
 
   const handleEditClick = (student: Student) => {
     setCurrentStudent(student);
@@ -205,6 +192,9 @@ export default function Enrollment() {
     try {
       if (currentStudent?.id) {
         const { id, ...dataToUpdate } = editData;
+        Object.keys(dataToUpdate).forEach(key => {
+          if (dataToUpdate[key] === undefined) delete dataToUpdate[key];
+        });
         await updateDoc(doc(db, 'users', currentStudent.id), dataToUpdate);
         setEditModal(false);
       }
@@ -214,25 +204,19 @@ export default function Enrollment() {
     }
   };
 
-const handleCheckResults = (studentId: string) => {
-  router.push(`/admin/students/foradmin?studentId=${studentId}`);
-};
-
-
   useEffect(() => {
     const handleObserver = (entries: IntersectionObserverEntry[]) => {
       if (entries[0].isIntersecting && hasMore && !loading) {
         if (fetchTrigger.current) clearTimeout(fetchTrigger.current);
         fetchTrigger.current = setTimeout(() => {
           fetchStudents(true);
-        }, 300); // Debounce by 300ms to prevent rapid triggers
+        }, 300);
       }
     };
     observer.current = new IntersectionObserver(handleObserver, { threshold: 1 });
-    if (observer.current) {
-      const target = document.querySelector('#load-more-trigger');
-      if (target) observer.current.observe(target);
-    }
+    const target = document.querySelector('#load-more-trigger');
+    if (target) observer.current.observe(target);
+
     return () => {
       if (observer.current) observer.current.disconnect();
       if (fetchTrigger.current) clearTimeout(fetchTrigger.current);
@@ -241,39 +225,26 @@ const handleCheckResults = (studentId: string) => {
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <main className="max-w-7xl mx-auto px-4 py-6">
+      <main className="max-w-7xl mx-auto px-4 py-6 sm:px-6 lg:px-8">
+        <div className="mb-6 flex flex-col sm:flex-row items-center gap-4">
+          <div className="relative w-full sm:w-80">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+            <Input
+              className="pl-10"
+              placeholder="Search students..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
+        </div>
         <Tabs defaultValue="students">
           <TabsContent value="students">
-            <Card className="mb-6">
-              <CardContent className="p-4 space-y-4">
-                <Input
-                  placeholder="Search students by name or email..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                />
-                <div className="flex flex-col md:flex-row gap-4">
-                  <select value={selectedCourse} onChange={(e) => setSelectedCourse(e.target.value)} className="border border-gray-300 rounded-md px-4 py-2">
-                    <option value="all">All Courses</option>
-                    {courses.map(course => (
-                      <option key={course.id} value={course.name}>{course.name}</option>
-                    ))}
-                  </select>
-                  <select value={selectedStatus} onChange={(e) => setSelectedStatus(e.target.value)} className="border border-gray-300 rounded-md px-4 py-2">
-                    <option value="all">All Status</option>
-                    <option value="active">Active (Premium)</option>
-                    <option value="inactive">Inactive</option>
-                    <option value="suspended">Suspended</option>
-                  </select>
-                </div>
-              </CardContent>
-            </Card>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {loading && !students.length ? (
-                Array(6).fill(0).map((_, index) => (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+              {loading && !filteredStudents.length ? (
+                Array(3).fill(0).map((_, index) => (
                   <Card key={index} className="shadow-xl animate-pulse">
                     <CardContent className="p-4 space-y-3">
-                      <div className="flex justify-between items-center">
+                      <div className="flex flex-col sm:flex-row justify-between items-center">
                         <div className="flex items-center space-x-3">
                           <div className="w-12 h-12 bg-gray-300 rounded-full"></div>
                           <div>
@@ -281,7 +252,7 @@ const handleCheckResults = (studentId: string) => {
                             <div className="h-4 bg-gray-300 rounded w-24 mt-1"></div>
                           </div>
                         </div>
-                        <div className="h-6 bg-gray-300 rounded w-16"></div>
+                        <div className="h-6 bg-gray-300 rounded w-16 mt-2 sm:mt-0"></div>
                       </div>
                       <div className="h-4 bg-gray-300 rounded w-20"></div>
                       <div className="h-4 bg-gray-300 rounded w-24"></div>
@@ -293,15 +264,15 @@ const handleCheckResults = (studentId: string) => {
                 filteredStudents.map((student) => (
                   <Card key={student.id} className="shadow-xl">
                     <CardContent className="p-4 space-y-3">
-                      <div className="flex justify-between items-center">
+                      <div className="flex flex-col sm:flex-row justify-between items-center">
                         <div className="flex items-center space-x-3">
                           <img src={student.profileImage} alt="Profile" className="w-12 h-12 rounded-full" />
                           <div>
-                            <h3 className="text-lg font-bold">{student.fullName}</h3>
-                            <p className="text-sm text-gray-600">{student.email}</p>
+                            <h3 className="text-lg font-bold truncate max-w-[200px]">{student.fullName}</h3>
+                            <p className="text-sm text-gray-600 truncate max-w-[200px]">{student.email}</p>
                           </div>
                         </div>
-                        <div className="flex flex-col items-end space-y-1">
+                        <div className="flex flex-col items-end space-y-1 mt-2 sm:mt-0">
                           <Badge className={`mt-1 ${student.premium ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'}`}>
                             {student.premium ? 'Active' : 'Inactive'}
                           </Badge>
@@ -312,13 +283,14 @@ const handleCheckResults = (studentId: string) => {
                           )}
                         </div>
                       </div>
-                      <p className="text-sm text-gray-600"><Phone className="inline h-4 w-4 mr-1" /> {student.phone}</p>
-                      <p className="text-sm text-gray-600"><BookOpen className="inline h-4 w-4 mr-1" /> {student.course}</p>
-                      <div className="text-right space-x-2">
+                      <p className="text-sm text-gray-600 truncate"><Phone className="inline h-4 w-4 mr-1" /> {student.phone}</p>
+                      <p className="text-sm text-gray-600 truncate"><BookOpen className="inline h-4 w-4 mr-1" /> {student.course}</p>
+                      <p className="text-sm text-gray-600 truncate"><MapPin className="inline h-4 w-4 mr-1" /> {student.district}</p>
+                      <div className="flex flex-col sm:flex-row justify-end space-y-2 sm:space-y-0 sm:space-x-2">
                         <Button variant="outline" size="sm" onClick={() => handleEditClick(student)}>
                           <Edit className="h-4 w-4 mr-1" /> Edit
                         </Button>
-                        <Button variant="outline" size="sm" onClick={() => handleCheckResults(student.id)}>
+                        <Button variant="outline" size="sm" onClick={() => router.push(`/admin/students/foradmin?studentId=${student.id}`)}>
                           <BarChart2 className="h-4 w-4 mr-1" /> Check Results
                         </Button>
                       </div>
@@ -328,18 +300,21 @@ const handleCheckResults = (studentId: string) => {
               )}
               {hasMore && <div id="load-more-trigger" className="h-1"></div>}
             </div>
+            {!loading && filteredStudents.length === 0 && (
+              <p className="text-center text-gray-600 mt-6">No students found.</p>
+            )}
           </TabsContent>
         </Tabs>
       </main>
 
       <Dialog open={editModal} onOpenChange={setEditModal}>
-        <DialogContent>
+        <DialogContent className="max-w-md sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>Edit Student</DialogTitle>
           </DialogHeader>
           {currentStudent && (
             <div className="space-y-3">
-              {['fullName', 'email', 'phone', 'course', 'university', 'campus', 'city', 'degree', 'plan', 'uid'].map((field) => (
+              {['fullName', 'email', 'phone', 'course', 'university', 'district', 'degree', 'plan'].map((field) => (
                 <Input
                   key={field}
                   placeholder={field.charAt(0).toUpperCase() + field.slice(1)}

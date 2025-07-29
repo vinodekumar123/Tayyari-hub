@@ -27,6 +27,15 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogTrigger,
+} from '@/components/ui/dialog';
+import Papa from 'papaparse';
 import dynamic from 'next/dynamic';
 import 'react-quill/dist/quill.snow.css';
 
@@ -74,6 +83,9 @@ export default function CreateQuestion() {
   const [previewMode, setPreviewMode] = useState(false);
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
   const [loading, setLoading] = useState(true);
+  const [csvErrors, setCsvErrors] = useState<string[]>([]);
+  const [isCsvDialogOpen, setIsCsvDialogOpen] = useState(false);
+  const [csvFile, setCsvFile] = useState<File | null>(null);
 
   const [questionData, setQuestionData] = useState<Question>({
     questionText: '',
@@ -245,22 +257,130 @@ export default function CreateQuestion() {
     return Object.keys(newErrors).length === 0;
   };
 
+  const validateCsvQuestion = (row: any, index: number) => {
+    const errors: string[] = [];
+    const requiredFields = ['questionText', 'options', 'correctAnswer', 'course', 'subject', 'difficulty'];
+    
+    requiredFields.forEach(field => {
+      if (!row[field] || (typeof row[field] === 'string' && !row[field].trim())) {
+        errors.push(`Row ${index + 1}: ${field} is required`);
+      }
+    });
+
+    if (row.options) {
+      const options = row.options.split('|').map((opt: string) => opt.trim());
+      if (options.length < 2) {
+        errors.push(`Row ${index + 1}: At least 2 options are required`);
+      }
+      if (options.some((opt: string) => !opt)) {
+        errors.push(`Row ${index + 1}: All options must be non-empty`);
+      }
+      if (!options.includes(row.correctAnswer)) {
+        errors.push(`Row ${index + 1}: Correct answer must match one of the options`);
+      }
+    }
+
+    if (row.course && !firestoreCourses.some(c => c.name === row.course)) {
+      errors.push(`Row ${index + 1}: Invalid course name`);
+    }
+
+    if (row.subject && !firestoreSubjects.some(s => s.name === row.subject)) {
+      errors.push(`Row ${index + 1}: Invalid subject name`);
+    }
+
+    if (row.difficulty && !['Easy', 'Medium', 'Hard'].includes(row.difficulty)) {
+      errors.push(`Row ${index + 1}: Invalid difficulty level`);
+    }
+
+    return errors;
+  };
+
+  const handleCsvUpload = async () => {
+    if (!csvFile) {
+      setCsvErrors(['No file selected']);
+      return;
+    }
+
+    setIsSaving(true);
+    setCsvErrors([]);
+
+    Papa.parse(csvFile, {
+      header: true,
+      skipEmptyLines: true,
+      complete: async (result) => {
+        const questions = result.data as any[];
+        const errors: string[] = [];
+        const validQuestions: Question[] = [];
+
+        questions.forEach((row, index) => {
+          const rowErrors = validateCsvQuestion(row, index);
+          if (rowErrors.length > 0) {
+            errors.push(...rowErrors);
+            return;
+          }
+
+          validQuestions.push({
+            questionText: row.questionText,
+            options: row.options.split('|').map((opt: string) => opt.trim()),
+            correctAnswer: row.correctAnswer,
+            explanation: row.explanation || '',
+            subject: row.subject,
+            chapter: row.chapter || '',
+            topic: row.topic || '',
+            difficulty: row.difficulty,
+            year: row.year || '',
+            book: row.book || '',
+            teacher: row.teacher || questionData.teacher,
+            course: row.course,
+            enableExplanation: row.enableExplanation ? row.enableExplanation.toLowerCase() === 'true' : true,
+            createdAt: new Date(),
+          });
+        });
+
+        if (errors.length > 0) {
+          setCsvErrors(errors);
+          setIsSaving(false);
+          return;
+        }
+
+        try {
+          for (const question of validQuestions) {
+            await addDoc(collection(db, 'mock-questions'), question);
+          }
+          setIsCsvDialogOpen(false);
+          setCsvFile(null);
+          router.push('/admin/mockquestions/questionbank');
+        } catch (err) {
+          console.error('Failed to import questions:', err);
+          setCsvErrors(['Failed to import questions']);
+        } finally {
+          setIsSaving(false);
+        }
+      },
+      error: (err) => {
+        console.error('CSV parsing error:', err);
+        setCsvErrors(['Error parsing CSV file']);
+        setIsSaving(false);
+      },
+    });
+  };
+
   const handleSave = async () => {
     if (!validateForm()) return;
     setIsSaving(true);
 
     try {
       if (id) {
-        await updateDoc(doc(db, "mock-questions", id), questionData);
+        await updateDoc(doc(db, 'mock-questions', id), questionData);
       } else {
-        await addDoc(collection(db, "mock-questions"), {
+        await addDoc(collection(db, 'mock-questions'), {
           ...questionData,
           createdAt: new Date(),
         });
       }
-      router.push("/admin/mockquestions/questionbank");
+      router.push('/admin/mockquestions/questionbank');
     } catch (err) {
-      console.error("Failed to save question:", err);
+      console.error('Failed to save question:', err);
     } finally {
       setIsSaving(false);
     }
@@ -313,20 +433,73 @@ export default function CreateQuestion() {
   return (
     <div className="min-h-screen bg-white rounded-xl">
       <header className="bg-white shadow-sm border-b">
-        <div className=" mx-auto px-4 sm:px-6 lg:px-8 py-6 flex flex-col sm:flex-row justify-between items-center gap-4">
+        <div className="mx-auto px-4 sm:px-6 lg:px-8 py-6 flex flex-col sm:flex-row justify-between items-center gap-4">
           <div className="flex items-center space-x-3">
             <div className="h-10 w-10 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-full flex items-center justify-center">
               <BookOpen className="text-white h-6 w-6" />
             </div>
             <h1 className="text-2xl font-bold text-gray-900">
-              {id ? "Edit Mock Question" : "Create Mock Question"}
+              {id ? 'Edit Mock Question' : 'Create Mock Question'}
             </h1>
           </div>
-         
+          <div className="flex items-center space-x-3">
+            <Dialog open={isCsvDialogOpen} onOpenChange={setIsCsvDialogOpen}>
+              <DialogTrigger asChild>
+                <Button className="bg-green-600 hover:bg-green-700 text-white">
+                  <Upload className="h-4 w-4 mr-2" />
+                  Import CSV
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-[500px]">
+                <DialogHeader>
+                  <DialogTitle className="text-xl font-semibold">Import Questions from CSV</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                  <p className="text-sm text-gray-600">
+                    Upload a CSV file with the following columns: questionText, options (pipe-separated), correctAnswer, course, subject, difficulty, explanation (optional), chapter (optional), topic (optional), year (optional), book (optional), teacher (optional), enableExplanation (true/false).
+                  </p>
+                  <Input
+                    type="file"
+                    accept=".csv"
+                    onChange={(e) => setCsvFile(e.target.files?.[0] || null)}
+                    className="border-gray-300"
+                  />
+                  {csvErrors.length > 0 && (
+                    <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
+                      <ul className="list-disc pl-5">
+                        {csvErrors.map((error, idx) => (
+                          <li key={idx}>{error}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+                <DialogFooter>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setIsCsvDialogOpen(false);
+                      setCsvFile(null);
+                      setCsvErrors([]);
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={handleCsvUpload}
+                    disabled={isSaving || !csvFile}
+                    className="bg-green-600 hover:bg-green-700 text-white"
+                  >
+                    {isSaving ? 'Importing...' : 'Import'}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          </div>
         </div>
       </header>
 
-      <main className=" mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {loading ? (
           <div className="space-y-8">
             <SkeletonCard />
