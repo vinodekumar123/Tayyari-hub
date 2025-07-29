@@ -25,12 +25,35 @@ import {
 } from '@/components/ui/dialog';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
+import { Download } from 'lucide-react';
+
+interface Question {
+  id: string;
+  subject?: string;
+}
+
+interface QuizData {
+  title: string;
+  subjects?: string[] | { name: string }[];
+  chapters?: string[] | { name: string }[];
+  selectedQuestions: Question[];
+}
+
+interface Score {
+  id: string;
+  name: string;
+  fatherName: string;
+  district: string;
+  score: number;
+  total: number;
+  answers: Record<string, string>;
+}
 
 export default function QuizStudentScores() {
-  const [scores, setScores] = useState<any[]>([]);
+  const [scores, setScores] = useState<Score[]>([]);
   const [loading, setLoading] = useState(true);
   const [quizTitle, setQuizTitle] = useState('');
-  const [subjects, setSubjects] = useState('');
+  const [subjects, setSubjects] = useState<string[]>([]);
   const [chapters, setChapters] = useState('');
   const [hasMore, setHasMore] = useState(true);
   const [lastVisible, setLastVisible] = useState<any>(null);
@@ -41,6 +64,7 @@ export default function QuizStudentScores() {
   const [sortByScore, setSortByScore] = useState<'desc' | 'asc'>('desc');
   const [districtFilter, setDistrictFilter] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
+  const [quizQuestions, setQuizQuestions] = useState<Question[]>([]);
 
   const params = useSearchParams();
   const router = useRouter();
@@ -49,30 +73,35 @@ export default function QuizStudentScores() {
   const pdfRef = useRef<HTMLDivElement>(null);
 
   const platformName = "Tayyari Hub";
-  const currentDate = new Date().toLocaleDateString();
+  const currentDate = new Date().toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric'
+  });
 
   const fetchMetadata = async () => {
     if (!quizId) return;
     const quizDoc = await getDoc(doc(db, 'quizzes', quizId));
     if (!quizDoc.exists()) return;
-    const data = quizDoc.data();
+    const data = quizDoc.data() as QuizData;
     setQuizTitle(data.title || 'Untitled');
 
     const extractNames = (raw: any) => {
-      if (Array.isArray(raw)) return raw.map((s: any) => typeof s === 'string' ? s : s?.name || '[Invalid]').join(', ');
-      if (typeof raw === 'object' && raw?.name) return raw.name;
-      return typeof raw === 'string' ? raw : 'N/A';
+      if (Array.isArray(raw)) return raw.map((s: any) => typeof s === 'string' ? s : s?.name || '[Invalid]').filter(Boolean);
+      if (typeof raw === 'object' && raw?.name) return [raw.name];
+      return typeof raw === 'string' ? [raw] : [];
     };
 
     setSubjects(extractNames(data.subjects || data.subject));
-    setChapters(extractNames(data.chapters || data.chapter));
+    setChapters(extractNames(data.chapters || data.chapter).join(', '));
+    setQuizQuestions(data.selectedQuestions || []);
   };
 
   const fetchScores = async () => {
     if (!quizId) return;
     const usersQuery = query(collection(db, 'users'), limit(10), ...(lastVisible ? [startAfter(lastVisible)] : []));
     const usersSnap = await getDocs(usersQuery);
-    const scoreList: any[] = [];
+    const scoreList: Score[] = [];
     const newFetchedIds = new Set<string>();
 
     const lastDoc = usersSnap.docs[usersSnap.docs.length - 1];
@@ -87,13 +116,16 @@ export default function QuizStudentScores() {
       const resultSnap = await getDoc(resultRef);
       if (resultSnap.exists()) {
         const userData = userDoc.data();
+        const resultData = resultSnap.data();
         newFetchedIds.add(userId);
         scoreList.push({
           id: userId,
           name: userData.fullName || 'Unknown',
           fatherName: userData.fatherName || '-',
           district: userData.district || '-',
-          ...resultSnap.data(),
+          score: resultData.score || 0,
+          total: resultData.total || 0,
+          answers: resultData.answers || {},
         });
       }
     }
@@ -106,6 +138,23 @@ export default function QuizStudentScores() {
 
     setLoading(false);
     setInitialLoading(false);
+  };
+
+  const calculateSubjectScores = (score: Score) => {
+    const subjectScores: Record<string, number> = {};
+    subjects.forEach(subj => subjectScores[subj] = 0);
+
+    quizQuestions.forEach(q => {
+      if (q.subject && score.answers[q.id] === q.correctAnswer) {
+        subjectScores[q.subject] = (subjectScores[q.subject] || 0) + 1;
+      }
+    });
+
+    const totalCorrect = score.score;
+    const totalWrong = score.total - score.score;
+    const totalQuestions = score.total;
+
+    return { subjectScores, totalCorrect, totalWrong, totalQuestions };
   };
 
   const handleObserver = useCallback((entries: any[]) => {
@@ -136,11 +185,39 @@ export default function QuizStudentScores() {
     const html2pdf = (await import('html2pdf.js')).default;
 
     html2pdf(pdfRef.current, {
-      margin: 10,
+      margin: [10, 10, 10, 10],
       filename: `${quizTitle.replace(/\s+/g, '_')}_Results.pdf`,
       html2canvas: { scale: 2 },
       jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+      pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
     });
+  };
+
+  const exportToCSV = () => {
+    const headers = ['Name', "Father's Name", 'District', ...subjects.map(s => `${s} Correct`), 'Total Correct', 'Total Wrong', 'Total Questions'];
+    const rows = filtered.map(s => {
+      const { subjectScores, totalCorrect, totalWrong, totalQuestions } = calculateSubjectScores(s);
+      return [
+        s.name,
+        s.fatherName,
+        s.district,
+        ...subjects.map(subj => subjectScores[subj] || 0),
+        totalCorrect,
+        totalWrong,
+        totalQuestions
+      ].map(field => `"${String(field).replace(/"/g, '""')}"`).join(',');
+    });
+
+    const csvContent = [headers.join(','), ...rows].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `${quizTitle.replace(/\s+/g, '_')}_Results.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   const filtered = scores.filter(s =>
@@ -149,56 +226,87 @@ export default function QuizStudentScores() {
   );
 
   return (
-    <div className="p-8 min-h-screen bg-gradient-to-b from-white to-blue-50">
+    <div className="p-8 min-h-screen bg-gradient-to-b from-blue-100 to-white">
       <div className="flex justify-between items-center mb-6">
         <Button variant="outline" onClick={() => router.push('/admin/results')}>
           ← Back to Results
         </Button>
-        <Dialog>
-          <DialogTrigger asChild>
-            <Button>Export PDF</Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Export Options</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div className="flex items-center space-x-2">
-                <Checkbox id="subjects" checked={showSubjects} onCheckedChange={setShowSubjects} />
-                <label htmlFor="subjects" className="text-sm">Include Subjects</label>
+        <div className="flex gap-2">
+          <Dialog>
+            <DialogTrigger asChild>
+              <Button className="bg-blue-600 hover:bg-blue-700">
+                <Download className="mr-2 h-4 w-4" /> Export PDF
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[425px]">
+              <DialogHeader>
+                <DialogTitle className="text-xl font-semibold">Export PDF Options</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4 py-4">
+                <div className="flex items-center space-x-2">
+                  <Checkbox id="subjects" checked={showSubjects} onCheckedChange={setShowSubjects} />
+                  <label htmlFor="subjects" className="text-sm font-medium">Include Subjects</label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Checkbox id="chapters" checked={showChapters} onCheckedChange={setShowChapters} />
+                  <label htmlFor="chapters" className="text-sm font-medium">Include Chapters</label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <label className="text-sm font-medium">Sort By:</label>
+                  <select
+                    value={sortByScore}
+                    onChange={e => setSortByScore(e.target.value as 'asc' | 'desc')}
+                    className="border px-2 py-1 rounded-md bg-gray-50"
+                  >
+                    <option value="desc">Highest Score</option>
+                    <option value="asc">Lowest Score</option>
+                  </select>
+                </div>
               </div>
-              <div className="flex items-center space-x-2">
-                <Checkbox id="chapters" checked={showChapters} onCheckedChange={setShowChapters} />
-                <label htmlFor="chapters" className="text-sm">Include Chapters</label>
-              </div>
-              <div className="flex items-center space-x-2">
-                <label className="text-sm">Sort By:</label>
-                <select value={sortByScore} onChange={e => setSortByScore(e.target.value as 'asc' | 'desc')} className="border px-2 py-1 rounded">
-                  <option value="desc">Highest Score</option>
-                  <option value="asc">Lowest Score</option>
-                </select>
-              </div>
-            </div>
-            <DialogFooter>
-              <Button onClick={exportToPDF}>Download</Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      </div>
-
-      <div className="flex gap-4 mb-4">
-        <Input placeholder="Search by student name..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
-        <Input placeholder="Filter by district..." value={districtFilter} onChange={e => setDistrictFilter(e.target.value)} />
-      </div>
-
-      <div ref={pdfRef} className="bg-white rounded-xl p-6 shadow-lg space-y-6">
-        <div className="flex justify-between text-sm text-gray-600">
-          <span className="font-bold">{platformName}</span>
-          <span>{currentDate}</span>
+              <DialogFooter>
+                <Button onClick={exportToPDF} className="bg-blue-600 hover:bg-blue-700">
+                  Download PDF
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+          <Button onClick={exportToCSV} className="bg-green-600 hover:bg-green-700">
+            <Download className="mr-2 h-4 w-4" /> Export CSV
+          </Button>
         </div>
-        <h1 className="text-2xl font-bold text-center text-gray-800">{quizTitle || 'Quiz'} Results</h1>
-        {showSubjects && <p className="text-center text-gray-700">📚 Subjects: {subjects}</p>}
-        {showChapters && <p className="text-center text-gray-700">📖 Chapters: {chapters}</p>}
+      </div>
+
+      <div className="flex gap-4 mb-6">
+        <Input
+          placeholder="Search by student name..."
+          value={searchTerm}
+          onChange={e => setSearchTerm(e.target.value)}
+          className="border-gray-300 focus:border-blue-500"
+        />
+        <Input
+          placeholder="Filter by district..."
+          value={districtFilter}
+          onChange={e => setDistrictFilter(e.target.value)}
+          className="border-gray-300 focus:border-blue-500"
+        />
+      </div>
+
+      <div ref={pdfRef} className="bg-white rounded-2xl p-8 shadow-xl space-y-6">
+        <div className="flex justify-between items-center text-sm text-gray-600">
+          <span className="font-bold text-lg text-blue-800">{platformName}</span>
+          <span className="text-gray-500">{currentDate}</span>
+        </div>
+        <h1 className="text-3xl font-extrabold text-center text-blue-900">{quizTitle || 'Quiz'} Results</h1>
+        {showSubjects && (
+          <p className="text-center text-gray-700 text-lg">
+            📚 <span className="font-semibold">Subjects:</span> {subjects.join(', ')}
+          </p>
+        )}
+        {showChapters && (
+          <p className="text-center text-gray-700 text-lg">
+            📖 <span className="font-semibold">Chapters:</span> {chapters}
+          </p>
+        )}
 
         {initialLoading ? (
           <div className="space-y-4">
@@ -210,28 +318,47 @@ export default function QuizStudentScores() {
             ))}
           </div>
         ) : filtered.length === 0 ? (
-          <p className="text-center text-gray-500">No results submitted for this quiz yet.</p>
+          <p className="text-center text-gray-500 text-lg">No results submitted for this quiz yet.</p>
         ) : (
-          <table className="w-full mt-6 text-sm border">
-            <thead className="bg-gray-100">
-              <tr>
-                <th className="border p-2 text-left">Name</th>
-                <th className="border p-2 text-left">Father's Name</th>
-                <th className="border p-2 text-left">District</th>
-                <th className="border p-2 text-center">Score</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((s) => (
-                <tr key={s.id}>
-                  <td className="border p-2">{s.name}</td>
-                  <td className="border p-2">{s.fatherName}</td>
-                  <td className="border p-2">{s.district}</td>
-                  <td className="border p-2 text-center font-medium">{s.score} / {s.total}</td>
+          <div className="overflow-x-auto">
+            <table className="w-full mt-6 text-sm border-collapse">
+              <thead className="bg-blue-50">
+                <tr>
+                  <th className="border border-gray-200 p-3 text-left font-semibold text-blue-900">Name</th>
+                  <th className="border border-gray-200 p-3 text-left font-semibold text-blue-900">Father's Name</th>
+                  <th className="border border-gray-200 p-3 text-left font-semibold text-blue-900">District</th>
+                  {subjects.map(subj => (
+                    <th key={subj} className="border border-gray-200 p-3 text-center font-semibold text-blue-900">
+                      {subj} Correct
+                    </th>
+                  ))}
+                  <th className="border border-gray-200 p-3 text-center font-semibold text-blue-900">Total Correct</th>
+                  <th className="border border-gray-200 p-3 text-center font-semibold text-blue-900">Total Wrong</th>
+                  <th className="border border-gray-200 p-3 text-center font-semibold text-blue-900">Total Questions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {filtered.map(s => {
+                  const { subjectScores, totalCorrect, totalWrong, totalQuestions } = calculateSubjectScores(s);
+                  return (
+                    <tr key={s.id} className="hover:bg-blue-50">
+                      <td className="border border-gray-200 p-3">{s.name}</td>
+                      <td className="border border-gray-200 p-3">{s.fatherName}</td>
+                      <td className="border border-gray-200 p-3">{s.district}</td>
+                      {subjects.map(subj => (
+                        <td key={subj} className="border border-gray-200 p-3 text-center">
+                          {subjectScores[subj] || 0}
+                        </td>
+                      ))}
+                      <td className="border border-gray-200 p-3 text-center font-medium">{totalCorrect}</td>
+                      <td className="border border-gray-200 p-3 text-center font-medium">{totalWrong}</td>
+                      <td className="border border-gray-200 p-3 text-center font-medium">{totalQuestions}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
 
