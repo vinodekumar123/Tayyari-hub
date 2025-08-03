@@ -38,6 +38,7 @@ const ResultPage: React.FC = () => {
   const searchParams = useSearchParams();
   const quizId = searchParams.get('id');
   const isMock = searchParams.get('mock') === 'true';
+  const studentId = searchParams.get('studentId');
 
   const [user, setUser] = useState<User | null>(null);
   const [quiz, setQuiz] = useState<QuizData | null>(null);
@@ -53,16 +54,17 @@ const ResultPage: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    if (!quizId || !user) return;
+    if (!quizId || !user || !studentId) return;
 
     const load = async () => {
       const quizDoc = isMock
-        ? doc(db, 'users', user.uid, 'mock-quizzes', quizId)
+        ? doc(db, 'users', studentId, 'mock-quizzes', quizId)
         : doc(db, 'quizzes', quizId);
+
       const resultDoc = doc(
         db,
         'users',
-        user.uid,
+        studentId,
         isMock ? 'mock-quizAttempts' : 'quizAttempts',
         quizId,
         'results',
@@ -79,17 +81,17 @@ const ResultPage: React.FC = () => {
       const quizData = quizSnap.data();
       const attemptData = resultSnap.data();
 
-     if (quizData.resultVisibility !== 'immediate') {
-  const userDoc = await getDoc(doc(db, "users", user.uid));
-  const userData = userDoc.exists() ? userDoc.data() : null;
-  const isAdmin = userData?.admin === true;
+      // result visibility logic
+      if (quizData.resultVisibility !== 'immediate') {
+        const userDoc = await getDoc(doc(db, 'users', user.uid));
+        const userData = userDoc.exists() ? userDoc.data() : null;
+        const isAdmin = userData?.admin === true;
 
-  if (!isAdmin) {
-    setAccessDenied(true);
-    return;
-  }
-}
-
+        if (!isAdmin) {
+          setAccessDenied(true);
+          return;
+        }
+      }
 
       const questions: Question[] = quizData.selectedQuestions || [];
       const answers: Record<string, string> = attemptData.answers || {};
@@ -116,7 +118,7 @@ const ResultPage: React.FC = () => {
     };
 
     load();
-  }, [quizId, user, isMock]);
+  }, [quizId, user, isMock, studentId]);
 
   if (accessDenied) {
     return (
@@ -144,7 +146,7 @@ const ResultPage: React.FC = () => {
   else remark = '📘 Keep Practicing';
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-white px-6 py-10 mx-auto ">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-white px-6 py-10 mx-auto">
       {showConfetti && (
         <>
           <Confetti width={width} height={height} />

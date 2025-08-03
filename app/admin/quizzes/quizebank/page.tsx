@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
@@ -43,7 +44,7 @@ import { ArrowRight, BookOpen, Calendar, Clock, Play, Pencil, Eye } from 'lucide
 import Link from 'next/link';
 
 function getQuizStatus(startDate: string, endDate: string, startTime?: string, endTime?: string) {
-  const now = new Date('2025-08-03T16:55:00+05:00');
+  const now = new Date('2025-08-04T01:25:00+05:00');
   const start = new Date(`${startDate}T${startTime || '00:00'}`);
   const end = new Date(`${endDate}T${endTime || '23:59'}`);
   console.log(`Now: ${now}, Start: ${start}, End: ${end}`);
@@ -56,8 +57,10 @@ export default function QuizBankPage() {
   const [quizzes, setQuizzes] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState<any>(null);
-  const [attemptedQuizzes, setAttemptedQuizzes] = useState<string[]>([]);
+  const [attemptedQuizzes, setAttemptedQuizzes] = useState<{ [key: string]: number }>({});
   const [enrolledCourses, setEnrolledCourses] = useState<string[]>([]);
+  const [userLoaded, setUserLoaded] = useState(false);
+
   const [lastVisible, setLastVisible] = useState<any>(null);
   const [hasMore, setHasMore] = useState(true);
   const [filters, setFilters] = useState({
@@ -72,7 +75,6 @@ export default function QuizBankPage() {
   const [showPremiumDialog, setShowPremiumDialog] = useState(false);
   const [selectedQuizId, setSelectedQuizId] = useState<string | null>(null);
   const unsubscribeRef = useRef<(() => void) | null>(null);
-
   const router = useRouter();
 
   const fetchQuizzes = async (startAfterDoc: any = null) => {
@@ -140,6 +142,7 @@ export default function QuizBankPage() {
           course,
           subject,
           chapter,
+          maxAttempts: quizData.maxAttempts || 1,
         };
       });
 
@@ -175,9 +178,12 @@ export default function QuizBankPage() {
         const attemptsSnapshot = await getDocs(
           collection(db, 'users', user.uid, 'quizAttempts')
         );
-        const attempted = attemptsSnapshot.docs
-          .filter((doc) => doc.data()?.completed)
-          .map((doc) => doc.id);
+        const attempted: { [key: string]: number } = {};
+        attemptsSnapshot.docs.forEach((doc) => {
+          if (doc.data()?.completed) {
+            attempted[doc.id] = doc.data().attemptNumber || 1;
+          }
+        });
         setAttemptedQuizzes(attempted);
       } else {
         setQuizzes([]);
@@ -185,6 +191,8 @@ export default function QuizBankPage() {
         setCurrentUser(null);
         setHasMore(false);
       }
+      setUserLoaded(true); // ✅ add this line
+
     });
 
     return () => {
@@ -195,14 +203,15 @@ export default function QuizBankPage() {
     };
   }, []);
 
-  useEffect(() => {
-    if (currentUser) {
-      setQuizzes([]);
-      setLastVisible(null);
-      setHasMore(true);
-      fetchQuizzes();
-    }
-  }, [filters, currentUser, enrolledCourses]);
+useEffect(() => {
+  if (userLoaded && currentUser) {
+    setQuizzes([]);
+    setLastVisible(null);
+    setHasMore(true);
+    fetchQuizzes(); // ✅ only now fetch quizzes
+  }
+}, [filters, currentUser, enrolledCourses, userLoaded]); // ✅ add userLoaded here
+
 
   const filteredQuizzes = quizzes.filter((quiz) => {
     const { course, subject, chapter, accessType, searchTerm, status, date } = filters;
@@ -223,12 +232,21 @@ export default function QuizBankPage() {
     return [...new Set(quizzes.map((q) => q[key]).filter(Boolean))];
   };
 
-  const handleQuizClick = (quiz: any) => {
+  const handleQuizClick = async (quiz: any) => {
     if (!currentUser?.isAdmin && currentUser?.plan === 'free' && quiz.accessType === 'paid') {
       setSelectedQuizId(quiz.id);
       setShowPremiumDialog(true);
       return;
     }
+
+    const attemptCount = attemptedQuizzes[quiz.id] || 0;
+    const maxAttempts = quiz.maxAttempts || 1;
+
+    if (attemptCount >= maxAttempts && !currentUser?.isAdmin) {
+      alert('You have reached the maximum number of attempts for this quiz.');
+      return;
+    }
+
     router.push(`/quiz/start?id=${quiz.id}`);
   };
 
@@ -345,7 +363,8 @@ export default function QuizBankPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
             {filteredQuizzes.map((quiz) => {
               const status = getQuizStatus(quiz.startDate, quiz.endDate, quiz.startTime, quiz.endTime);
-              const isAttempted = attemptedQuizzes.includes(quiz.id);
+              const attemptCount = attemptedQuizzes[quiz.id] || 0;
+              const canAttempt = attemptCount < (quiz.maxAttempts || 1);
 
               const courseName =
                 typeof quiz.course === 'object' && 'name' in quiz.course
@@ -404,7 +423,7 @@ export default function QuizBankPage() {
                         </div>
                         <div className="flex justify-between">
                           <span className="text-gray-600">Attempts:</span>
-                          <span className="font-medium">{quiz.maxAttempts}</span>
+                          <span className="font-medium">{attemptCount} / {quiz.maxAttempts}</span>
                         </div>
                         <div className="flex items-center justify-between mt-1">
                           <div className="flex items-center gap-1 text-gray-600">
@@ -430,30 +449,22 @@ export default function QuizBankPage() {
                         <Button variant="outline" disabled className="w-full h-10 sm:h-12">
                           Quiz Ended
                         </Button>
-                      ) : isAttempted ? (
-                        <Button variant="outline" disabled className="w-full h-10 sm:h-12">
-                          Attempted
-                        </Button>
                       ) : status === 'upcoming' ? (
                         <Button variant="outline" disabled className="w-full h-10 sm:h-12">
                           Upcoming
                         </Button>
-                      ) : quiz.accessType === 'paid' && currentUser?.plan === 'free' ? (
+                      ) : !canAttempt ? (
+                        <Button variant="outline" disabled className="w-full h-10 sm:h-12">
+                          Max Attempts Reached
+                        </Button>
+                      ) : (
                         <Button
                           className="w-full h-10 sm:h-12 bg-green-600 text-white"
                           onClick={() => handleQuizClick(quiz)}
                         >
                           <Play className="h-4 w-4 mr-2" />
-                          Start Quiz
+                          {attemptCount > 0 ? 'Retake Quiz' : 'Start Quiz'}
                           <ArrowRight className="h-4 w-4 ml-2" />
-                        </Button>
-                      ) : (
-                        <Button className="w-full h-10 sm:h-12 bg-green-600 text-white" asChild>
-                          <Link href={`/quiz/start?id=${quiz.id}`}>
-                            <Play className="h-4 w-4 mr-2" />
-                            Start Quiz
-                            <ArrowRight className="h-4 w-4 ml-2" />
-                          </Link>
                         </Button>
                       )}
 

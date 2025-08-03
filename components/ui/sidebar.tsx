@@ -34,13 +34,12 @@ export function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
 
-  const [expandedSections, setExpandedSections] = useState<string[]>(['main']);
+  const [expandedSections, setExpandedSections] = useState<string[]>([]);
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [showSignOutDialog, setShowSignOutDialog] = useState(false);
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
 
-  // Lock body scroll when sidebar is open (mobile)
   useEffect(() => {
     if (mobileOpen) {
       document.body.style.overflow = 'hidden';
@@ -52,49 +51,11 @@ export function Sidebar() {
     };
   }, [mobileOpen]);
 
-  useEffect(() => {
-    const auth = getAuth(app);
-    const db = getFirestore(app);
-
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      if (user) {
-        const userRef = doc(db, 'users', user.uid);
-        const snap = await getDoc(userRef);
-        if (snap.exists()) {
-          const data = snap.data();
-          setIsAdmin(data.admin === true);
-        } else {
-          setIsAdmin(false);
-        }
-      } else {
-        setIsAdmin(false);
-      }
-    });
-
-    return () => unsubscribe();
-  }, []);
-
-  const toggleSection = (section: string) => {
-    setExpandedSections((prev) =>
-      prev.includes(section) ? prev.filter(s => s !== section) : [...prev, section]
-    );
-  };
-
-  const isActive = (href?: string) => href && pathname.includes(href);
-
-  const handleSignOut = async () => {
-    const auth = getAuth(app);
-    await signOut(auth);
-    router.push('/');
-  };
-
   const adminMenu: Section[] = [
     {
       section: 'main',
       title: 'Admin Dashboard',
-      items: [
-        { icon: Home, label: 'Dashboard', href: '/dashboard/admin' },
-      ]
+      items: [{ icon: Home, label: 'Dashboard', href: '/dashboard/admin' }],
     },
     {
       section: 'content',
@@ -107,23 +68,21 @@ export function Sidebar() {
         { icon: Plus, label: 'Add Mock Question', href: '/admin/mockquestions/create' },
         { icon: Trophy, label: 'Quizzes', href: '/admin/quizzes/quizebank' },
         { icon: Plus, label: 'Create Quiz', href: '/admin/quizzes/create' },
-      ]
+      ],
     },
     {
       section: 'users',
       title: 'User Management',
       items: [
         { icon: Users, label: 'Students', href: '/admin/students' },
-        { icon: FileBarChart, label: 'Results', href: '/admin/results' }
-      ]
+        { icon: FileBarChart, label: 'Results', href: '/admin/results' },
+      ],
     },
     {
       section: 'settings',
       title: 'Admin Profile',
-      items: [
-        { icon: Settings, label: 'Settings', href: '/admin/settings' }
-      ]
-    }
+      items: [{ icon: Settings, label: 'Settings', href: '/admin/settings' }],
+    },
   ];
 
   const studentMenu: Section[] = [
@@ -137,9 +96,48 @@ export function Sidebar() {
         { icon: Plus, label: 'Create Your Own Quiz (Coming Soon)', href: '/dashboard/student' },
         { icon: ClipboardList, label: 'Results', href: '/admin/students/results' },
         { icon: UserCircle, label: 'Profile Settings', href: '/admin/student-profile' },
-      ]
-    }
+      ],
+    },
   ];
+
+  useEffect(() => {
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        const userRef = doc(db, 'users', user.uid);
+        const snap = await getDoc(userRef);
+        if (snap.exists()) {
+          const data = snap.data();
+          const isAdminUser = data.admin === true;
+          setIsAdmin(isAdminUser);
+          const roleMenu = isAdminUser ? adminMenu : studentMenu;
+          setExpandedSections(roleMenu.map((section) => section.section)); // ✅ Expand all sections initially
+        } else {
+          setIsAdmin(false);
+        }
+      } else {
+        setIsAdmin(false);
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  const toggleSection = (section: string) => {
+    setExpandedSections((prev) =>
+      prev.includes(section) ? prev.filter((s) => s !== section) : [...prev, section]
+    );
+  };
+
+  const isActive = (href?: string) => href && pathname.includes(href);
+
+  const handleSignOut = async () => {
+    const auth = getAuth(app);
+    await signOut(auth);
+    router.push('/');
+  };
 
   if (isAdmin === null) return null;
 
@@ -158,12 +156,10 @@ export function Sidebar() {
 
       {/* Sidebar */}
       <div
-        className={`
-          fixed top-0 left-0 h-full z-50 bg-white border-r border-gray-200 flex flex-col transition-transform duration-300
+        className={`fixed top-0 left-0 h-full z-50 bg-white border-r border-gray-200 flex flex-col transition-transform duration-300
           ${collapsed ? 'w-16' : 'w-64'}
           ${mobileOpen ? 'translate-x-0' : '-translate-x-full'}
-          md:translate-x-0 md:static md:flex
-        `}
+          md:translate-x-0 md:static md:flex`}
       >
         {/* Header */}
         <div className="p-4 border-b flex items-center justify-between">
@@ -176,7 +172,6 @@ export function Sidebar() {
           )}
 
           <div className="flex items-center space-x-2">
-            {/* Close Sidebar Button (Mobile) */}
             <Button variant="ghost" size="icon" onClick={() => setMobileOpen(false)} className="md:hidden">
               <X className="h-5 w-5" />
             </Button>

@@ -299,7 +299,7 @@ export default function EnhancedStudentDashboard() {
           ) : (
             <>
               <Card><CardContent className="p-3 sm:p-4 text-center"><Trophy className="mx-auto text-purple-500 w-6 h-6 sm:w-8 sm:h-8" /><p className="font-semibold mt-2 text-sm sm:text-base">Quizzes Completed</p><p className="text-xl sm:text-2xl">{completedQuizzes.length}</p></CardContent></Card>
-              <Card><CardContent className="p-3 sm:p-4 text-center"><Medal className="mx-auto text-green-500 w-6 h-6 sm:w-8 sm:h-8" /><p className="font-semibold mt-2 text-sm sm:text-base">Mock Tests Completed</p><p className="text-xl sm:text-2xl">{completedMocks.length}</p></CardContent></Card>
+              <Card><CardContent className="p-3 sm:p-4 text-center"><Medal className="mx-auto text-green-500 w-6 h-6 sm:w-8 sm:h-8" /><p className="font-semibold mt-2 text-sm sm:text-base">Your Created Tests Completed</p><p className="text-xl sm:text-2xl">{completedMocks.length}</p></CardContent></Card>
               <Card><CardContent className="p-3 sm:p-4 text-center"><CalendarDays className="mx-auto text-yellow-500 w-6 h-6 sm:w-8 sm:h-8" /><p className="font-semibold mt-2 text-sm sm:text-base">Your Rank</p><p className="text-xl sm:text-2xl">#{rank}</p></CardContent></Card>
               <Card><CardContent className="p-3 sm:p-4 text-center"><Activity className="mx-auto text-indigo-600 w-6 h-6 sm:w-8 sm:h-8" /><p className="font-semibold mt-2 text-sm sm:text-base">Overall Accuracy</p><p className="text-xl sm:text-2xl text-indigo-600 font-bold">{avgPerformance}%</p></CardContent></Card>
             </>
@@ -331,7 +331,7 @@ export default function EnhancedStudentDashboard() {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
           <Card><CardContent className="p-3 sm:p-4 text-center"><p className="font-semibold text-sm sm:text-base">📝 Quiz Questions Attempted</p><p className="text-xl sm:text-2xl">{quizStats.attempted}</p><p className="text-green-600 font-bold text-sm sm:text-base">{quizStats.correct} Correct</p></CardContent></Card>
-          <Card><CardContent className="p-3 sm:p-4 text-center"><p className="font-semibold text-sm sm:text-base">🧪 Mock Questions Attempted</p><p className="text-xl sm:text-2xl">{mockStats.attempted}</p><p className="text-green-600 font-bold text-sm sm:text-base">{mockStats.correct} Correct</p></CardContent></Card>
+          <Card><CardContent className="p-3 sm:p-4 text-center"><p className="font-semibold text-sm sm:text-base">🧪 Practice Questions Attempted</p><p className="text-xl sm:text-2xl">{mockStats.attempted}</p><p className="text-green-600 font-bold text-sm sm:text-base">{mockStats.correct} Correct</p></CardContent></Card>
         </div>
 
         {/* Quiz Subject Stats Table */}
@@ -372,9 +372,9 @@ export default function EnhancedStudentDashboard() {
         {/* Mock Subject Stats Table */}
         <Card>
           <CardContent className="p-3 sm:p-4">
-            <h2 className="text-lg sm:text-xl font-bold mb-4 text-gray-800">🧪 Mock Subject Statistics</h2>
+            <h2 className="text-lg sm:text-xl font-bold mb-4 text-gray-800">🧪 Practice Subject Statistics</h2>
             {mockSubjectStats.length === 0 ? (
-              <p className="text-gray-500 text-center text-sm sm:text-base">No mock quiz data available.</p>
+              <p className="text-gray-500 text-center text-sm sm:text-base">No practice quiz data available.</p>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm sm:text-base">
@@ -419,7 +419,7 @@ export default function EnhancedStudentDashboard() {
         </div>
 
         <div className="rounded-lg p-4 sm:p-6 bg-white shadow">
-          <h2 className="text-lg sm:text-xl font-bold mb-4 text-gray-800">📊 Mock Subject Accuracy</h2>
+          <h2 className="text-lg sm:text-xl font-bold mb-4 text-gray-800">📊 Practice Subject Accuracy</h2>
           <ResponsiveContainer width="100%" height={250} minHeight={200}>
             <PieChart>
               <Pie data={mockSubjectStats} dataKey="accuracy" nameKey="subject" outerRadius={80} label={{ fontSize: 12 }}>

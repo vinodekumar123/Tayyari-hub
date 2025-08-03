@@ -302,7 +302,7 @@ export default function StudentResultsPage() {
                   variant="outline"
                   className="w-full text-sm font-semibold border-blue-500 text-blue-700 hover:bg-blue-50 mt-4"
                   onClick={() =>
-                    router.push(`/admin/students/responses?id=${result.id}&mock=${result.isMock}`)
+                    router.push(`/admin/students/responses?id=${result.id}&mock=${result.isMock}&studentId=${userId}`)
                   }
                 >
                   🔎 View Responses

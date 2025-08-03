@@ -2,20 +2,26 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, setDoc, serverTimestamp, getDocs, collection } from 'firebase/firestore';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { db, auth } from '../../firebase';
 import {
   Card,
   CardHeader,
   CardTitle,
-  CardContent
+  CardContent,
 } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { ArrowLeft, ArrowRight, Info, BookOpen, Clock, Send, Download } from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { ArrowLeft, ArrowRight, Info, BookOpen, Clock, Send, Download, CheckCircle } from 'lucide-react';
 import jsPDF from 'jspdf';
-import { saveAs } from 'file-saver';
 
 interface Question {
   id: string;
@@ -36,6 +42,7 @@ interface QuizData {
   resultVisibility: string;
   selectedQuestions: Question[];
   questionsPerPage?: number;
+  maxAttempts: number;
 }
 
 const stripHtml = (html: string): string => {
@@ -57,13 +64,15 @@ const StartQuizPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [showTimeoutModal, setShowTimeoutModal] = useState(false);
   const [showDownloadModal, setShowDownloadModal] = useState(false);
+  const [showSubmissionModal, setShowSubmissionModal] = useState(false);
   const [timeLeft, setTimeLeft] = useState(0);
   const [hasLoadedTime, setHasLoadedTime] = useState(false);
+  const [attemptCount, setAttemptCount] = useState(0);
   const hasSubmittedRef = useRef(false);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, async u => {
+    const unsub = onAuthStateChanged(auth, async (u) => {
       setUser(u);
       if (u) {
         const userSnap = await getDoc(doc(db, 'users', u.uid));
@@ -81,7 +90,10 @@ const StartQuizPage: React.FC = () => {
 
     const load = async () => {
       const qSnap = await getDoc(doc(db, 'quizzes', quizId));
-      if (!qSnap.exists()) return;
+      if (!qSnap.exists()) {
+        router.push('/quiz-bank');
+        return;
+      }
 
       const data = qSnap.data();
       const quizData: QuizData = {
@@ -95,13 +107,33 @@ const StartQuizPage: React.FC = () => {
           ...q,
           subject: q.subject || (data.subjects?.[0]?.name || data.subject?.name || 'Uncategorized'),
         })),
-        questionsPerPage: data.questionsPerPage || 1
+        questionsPerPage: data.questionsPerPage || 1,
+        maxAttempts: data.maxAttempts || 1,
       };
 
       setQuiz(quizData);
 
+      // Fetch completed attempts to check eligibility
+      const attemptsSnapshot = await getDocs(collection(db, 'users', user.uid, 'quizAttempts'));
+      let currentAttemptCount = 0;
+      attemptsSnapshot.docs.forEach((doc) => {
+        if (doc.id === quizId && doc.data()?.completed) {
+          currentAttemptCount = doc.data().attemptNumber || 1;
+        }
+      });
+
+      if (currentAttemptCount >= quizData.maxAttempts && !isAdmin) {
+        alert('You have reached the maximum number of attempts for this quiz.');
+        router.push('/quiz-bank');
+        return;
+      }
+
+      setAttemptCount(currentAttemptCount);
+
+      // Check for an incomplete attempt
       const resumeSnap = await getDoc(doc(db, 'users', user.uid, 'quizAttempts', quizId));
-      if (resumeSnap.exists()) {
+      if (resumeSnap.exists() && !resumeSnap.data().completed && resumeSnap.data().attemptNumber === undefined) {
+        // Resume incomplete attempt
         const rt = resumeSnap.data();
         setAnswers(rt.answers || {});
         const questionIndex = rt.currentIndex || 0;
@@ -109,16 +141,20 @@ const StartQuizPage: React.FC = () => {
         if (!isAdmin && rt.remainingTime !== undefined) {
           setTimeLeft(rt.remainingTime);
         } else {
-          const elapsed = rt.startedAt ? Date.now() - rt.startedAt.toMillis() : 0;
-          setTimeLeft(quizData.duration * 60 - Math.floor(elapsed / 1000));
+          setTimeLeft(quizData.duration * 60);
         }
       } else {
+        // New attempt: reset timer and initialize quizAttempts
         setTimeLeft(quizData.duration * 60);
+        setAnswers({});
+        setCurrentPage(0);
         await setDoc(doc(db, 'users', user.uid, 'quizAttempts', quizId), {
           startedAt: serverTimestamp(),
           answers: {},
-          currentIndex: 0
-        });
+          currentIndex: 0,
+          completed: false,
+          remainingTime: quizData.duration * 60,
+        }, { merge: true });
       }
 
       setHasLoadedTime(true);
@@ -129,23 +165,19 @@ const StartQuizPage: React.FC = () => {
   }, [quizId, user, isAdmin]);
 
   useEffect(() => {
-    if (loading || !quiz || showTimeoutModal || !hasLoadedTime || isAdmin) return;
+    if (loading || !quiz || showTimeoutModal || showSubmissionModal || !hasLoadedTime || isAdmin) return;
 
     if (timeLeft <= 0) {
       handleSubmit();
-      setShowTimeoutModal(true);
-      setTimeout(() => router.push('/'), 3000);
       return;
     }
 
     if (timerRef.current) clearInterval(timerRef.current);
     timerRef.current = setInterval(() => {
-      setTimeLeft(prev => {
+      setTimeLeft((prev) => {
         if (prev <= 1) {
           clearInterval(timerRef.current!);
           handleSubmit();
-          setShowTimeoutModal(true);
-          setTimeout(() => router.push('/'), 3000);
           return 0;
         }
         return prev - 1;
@@ -153,15 +185,15 @@ const StartQuizPage: React.FC = () => {
     }, 1000);
 
     return () => clearInterval(timerRef.current!);
-  }, [loading, quiz, showTimeoutModal, hasLoadedTime, timeLeft, isAdmin]);
+  }, [loading, quiz, showTimeoutModal, showSubmissionModal, hasLoadedTime, timeLeft, isAdmin]);
 
   useEffect(() => {
     const handleUnload = () => {
-      if (user && quiz && !isAdmin) {
+      if (user && quiz && !isAdmin && !hasSubmittedRef.current) {
         setDoc(doc(db, 'users', user.uid, 'quizAttempts', quizId), {
           answers,
           currentIndex: currentPage * (quiz.questionsPerPage || 1),
-          remainingTime: timeLeft
+          remainingTime: timeLeft,
         }, { merge: true });
       }
     };
@@ -177,7 +209,7 @@ const StartQuizPage: React.FC = () => {
       setDoc(doc(db, 'users', user.uid, 'quizAttempts', quizId), {
         answers: updatedAnswers,
         currentIndex: currentPage * (quiz.questionsPerPage || 1),
-        remainingTime: timeLeft
+        remainingTime: timeLeft,
       }, { merge: true });
     }
   };
@@ -197,35 +229,42 @@ const StartQuizPage: React.FC = () => {
       }
     }
 
+    const newAttemptCount = attemptCount + 1;
     const resultData = {
       quizId,
       title: quiz.title || 'Untitled Quiz',
       course: typeof quiz.course === 'object' ? quiz.course.name : quiz.course || 'Unknown',
       subject: Array.isArray(quiz.subject)
-        ? quiz.subject.map(s => s.name).join(', ') || 'Unknown'
+        ? quiz.subject.map((s) => s.name).join(', ') || 'Unknown'
         : typeof quiz.subject === 'object'
         ? quiz.subject?.name || 'Unknown'
         : quiz.subject || 'Unknown',
       score,
       total,
       timestamp: serverTimestamp(),
-      answers
+      answers,
+      attemptNumber: newAttemptCount,
     };
 
     await setDoc(doc(db, 'users', user.uid, 'quizAttempts', quizId), {
       submittedAt: serverTimestamp(),
       answers,
       completed: true,
-      remainingTime: 0
+      remainingTime: 0,
+      attemptNumber: newAttemptCount,
     }, { merge: true });
 
     await setDoc(doc(db, 'users', user.uid, 'quizAttempts', quizId, 'results', quizId), resultData);
 
-    if (isAdmin || quiz.resultVisibility === 'immediate') {
-      router.push('/quiz/results?id=' + quizId);
-    } else {
-      router.push('/dashboard/student');
-    }
+    setShowSubmissionModal(true);
+    setTimeout(() => {
+      setShowSubmissionModal(false);
+      if (isAdmin || quiz.resultVisibility === 'immediate') {
+        router.push('/quiz/results?id=' + quizId);
+      } else {
+        router.push('/dashboard/student');
+      }
+    }, 3000);
   };
 
   const formatTime = (sec: number) => {
@@ -243,20 +282,17 @@ const StartQuizPage: React.FC = () => {
     const maxWidth = pageWidth - 2 * margin;
     let y = margin;
 
-    // Headline
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(20);
-    doc.setTextColor(0, 51, 102); // Dark blue
+    doc.setTextColor(0, 51, 102);
     doc.text(quiz.title, pageWidth / 2, y, { align: 'center' });
     y += 10;
 
-    // Date
     doc.setFontSize(12);
     doc.setTextColor(100);
-    doc.text(`Date: August 03, 2025`, pageWidth / 2, y, { align: 'center' });
+    doc.text(`Date: August 04, 2025`, pageWidth / 2, y, { align: 'center' });
     y += 20;
 
-    // Questions by Subject
     const groupedQuestions = quiz.selectedQuestions.reduce((acc, question) => {
       const subjectName = typeof question.subject === 'object' ? question.subject?.name : question.subject || 'Uncategorized';
       if (!acc[subjectName]) {
@@ -272,7 +308,6 @@ const StartQuizPage: React.FC = () => {
         y = margin;
       }
 
-      // Subject Heading
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(16);
       doc.setTextColor(0, 51, 102);
@@ -285,7 +320,6 @@ const StartQuizPage: React.FC = () => {
           y = margin;
         }
 
-        // Question
         doc.setFont('helvetica', 'normal');
         doc.setFontSize(12);
         doc.setTextColor(0);
@@ -294,7 +328,6 @@ const StartQuizPage: React.FC = () => {
         doc.text(questionLines, margin, y);
         y += questionLines.length * 7 + 5;
 
-        // Options
         q.options.forEach((opt, i) => {
           const optionText = `${String.fromCharCode(65 + i)}. ${stripHtml(opt)}`;
           const optionLines = doc.splitTextToSize(optionText, maxWidth - 10);
@@ -302,10 +335,9 @@ const StartQuizPage: React.FC = () => {
           y += optionLines.length * 7 + 3;
         });
 
-        // Correct Answer (if included)
         if (includeAnswers && q.correctAnswer) {
           doc.setFont('helvetica', 'bold');
-          doc.setTextColor(0, 128, 0); // Green
+          doc.setTextColor(0, 128, 0);
           const answerText = `Correct Answer: ${stripHtml(q.correctAnswer)}`;
           const answerLines = doc.splitTextToSize(answerText, maxWidth);
           doc.text(answerLines, margin, y);
@@ -318,7 +350,6 @@ const StartQuizPage: React.FC = () => {
       y += 10;
     });
 
-    // Save PDF
     const fileName = `${quiz.title}${includeAnswers ? '_with_answers' : ''}.pdf`;
     doc.save(fileName);
   };
@@ -359,39 +390,68 @@ const StartQuizPage: React.FC = () => {
   return (
     <div className="min-h-screen bg-gray-50 px-4">
       {showTimeoutModal && (
-        <Modal onClose={() => setShowTimeoutModal(false)}>
-          <h2 className="text-xl font-semibold text-gray-900">⏰ Time is Out!</h2>
-          <p className="text-gray-700 mt-2">Time's up. Submitting your answers now.</p>
-        </Modal>
+        <Dialog open={showTimeoutModal} onOpenChange={setShowTimeoutModal}>
+          <DialogContent className="w-[90vw] max-w-md sm:max-w-lg">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Clock className="h-6 w-6 text-red-600" />
+                Time is Out!
+              </DialogTitle>
+              <DialogDescription>
+                Time's up. Your answers have been submitted.
+              </DialogDescription>
+            </DialogHeader>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {showSubmissionModal && (
+        <Dialog open={showSubmissionModal}>
+          <DialogContent className="w-[90vw] max-w-md sm:max-w-lg bg-white rounded-xl shadow-2xl animate-fade-in">
+            <DialogHeader className="text-center">
+              <DialogTitle className="flex flex-col items-center gap-2">
+                <CheckCircle className="h-12 w-12 text-green-600 animate-bounce" />
+                <span className="text-2xl font-bold text-gray-900">Quiz Submitted!</span>
+              </DialogTitle>
+              <DialogDescription className="text-gray-600 text-lg">
+                Your quiz has been successfully submitted. Redirecting to dashboard...
+              </DialogDescription>
+            </DialogHeader>
+          </DialogContent>
+        </Dialog>
       )}
 
       {showDownloadModal && (
-        <Modal onClose={() => setShowDownloadModal(false)}>
-          <h2 className="text-xl font-semibold text-gray-900">Download Quiz as PDF</h2>
-          <p className="text-gray-700 mt-2">Choose an option for downloading the quiz:</p>
-          <div className="mt-4 flex flex-col gap-2">
-            <Button
-              onClick={() => {
-                generatePDF(false);
-                setShowDownloadModal(false);
-              }}
-              className="bg-blue-600 text-white hover:bg-blue-700"
-            >
-              <Download className="mr-2 h-5 w-5" />
-              Download Questions Only
-            </Button>
-            <Button
-              onClick={() => {
-                generatePDF(true);
-                setShowDownloadModal(false);
-              }}
-              className="bg-green-600 text-white hover:bg-green-700"
-            >
-              <Download className="mr-2 h-5 w-5" />
-              Download with Answers
-            </Button>
-          </div>
-        </Modal>
+        <Dialog open={showDownloadModal} onOpenChange={setShowDownloadModal}>
+          <DialogContent className="w-[90vw] max-w-md sm:max-w-lg">
+            <DialogHeader>
+              <DialogTitle>Download Quiz as PDF</DialogTitle>
+              <DialogDescription>Choose an option for downloading the quiz:</DialogDescription>
+            </DialogHeader>
+            <div className="mt-4 flex flex-col gap-2">
+              <Button
+                onClick={() => {
+                  generatePDF(false);
+                  setShowDownloadModal(false);
+                }}
+                className="bg-blue-600 text-white hover:bg-blue-700"
+              >
+                <Download className="mr-2 h-5 w-5" />
+                Download Questions Only
+              </Button>
+              <Button
+                onClick={() => {
+                  generatePDF(true);
+                  setShowDownloadModal(false);
+                }}
+                className="bg-green-600 text-white hover:bg-green-700"
+              >
+                <Download className="mr-2 h-5 w-5" />
+                Download with Answers
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
       )}
 
       <header className="bg-white border-b sticky top-0 z-40 shadow-sm">
@@ -493,37 +553,30 @@ const StartQuizPage: React.FC = () => {
             <div className="flex justify-between pt-6">
               <Button
                 variant="outline"
-                onClick={() => setCurrentPage(i => Math.max(0, i - 1))}
-                disabled={currentPage === 0 || showTimeoutModal}
+                onClick={() => setCurrentPage((i) => Math.max(0, i - 1))}
+                disabled={currentPage === 0 || showTimeoutModal || showSubmissionModal}
               >
                 <ArrowLeft className="mr-2" /> Previous
               </Button>
               <Button
-                onClick={isLastPage ? handleSubmit : () => setCurrentPage(i => i + 1)}
-                disabled={showTimeoutModal}
+                onClick={isLastPage ? handleSubmit : () => setCurrentPage((i) => i + 1)}
+                disabled={showTimeoutModal || showSubmissionModal}
                 className={isLastPage ? 'bg-red-600 text-white hover:bg-red-700' : ''}
               >
-                {isLastPage ? (<><Send className="mr-2" /> Submit</>) : (<>Next <ArrowRight className="ml-2" /></>)}
+                {isLastPage ? (
+                  <>
+                    <Send className="mr-2" /> Submit
+                  </>
+                ) : (
+                  <>
+                    Next <ArrowRight className="ml-2" />
+                  </>
+                )}
               </Button>
             </div>
           </CardContent>
         </Card>
       </main>
-    </div>
-  );
-};
-
-const Modal = ({ onClose, children }: { onClose: () => void; children: React.ReactNode }) => {
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-xl shadow-xl p-6 max-w-md w-full mx-4">
-        {children}
-        <div className="mt-6 flex justify-end">
-          <Button onClick={onClose} className="bg-red-600 text-white hover:bg-red-700">
-            Cancel
-          </Button>
-        </div>
-      </div>
     </div>
   );
 };
