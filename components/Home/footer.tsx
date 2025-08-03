@@ -41,16 +41,18 @@ const Footer = () => {
         <div>
           <h3 className="text-lg font-semibold mb-4">Follow Us</h3>
           <div className="flex gap-4">
-            <a href="#" className="hover:text-blue-600"><Facebook /></a>
+            <a href="#https://Facebook.com/tayyarihub" className="hover:text-blue-600"><Facebook /></a>
             <a href="#" className="hover:text-blue-600"><Twitter /></a>
             <a href="#" className="hover:text-blue-600"><Instagram /></a>
+                        <a href="#" className="hover:text-blue-600"><Instagram /></a>
+
             <a href="#" className="hover:text-blue-600"><Youtube /></a>
           </div>
         </div>
       </div>
 
       <div className="border-t text-center py-4 text-sm text-gray-500">
-        © {new Date().getFullYear()} EduMaster. All rights reserved.
+        © {new Date().getFullYear()} TayyariHub. All rights reserved.
       </div>
     </footer>
   );
