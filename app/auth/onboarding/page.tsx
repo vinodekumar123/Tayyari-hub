@@ -24,9 +24,7 @@ export default function OnboardingPage() {
     email: '',
     phone: '',
     district: '',
-    university: '',
-    campus: '',
-    degree: '',
+  
     course: '',
   });
 
@@ -57,10 +55,7 @@ export default function OnboardingPage() {
             'fatherName',
             'email',
             'phone',
-            'city',
-            'university',
-            'campus',
-            'degree',
+        
             'course',
           ];
           const incomplete = required.some((field) => !data[field]);
@@ -250,28 +245,8 @@ export default function OnboardingPage() {
               </>
             ) : (
               <>
-                <div className="space-y-2">
-                  <Label htmlFor="university">University</Label>
-                  <Input
-                    id="university"
-                    placeholder="e.g. Punjab University"
-                    value={form.university}
-                    onChange={(e) => handleChange('university', e.target.value)}
-                    className="h-12 rounded-xl text-sm sm:text-base"
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="campus">Campus</Label>
-                  <Input
-                    id="campus"
-                    placeholder="e.g. Lahore Campus"
-                    value={form.campus}
-                    onChange={(e) => handleChange('campus', e.target.value)}
-                    className="h-12 rounded-xl text-sm sm:text-base"
-                    required
-                  />
-                </div>
+           
+        
                 <div className="space-y-2">
                   <Label htmlFor="course">Course</Label>
                   <Input
