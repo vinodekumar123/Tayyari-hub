@@ -79,10 +79,17 @@ const ResultPage: React.FC = () => {
       const quizData = quizSnap.data();
       const attemptData = resultSnap.data();
 
-      if (quizData.resultVisibility !== 'immediate') {
-        setAccessDenied(true);
-        return;
-      }
+     if (quizData.resultVisibility !== 'immediate') {
+  const userDoc = await getDoc(doc(db, "users", user.uid));
+  const userData = userDoc.exists() ? userDoc.data() : null;
+  const isAdmin = userData?.admin === true;
+
+  if (!isAdmin) {
+    setAccessDenied(true);
+    return;
+  }
+}
+
 
       const questions: Question[] = quizData.selectedQuestions || [];
       const answers: Record<string, string> = attemptData.answers || {};

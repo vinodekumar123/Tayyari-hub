@@ -9,6 +9,14 @@ import {
 } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { db, auth } from '../../firebase';
 import {
@@ -43,7 +51,6 @@ import {
 import { onAuthStateChanged } from 'firebase/auth';
 import { useRouter } from 'next/navigation';
 
-// Types
 type Course = {
   id: string;
   name: string;
@@ -161,7 +168,6 @@ export default function Enrollment() {
     unsubscribeRef.current = unsubscribe;
   };
 
-  // Handle search filtering
   useEffect(() => {
     const filtered = students.filter(student =>
       student.fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -313,24 +319,51 @@ export default function Enrollment() {
             <DialogTitle>Edit Student</DialogTitle>
           </DialogHeader>
           {currentStudent && (
-            <div className="space-y-3">
-              {['fullName', 'email', 'phone', 'course', 'university', 'district', 'degree', 'plan'].map((field) => (
-                <Input
-                  key={field}
-                  placeholder={field.charAt(0).toUpperCase() + field.slice(1)}
-                  value={String(editData[field] ?? '')}
-                  onChange={(e) => handleEditChange(field, e.target.value)}
-                />
-              ))}
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {['fullName', 'email', 'phone', 'course', 'fatherName', 'district',].map((field) => (
+                  <div key={field} className="space-y-1">
+                    <Label htmlFor={field} className="text-sm font-medium text-gray-700">
+                      {field.charAt(0).toUpperCase() + field.slice(1).replace(/([A-Z])/g, ' $1').trim()}
+                    </Label>
+                    <Input
+                      id={field}
+                      placeholder={field.charAt(0).toUpperCase() + field.slice(1)}
+                      value={String(editData[field] ?? '')}
+                      onChange={(e) => handleEditChange(field, e.target.value)}
+                    />
+                  </div>
+                ))}
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="plan" className="text-sm font-medium text-gray-700">
+                  Plan
+                </Label>
+                <Select
+                  value={editData.plan ?? 'Free'}
+                  onValueChange={(value) => handleEditChange('plan', value)}
+                >
+                  <SelectTrigger id="plan">
+                    <SelectValue placeholder="Select plan" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="free">Free</SelectItem>
+                    <SelectItem value="premium">Premium</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
               {isSuperadmin && (
                 <div className="flex items-center space-x-2">
                   <input
                     type="checkbox"
+                    id="admin"
                     checked={editData.admin ?? false}
                     onChange={(e) => handleEditChange('admin', e.target.checked)}
                     className="h-4 w-4"
                   />
-                  <label>Admin</label>
+                  <Label htmlFor="admin" className="text-sm font-medium text-gray-700">
+                    Admin
+                  </Label>
                 </div>
               )}
             </div>

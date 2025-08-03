@@ -48,6 +48,7 @@ const StartQuizPage: React.FC = () => {
   const router = useRouter();
   const quizId = searchParams.get('id')!;
   const [user, setUser] = useState<User | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [quiz, setQuiz] = useState<QuizData | null>(null);
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [currentPage, setCurrentPage] = useState(0);
@@ -59,7 +60,16 @@ const StartQuizPage: React.FC = () => {
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, u => setUser(u));
+    const unsub = onAuthStateChanged(auth, async u => {
+      setUser(u);
+      if (u) {
+        const userSnap = await getDoc(doc(db, 'users', u.uid));
+        if (userSnap.exists()) {
+          const data = userSnap.data();
+          setIsAdmin(data.admin === true);
+        }
+      }
+    });
     return () => unsub();
   }, []);
 
@@ -75,12 +85,12 @@ const StartQuizPage: React.FC = () => {
         title: data.title || 'Untitled Quiz',
         course: data.course || '',
         chapter: data.chapter || '',
-        subject: data.subjects || data.subject || '', // Handle both subjects (array) and subject (object/string)
+        subject: data.subjects || data.subject || '',
         duration: data.duration || 60,
         resultVisibility: data.resultVisibility || 'immediate',
         selectedQuestions: (data.selectedQuestions || []).map((q: any) => ({
           ...q,
-          subject: q.subject || (data.subjects && data.subjects.length > 0 ? data.subjects[0]?.name : data.subject?.name || 'Uncategorized'),
+          subject: q.subject || (data.subjects?.[0]?.name || data.subject?.name || 'Uncategorized'),
         })),
         questionsPerPage: data.questionsPerPage || 1
       };
@@ -93,8 +103,7 @@ const StartQuizPage: React.FC = () => {
         setAnswers(rt.answers || {});
         const questionIndex = rt.currentIndex || 0;
         setCurrentPage(Math.floor(questionIndex / quizData.questionsPerPage));
-
-        if (rt.remainingTime !== undefined) {
+        if (!isAdmin && rt.remainingTime !== undefined) {
           setTimeLeft(rt.remainingTime);
         } else {
           const elapsed = rt.startedAt ? Date.now() - rt.startedAt.toMillis() : 0;
@@ -114,10 +123,10 @@ const StartQuizPage: React.FC = () => {
     };
 
     load();
-  }, [quizId, user]);
+  }, [quizId, user, isAdmin]);
 
   useEffect(() => {
-    if (loading || !quiz || showTimeoutModal || !hasLoadedTime) return;
+    if (loading || !quiz || showTimeoutModal || !hasLoadedTime || isAdmin) return;
 
     if (timeLeft <= 0) {
       handleSubmit();
@@ -141,11 +150,11 @@ const StartQuizPage: React.FC = () => {
     }, 1000);
 
     return () => clearInterval(timerRef.current!);
-  }, [loading, quiz, showTimeoutModal, hasLoadedTime, timeLeft]);
+  }, [loading, quiz, showTimeoutModal, hasLoadedTime, timeLeft, isAdmin]);
 
   useEffect(() => {
     const handleUnload = () => {
-      if (user && quiz) {
+      if (user && quiz && !isAdmin) {
         setDoc(doc(db, 'users', user.uid, 'quizAttempts', quizId), {
           answers,
           currentIndex: currentPage * (quiz.questionsPerPage || 1),
@@ -155,13 +164,13 @@ const StartQuizPage: React.FC = () => {
     };
     window.addEventListener('beforeunload', handleUnload);
     return () => window.removeEventListener('beforeunload', handleUnload);
-  }, [answers, currentPage, timeLeft, quiz, user]);
+  }, [answers, currentPage, timeLeft, quiz, user, isAdmin]);
 
   const handleAnswer = (qid: string, val: string) => {
     const updatedAnswers = { ...answers, [qid]: val };
     setAnswers(updatedAnswers);
 
-    if (user && quiz) {
+    if (user && quiz && !isAdmin) {
       setDoc(doc(db, 'users', user.uid, 'quizAttempts', quizId), {
         answers: updatedAnswers,
         currentIndex: currentPage * (quiz.questionsPerPage || 1),
@@ -226,7 +235,6 @@ const StartQuizPage: React.FC = () => {
 
   const questionsPerPage = quiz.questionsPerPage || 1;
 
-  // Group questions by subject
   const groupedQuestions = quiz.selectedQuestions.reduce((acc, question) => {
     const subjectName = typeof question.subject === 'object' ? question.subject?.name : question.subject || 'Uncategorized';
     if (!acc[subjectName]) {
@@ -236,17 +244,14 @@ const StartQuizPage: React.FC = () => {
     return acc;
   }, {} as Record<string, Question[]>);
 
-  // Flatten grouped questions for pagination
   const flattenedQuestions = Object.entries(groupedQuestions)
-    .sort(([a], [b]) => a.localeCompare(b)) // Sort subjects alphabetically
+    .sort(([a], [b]) => a.localeCompare(b))
     .flatMap(([_, questions]) => questions);
 
-  // Calculate pagination
   const startIdx = currentPage * questionsPerPage;
   const endIdx = startIdx + questionsPerPage;
   const qSlice = flattenedQuestions.slice(startIdx, endIdx);
 
-  // Re-group questions for the current page to maintain subject headings
   const pageGroupedQuestions = qSlice.reduce((acc, question) => {
     const subjectName = typeof question.subject === 'object' ? question.subject?.name : question.subject || 'Uncategorized';
     if (!acc[subjectName]) {
@@ -281,14 +286,22 @@ const StartQuizPage: React.FC = () => {
               )}
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <Clock className="h-5 w-5 text-red-600" />
-            <span className="font-mono font-semibold text-red-600">{formatTime(timeLeft)}</span>
-          </div>
+          {!isAdmin && (
+            <div className="flex items-center gap-2">
+              <Clock className="h-5 w-5 text-red-600" />
+              <span className="font-mono font-semibold text-red-600">{formatTime(timeLeft)}</span>
+            </div>
+          )}
         </div>
       </header>
 
       <main className="max-w-6xl w-full mx-auto p-4">
+        {isAdmin && (
+          <div className="bg-yellow-100 text-yellow-800 px-4 py-2 rounded-md text-sm mb-4">
+            🛠 Admin Mode: Timer is disabled.
+          </div>
+        )}
+
         <Card className="shadow-md w-full">
           <CardHeader>
             <CardTitle className="text-lg font-semibold">
@@ -345,9 +358,6 @@ const StartQuizPage: React.FC = () => {
                 ))}
               </div>
             ))}
-            {Object.keys(pageGroupedQuestions).length === 0 && (
-              <p className="text-gray-600">No questions available for this page.</p>
-            )}
 
             <div className="flex justify-between pt-6">
               <Button

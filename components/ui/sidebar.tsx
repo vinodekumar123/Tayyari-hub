@@ -8,7 +8,8 @@ import {
   Database, Home, ChevronDown, ChevronRight, LogOut,
   ClipboardList, UserCircle, Menu, X, FileBarChart
 } from 'lucide-react';
-
+import logo from "../../app/assets/logo.png";
+import Image from "next/image";
 import { getAuth, onAuthStateChanged, signOut } from 'firebase/auth';
 import { getFirestore, doc, getDoc } from 'firebase/firestore';
 import { app } from '../../app/firebase';
@@ -121,7 +122,7 @@ export function Sidebar() {
       items: [
         { icon: Home, label: 'Dashboard', href: '/dashboard/student' },
         { icon: Trophy, label: 'Quizzes', href: '/admin/quizzes/quizebank' },
-        { icon: Trophy, label: 'Mock Quizzes', href: '/admin/mockquize/quizebank' },
+        { icon: Trophy, label: 'Your Quizzes', href: '/admin/mockquize/quizebank' },
         { icon: Plus, label: 'Create Your Own Quiz (Coming Soon)', href: '/dashboard/student' },
         { icon: ClipboardList, label: 'Results', href: '/admin/students/results' },
         { icon: UserCircle, label: 'Profile Settings', href: '/admin/student-profile' },
@@ -151,12 +152,14 @@ export function Sidebar() {
         <div className="p-4 border-b flex items-center justify-between">
           {!collapsed ? (
             <div className="flex items-center space-x-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-purple-600 to-blue-600 shadow-lg">
-                <BookOpen className="h-6 w-6 text-white" />
-              </div>
+       
               <div>
-                <h1 className="text-xl font-bold text-gray-900">Tayyari Hub</h1>
-                <p className="text-sm text-gray-500">Sidebar Panel</p>
+      <Image
+            src={logo}
+            alt="Tayyari Hub Logo"
+            className="h-10 w-auto"
+            priority
+          />                
               </div>
             </div>
           ) : (

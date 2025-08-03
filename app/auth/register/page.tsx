@@ -12,6 +12,8 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Mail, Lock, BookOpen, Sparkles, ArrowRight } from "lucide-react";
+import logo from "../../assets/logo.png";
+import Image from "next/image";
 
 export default function RegisterPage() {
   const [email, setEmail] = useState("");
@@ -73,10 +75,12 @@ export default function RegisterPage() {
       <div className="w-full max-w-md relative z-10">
         <div className="text-center mb-8">
           <Link href="/" className="inline-flex items-center space-x-3 mb-6 group">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary shadow-lg group-hover:shadow-xl transition-all duration-300 transform group-hover:scale-105">
-              <BookOpen className="h-7 w-7 text-white" />
-            </div>
-            <span className="text-3xl font-bold text-primary">Tayyari Hub</span>
+              <Image
+            src={logo}
+            alt="Tayyari Hub Logo"
+            className="h-10 w-auto"
+            priority
+          />
           </Link>
           <h1 className="text-4xl font-bold text-gray-900 mb-3">Create Account</h1>
           <p className="text-gray-600 text-lg">Join the journey to success</p>
