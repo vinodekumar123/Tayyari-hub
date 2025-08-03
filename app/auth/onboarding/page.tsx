@@ -258,17 +258,7 @@ export default function OnboardingPage() {
                     required
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="degree">Degree</Label>
-                  <Input
-                    id="degree"
-                    placeholder="e.g. BSCS"
-                    value={form.degree}
-                    onChange={(e) => handleChange('degree', e.target.value)}
-                    className="h-12 rounded-xl text-sm sm:text-base"
-                    required
-                  />
-                </div>
+         
               </>
             )}
 

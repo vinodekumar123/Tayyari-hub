@@ -13,7 +13,9 @@ import {
 } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { ArrowLeft, ArrowRight, Info, BookOpen, Clock, Send } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Info, BookOpen, Clock, Send, Download } from 'lucide-react';
+import jsPDF from 'jspdf';
+import { saveAs } from 'file-saver';
 
 interface Question {
   id: string;
@@ -54,6 +56,7 @@ const StartQuizPage: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(0);
   const [loading, setLoading] = useState(true);
   const [showTimeoutModal, setShowTimeoutModal] = useState(false);
+  const [showDownloadModal, setShowDownloadModal] = useState(false);
   const [timeLeft, setTimeLeft] = useState(0);
   const [hasLoadedTime, setHasLoadedTime] = useState(false);
   const hasSubmittedRef = useRef(false);
@@ -218,7 +221,7 @@ const StartQuizPage: React.FC = () => {
 
     await setDoc(doc(db, 'users', user.uid, 'quizAttempts', quizId, 'results', quizId), resultData);
 
-    if (quiz.resultVisibility === 'immediate') {
+    if (isAdmin || quiz.resultVisibility === 'immediate') {
       router.push('/quiz/results?id=' + quizId);
     } else {
       router.push('/dashboard/student');
@@ -229,6 +232,95 @@ const StartQuizPage: React.FC = () => {
     const m = Math.floor(sec / 60).toString().padStart(2, '0');
     const s = (sec % 60).toString().padStart(2, '0');
     return `${m}:${s}`;
+  };
+
+  const generatePDF = (includeAnswers: boolean) => {
+    if (!quiz) return;
+
+    const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const margin = 20;
+    const maxWidth = pageWidth - 2 * margin;
+    let y = margin;
+
+    // Headline
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(20);
+    doc.setTextColor(0, 51, 102); // Dark blue
+    doc.text(quiz.title, pageWidth / 2, y, { align: 'center' });
+    y += 10;
+
+    // Date
+    doc.setFontSize(12);
+    doc.setTextColor(100);
+    doc.text(`Date: August 03, 2025`, pageWidth / 2, y, { align: 'center' });
+    y += 20;
+
+    // Questions by Subject
+    const groupedQuestions = quiz.selectedQuestions.reduce((acc, question) => {
+      const subjectName = typeof question.subject === 'object' ? question.subject?.name : question.subject || 'Uncategorized';
+      if (!acc[subjectName]) {
+        acc[subjectName] = [];
+      }
+      acc[subjectName].push(question);
+      return acc;
+    }, {} as Record<string, Question[]>);
+
+    Object.entries(groupedQuestions).sort(([a], [b]) => a.localeCompare(b)).forEach(([subject, questions], subjectIndex) => {
+      if (y > doc.internal.pageSize.getHeight() - 30) {
+        doc.addPage();
+        y = margin;
+      }
+
+      // Subject Heading
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(16);
+      doc.setTextColor(0, 51, 102);
+      doc.text(subject, margin, y);
+      y += 10;
+
+      questions.forEach((q, qIndex) => {
+        if (y > doc.internal.pageSize.getHeight() - 50) {
+          doc.addPage();
+          y = margin;
+        }
+
+        // Question
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(12);
+        doc.setTextColor(0);
+        const questionText = `Q${subjectIndex * questions.length + qIndex + 1}. ${stripHtml(q.questionText)}`;
+        const questionLines = doc.splitTextToSize(questionText, maxWidth);
+        doc.text(questionLines, margin, y);
+        y += questionLines.length * 7 + 5;
+
+        // Options
+        q.options.forEach((opt, i) => {
+          const optionText = `${String.fromCharCode(65 + i)}. ${stripHtml(opt)}`;
+          const optionLines = doc.splitTextToSize(optionText, maxWidth - 10);
+          doc.text(optionLines, margin + 10, y);
+          y += optionLines.length * 7 + 3;
+        });
+
+        // Correct Answer (if included)
+        if (includeAnswers && q.correctAnswer) {
+          doc.setFont('helvetica', 'bold');
+          doc.setTextColor(0, 128, 0); // Green
+          const answerText = `Correct Answer: ${stripHtml(q.correctAnswer)}`;
+          const answerLines = doc.splitTextToSize(answerText, maxWidth);
+          doc.text(answerLines, margin, y);
+          y += answerLines.length * 7 + 5;
+          doc.setFont('helvetica', 'normal');
+          doc.setTextColor(0);
+        }
+      });
+
+      y += 10;
+    });
+
+    // Save PDF
+    const fileName = `${quiz.title}${includeAnswers ? '_with_answers' : ''}.pdf`;
+    doc.save(fileName);
   };
 
   if (loading || !quiz) return <p className="text-center py-10">Loading...</p>;
@@ -273,6 +365,35 @@ const StartQuizPage: React.FC = () => {
         </Modal>
       )}
 
+      {showDownloadModal && (
+        <Modal onClose={() => setShowDownloadModal(false)}>
+          <h2 className="text-xl font-semibold text-gray-900">Download Quiz as PDF</h2>
+          <p className="text-gray-700 mt-2">Choose an option for downloading the quiz:</p>
+          <div className="mt-4 flex flex-col gap-2">
+            <Button
+              onClick={() => {
+                generatePDF(false);
+                setShowDownloadModal(false);
+              }}
+              className="bg-blue-600 text-white hover:bg-blue-700"
+            >
+              <Download className="mr-2 h-5 w-5" />
+              Download Questions Only
+            </Button>
+            <Button
+              onClick={() => {
+                generatePDF(true);
+                setShowDownloadModal(false);
+              }}
+              className="bg-green-600 text-white hover:bg-green-700"
+            >
+              <Download className="mr-2 h-5 w-5" />
+              Download with Answers
+            </Button>
+          </div>
+        </Modal>
+      )}
+
       <header className="bg-white border-b sticky top-0 z-40 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
           <div className="flex items-center gap-3">
@@ -298,7 +419,17 @@ const StartQuizPage: React.FC = () => {
       <main className="max-w-6xl w-full mx-auto p-4">
         {isAdmin && (
           <div className="bg-yellow-100 text-yellow-800 px-4 py-2 rounded-md text-sm mb-4">
-            🛠 Admin Mode: Timer is disabled.
+            <p>🛠 Admin Mode: Timer is disabled.</p>
+            <div className="mt-2 flex gap-2">
+              <Button
+                variant="outline"
+                onClick={() => setShowDownloadModal(true)}
+                className="flex items-center gap-2"
+              >
+                <Download className="h-5 w-5" />
+                Download PDF
+              </Button>
+            </div>
           </div>
         )}
 
@@ -389,7 +520,7 @@ const Modal = ({ onClose, children }: { onClose: () => void; children: React.Rea
         {children}
         <div className="mt-6 flex justify-end">
           <Button onClick={onClose} className="bg-red-600 text-white hover:bg-red-700">
-            OK
+            Cancel
           </Button>
         </div>
       </div>

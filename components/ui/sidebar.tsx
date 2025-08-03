@@ -40,6 +40,18 @@ export function Sidebar() {
   const [showSignOutDialog, setShowSignOutDialog] = useState(false);
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
 
+  // Lock body scroll when sidebar is open (mobile)
+  useEffect(() => {
+    if (mobileOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [mobileOpen]);
+
   useEffect(() => {
     const auth = getAuth(app);
     const db = getFirestore(app);
@@ -68,7 +80,6 @@ export function Sidebar() {
     );
   };
 
-  const toggleCollapse = () => setCollapsed(prev => !prev);
   const isActive = (href?: string) => href && pathname.includes(href);
 
   const handleSignOut = async () => {
@@ -136,47 +147,43 @@ export function Sidebar() {
 
   return (
     <>
-      <div className="md:hidden p-4">
-        <Button variant="ghost" size="icon" onClick={() => setMobileOpen(true)}>
-          <Menu className="h-5 w-5" />
-        </Button>
+      {/* Mobile Menu Button */}
+      <div className="md:hidden fixed top-4 left-4 z-50">
+        {!mobileOpen && (
+          <Button variant="ghost" size="icon" onClick={() => setMobileOpen(true)}>
+            <Menu className="h-6 w-6 text-gray-800" />
+          </Button>
+        )}
       </div>
 
+      {/* Sidebar */}
       <div
-        className={`fixed inset-y-0 left-0 z-50 bg-white border-r border-gray-200 flex flex-col transition-all duration-300
-        ${collapsed ? 'w-16' : 'w-64'}
-        ${mobileOpen ? 'translate-x-0' : '-translate-x-full'}
-        md:translate-x-0 md:static md:flex`}
+        className={`
+          fixed top-0 left-0 h-full z-50 bg-white border-r border-gray-200 flex flex-col transition-transform duration-300
+          ${collapsed ? 'w-16' : 'w-64'}
+          ${mobileOpen ? 'translate-x-0' : '-translate-x-full'}
+          md:translate-x-0 md:static md:flex
+        `}
       >
         {/* Header */}
         <div className="p-4 border-b flex items-center justify-between">
           {!collapsed ? (
             <div className="flex items-center space-x-3">
-       
-              <div>
-      <Image
-            src={logo}
-            alt="Tayyari Hub Logo"
-            className="h-10 w-auto"
-            priority
-          />                
-              </div>
+              <Image src={logo} alt="Tayyari Hub Logo" className="h-10 w-auto" priority />
             </div>
           ) : (
             <BookOpen className="h-6 w-6 text-purple-700" />
           )}
 
           <div className="flex items-center space-x-2">
-            <Button variant="ghost" size="icon" onClick={toggleCollapse}>
-              <Menu className="h-5 w-5" />
-            </Button>
+            {/* Close Sidebar Button (Mobile) */}
             <Button variant="ghost" size="icon" onClick={() => setMobileOpen(false)} className="md:hidden">
               <X className="h-5 w-5" />
             </Button>
           </div>
         </div>
 
-        {/* Nav */}
+        {/* Navigation */}
         <nav className="flex-1 overflow-y-auto p-4 space-y-10">
           {menu.map((section) => (
             <div key={section.section}>
@@ -226,12 +233,10 @@ export function Sidebar() {
             </div>
           ))}
 
-          {/* Sign Out inside nav */}
+          {/* Sign Out */}
           <div
             onClick={() => setShowSignOutDialog(true)}
-            className={`flex items-center justify-between px-3 py-2 rounded-sm text-sm cursor-pointer transition-all duration-200 group ${
-              'text-gray-600 hover:bg-red-100 hover:text-red-700'
-            }`}
+            className="flex items-center justify-between px-3 py-2 rounded-sm text-sm cursor-pointer transition-all duration-200 text-gray-600 hover:bg-red-100 hover:text-red-700"
           >
             <div className="flex items-center space-x-3">
               <LogOut className="h-5 w-5 text-red-500 group-hover:text-red-700" />
@@ -246,7 +251,7 @@ export function Sidebar() {
         <div className="fixed inset-0 z-40 bg-black/30 md:hidden" onClick={() => setMobileOpen(false)} />
       )}
 
-      {/* Sign-Out Confirmation Dialog */}
+      {/* Sign Out Dialog */}
       {showSignOutDialog && (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-6">
