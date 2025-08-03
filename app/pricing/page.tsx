@@ -117,7 +117,7 @@ export default function PricingPage() {
               <li><strong>Account (Mobile):</strong> 0323 7507673</li>
               <li><strong>Bank:</strong> Easypaisa</li>
               <li><strong>Title:</strong> Tayyari Hub</li>
-              <li className="mt-2">📸 Attach screenshot of payment below.</li>
+              <li className="mt-2">📸 Send screenshot to the whatsapp number 03237507673.</li>
               <li>⚠️ Fake or invalid screenshots will lead to strict action.</li>
               <li>📞 For Support: <strong>0323 7507673</strong></li>
             </ul>
