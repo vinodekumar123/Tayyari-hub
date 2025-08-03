@@ -17,7 +17,7 @@ const PricingSection = () => {
             <h3 className="text-2xl font-semibold text-gray-800 mb-2">Free Plan</h3>
             <p className="text-gray-500 mb-6">Get started with basic access to 10 quizzes.</p>
             <ul className="space-y-3 text-sm text-gray-700 mb-6">
-              <li>✅ Access to 10 quizzes</li>
+              <li>✅ Access to Few quizzes</li>
               <li>✅ Practice MDCAT, LAT, ECAT basics</li>
               <li>❌ No custom quizzes</li>
               <li>❌ Limited subjects</li>

@@ -12,10 +12,7 @@ export default function StudentProfilePage() {
   const [form, setForm] = useState({
     fullName: "",
     email: "",
-    university: "",
-    campus: "",
-    degree: "",
-    city: '',
+  
     plan: '',
     course: "",
     fatherName: "",
@@ -34,11 +31,8 @@ export default function StudentProfilePage() {
           setForm({
             fullName: data.fullName || "",
             email: data.email || "",
-            university: data.university || "",
-            campus: data.campus || "",
-            degree: data.degree || "",
+          
             course: data.course || "",
-            city: data.city || "",
             plan: data.plan || "",
             fatherName: data.fatherName || "",
             district: data.district || "",
@@ -58,13 +52,13 @@ export default function StudentProfilePage() {
   const handleUpdate = async () => {
     if (!uid) return;
     const ref = doc(db, "users", uid);
-    const { fullName, campus, course, fatherName, district } = form;
-    await updateDoc(ref, { fullName, campus, course, fatherName, district });
+    const { fullName,  course, fatherName, district } = form;
+    await updateDoc(ref, { fullName, course, fatherName, district });
     alert("Profile updated successfully");
   };
 
-  const editableFields = ["fullName", "campus", "course", "fatherName", "district"];
-  const displayFields = ["fullName", "email", "university", "campus", "city", "degree", "course", "plan", "fatherName", "district"];
+  const editableFields = ["fullName", "fatherName", "district"];
+  const displayFields = ["fullName", "email", "course", "plan", "fatherName", "district"];
 
   if (loading) return <div className="p-6">Loading...</div>;
 

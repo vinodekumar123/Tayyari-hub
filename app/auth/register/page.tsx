@@ -32,7 +32,7 @@ export default function RegisterPage() {
     document.body.style.cursor = "wait";
     try {
       await createUserWithEmailAndPassword(auth, email, password);
-      router.push("/onboarding");
+      router.push("/auth/onboarding");
     } catch (err: any) {
       setError(
         err.code === "auth/email-already-in-use"

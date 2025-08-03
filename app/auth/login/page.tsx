@@ -108,8 +108,7 @@ export default function LoginPage() {
       if (userSnap.exists()) {
         const userData = userSnap.data();
         const requiredFields = [
-          'fullName', 'email', 'phone', 'city',
-          'university', 'campus', 'degree',
+          'fullName', 'email', 'phone', 
           'course', 'fatherName', 'plan', 'createdAt'
         ];
 
