@@ -3,11 +3,11 @@
 import { useState, useEffect } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth, db } from '../../firebase';
-import { collection, onSnapshot, getDocs } from 'firebase/firestore';
+import { collection, onSnapshot, getDocs, query, where } from 'firebase/firestore';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Sidebar } from '@/components/ui/sidebar';
-import { Users, Trophy, Database, AlertCircle, FileText, BookOpen } from 'lucide-react';
+import { Users, Trophy, Database, AlertCircle, FileText, BookOpen, Star } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { Skeleton } from '@/components/ui/skeleton';
 import Link from 'next/link';
@@ -16,6 +16,7 @@ export default function AdminDashboard() {
   const router = useRouter();
   const [adminUser, setAdminUser] = useState<any>(null);
   const [students, setStudents] = useState<any[]>([]);
+  const [premiumStudents, setPremiumStudents] = useState<any[]>([]);
   const [quizzes, setQuizzes] = useState<any[]>([]);
   const [mockQuizzes, setMockQuizzes] = useState<any[]>([]);
   const [quizQuestions, setQuizQuestions] = useState<any[]>([]);
@@ -40,11 +41,12 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     const fetchStats = async () => {
-      const [quizSnap, mockSnap, quizQSnap, mockQSnap] = await Promise.all([
+      const [quizSnap, mockSnap, quizQSnap, mockQSnap, premiumSnap] = await Promise.all([
         getDocs(collection(db, 'quizzes')),
         getAllMockQuizzes(),
         getDocs(collection(db, 'questions')),
         getDocs(collection(db, 'mock-questions')),
+        getDocs(query(collection(db, 'users'), where('plan', '==', 'premium'))),
       ]);
 
       const now = new Date();
@@ -59,6 +61,7 @@ export default function AdminDashboard() {
       setMockQuizzes(mockSnap);
       setQuizQuestions(quizQSnap.docs.map(doc => doc.data()));
       setMockQuestions(mockQSnap.docs.map(doc => doc.data()));
+      setPremiumStudents(premiumSnap.docs.map(doc => doc.data()));
       setLoading(false);
     };
 
@@ -77,6 +80,7 @@ export default function AdminDashboard() {
 
   const dashboardStats = {
     totalStudents: students.length,
+    totalPremiumStudents: premiumStudents.length,
     totalQuizzes: quizzes.length,
     totalMockQuizzes: mockQuizzes.length,
     activeQuizzes: quizzes.filter(q => {
@@ -135,16 +139,52 @@ export default function AdminDashboard() {
 
         <main className="flex-1 overflow-auto p-6">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-            <StatCard title="Total Students" value={dashboardStats.totalStudents} icon={<Users className="h-6 w-6 text-blue-600" />} bg="bg-blue-100" />
-            <StatCard title="Total Quizzes" value={dashboardStats.totalQuizzes} icon={<Trophy className="h-6 w-6 text-green-600" />} bg="bg-green-100" />
-            <StatCard title="Mock Quizzes" value={dashboardStats.totalMockQuizzes} icon={<FileText className="h-6 w-6 text-yellow-600" />} bg="bg-yellow-100" />
-            <StatCard title="Active Quizzes" value={dashboardStats.activeQuizzes} icon={<AlertCircle className="h-6 w-6 text-red-600" />} bg="bg-red-100" />
-            <StatCard title="Quiz Questions" value={dashboardStats.quizQuestions} icon={<Database className="h-6 w-6 text-purple-600" />} bg="bg-purple-100" />
-            <StatCard title="Mock Questions" value={dashboardStats.mockQuestions} icon={<BookOpen className="h-6 w-6 text-pink-600" />} bg="bg-pink-100" />
+            <StatCard
+              title="Total Students"
+              value={dashboardStats.totalStudents}
+              icon={<Users className="h-6 w-6 text-blue-600" />}
+              bg="bg-blue-100"
+            />
+            <StatCard
+              title="Total Premium Students"
+              value={dashboardStats.totalPremiumStudents}
+              icon={<Star className="h-6 w-6 text-indigo-600" />}
+              bg="bg-indigo-100"
+            />
+            <StatCard
+              title="Total Quizzes"
+              value={dashboardStats.totalQuizzes}
+              icon={<Trophy className="h-6 w-6 text-green-600" />}
+              bg="bg-green-100"
+            />
+            <StatCard
+              title="Mock Quizzes"
+              value={dashboardStats.totalMockQuizzes}
+              icon={<FileText className="h-6 w-6 text-yellow-600" />}
+              bg="bg-yellow-100"
+            />
+            <StatCard
+              title="Active Quizzes"
+              value={dashboardStats.activeQuizzes}
+              icon={<AlertCircle className="h-6 w-6 text-red-600" />}
+              bg="bg-red-100"
+            />
+            <StatCard
+              title="Quiz Questions"
+              value={dashboardStats.quizQuestions}
+              icon={<Database className="h-6 w-6 text-purple-600" />}
+              bg="bg-purple-100"
+            />
+            <StatCard
+              title="Mock Questions"
+              value={dashboardStats.mockQuestions}
+              icon={<BookOpen className="h-6 w-6 text-pink-600" />}
+              bg="bg-pink-100"
+            />
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Link href="" passHref>
+            <Link href="/admin/quizzes/create" passHref>
               <Button className="h-24 w-full flex flex-col justify-center items-center space-y-2">
                 <span className="text-lg font-semibold">Create Quiz</span>
               </Button>
@@ -154,7 +194,7 @@ export default function AdminDashboard() {
                 <span className="text-lg font-semibold">Manage Students</span>
               </Button>
             </Link>
-            <Link href="/admin/results/" passHref>
+            <Link href="/admin/results" passHref>
               <Button variant="outline" className="h-24 w-full flex flex-col justify-center items-center space-y-2">
                 <span className="text-lg font-semibold">View Results</span>
               </Button>

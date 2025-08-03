@@ -112,34 +112,19 @@ export default function PricingPage() {
 
           <div className="mt-6 text-left">
             <p className="font-semibold">📥 To Subscribe:</p>
-            <ul className="list-disc pl-5 text-gray-700 mt-2">
+            <ul className="list-disc pl-5 text-gray-700 mt-2 space-y-1">
               <li>Send <strong>PKR {price}</strong> to the following account:</li>
-              <li><strong>Account:</strong> ×××××</li>
-              <li><strong>Bank:</strong> xxxx</li>
-              <li><strong>Title:</strong> xxxxx</li>
+              <li><strong>Account (Mobile):</strong> 0323 7507673</li>
+              <li><strong>Bank:</strong> Easypaisa</li>
+              <li><strong>Title:</strong> Tayyari Hub</li>
               <li className="mt-2">📸 Attach screenshot of payment below.</li>
               <li>⚠️ Fake or invalid screenshots will lead to strict action.</li>
-              <li>📞 For Support: <strong>034×××××××</strong></li>
+              <li>📞 For Support: <strong>0323 7507673</strong></li>
             </ul>
           </div>
 
-          <div className="mt-6">
-            <p className="font-semibold mb-2">Upload Screenshot (PDF or Image):</p>
-            <Input type="file" accept=".pdf,image/*" onChange={handleFileChange} />
-            {previewUrl && (
-              <img src={previewUrl} alt="Preview" className="mt-4 max-h-56 rounded-lg border" />
-            )}
-          </div>
+      
 
-          <div className="mt-8 text-center">
-            <Button
-              onClick={handleUpgrade}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl font-semibold inline-flex items-center"
-            >
-              Upgrade Plan <ArrowRightCircle className="ml-2 w-5 h-5" />
-            </Button>
-            {status && <p className="mt-3 text-sm text-gray-700">{status}</p>}
-          </div>
         </CardContent>
       </Card>
     </div>
