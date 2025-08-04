@@ -16,7 +16,7 @@ const HomePage = () => {
 <Navbar/>   
 
 <CoursesSection/>
-{/* <DashboardShowcase/> */}
+<DashboardShowcase/>
 <PricingSection/>
 <WhatsappInviteSection/>
 <TestimonialSection/>

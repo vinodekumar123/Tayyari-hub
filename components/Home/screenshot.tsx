@@ -2,14 +2,14 @@
 
 import Image from 'next/image';
 import { motion } from 'framer-motion';
+import logo from "../../app/images/scd.jpg";
 
 export default function DashboardShowcase() {
   const screenshots = [
     {
-      src: '/admin/images/scd/png',
+      src: logo, // ✅ corrected
       alt: 'Student dashboard overview',
     },
-  
   ];
 
   return (
@@ -28,10 +28,10 @@ export default function DashboardShowcase() {
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-1 gap-6">
           {screenshots.map((shot, idx) => (
             <motion.div
-              key={shot.src}
+              key={idx}
               initial={{ opacity: 0, y: 30 }}
               whileInView={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: idx * 0.2 }}
