@@ -21,8 +21,7 @@ export default function DashboardShowcase() {
       <div className="relative z-10 max-w-screen-xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center mb-12">
           <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-gray-900">
-            See Your Dashboard in Action
-          </h2>
+Schedule of Our Mock Test series          </h2>
           <p className="mt-4 max-w-2xl mx-auto text-lg text-gray-600">
             A glimpse of the intuitive experience you get instantly after onboarding.
           </p>
