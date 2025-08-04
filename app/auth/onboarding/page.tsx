@@ -240,24 +240,7 @@ export default function OnboardingPage() {
                     />
                   </div>
                 </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="email">Email Address</Label>
-                  <div className="relative">
-                    <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
-                    <Input
-                      id="email"
-                      type="email"
-                      value={form.email}
-                      readOnly
-                      className="pl-10 h-12 bg-gray-100 text-gray-500 cursor-not-allowed rounded-xl text-sm sm:text-base"
-                    />
-                  </div>
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="space-y-2">
+ <div className="space-y-2">
                   <Label htmlFor="course">Course</Label>
                   <Select
                     value={form.course}
@@ -276,6 +259,23 @@ export default function OnboardingPage() {
                     </SelectContent>
                   </Select>
                 </div>
+                <div className="space-y-2">
+                  <Label htmlFor="email">Email Address</Label>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+                    <Input
+                      id="email"
+                      type="email"
+                      value={form.email}
+                      readOnly
+                      className="pl-10 h-12 bg-gray-100 text-gray-500 cursor-not-allowed rounded-xl text-sm sm:text-base"
+                    />
+                  </div>
+                </div>
+              </>
+            ) : (
+              <>
+               
               </>
             )}
 
