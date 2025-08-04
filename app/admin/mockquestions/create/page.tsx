@@ -411,18 +411,18 @@ export default function CreateQuestion() {
   const SkeletonCard = () => (
     <Card className="animate-pulse">
       <CardHeader>
-        <div className="h-6 w-48 bg-gray-200 rounded"></div>
+        <div className="h-8 w-64 bg-gray-200 rounded"></div>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="space-y-2">
-          <div className="h-4 w-24 bg-gray-200 rounded"></div>
-          <div className="h-20 w-full bg-gray-200 rounded"></div>
+          <div className="h-6 w-32 bg-gray-200 rounded"></div>
+          <div className="h-24 w-full bg-gray-200 rounded"></div>
         </div>
         <div className="space-y-2">
-          <div className="h-4 w-24 bg-gray-200 rounded"></div>
+          <div className="h-6 w-32 bg-gray-200 rounded"></div>
           <div className="space-y-2">
             {[...Array(4)].map((_, idx) => (
-              <div key={idx} className="h-10 w-full bg-gray-200 rounded"></div>
+              <div key={idx} className="h-12 w-full bg-gray-200 rounded"></div>
             ))}
           </div>
         </div>
@@ -434,41 +434,41 @@ export default function CreateQuestion() {
     <div className="min-h-screen bg-white rounded-xl">
       <header className="bg-white shadow-sm border-b">
         <div className="mx-auto px-4 sm:px-6 lg:px-8 py-6 flex flex-col sm:flex-row justify-between items-center gap-4">
-          <div className="flex items-center space-x-3">
-            <div className="h-10 w-10 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-full flex items-center justify-center">
-              <BookOpen className="text-white h-6 w-6" />
+          <div className="flex items-center space-x-4">
+            <div className="h-12 w-12 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-full flex items-center justify-center">
+              <BookOpen className="text-white h-8 w-8" />
             </div>
-            <h1 className="text-2xl font-bold text-gray-900">
+            <h1 className="text-3xl font-bold text-gray-900">
               {id ? 'Edit Mock Question' : 'Create Mock Question'}
             </h1>
           </div>
-          <div className="flex items-center space-x-3">
+          <div className="flex items-center space-x-4">
             <Dialog open={isCsvDialogOpen} onOpenChange={setIsCsvDialogOpen}>
               <DialogTrigger asChild>
-                <Button className="bg-green-600 hover:bg-green-700 text-white">
-                  <Upload className="h-4 w-4 mr-2" />
+                <Button className="bg-green-600 hover:bg-green-700 text-white text-lg">
+                  <Upload className="h-6 w-6 mr-2" />
                   Import CSV
                 </Button>
               </DialogTrigger>
               <DialogContent className="sm:max-w-[500px]">
                 <DialogHeader>
-                  <DialogTitle className="text-xl font-semibold">Import Questions from CSV</DialogTitle>
+                  <DialogTitle className="text-2xl font-semibold">Import Questions from CSV</DialogTitle>
                 </DialogHeader>
                 <div className="space-y-4 py-4">
-                  <p className="text-sm text-gray-600">
+                  <p className="text-lg text-gray-600">
                     Upload a CSV file with the following columns: questionText, options (pipe-separated), correctAnswer, course, subject, difficulty, explanation (optional), chapter (optional), topic (optional), year (optional), book (optional), teacher (optional), enableExplanation (true/false).
                   </p>
                   <Input
                     type="file"
                     accept=".csv"
                     onChange={(e) => setCsvFile(e.target.files?.[0] || null)}
-                    className="border-gray-300"
+                    className="border-gray-300 text-lg"
                   />
                   {csvErrors.length > 0 && (
                     <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
                       <ul className="list-disc pl-5">
                         {csvErrors.map((error, idx) => (
-                          <li key={idx}>{error}</li>
+                          <li key={idx} className="text-lg">{error}</li>
                         ))}
                       </ul>
                     </div>
@@ -482,13 +482,14 @@ export default function CreateQuestion() {
                       setCsvFile(null);
                       setCsvErrors([]);
                     }}
+                    className="text-lg"
                   >
                     Cancel
                   </Button>
                   <Button
                     onClick={handleCsvUpload}
                     disabled={isSaving || !csvFile}
-                    className="bg-green-600 hover:bg-green-700 text-white"
+                    className="bg-green-600 hover:bg-green-700 text-white text-lg"
                   >
                     {isSaving ? 'Importing...' : 'Import'}
                   </Button>
@@ -511,14 +512,14 @@ export default function CreateQuestion() {
             {(errors.questionText || errors.options || errors.correctAnswer || errors.course || errors.subject || errors.difficulty) && (
               <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert">
                 <div className="flex items-center">
-                  <AlertCircle className="h-5 w-5 mr-2" />
+                  <AlertCircle className="h-6 w-6 mr-2" />
                   <ul className="list-disc pl-5">
-                    {errors.questionText && <li>{errors.questionText}</li>}
-                    {errors.options && <li>{errors.options}</li>}
-                    {errors.correctAnswer && <li>{errors.correctAnswer}</li>}
-                    {errors.course && <li>{errors.course}</li>}
-                    {errors.subject && <li>{errors.subject}</li>}
-                    {errors.difficulty && <li>{errors.difficulty}</li>}
+                    {errors.questionText && <li className="text-lg">{errors.questionText}</li>}
+                    {errors.options && <li className="text-lg">{errors.options}</li>}
+                    {errors.correctAnswer && <li className="text-lg">{errors.correctAnswer}</li>}
+                    {errors.course && <li className="text-lg">{errors.course}</li>}
+                    {errors.subject && <li className="text-lg">{errors.subject}</li>}
+                    {errors.difficulty && <li className="text-lg">{errors.difficulty}</li>}
                   </ul>
                 </div>
               </div>
@@ -527,11 +528,11 @@ export default function CreateQuestion() {
             {/* Question Content */}
             <Card className="shadow-md hover:shadow-lg transition-shadow duration-300">
               <CardHeader>
-                <CardTitle className="text-lg font-semibold text-gray-900">Question Content</CardTitle>
+                <CardTitle className="text-xl font-semibold text-gray-900">Question Content</CardTitle>
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="space-y-2">
-                  <Label htmlFor="questionText" className="text-sm font-medium text-gray-700">
+                  <Label htmlFor="questionText" className="text-xl font-medium text-gray-700">
                     Question Text *
                   </Label>
                   <ReactQuill
@@ -545,44 +546,44 @@ export default function CreateQuestion() {
 
                 <div className="space-y-4">
                   <div className="flex justify-between items-center">
-                    <Label className="text-sm font-medium text-gray-700">Answer Options *</Label>
+                    <Label className="text-xl font-medium text-gray-700">Answer Options *</Label>
                     <Button
                       variant="outline"
                       size="sm"
                       onClick={addOption}
                       disabled={questionData.options.length >= 6}
-                      className="border-gray-300 hover:bg-gray-100"
+                      className="border-gray-300 hover:bg-gray-100 text-lg"
                     >
-                      <Plus className="h-4 w-4 mr-1" />
+                      <Plus className="h-6 w-6 mr-2" />
                       Add Option
                     </Button>
                   </div>
 
                   <div className="space-y-3">
                     {questionData.options.map((option, index) => (
-                      <div key={index} className="flex items-center space-x-3">
-                        <span className="font-medium text-gray-600 w-8">{String.fromCharCode(65 + index)}.</span>
+                      <div key={index} className="flex items-center space-x-4">
+                        <span className="text-lg font-medium text-gray-600 w-10">{String.fromCharCode(65 + index)}.</span>
                         <Input
                           placeholder={`Option ${index + 1}`}
                           value={option}
                           onChange={(e) => handleOptionChange(index, e.target.value)}
-                          className="flex-1"
+                          className="flex-1 text-lg"
                         />
                         <Checkbox
                           checked={questionData.correctAnswer === option}
                           onCheckedChange={(checked) => {
                             if (checked) handleInputChange('correctAnswer', option);
                           }}
-                          className="h-5 w-5"
+                          className="h-6 w-6"
                         />
                         {questionData.options.length > 2 && (
                           <Button
                             variant="ghost"
                             size="sm"
                             onClick={() => removeOption(index)}
-                            className="text-red-600 hover:text-red-700"
+                            className="text-red-600 hover:text-red-700 text-lg"
                           >
-                            <X className="h-4 w-4" />
+                            <X className="h-6 w-6" />
                           </Button>
                         )}
                       </div>
@@ -591,13 +592,13 @@ export default function CreateQuestion() {
                 </div>
 
                 <div className="space-y-4">
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-4">
                     <Checkbox
                       checked={questionData.enableExplanation}
                       onCheckedChange={(checked) => handleInputChange('enableExplanation', checked)}
-                      className="h-5 w-5"
+                      className="h-6 w-6"
                     />
-                    <Label className="text-sm font-medium text-gray-700">Enable Explanation</Label>
+                    <Label className="text-xl font-medium text-gray-700">Enable Explanation</Label>
                   </div>
                   {questionData.enableExplanation && (
                     <Textarea
@@ -605,7 +606,7 @@ export default function CreateQuestion() {
                       value={questionData.explanation}
                       onChange={(e) => handleInputChange('explanation', e.target.value)}
                       rows={3}
-                      className="mt-1"
+                      className="mt-1 text-lg"
                     />
                   )}
                 </div>
@@ -615,37 +616,37 @@ export default function CreateQuestion() {
             {/* Metadata */}
             <Card className="shadow-md hover:shadow-lg transition-shadow duration-300">
               <CardHeader>
-                <CardTitle className="text-lg font-semibold text-gray-900">Question Metadata</CardTitle>
+                <CardTitle className="text-xl font-semibold text-gray-900">Question Metadata</CardTitle>
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
-                    <Label className="text-sm font-medium text-gray-700">Course *</Label>
+                    <Label className="text-xl font-medium text-gray-700">Course *</Label>
                     <Select value={questionData.course} onValueChange={(val) => handleInputChange('course', val)}>
-                      <SelectTrigger className={`mt-1 ${errors.course ? 'border-red-500' : ''}`}>
+                      <SelectTrigger className={`mt-1 ${errors.course ? 'border-red-500' : ''} text-lg`}>
                         <SelectValue placeholder="Select course" />
                       </SelectTrigger>
                       <SelectContent>
                         {firestoreCourses.map(course => (
-                          <SelectItem key={course.id} value={course.name}>{course.name}</SelectItem>
+                          <SelectItem key={course.id} value={course.name} className="text-lg">{course.name}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                   </div>
 
                   <div>
-                    <Label className="text-sm font-medium text-gray-700">Subject *</Label>
+                    <Label className="text-xl font-medium text-gray-700">Subject *</Label>
                     <Select
                       value={questionData.subject}
                       onValueChange={(val) => handleInputChange('subject', val)}
                       disabled={!questionData.course}
                     >
-                      <SelectTrigger className={`mt-1 ${errors.subject ? 'border-red-500' : ''}`}>
+                      <SelectTrigger className={`mt-1 ${errors.subject ? 'border-red-500' : ''} text-lg`}>
                         <SelectValue placeholder="Select subject" />
                       </SelectTrigger>
                       <SelectContent>
                         {availableSubjects.map(sub => (
-                          <SelectItem key={sub} value={sub}>{sub}</SelectItem>
+                          <SelectItem key={sub} value={sub} className="text-lg">{sub}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
@@ -654,36 +655,36 @@ export default function CreateQuestion() {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
-                    <Label className="text-sm font-medium text-gray-700">Chapter</Label>
+                    <Label className="text-xl font-medium text-gray-700">Chapter</Label>
                     <Select
                       value={questionData.chapter}
                       onValueChange={(val) => handleInputChange('chapter', val)}
                       disabled={!questionData.subject}
                     >
-                      <SelectTrigger className="mt-1">
+                      <SelectTrigger className="mt-1 text-lg">
                         <SelectValue placeholder="Select chapter" />
                       </SelectTrigger>
                       <SelectContent>
                         {availableChapters.map(ch => (
-                          <SelectItem key={ch} value={ch}>{ch}</SelectItem>
+                          <SelectItem key={ch} value={ch} className="text-lg">{ch}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                   </div>
 
                   <div>
-                    <Label className="text-sm font-medium text-gray-700">Topic</Label>
+                    <Label className="text-xl font-medium text-gray-700">Topic</Label>
                     <Select
                       value={questionData.topic}
                       onValueChange={(val) => handleInputChange('topic', val)}
                       disabled={availableTopics.length === 0}
                     >
-                      <SelectTrigger className="mt-1">
+                      <SelectTrigger className="mt-1 text-lg">
                         <SelectValue placeholder="Select topic" />
                       </SelectTrigger>
                       <SelectContent>
                         {availableTopics.map(topic => (
-                          <SelectItem key={topic} value={topic}>{topic}</SelectItem>
+                          <SelectItem key={topic} value={topic} className="text-lg">{topic}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
@@ -692,54 +693,54 @@ export default function CreateQuestion() {
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                   <div>
-                    <Label className="text-sm font-medium text-gray-700">Difficulty *</Label>
+                    <Label className="text-xl font-medium text-gray-700">Difficulty *</Label>
                     <Select
                       value={questionData.difficulty}
                       onValueChange={(val) => handleInputChange('difficulty', val)}
                     >
-                      <SelectTrigger className={`mt-1 ${errors.difficulty ? 'border-red-500' : ''}`}>
+                      <SelectTrigger className={`mt-1 ${errors.difficulty ? 'border-red-500' : ''} text-lg`}>
                         <SelectValue placeholder="Select difficulty" />
                       </SelectTrigger>
                       <SelectContent>
                         {difficulties.map(diff => (
-                          <SelectItem key={diff} value={diff}>{diff}</SelectItem>
+                          <SelectItem key={diff} value={diff} className="text-lg">{diff}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                   </div>
 
                   <div>
-                    <Label className="text-sm font-medium text-gray-700">Year</Label>
+                    <Label className="text-xl font-medium text-gray-700">Year</Label>
                     <Select value={questionData.year} onValueChange={(val) => handleInputChange('year', val)}>
-                      <SelectTrigger className="mt-1">
+                      <SelectTrigger className="mt-1 text-lg">
                         <SelectValue placeholder="Select year" />
                       </SelectTrigger>
                       <SelectContent>
                         {years.map(year => (
-                          <SelectItem key={year} value={year}>{year}</SelectItem>
+                          <SelectItem key={year} value={year} className="text-lg">{year}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                   </div>
 
                   <div>
-                    <Label className="text-sm font-medium text-gray-700">Book</Label>
+                    <Label className="text-xl font-medium text-gray-700">Book</Label>
                     <Input
                       value={questionData.book}
                       onChange={(e) => handleInputChange('book', e.target.value)}
                       placeholder="Reference book"
-                      className="mt-1"
+                      className="mt-1 text-lg"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <Label className="text-sm font-medium text-gray-700">Teacher</Label>
+                  <Label className="text-xl font-medium text-gray-700">Teacher</Label>
                   <Input
                     value={questionData.teacher}
                     onChange={(e) => handleInputChange('teacher', e.target.value)}
                     placeholder="Your name"
-                    className="mt-1"
+                    className="mt-1 text-lg"
                   />
                 </div>
               </CardContent>
@@ -749,7 +750,7 @@ export default function CreateQuestion() {
             <div className="flex justify-end space-x-4">
               <Button
                 variant="outline"
-                className="border-gray-300 hover:bg-gray-100 transition-colors"
+                className="border-gray-300 hover:bg-gray-100 transition-colors text-lg"
                 onClick={() => router.back()}
               >
                 Cancel
@@ -757,11 +758,11 @@ export default function CreateQuestion() {
               <Button
                 disabled={isSaving}
                 onClick={handleSave}
-                className="bg-blue-600 hover:bg-blue-700 text-white transition-colors"
+                className="bg-blue-600 hover:bg-blue-700 text-white transition-colors text-lg"
               >
                 {isSaving ? 'Saving...' : (
                   <>
-                    <Save className="h-4 w-4 mr-2" />
+                    <Save className="h-6 w-6 mr-2" />
                     Save Question
                   </>
                 )}

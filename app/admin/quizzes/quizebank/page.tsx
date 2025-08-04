@@ -78,91 +78,57 @@ export default function QuizBankPage() {
   const unsubscribeRef = useRef<(() => void) | null>(null);
   const router = useRouter();
 
-  const fetchQuizzes = async (startAfterDoc: any = null) => {
-    if (!currentUser) return;
+const fetchQuizzes = async (startAfterDoc: any = null) => {
+  if (!currentUser) return;
 
-    const isAdmin = currentUser.isAdmin;
-    let courseIds: string[] = enrolledCourses;
+  const isAdmin = currentUser.isAdmin;
+  let courseNames: string[] = enrolledCourses;
 
-    // Fetch quizzes only if the user's course is "MCAT"
-    if (!isAdmin && courseIds.length > 0 && !courseIds.includes('MCAT')) {
-      setQuizzes([]);
-      setLoading(false);
-      setHasMore(false);
-      return;
-    }
+  const constraints = [orderBy('createdAt', 'desc'), limit(2)];
 
-    const constraints = [orderBy('createdAt', 'desc'), limit(2)];
-    if (!isAdmin) {
-      constraints.push(where('published', '==', true));
-      if (courseIds.length > 0 && courseIds.includes('MCAT')) {
-        constraints.push(where('course.id', '==', 'MCAT')); // Filter for MCAT course only
-      }
-    }
-    if (startAfterDoc) {
-      constraints.push(startAfter(startAfterDoc));
-    }
+  if (!isAdmin && courseNames.length > 0) {
+    constraints.push(where('published', '==', true));
+    constraints.push(where('course.name', 'in', courseNames)); // ✅ key fix
+  }
 
-    const q = query(collection(db, 'quizzes'), ...constraints);
+  if (startAfterDoc) {
+    constraints.push(startAfter(startAfterDoc));
+  }
 
-    if (unsubscribeRef.current) {
-      unsubscribeRef.current();
-    }
+  const q = query(collection(db, 'quizzes'), ...constraints);
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const data = snapshot.docs.map((doc) => {
-        const quizData = doc.data();
-        const subject = (() => {
-          if (quizData.questionFilters?.subjects?.length) {
-            return quizData.questionFilters.subjects.join(', ');
-          } else if (Array.isArray(quizData.subjects)) {
-            return quizData.subjects
-              .map((s: any) => (typeof s === 'string' ? s : s?.name || '[Invalid]'))
-              .join(', ');
-          } else if (quizData.subject?.name) {
-            return quizData.subject.name;
-          } else if (typeof quizData.subject === 'string') {
-            return quizData.subject;
-          } else {
-            return '';
-          }
-        })();
+  if (unsubscribeRef.current) {
+    unsubscribeRef.current();
+  }
 
-        const chapter = (() => {
-          if (quizData.questionFilters?.chapters?.length) {
-            return quizData.questionFilters.chapters.join(', ');
-          } else if (quizData.chapter?.name) {
-            return quizData.chapter.name;
-          } else if (typeof quizData.chapter === 'string') {
-            return quizData.chapter;
-          } else {
-            return '';
-          }
-        })();
+  const unsubscribe = onSnapshot(q, (snapshot) => {
+    const data = snapshot.docs.map((doc) => {
+      const quizData = doc.data();
 
-        const course =
-          quizData.course?.name ||
-          (typeof quizData.course === 'string' ? quizData.course : '') ||
-          '';
+      const course = quizData.course?.name || '';
+      const subject = Array.isArray(quizData.subjects)
+        ? quizData.subjects.map((s: any) => s.name || s).join(', ')
+        : quizData.subject?.name || quizData.subject || '';
+      const chapter = quizData.chapter?.name || quizData.chapter || '';
 
-        return {
-          id: doc.id,
-          ...quizData,
-          course,
-          subject,
-          chapter,
-          maxAttempts: quizData.maxAttempts || 1,
-        };
-      });
-
-      setQuizzes((prev) => (startAfterDoc ? [...prev, ...data] : data));
-      setLastVisible(snapshot.docs[snapshot.docs.length - 1]);
-      setHasMore(snapshot.docs.length === 2);
-      setLoading(false);
+      return {
+        id: doc.id,
+        ...quizData,
+        course,
+        subject,
+        chapter,
+        maxAttempts: quizData.maxAttempts || 1,
+      };
     });
 
-    unsubscribeRef.current = unsubscribe;
-  };
+    setQuizzes((prev) => (startAfterDoc ? [...prev, ...data] : data));
+    setLastVisible(snapshot.docs[snapshot.docs.length - 1]);
+    setHasMore(snapshot.docs.length === 2);
+    setLoading(false);
+  });
+
+  unsubscribeRef.current = unsubscribe;
+};
 
   useEffect(() => {
     const auth = getAuth();

@@ -28,7 +28,6 @@ import {
   EyeOff,
   Mail,
   Lock,
-  BookOpen,
   ArrowRight
 } from 'lucide-react';
 import Link from 'next/link';
@@ -39,7 +38,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [navigated, setNavigated] = useState(false); // prevent double redirects
+  const [navigated, setNavigated] = useState(false);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
@@ -53,20 +52,8 @@ export default function LoginPage() {
           if (userSnap.exists()) {
             const userData = userSnap.data();
 
-            const requiredFields = [
-              'fullName', 'email', 'phone', 'city',
-              'university', 'campus', 'degree',
-              'course', 'fatherName', 'plan', 'createdAt'
-            ];
-
-            const isIncomplete = requiredFields.some(
-              (field) => !userData[field] || userData[field]?.toString().trim() === ''
-            );
-
             if (userData.admin === true) {
               router.push('/dashboard/admin');
-            } else if (isIncomplete) {
-              router.push('/auth/register');
             } else {
               router.push('/dashboard/student');
             }
@@ -110,19 +97,9 @@ export default function LoginPage() {
 
       if (userSnap.exists()) {
         const userData = userSnap.data();
-        const requiredFields = [
-          'fullName', 'email', 'phone', 
-          'course', 'fatherName', 'plan', 'createdAt'
-        ];
-
-        const isIncomplete = requiredFields.some(
-          (field) => !userData[field] || userData[field]?.toString().trim() === ''
-        );
 
         if (userData.admin === true) {
           router.push('/dashboard/admin');
-        } else if (isIncomplete) {
-          router.push('/auth/register');
         } else {
           router.push('/dashboard/student');
         }
@@ -162,12 +139,12 @@ export default function LoginPage() {
       <div className="w-full max-w-md relative z-10">
         <div className="text-center mb-8">
           <Link href="/" className="inline-flex items-center space-x-3 mb-6 group">
-              <Image
-            src={logo}
-            alt="Tayyari Hub Logo"
-            className="h-10 w-auto"
-            priority
-          />
+            <Image
+              src={logo}
+              alt="Tayyari Hub Logo"
+              className="h-10 w-auto"
+              priority
+            />
           </Link>
           <h1 className="text-4xl font-bold text-gray-900 mb-3">Sign In</h1>
           <p className="text-gray-600 text-lg">Continue your preparation journey</p>
@@ -261,7 +238,7 @@ export default function LoginPage() {
               </div>
             </div>
 
-        <Button
+            <Button
               variant="outline"
               onClick={handleGoogleLogin}
               className="w-full h-12 border-2 border-gray-200 hover:border-gray-300 hover:bg-gray-50 rounded-xl transition-all duration-300 font-medium"
@@ -274,7 +251,6 @@ export default function LoginPage() {
               </svg>
               Continue with Google
             </Button>
-
 
             <div className="text-center text-sm">
               <span className="text-gray-600">Don't have an account? </span>

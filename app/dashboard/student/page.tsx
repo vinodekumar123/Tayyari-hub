@@ -273,7 +273,7 @@ export default function EnhancedStudentDashboard() {
   return (
     <div className="flex min-h-screen bg-gradient-to-tr from-white to-slate-100 flex-col md:flex-row">
       <Sidebar />
-      <div className="flex-1 p-4 sm:p-6 md:p-8 space-y-6 md:space-y-8">
+      <div className="flex-1 p-4 mt-8 sm:p-6 md:p-8 space-y-6 md:space-y-8">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
             <h1 className="text-2xl sm:text-3xl md:text-4xl font-extrabold text-gray-900">{greeting}, {studentData?.fullName || 'Student'}! 🌟</h1>
