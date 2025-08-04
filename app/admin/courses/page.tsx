@@ -415,15 +415,16 @@ export default function Courses() {
                       <AlertDescription>{error}</AlertDescription>
                     </Alert>
                   )}
-                  <div>
-                    <Label className="text-sm font-medium text-gray-700">Subject Name</Label>
-                    <Input
-                      value={newSubject.name}
-                      onChange={(e) => setNewCourse({ ...newCourse, name: e.target.value })}
-                      className= "mt-1"
-                      placeholder="Enter subject name"
-                    />
-                  </div>
+             <div>
+  <Label className="text-sm font-medium text-gray-700">Subject Name</Label>
+  <Input
+    value={newSubject.name}
+    onChange={(e) => setNewSubject({ ...newSubject, name: e.target.value })} // ✅ Correct state update
+    className="mt-1"
+    placeholder="Enter subject name"
+  />
+</div>
+
                   <div>
                     <Label className="text-sm font-medium text-gray-700">Add Chapter</Label>
                     <div className="flex gap-3 mt-1">
