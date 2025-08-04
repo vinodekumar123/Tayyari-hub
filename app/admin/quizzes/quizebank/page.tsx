@@ -84,11 +84,19 @@ export default function QuizBankPage() {
     const isAdmin = currentUser.isAdmin;
     let courseIds: string[] = enrolledCourses;
 
+    // Fetch quizzes only if the user's course is "MCAT"
+    if (!isAdmin && courseIds.length > 0 && !courseIds.includes('MCAT')) {
+      setQuizzes([]);
+      setLoading(false);
+      setHasMore(false);
+      return;
+    }
+
     const constraints = [orderBy('createdAt', 'desc'), limit(2)];
     if (!isAdmin) {
       constraints.push(where('published', '==', true));
-      if (courseIds.length > 0) {
-        constraints.push(where('course.id', 'in', courseIds));
+      if (courseIds.length > 0 && courseIds.includes('MCAT')) {
+        constraints.push(where('course.id', '==', 'MCAT')); // Filter for MCAT course only
       }
     }
     if (startAfterDoc) {
@@ -192,7 +200,7 @@ export default function QuizBankPage() {
         setCurrentUser(null);
         setHasMore(false);
       }
-      setUserLoaded(true); // ✅ add this line
+      setUserLoaded(true);
     });
 
     return () => {
@@ -208,9 +216,9 @@ export default function QuizBankPage() {
       setQuizzes([]);
       setLastVisible(null);
       setHasMore(true);
-      fetchQuizzes(); // ✅ only now fetch quizzes
+      fetchQuizzes();
     }
-  }, [filters, currentUser, enrolledCourses, userLoaded]); // ✅ add userLoaded here
+  }, [filters, currentUser, enrolledCourses, userLoaded]);
 
   const filteredQuizzes = quizzes.filter((quiz) => {
     const { course, subject, chapter, accessType, searchTerm, status, date } = filters;
