@@ -3,6 +3,7 @@
 import React, { useEffect } from "react";
 import Image from "next/image";
 import l1 from "/app/assets/hero.png"; // ✅ Adjust the path if needed
+import Link from "next/link";
 
 const HeroSection = () => {
   useEffect(() => {
@@ -59,12 +60,13 @@ const HeroSection = () => {
             Join thousands of students mastering MDCAT, LAT, ECAT, and NTS through intelligent test systems and performance tracking.
           </p>
           <div className="flex flex-col sm:flex-row justify-center md:justify-start gap-4">
-            <a
-              href="#"
-              className="px-6 py-3 bg-blue-600 text-white font-semibold rounded-xl shadow-md hover:bg-blue-700 transition"
+            <Link
+              href="/auth/login"
+                          className="px-6 py-3 bg-blue-600 text-white font-semibold rounded-xl shadow-md hover:bg-blue-700 transition"
             >
-              Start Practicing
-            </a>
+              Start Prepration
+            </Link>
+
             <a
               href="#"
               className="px-6 py-3 border border-gray-300 text-gray-700 font-semibold rounded-xl hover:bg-gray-100 transition"
