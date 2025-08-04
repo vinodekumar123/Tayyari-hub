@@ -6,6 +6,7 @@ import CoursesSection from "@/components/Home/courses";
 import Footer from "@/components/Home/footer";
 import TestimonialSection from "@/components/Home/reviews";
 import PricingSection from "@/components/Home/pricing";
+import WhatsappInviteSection from "@/components/Home/whatsapp";
 
 const HomePage = () => {
   return (
@@ -15,6 +16,7 @@ const HomePage = () => {
 
 <CoursesSection/>
 <PricingSection/>
+<WhatsappInviteSection/>
 <TestimonialSection/>
 <Footer/>
  </>
