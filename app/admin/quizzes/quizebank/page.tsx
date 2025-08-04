@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
@@ -14,6 +13,7 @@ import {
   where,
   limit,
   startAfter,
+  deleteDoc,
 } from 'firebase/firestore';
 import { getAuth, onAuthStateChanged } from 'firebase/auth';
 import { db } from '../../../firebase';
@@ -40,7 +40,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog';
-import { ArrowRight, BookOpen, Calendar, Clock, Play, Pencil, Eye } from 'lucide-react';
+import { ArrowRight, BookOpen, Calendar, Clock, Play, Pencil, Eye, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 
 function getQuizStatus(startDate: string, endDate: string, startTime?: string, endTime?: string) {
@@ -60,7 +60,6 @@ export default function QuizBankPage() {
   const [attemptedQuizzes, setAttemptedQuizzes] = useState<{ [key: string]: number }>({});
   const [enrolledCourses, setEnrolledCourses] = useState<string[]>([]);
   const [userLoaded, setUserLoaded] = useState(false);
-
   const [lastVisible, setLastVisible] = useState<any>(null);
   const [hasMore, setHasMore] = useState(true);
   const [filters, setFilters] = useState({
@@ -74,6 +73,8 @@ export default function QuizBankPage() {
   });
   const [showPremiumDialog, setShowPremiumDialog] = useState(false);
   const [selectedQuizId, setSelectedQuizId] = useState<string | null>(null);
+  const [deleteModal, setDeleteModal] = useState(false);
+  const [quizToDelete, setQuizToDelete] = useState<any>(null);
   const unsubscribeRef = useRef<(() => void) | null>(null);
   const router = useRouter();
 
@@ -192,7 +193,6 @@ export default function QuizBankPage() {
         setHasMore(false);
       }
       setUserLoaded(true); // ✅ add this line
-
     });
 
     return () => {
@@ -203,15 +203,14 @@ export default function QuizBankPage() {
     };
   }, []);
 
-useEffect(() => {
-  if (userLoaded && currentUser) {
-    setQuizzes([]);
-    setLastVisible(null);
-    setHasMore(true);
-    fetchQuizzes(); // ✅ only now fetch quizzes
-  }
-}, [filters, currentUser, enrolledCourses, userLoaded]); // ✅ add userLoaded here
-
+  useEffect(() => {
+    if (userLoaded && currentUser) {
+      setQuizzes([]);
+      setLastVisible(null);
+      setHasMore(true);
+      fetchQuizzes(); // ✅ only now fetch quizzes
+    }
+  }, [filters, currentUser, enrolledCourses, userLoaded]); // ✅ add userLoaded here
 
   const filteredQuizzes = quizzes.filter((quiz) => {
     const { course, subject, chapter, accessType, searchTerm, status, date } = filters;
@@ -254,6 +253,25 @@ useEffect(() => {
     if (hasMore && !loading) {
       setLoading(true);
       fetchQuizzes(lastVisible);
+    }
+  };
+
+  const handleDeleteClick = (quiz: any) => {
+    setQuizToDelete(quiz);
+    setDeleteModal(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (quizToDelete?.id) {
+      try {
+        await deleteDoc(doc(db, 'quizzes', quizToDelete.id));
+        setQuizzes(quizzes.filter((q) => q.id !== quizToDelete.id));
+        setFilteredQuizzes(filteredQuizzes.filter((q) => q.id !== quizToDelete.id));
+        setDeleteModal(false);
+      } catch (err) {
+        console.error('Error deleting quiz:', err);
+        alert('Failed to delete quiz.');
+      }
     }
   };
 
@@ -344,6 +362,25 @@ useEffect(() => {
               onClick={() => router.push('/pricing')}
             >
               Subscribe
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={deleteModal} onOpenChange={setDeleteModal}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Confirm Delete</DialogTitle>
+          </DialogHeader>
+          <DialogDescription>
+            Are you sure you want to delete <strong>{quizToDelete?.title}</strong>? This action cannot be undone.
+          </DialogDescription>
+          <DialogFooter className="mt-4">
+            <Button variant="outline" onClick={() => setDeleteModal(false)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={handleDeleteConfirm}>
+              Delete
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -469,15 +506,24 @@ useEffect(() => {
                       )}
 
                       {currentUser?.isAdmin && (
-                        <Button
-                          variant="secondary"
-                          className="w-full h-9 sm:h-10 mt-2 rounded-xl"
-                          asChild
-                        >
-                          <Link href={`/admin/quizzes/create?id=${quiz.id}`}>
-                            <Pencil className="h-4 w-4 mr-2" /> Edit Quiz
-                          </Link>
-                        </Button>
+                        <>
+                          <Button
+                            variant="secondary"
+                            className="w-full h-9 sm:h-10 mt-2 rounded-xl"
+                            asChild
+                          >
+                            <Link href={`/admin/quizzes/create?id=${quiz.id}`}>
+                              <Pencil className="h-4 w-4 mr-2" /> Edit Quiz
+                            </Link>
+                          </Button>
+                          <Button
+                            variant="destructive"
+                            className="w-full h-9 sm:h-10 mt-2 rounded-xl"
+                            onClick={() => handleDeleteClick(quiz)}
+                          >
+                            <Trash2 className="h-4 w-4 mr-2" /> Delete Quiz
+                          </Button>
+                        </>
                       )}
                     </div>
                   </CardContent>

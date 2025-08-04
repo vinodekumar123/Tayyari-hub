@@ -3,14 +3,21 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { auth, db } from '../../firebase';
-import { doc, setDoc, updateDoc, serverTimestamp, getDoc } from 'firebase/firestore';
+import { doc, setDoc, updateDoc, serverTimestamp, getDoc, collection, onSnapshot } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Mail, User, Phone, MapPin } from 'lucide-react';
+import { Mail, User, Phone, MapPin, BookOpen } from 'lucide-react';
 import { toast } from 'sonner';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 export default function OnboardingPage() {
   const router = useRouter();
@@ -24,9 +31,9 @@ export default function OnboardingPage() {
     email: '',
     phone: '',
     district: '',
-  
     course: '',
   });
+  const [courses, setCourses] = useState<{ id: string; name: string }[]>([]);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
@@ -50,14 +57,7 @@ export default function OnboardingPage() {
             return;
           }
 
-          const required = [
-            'fullName',
-            'fatherName',
-            'email',
-            'phone',
-        
-            'course',
-          ];
+          const required = ['fullName', 'fatherName', 'email', 'phone', 'district', 'course'];
           const incomplete = required.some((field) => !data[field]);
 
           if (!incomplete) {
@@ -81,7 +81,19 @@ export default function OnboardingPage() {
       }
     });
 
-    return () => unsubscribe();
+    // Fetch courses from Firestore
+    const unsubscribeCourses = onSnapshot(collection(db, 'courses'), (snapshot) => {
+      const courseData = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        name: doc.data().name as string,
+      }));
+      setCourses(courseData);
+    });
+
+    return () => {
+      unsubscribe();
+      unsubscribeCourses();
+    };
   }, [router]);
 
   const handleChange = (field, value) => {
@@ -215,13 +227,13 @@ export default function OnboardingPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="city">District</Label>
+                  <Label htmlFor="district">District</Label>
                   <div className="relative">
                     <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
                     <Input
-                      id="city"
-                      placeholder="Your city"
-                      value={form.city}
+                      id="district"
+                      placeholder="Your district"
+                      value={form.district}
                       onChange={(e) => handleChange('district', e.target.value)}
                       className="pl-10 h-12 rounded-xl text-sm sm:text-base"
                       required
@@ -245,20 +257,25 @@ export default function OnboardingPage() {
               </>
             ) : (
               <>
-           
-        
                 <div className="space-y-2">
                   <Label htmlFor="course">Course</Label>
-                  <Input
-                    id="course"
-                    placeholder="e.g. Computer Science"
+                  <Select
                     value={form.course}
-                    onChange={(e) => handleChange('course', e.target.value)}
-                    className="h-12 rounded-xl text-sm sm:text-base"
+                    onValueChange={(value) => handleChange('course', value)}
                     required
-                  />
+                  >
+                    <SelectTrigger className="h-12 rounded-xl text-sm sm:text-base">
+                      <SelectValue placeholder="Select a course" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {courses.map((course) => (
+                        <SelectItem key={course.id} value={course.name}>
+                          {course.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
-         
               </>
             )}
 
