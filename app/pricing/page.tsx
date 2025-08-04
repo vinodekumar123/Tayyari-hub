@@ -86,10 +86,10 @@ export default function PricingPage() {
             <p className="font-semibold text-gray-800">📥 To Subscribe:</p>
             <ul className="list-disc pl-5 text-gray-700 mt-2 space-y-1">
               <li>Send <strong>PKR {price}</strong> to the following number:</li>
-              <li><strong>JazzCash & Easypaisa:</strong> 0328 2419375</li>
-              <li><strong>Account Holder:</strong> Naveed</li>
+              <li><strong>JazzCash & Easypaisa:</strong>0328 2419375
+              <li><strong>Account Holder:</strong> Naveed</li> </li>
               <li className="mt-2">📸 Send payment screenshot to the following whatsapp number.</li>
-              <li>📞 For support or confirmation: 0328 2419375</li>
+              <li>📞 For support or confirmation:+923237507673</li>
             </ul>
           </div>
 
