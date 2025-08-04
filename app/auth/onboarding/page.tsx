@@ -172,7 +172,7 @@ export default function OnboardingPage() {
           router.push('/dashboard/student');
         }
       } else {
-        router.push('/premium');
+        router.push('/pricing');
       }
     } catch (err) {
       console.error('Failed to save plan choice:', err);

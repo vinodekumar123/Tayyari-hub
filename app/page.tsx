@@ -7,6 +7,7 @@ import Footer from "@/components/Home/footer";
 import TestimonialSection from "@/components/Home/reviews";
 import PricingSection from "@/components/Home/pricing";
 import WhatsappInviteSection from "@/components/Home/whatsapp";
+import DashboardShowcase from "@/components/Home/screenshot";
 
 const HomePage = () => {
   return (
@@ -15,6 +16,7 @@ const HomePage = () => {
 <Navbar/>   
 
 <CoursesSection/>
+{/* <DashboardShowcase/> */}
 <PricingSection/>
 <WhatsappInviteSection/>
 <TestimonialSection/>
