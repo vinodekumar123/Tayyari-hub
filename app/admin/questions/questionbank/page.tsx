@@ -15,6 +15,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { Label } from 'recharts';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
   Dialog,
@@ -26,26 +27,27 @@ import {
 } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Pencil, Trash, Plus, Loader2, Download } from 'lucide-react';
-import { Label } from 'recharts';
+
+type Question = {
+  id: string;
+  questionText: string;
+  options: string[];
+  correctAnswer: string;
+  course?: string;
+  subject?: string;
+  chapter?: string;
+  difficulty?: string;
+  explanation?: string;
+  topic?: string;
+  year?: string;
+  book?: string;
+  teacher?: string;
+  enableExplanation?: boolean;
+  createdAt?: Date; // Added for sorting
+};
+
 const QuestionBankPage = () => {
   const router = useRouter();
-
-  type Question = {
-    id: string;
-    questionText: string;
-    options: string[];
-    correctAnswer: string;
-    course?: string;
-    subject?: string;
-    chapter?: string;
-    difficulty?: string;
-    explanation?: string;
-    topic?: string;
-    year?: string;
-    book?: string;
-    teacher?: string;
-    enableExplanation?: boolean;
-  };
 
   const [questions, setQuestions] = useState<Question[]>([]);
   const [filtered, setFiltered] = useState<Question[]>([]);
@@ -56,6 +58,7 @@ const QuestionBankPage = () => {
   const [deleteMode, setDeleteMode] = useState<'selected' | 'subject' | 'all'>('selected');
   const [selectedSubject, setSelectedSubject] = useState('');
   const [isDeleting, setIsDeleting] = useState(false);
+  const [sortOrder, setSortOrder] = useState<'latest' | 'oldest'>('latest'); // New state for sorting
 
   useEffect(() => {
     const fetchQuestions = async () => {
@@ -64,6 +67,7 @@ const QuestionBankPage = () => {
         const fetched: Question[] = snapshot.docs.map((doc) => ({
           id: doc.id,
           ...(doc.data() as Omit<Question, 'id'>),
+          createdAt: (doc.data().createdAt?.toDate()) || new Date(), // Convert Firestore timestamp to Date, fallback to current time
         }));
         setQuestions(fetched);
         setFiltered(fetched);
@@ -77,17 +81,26 @@ const QuestionBankPage = () => {
     fetchQuestions();
   }, []);
 
+  useEffect(() => {
+    // Apply sorting when questions or sortOrder changes
+    let sortedQuestions = [...questions];
+    if (sortOrder === 'latest') {
+      sortedQuestions.sort((a, b) => b.createdAt!.getTime() - a.createdAt!.getTime());
+    } else {
+      sortedQuestions.sort((a, b) => a.createdAt!.getTime() - b.createdAt!.getTime());
+    }
+    setFiltered(sortedQuestions.filter(
+      (q) =>
+        q.course?.toLowerCase().includes(search.toLowerCase()) ||
+        q.subject?.toLowerCase().includes(search.toLowerCase()) ||
+        q.chapter?.toLowerCase().includes(search.toLowerCase())
+    ));
+    setSelectedQuestions([]);
+  }, [questions, search, sortOrder]);
+
   const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
     const keyword = e.target.value.toLowerCase();
     setSearch(keyword);
-    const filtered = questions.filter(
-      (q) =>
-        q.course?.toLowerCase().includes(keyword) ||
-        q.subject?.toLowerCase().includes(keyword) ||
-        q.chapter?.toLowerCase().includes(keyword)
-    );
-    setFiltered(filtered);
-    setSelectedQuestions([]);
   };
 
   const handleSelectQuestion = (id: string) => {
@@ -395,14 +408,25 @@ const QuestionBankPage = () => {
         </div>
       </div>
 
-      {/* Search */}
-      <div className="mb-6 max-w-full sm:max-w-xl">
-        <Input
-          placeholder="Search by course, subject, or chapter..."
-          value={search}
-          onChange={handleSearch}
-          className="w-full py-6 px-4 border-gray-300 focus:border-blue-500 focus:ring-blue-500 rounded-md"
-        />
+      {/* Search and Sort */}
+      <div className="mb-6 flex flex-col sm:flex-row gap-4">
+        <div className="max-w-full sm:max-w-xl w-full">
+          <Input
+            placeholder="Search by course, subject, or chapter..."
+            value={search}
+            onChange={handleSearch}
+            className="w-full py-6 px-4 border-gray-300 focus:border-blue-500 focus:ring-blue-500 rounded-md"
+          />
+        </div>
+        <Select value={sortOrder} onValueChange={(val) => setSortOrder(val as 'latest' | 'oldest')}>
+          <SelectTrigger className="w-full sm:w-40">
+            <SelectValue placeholder="Sort by" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="latest">Latest</SelectItem>
+            <SelectItem value="oldest">Oldest</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       {/* Content */}

@@ -27,7 +27,8 @@ import {
   query,
   orderBy,
   limit,
-  startAfter
+  startAfter,
+  deleteDoc
 } from 'firebase/firestore';
 import {
   Tabs,
@@ -38,7 +39,8 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogFooter
+  DialogFooter,
+  DialogDescription
 } from '@/components/ui/dialog';
 import {
   Edit,
@@ -46,7 +48,9 @@ import {
   BookOpen,
   BarChart2,
   MapPin,
-  Search
+  Search,
+  Filter,
+  Trash2
 } from 'lucide-react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { useRouter } from 'next/navigation';
@@ -80,10 +84,13 @@ type Student = {
 
 export default function Enrollment() {
   const [searchTerm, setSearchTerm] = useState('');
+  const [filterType, setFilterType] = useState<string>('all');
+  const [courseFilter, setCourseFilter] = useState<string>('all');
   const [filteredStudents, setFilteredStudents] = useState<Student[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
   const [courses, setCourses] = useState<Course[]>([]);
   const [editModal, setEditModal] = useState(false);
+  const [deleteModal, setDeleteModal] = useState(false);
   const [currentStudent, setCurrentStudent] = useState<Student | null>(null);
   const [editData, setEditData] = useState<Partial<Student>>({});
   const [isSuperadmin, setIsSuperadmin] = useState(false);
@@ -148,12 +155,12 @@ export default function Enrollment() {
 
       if (!append) {
         setStudents(newData);
-        setFilteredStudents(newData);
+        applyFilters(newData);
       } else {
         const uniqueData = newData.filter(newStudent => !students.some(existing => existing.id === newStudent.id));
         if (uniqueData.length > 0) {
           setStudents(prev => [...prev, ...uniqueData]);
-          setFilteredStudents(prev => [...prev, ...uniqueData]);
+          applyFilters([...students, ...uniqueData]);
         }
       }
 
@@ -168,16 +175,41 @@ export default function Enrollment() {
     unsubscribeRef.current = unsubscribe;
   };
 
-  useEffect(() => {
-    const filtered = students.filter(student =>
+  const applyFilters = (studentList: Student[]) => {
+    let filtered = studentList;
+
+    // Apply search term filter
+    filtered = filtered.filter(student =>
       student.fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       student.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
       student.phone.includes(searchTerm) ||
       student.course?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       student.district?.toLowerCase().includes(searchTerm.toLowerCase())
     );
+
+    // Apply user type filter
+    if (filterType !== 'all') {
+      filtered = filtered.filter(student => {
+        if (filterType === 'premium') return student.plan === 'premium';
+        if (filterType === 'free') return student.plan === 'free' || !student.plan;
+        if (filterType === 'admin') return student.admin === true;
+        return true;
+      });
+    }
+
+    // Apply course filter
+    if (courseFilter !== 'all') {
+      filtered = filtered.filter(student => 
+        student.course?.toLowerCase() === courseFilter.toLowerCase()
+      );
+    }
+
     setFilteredStudents(filtered);
-  }, [searchTerm, students]);
+  };
+
+  useEffect(() => {
+    applyFilters(students);
+  }, [searchTerm, filterType, courseFilter, students]);
 
   const handleEditClick = (student: Student) => {
     setCurrentStudent(student);
@@ -186,7 +218,11 @@ export default function Enrollment() {
   };
 
   const handleEditChange = <K extends keyof Student>(key: K, value: Student[K]) => {
-    setEditData((prev) => ({ ...prev, [key]: value }));
+    if (key === 'course' && value === 'none') {
+      setEditData((prev) => ({ ...prev, [key]: '' }));
+    } else {
+      setEditData((prev) => ({ ...prev, [key]: value }));
+    }
   };
 
   const handleEditSave = async () => {
@@ -210,6 +246,25 @@ export default function Enrollment() {
     }
   };
 
+  const handleDeleteClick = (student: Student) => {
+    setCurrentStudent(student);
+    setDeleteModal(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (currentStudent?.id) {
+      try {
+        await deleteDoc(doc(db, 'users', currentStudent.id));
+        setDeleteModal(false);
+        setStudents(students.filter(student => student.id !== currentStudent.id));
+        setFilteredStudents(filteredStudents.filter(student => student.id !== currentStudent.id));
+      } catch (err) {
+        console.error('Error deleting student:', err);
+        alert('Failed to delete student.');
+      }
+    }
+  };
+
   useEffect(() => {
     const handleObserver = (entries: IntersectionObserverEntry[]) => {
       if (entries[0].isIntersecting && hasMore && !loading) {
@@ -227,7 +282,7 @@ export default function Enrollment() {
       if (observer.current) observer.current.disconnect();
       if (fetchTrigger.current) clearTimeout(fetchTrigger.current);
     };
-  }, [hasMore, loading, students]);
+  }, [hasMore, loading]);
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -241,6 +296,34 @@ export default function Enrollment() {
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
+          </div>
+          <div className="flex gap-4 w-full sm:w-auto">
+            <Select value={filterType} onValueChange={setFilterType}>
+              <SelectTrigger className="w-full sm:w-40">
+                <Filter className="h-4 w-4 mr-2" />
+                <SelectValue placeholder="Filter by type" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Users</SelectItem>
+                <SelectItem value="premium">Premium Users</SelectItem>
+                <SelectItem value="free">Free Users</SelectItem>
+                <SelectItem value="admin">Admins</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={courseFilter} onValueChange={setCourseFilter}>
+              <SelectTrigger className="w-full sm:w-40">
+                <BookOpen className="h-4 w-4 mr-2" />
+                <SelectValue placeholder="Filter by course" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Courses</SelectItem>
+                {courses.map(course => (
+                  <SelectItem key={course.id} value={course.name}>
+                    {course.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         </div>
         <Tabs defaultValue="students">
@@ -279,8 +362,8 @@ export default function Enrollment() {
                           </div>
                         </div>
                         <div className="flex flex-col items-end space-y-1 mt-2 sm:mt-0">
-                          <Badge className={`mt-1 ${student.premium ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'}`}>
-                            {student.premium ? 'Active' : 'Inactive'}
+                          <Badge className={`mt-1 ${student.plan === 'premium' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'}`}>
+                            {student.plan === 'premium' ? 'Active' : 'Inactive'}
                           </Badge>
                           {student.admin && (
                             <Badge className="bg-blue-100 text-blue-700">
@@ -298,6 +381,9 @@ export default function Enrollment() {
                         </Button>
                         <Button variant="outline" size="sm" onClick={() => router.push(`/admin/students/foradmin?studentId=${student.id}`)}>
                           <BarChart2 className="h-4 w-4 mr-1" /> Check Results
+                        </Button>
+                        <Button variant="destructive" size="sm" onClick={() => handleDeleteClick(student)}>
+                          <Trash2 className="h-4 w-4 mr-1" /> Delete
                         </Button>
                       </div>
                     </CardContent>
@@ -321,7 +407,7 @@ export default function Enrollment() {
           {currentStudent && (
             <div className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {['fullName', 'email', 'phone', 'course', 'fatherName', 'district',].map((field) => (
+                {['fullName', 'email', 'phone', 'fatherName', 'district'].map((field) => (
                   <div key={field} className="space-y-1">
                     <Label htmlFor={field} className="text-sm font-medium text-gray-700">
                       {field.charAt(0).toUpperCase() + field.slice(1).replace(/([A-Z])/g, ' $1').trim()}
@@ -334,13 +420,34 @@ export default function Enrollment() {
                     />
                   </div>
                 ))}
+                <div className="space-y-1">
+                  <Label htmlFor="course" className="text-sm font-medium text-gray-700">
+                    Course
+                  </Label>
+                  <Select
+                    value={editData.course ?? 'none'}
+                    onValueChange={(value) => handleEditChange('course', value)}
+                  >
+                    <SelectTrigger id="course">
+                      <SelectValue placeholder="Select course" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">None</SelectItem>
+                      {courses.map(course => (
+                        <SelectItem key={course.id} value={course.name}>
+                          {course.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
               <div className="space-y-1">
                 <Label htmlFor="plan" className="text-sm font-medium text-gray-700">
                   Plan
                 </Label>
                 <Select
-                  value={editData.plan ?? 'Free'}
+                  value={editData.plan ?? 'free'}
                   onValueChange={(value) => handleEditChange('plan', value)}
                 >
                   <SelectTrigger id="plan">
@@ -370,6 +477,25 @@ export default function Enrollment() {
           )}
           <DialogFooter className="mt-4">
             <Button onClick={handleEditSave}>Save Changes</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={deleteModal} onOpenChange={setDeleteModal}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Confirm Delete</DialogTitle>
+          </DialogHeader>
+          <DialogDescription>
+            Are you sure you want to delete <strong>{currentStudent?.fullName}</strong>? This action cannot be undone.
+          </DialogDescription>
+          <DialogFooter className="mt-4">
+            <Button variant="outline" onClick={() => setDeleteModal(false)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={handleDeleteConfirm}>
+              Delete
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
