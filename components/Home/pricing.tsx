@@ -63,10 +63,7 @@ const PricingSection = () => {
                 <FaCheckCircle className="text-white" />
                 Unlimited quizzes
               </li>
-              <li className="flex items-center gap-2">
-                <FaCheckCircle className="text-white" />
-                All subjects included
-              </li>
+            
               <li className="flex items-center gap-2">
                 <FaCheckCircle className="text-white" />
                 Create custom quizzes
@@ -77,7 +74,7 @@ const PricingSection = () => {
               </li>
             </ul>
 
-            <div className="text-3xl font-bold mb-4">PKR 2000</div>
+            <div className="text-3xl font-bold mb-4">PKR 1500</div>
 
             <Link
               href="/pricing"

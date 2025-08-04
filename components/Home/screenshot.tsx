@@ -6,13 +6,10 @@ import { motion } from 'framer-motion';
 export default function DashboardShowcase() {
   const screenshots = [
     {
-      src: '/screenshots/dashboard-overview.png',
+      src: '/admin/images/scd/png',
       alt: 'Student dashboard overview',
     },
-    {
-      src: '/screenshots/dashboard-quiz.png',
-      alt: 'Live quiz interface',
-    },
+  
   ];
 
   return (
