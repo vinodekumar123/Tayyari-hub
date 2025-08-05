@@ -153,34 +153,36 @@ export default function OnboardingPage() {
       setLoading(false);
     }
   };
+const handlePlanChoice = async (choice: 'free' | 'premium') => {
+  if (!userId) return;
 
-  const handlePlanChoice = async (choice: 'free' | 'premium') => {
-    if (!userId) return;
-    setLoading(true);
-    try {
+  setLoading(true);
+  try {
+    if (choice === 'free') {
+      // Update Firestore only if the user chooses the free plan
       await updateDoc(doc(db, 'users', userId), {
-        plan: choice,
+        plan: 'free',
       });
 
       const userSnap = await getDoc(doc(db, 'users', userId));
       const data = userSnap.exists() ? userSnap.data() : {};
 
-      if (choice === 'free') {
-        if (data.admin) {
-          router.push('/dashboard/admin');
-        } else {
-          router.push('/dashboard/student');
-        }
+      if (data.admin) {
+        router.push('/dashboard/admin');
       } else {
-        router.push('/pricing');
+        router.push('/dashboard/student');
       }
-    } catch (err) {
-      console.error('Failed to save plan choice:', err);
-      toast.error('Could not save your plan choice. Please try again.');
-    } finally {
-      setLoading(false);
+    } else {
+      // If premium is selected, just navigate without changing plan in Firestore
+      router.push('/pricing');
     }
-  };
+  } catch (err) {
+    console.error('Failed to save plan choice:', err);
+    toast.error('Could not process your request. Please try again.');
+  } finally {
+    setLoading(false);
+  }
+};
 
   if (loading) {
     return (
@@ -352,7 +354,7 @@ export default function OnboardingPage() {
                     Processing...
                   </div>
                 ) : (
-                  'Go Premium – 1000 PKR'
+                  'Go Premium – 1500 PKR'
                 )}
               </Button>
             </div>
