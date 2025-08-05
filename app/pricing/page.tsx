@@ -9,6 +9,7 @@ import { CheckCircle, ArrowRightCircle } from 'lucide-react';
 import { auth, db } from "@/app/firebase";
 import { doc, updateDoc } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
+import Link from 'next/link';
 
 export default function PricingPage() {
   const [price] = useState(1500);
@@ -96,13 +97,8 @@ export default function PricingPage() {
         
 
           <div className="mt-6">
-            <Button
-              onClick={handleUpgrade}
-              className="w-full bg-green-600 hover:bg-green-700 text-white h-12 text-lg font-semibold rounded-xl"
-            >
-              <ArrowRightCircle className="w-5 h-5 mr-2" />
-              Submit & Upgrade
-            </Button>
+           <Link href="/dashboard/student" className="text-primary hover:underline font-medium">
+Dashboard              </Link>
             {status && <p className="text-sm mt-4 text-center text-blue-600">{status}</p>}
           </div>
         </CardContent>
