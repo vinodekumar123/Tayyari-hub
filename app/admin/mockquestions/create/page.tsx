@@ -365,26 +365,33 @@ export default function CreateQuestion() {
     });
   };
 
-  const handleSave = async () => {
-    if (!validateForm()) return;
-    setIsSaving(true);
+const handleSave = async () => {
+  if (!validateForm()) return;
+  setIsSaving(true);
 
-    try {
-      if (id) {
-        await updateDoc(doc(db, 'mock-questions', id), questionData);
-      } else {
-        await addDoc(collection(db, 'mock-questions'), {
-          ...questionData,
-          createdAt: new Date(),
-        });
-      }
-      router.push('/admin/mockquestions/questionbank');
-    } catch (err) {
-      console.error('Failed to save question:', err);
-    } finally {
-      setIsSaving(false);
+  try {
+    if (id) {
+      await updateDoc(doc(db, 'mock-questions', id), questionData);
+    } else {
+      await addDoc(collection(db, 'mock-questions'), {
+        ...questionData,
+        createdAt: new Date(),
+      });
+
+      // Reset form fields after adding a new question
+      setQuestionData({
+        question: '',
+        options: ['', '', '', ''],
+        correctAnswer: '',
+        explanation: '',
+      });
     }
-  };
+  } catch (err) {
+    console.error('Failed to save question:', err);
+  } finally {
+    setIsSaving(false);
+  }
+};
 
   const selectedCourse = firestoreCourses.find(c => c.name === questionData.course);
   const availableSubjects = firestoreSubjects

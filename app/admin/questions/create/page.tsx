@@ -361,27 +361,39 @@ export default function CreateQuestion() {
       },
     });
   };
+const handleSave = async () => {
+  if (!validateForm()) return;
+  setIsSaving(true);
 
-  const handleSave = async () => {
-    if (!validateForm()) return;
-    setIsSaving(true);
-
-    try {
-      if (id) {
-        await updateDoc(doc(db, "questions", id), questionData);
-      } else {
-        await addDoc(collection(db, "questions"), {
-          ...questionData,
-          createdAt: new Date()
-        });
-      }
+  try {
+    if (id) {
+      // Update existing question
+      await updateDoc(doc(db, "questions", id), questionData);
       router.push("/admin/questions/questionbank");
-    } catch (err) {
-      setErrors({ save: 'Failed to save question' });
-    } finally {
-      setIsSaving(false);
+    } else {
+      // Add new question
+      await addDoc(collection(db, "questions"), {
+        ...questionData,
+        createdAt: new Date()
+      });
+      // Reset form fields
+      setQuestionData({
+        question: '',
+        options: ['', '', '', ''],
+        correctOption: '',
+        explanation: '',
+        subject: '',
+        topic: '',
+        difficulty: '',
+      });
     }
-  };
+  } catch (err) {
+    setErrors({ save: 'Failed to save question' });
+  } finally {
+    setIsSaving(false);
+  }
+};
+
 
   const selectedCourse = firestoreCourses.find(c => c.name === questionData.course);
   const availableSubjects = selectedCourse?.subjectIds
