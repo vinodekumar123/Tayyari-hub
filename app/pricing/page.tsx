@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { CheckCircle, ArrowRightCircle } from 'lucide-react';
+import { CheckCircle, ArrowRightCircle, ChevronLeft } from 'lucide-react';
 import { auth, db } from "@/app/firebase";
 import { doc, updateDoc } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
@@ -69,6 +69,15 @@ export default function PricingPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 p-6">
       <Card className="w-full max-w-xl p-6 shadow-xl rounded-2xl">
+        
+         <div className="mt-6">
+  <Link href="/" className="text-primary hover:underline font-medium inline-flex items-center gap-1">
+    <ChevronLeft size={18} />
+    Back
+  </Link>
+  {status && <p className="text-sm mt-4 text-center text-blue-600">{status}</p>}
+</div>
+
         <CardContent>
           <h1 className="text-3xl font-bold mb-4 text-center">🎓 Upgrade to Premium</h1>
           <p className="text-center text-gray-600 mb-6">Unlock unlimited quizzes and premium content.</p>
@@ -96,11 +105,6 @@ export default function PricingPage() {
 
         
 
-          <div className="mt-6">
-           <Link href="/dashboard/student" className="text-primary hover:underline font-medium">
-Dashboard              </Link>
-            {status && <p className="text-sm mt-4 text-center text-blue-600">{status}</p>}
-          </div>
         </CardContent>
       </Card>
     </div>

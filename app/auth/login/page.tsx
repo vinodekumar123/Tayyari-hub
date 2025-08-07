@@ -28,7 +28,8 @@ import {
   EyeOff,
   Mail,
   Lock,
-  ArrowRight
+  ArrowRight,
+  ChevronLeft
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -135,8 +136,15 @@ export default function LoginPage() {
     <div className="min-h-screen bg-white flex items-center justify-center p-4 relative overflow-hidden">
       <div className="absolute top-20 left-20 w-72 h-72 bg-blue-300 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-pulse" />
       <div className="absolute bottom-20 right-20 w-72 h-72 bg-blue-200 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-pulse delay-1000" />
+ 
 
       <div className="w-full max-w-md relative z-10">
+             <div className="mt-6">
+  <Link href="/" className="text-primary hover:underline font-medium inline-flex items-center gap-1">
+    <ChevronLeft size={18} />
+    Back
+  </Link>
+</div>
         <div className="text-center mb-8">
           <Link href="/" className="inline-flex items-center space-x-3 mb-6 group">
             <Image
