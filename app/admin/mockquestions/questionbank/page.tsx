@@ -15,6 +15,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { Label } from 'recharts';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
   Dialog,
@@ -25,28 +26,27 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Pencil, Trash, Plus, Loader2, Download, Import } from 'lucide-react';
-import { Label } from 'recharts';
+import { Pencil, Trash, Plus, Loader2, Download } from 'lucide-react';
+
+type Question = {
+  id: string;
+  questionText: string;
+  options: string[];
+  correctAnswer: string;
+  course?: string;
+  subject?: string;
+  chapter?: string;
+  difficulty?: string;
+  explanation?: string;
+  topic?: string;
+  year?: string;
+  book?: string;
+  teacher?: string;
+  enableExplanation?: boolean;
+};
+
 const QuestionBankPage = () => {
   const router = useRouter();
-
-  type Question = {
-    id: string;
-    questionText: string;
-    options: string[];
-    correctAnswer: string;
-    course?: string;
-    subject?: string;
-    chapter?: string;
-    difficulty?: string;
-    explanation?: string;
-    topic?: string;
-    year?: string;
-    book?: string;
-    teacher?: string;
-    enableExplanation?: boolean;
-  };
-
   const [questions, setQuestions] = useState<Question[]>([]);
   const [filtered, setFiltered] = useState<Question[]>([]);
   const [search, setSearch] = useState('');
@@ -84,7 +84,8 @@ const QuestionBankPage = () => {
       (q) =>
         q.course?.toLowerCase().includes(keyword) ||
         q.subject?.toLowerCase().includes(keyword) ||
-        q.chapter?.toLowerCase().includes(keyword)
+        q.chapter?.toLowerCase().includes(keyword) ||
+        q.questionText?.toLowerCase().includes(keyword)
     );
     setFiltered(filtered);
     setSelectedQuestions([]);
@@ -396,13 +397,22 @@ const QuestionBankPage = () => {
       </div>
 
       {/* Search */}
-      <div className="mb-6 max-w-full sm:max-w-xl">
+      <div className="mb-6 flex max-w-full sm:max-w-xl gap-2">
         <Input
-          placeholder="Search by course, subject, or chapter..."
+          placeholder="Search by course, subject, chapter, or question..."
           value={search}
           onChange={handleSearch}
           className="w-full py-6 px-4 border-gray-300 focus:border-blue-500 focus:ring-blue-500 rounded-md"
         />
+        {search && (
+          <Button
+            variant="outline"
+            onClick={() => setSearch('')}
+            className="border-gray-300 hover:bg-gray-100 text-gray-700"
+          >
+            Clear
+          </Button>
+        )}
       </div>
 
       {/* Content */}
