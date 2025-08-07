@@ -1,15 +1,12 @@
 'use client';
 
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import {
   collection,
   getDocs,
   doc,
   getDoc,
-  query,
-  limit,
-  startAfter
 } from 'firebase/firestore';
 import { db } from '@/app/firebase';
 import { Card, CardContent } from '@/components/ui/card';
@@ -30,6 +27,7 @@ import { Download } from 'lucide-react';
 interface Question {
   id: string;
   subject?: string;
+  correctAnswer?: string;
 }
 
 interface QuizData {
@@ -55,22 +53,17 @@ export default function QuizStudentScores() {
   const [quizTitle, setQuizTitle] = useState('');
   const [subjects, setSubjects] = useState<string[]>([]);
   const [chapters, setChapters] = useState('');
-  const [hasMore, setHasMore] = useState(true);
-  const [lastVisible, setLastVisible] = useState<any>(null);
-  const [initialLoading, setInitialLoading] = useState(true);
-  const fetchedUserIdsRef = useRef<Set<string>>(new Set());
   const [showSubjects, setShowSubjects] = useState(true);
   const [showChapters, setShowChapters] = useState(true);
   const [sortByScore, setSortByScore] = useState<'desc' | 'asc'>('desc');
   const [districtFilter, setDistrictFilter] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [quizQuestions, setQuizQuestions] = useState<Question[]>([]);
+  const pdfRef = useRef<HTMLDivElement>(null);
 
   const params = useSearchParams();
   const router = useRouter();
   const quizId = params.get('id');
-  const loaderRef = useRef<HTMLDivElement | null>(null);
-  const pdfRef = useRef<HTMLDivElement>(null);
 
   const platformName = "Tayyari Hub";
   const currentDate = new Date().toLocaleDateString('en-US', {
@@ -99,45 +92,36 @@ export default function QuizStudentScores() {
 
   const fetchScores = async () => {
     if (!quizId) return;
-    const usersQuery = query(collection(db, 'users'), limit(10), ...(lastVisible ? [startAfter(lastVisible)] : []));
-    const usersSnap = await getDocs(usersQuery);
-    const scoreList: Score[] = [];
-    const newFetchedIds = new Set<string>();
+    setLoading(true);
+    try {
+      const usersSnap = await getDocs(collection(db, 'users'));
+      const scorePromises = usersSnap.docs.map(async (userDoc) => {
+        const userId = userDoc.id;
+        const resultRef = doc(db, 'users', userId, 'quizAttempts', quizId, 'results', quizId);
+        const resultSnap = await getDoc(resultRef);
+        if (resultSnap.exists()) {
+          const userData = userDoc.data();
+          const resultData = resultSnap.data();
+          return {
+            id: userId,
+            name: userData.fullName || 'Unknown',
+            fatherName: userData.fatherName || '-',
+            district: userData.district || '-',
+            score: resultData.score || 0,
+            total: resultData.total || 0,
+            answers: resultData.answers || {},
+          };
+        }
+        return null;
+      });
 
-    const lastDoc = usersSnap.docs[usersSnap.docs.length - 1];
-    if (!lastDoc) setHasMore(false);
-    else setLastVisible(lastDoc);
-
-    for (const userDoc of usersSnap.docs) {
-      const userId = userDoc.id;
-      if (fetchedUserIdsRef.current.has(userId) || newFetchedIds.has(userId)) continue;
-
-      const resultRef = doc(db, 'users', userId, 'quizAttempts', quizId, 'results', quizId);
-      const resultSnap = await getDoc(resultRef);
-      if (resultSnap.exists()) {
-        const userData = userDoc.data();
-        const resultData = resultSnap.data();
-        newFetchedIds.add(userId);
-        scoreList.push({
-          id: userId,
-          name: userData.fullName || 'Unknown',
-          fatherName: userData.fatherName || '-',
-          district: userData.district || '-',
-          score: resultData.score || 0,
-          total: resultData.total || 0,
-          answers: resultData.answers || {},
-        });
-      }
+      const scoreList = (await Promise.all(scorePromises)).filter((score): score is Score => score !== null);
+      setScores(scoreList.sort((a, b) => sortByScore === 'desc' ? b.score - a.score : a.score - b.score));
+    } catch (error) {
+      console.error('Error fetching scores:', error);
+    } finally {
+      setLoading(false);
     }
-
-    newFetchedIds.forEach(id => fetchedUserIdsRef.current.add(id));
-    setScores(prev => {
-      const merged = [...prev, ...scoreList.filter(s => !prev.find(p => p.id === s.id))];
-      return merged.sort((a, b) => sortByScore === 'desc' ? b.score - a.score : a.score - b.score);
-    });
-
-    setLoading(false);
-    setInitialLoading(false);
   };
 
   const calculateSubjectScores = (score: Score) => {
@@ -145,7 +129,7 @@ export default function QuizStudentScores() {
     subjects.forEach(subj => subjectScores[subj] = 0);
 
     quizQuestions.forEach(q => {
-      if (q.subject && score.answers[q.id] === q.correctAnswer) {
+      if (q.subject && q.correctAnswer && score.answers[q.id] === q.correctAnswer) {
         subjectScores[q.subject] = (subjectScores[q.subject] || 0) + 1;
       }
     });
@@ -156,23 +140,6 @@ export default function QuizStudentScores() {
 
     return { subjectScores, totalCorrect, totalWrong, totalQuestions };
   };
-
-  const handleObserver = useCallback((entries: any[]) => {
-    const target = entries[0];
-    if (target.isIntersecting && hasMore && !loading) {
-      setLoading(true);
-      fetchScores();
-    }
-  }, [hasMore, loading]);
-
-  useEffect(() => {
-    if (loaderRef.current) {
-      const option = { root: null, rootMargin: '20px', threshold: 1.0 };
-      const observer = new IntersectionObserver(handleObserver, option);
-      observer.observe(loaderRef.current);
-      return () => observer.disconnect();
-    }
-  }, [handleObserver]);
 
   useEffect(() => {
     fetchMetadata();
@@ -194,10 +161,11 @@ export default function QuizStudentScores() {
   };
 
   const exportToCSV = () => {
-    const headers = ['Name', "Father's Name", 'District', ...subjects.map(s => `${s} Correct`), 'Total Correct', 'Total Wrong', 'Total Questions'];
-    const rows = filtered.map(s => {
+    const headers = ['S.No', 'Name', "Father's Name", 'District', ...subjects.map(s => `${s} Correct`), 'Total Correct', 'Total Wrong', 'Total Questions'];
+    const rows = filtered.map((s, index) => {
       const { subjectScores, totalCorrect, totalWrong, totalQuestions } = calculateSubjectScores(s);
       return [
+        index + 1,
         s.name,
         s.fatherName,
         s.district,
@@ -287,7 +255,7 @@ export default function QuizStudentScores() {
           placeholder="Filter by district..."
           value={districtFilter}
           onChange={e => setDistrictFilter(e.target.value)}
-          className="border-gray-300 focus:border-blue-500"
+          className="border-gray-300296focus:border-blue-500"
         />
       </div>
 
@@ -308,7 +276,7 @@ export default function QuizStudentScores() {
           </p>
         )}
 
-        {initialLoading ? (
+        {loading ? (
           <div className="space-y-4">
             {[...Array(5)].map((_, i) => (
               <Card key={i} className="p-4">
@@ -324,6 +292,7 @@ export default function QuizStudentScores() {
             <table className="w-full mt-6 text-sm border-collapse">
               <thead className="bg-blue-50">
                 <tr>
+                  <th className="border border-gray-200 p-3 text-left font-semibold text-blue-900">S.No</th>
                   <th className="border border-gray-200 p-3 text-left font-semibold text-blue-900">Name</th>
                   <th className="border border-gray-200 p-3 text-left font-semibold text-blue-900">Father's Name</th>
                   <th className="border border-gray-200 p-3 text-left font-semibold text-blue-900">District</th>
@@ -338,10 +307,11 @@ export default function QuizStudentScores() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map(s => {
+                {filtered.map((s, index) => {
                   const { subjectScores, totalCorrect, totalWrong, totalQuestions } = calculateSubjectScores(s);
                   return (
                     <tr key={s.id} className="hover:bg-blue-50">
+                      <td className="border border-gray-200 p-3">{index + 1}</td>
                       <td className="border border-gray-200 p-3">{s.name}</td>
                       <td className="border border-gray-200 p-3">{s.fatherName}</td>
                       <td className="border border-gray-200 p-3">{s.district}</td>
@@ -362,8 +332,7 @@ export default function QuizStudentScores() {
         )}
       </div>
 
-      <div ref={loaderRef} className="h-10 mt-4" />
-      {loading && !initialLoading && <p className="text-center text-gray-500 mt-2">Loading more...</p>}
+      {loading && <p className="text-center text-gray-500 mt-2">Loading...</p>}
     </div>
   );
 }
