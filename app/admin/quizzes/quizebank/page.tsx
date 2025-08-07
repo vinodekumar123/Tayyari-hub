@@ -44,7 +44,7 @@ import { ArrowRight, BookOpen, Calendar, Clock, Play, Pencil, Eye, Trash2 } from
 import Link from 'next/link';
 
 function getQuizStatus(startDate: string, endDate: string, startTime?: string, endTime?: string) {
-  const now = new Date('2025-08-04T01:25:00+05:00');
+const now = new Date(); // ✅ Use system time
   const start = new Date(`${startDate}T${startTime || '00:00'}`);
   const end = new Date(`${endDate}T${endTime || '23:59'}`);
   console.log(`Now: ${now}, Start: ${start}, End: ${end}`);

@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { Mail, Lock, BookOpen, Sparkles, ArrowRight } from "lucide-react";
+import { Mail, Lock, BookOpen, Sparkles, ArrowRight, ChevronLeft } from "lucide-react";
 import logo from "../../assets/logo.png";
 import Image from "next/image";
 
@@ -73,6 +73,12 @@ export default function RegisterPage() {
       <div className="absolute bottom-20 right-20 w-72 h-72 bg-blue-200 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-pulse delay-1000" />
       
       <div className="w-full max-w-md relative z-10">
+             <div className="mt-6">
+  <Link href="/" className="text-primary hover:underline font-medium inline-flex items-center gap-1">
+    <ChevronLeft size={18} />
+    Back
+  </Link>
+</div>
         <div className="text-center mb-8">
           <Link href="/" className="inline-flex items-center space-x-3 mb-6 group">
               <Image
