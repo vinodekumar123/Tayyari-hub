@@ -112,41 +112,57 @@ export default function TeacherProfilePage() {
       setSaving(false);
     }
   };
-const handleCourseSelect = async (courseName: string) => {
-  const selectedCourse = allCourses.find(c => c.name === courseName);
-  if (!selectedCourse) return;
 
-  // Filter subject objects that match course.subjectIds
-  const courseSubjects = allSubjects.filter(sub =>
-    selectedCourse.subjectIds.includes(sub.id)
-  );
+  const handleCourseSelect = async (courseName: string) => {
+    const selected = allCourses.find(c => c.name === courseName);
+    if (!selected) return;
 
-  setAvailableSubjects(courseSubjects);
-  setAvailableChapters([]); // Reset chapters
+    handleInputChange('course', courseName);
+    handleInputChange('courseId', selected.id);
+    handleInputChange('subject', '');
+    handleInputChange('subjectId', '');
+    handleInputChange('chapter', '');
+    handleInputChange('chapterId', '');
+    setAvailableChapters([]);
+    setAvailableSubjects([]);
 
-  handleInputChange('course', selectedCourse.name);
-  handleInputChange('courseId', selectedCourse.id);
-  handleInputChange('subject', '');
-  handleInputChange('subjectId', '');
-  handleInputChange('chapter', '');
-  handleInputChange('chapterId', '');
-};
+    const subjectNames: string[] = [];
+    for (const subjectId of selected.subjectIds || []) {
+      const subjectRef = doc(db, 'subjects', subjectId);
+      const subjectSnap = await getDoc(subjectRef);
+      if (subjectSnap.exists()) {
+        const subjectData = subjectSnap.data();
+        subjectNames.push(subjectData.name);
+      }
+    }
 
-const handleSubjectSelect = async (subjectName: string) => {
-  const selectedSubject = availableSubjects.find(s => s.name === subjectName);
-  if (!selectedSubject) return;
+    setAvailableSubjects(subjectNames);
+  };
 
-  const chapterNames = Object.keys(selectedSubject.chapters || {});
-  setAvailableChapters(chapterNames);
+  const handleSubjectSelect = async (subjectName: string) => {
+    handleInputChange('subject', subjectName);
+    handleInputChange('subjectId', '');
+    handleInputChange('chapter', '');
+    handleInputChange('chapterId', '');
+    setAvailableChapters([]);
 
-  handleInputChange('subject', selectedSubject.name);
-  handleInputChange('subjectId', selectedSubject.id);
-  handleInputChange('chapter', '');
-  handleInputChange('chapterId', '');
-};
+    const selectedCourse = allCourses.find(c => c.name === form.metadata?.course);
+    if (!selectedCourse || !selectedCourse.subjectIds) return;
 
-
-
+    for (const subjectId of selectedCourse.subjectIds) {
+      const subjectRef = doc(db, 'subjects', subjectId);
+      const subjectSnap = await getDoc(subjectRef);
+      if (subjectSnap.exists()) {
+        const subjectData = subjectSnap.data();
+        if (subjectData.name === subjectName) {
+          const chapters = subjectData.chapters || {};
+          setAvailableChapters(Object.keys(chapters));
+          handleInputChange('subjectId', subjectId);
+          break;
+        }
+      }
+    }
+  };
 
   const handleChapterSelect = (chapterName: string) => {
     handleInputChange('chapter', chapterName);
@@ -199,22 +215,20 @@ const handleSubjectSelect = async (subjectName: string) => {
               options={allCourses.map((c) => c.name)}
               onChange={handleCourseSelect}
             />
-         <RadixDropdown
-  label="Subject"
-  value={form.metadata?.subject || ''}
-  options={availableSubjects.map(s => s.name)}
-  onChange={handleSubjectSelect}
-  disabled={!form.metadata?.course}
-/>
-
-<RadixDropdown
-  label="Chapter"
-  value={form.metadata?.chapter || ''}
-  options={availableChapters}
-  onChange={handleChapterSelect}
-  disabled={!form.metadata?.subject}
-/>
-
+            <RadixDropdown
+              label="Subject"
+              value={form.metadata?.subject || ''}
+              options={availableSubjects}
+              onChange={handleSubjectSelect}
+              disabled={!form.metadata?.course}
+            />
+            <RadixDropdown
+              label="Chapter"
+              value={form.metadata?.chapter || ''}
+              options={availableChapters}
+              onChange={handleChapterSelect}
+              disabled={!form.metadata?.subject}
+            />
             <RadixDropdown
               label="Difficulty"
               value={form.metadata?.difficulty || ''}
