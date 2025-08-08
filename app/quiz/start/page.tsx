@@ -512,10 +512,13 @@ const StartQuizPage: React.FC = () => {
                 </h2>
                 {questions.map((q, idx) => (
                   <div key={q.id} className="space-y-4">
-                    <p className="text-lg font-medium">
-                      <span className="font-semibold">Q{startIdx + idx + 1}. </span>
-                      {stripHtml(q.questionText)}
-                    </p>
+                  <div className="text-lg font-medium prose max-w-none">
+  <span className="font-semibold">Q{startIdx + idx + 1}. </span>
+  <span
+    dangerouslySetInnerHTML={{ __html: q.questionText }}
+  />
+</div>
+
                     <div className="grid gap-3">
                       {q.options.map((opt, i) => (
                         <label
@@ -535,7 +538,10 @@ const StartQuizPage: React.FC = () => {
                             className="h-5 w-5 text-blue-600 mr-3"
                           />
                           <span className="font-semibold mr-2">{String.fromCharCode(65 + i)}.</span>
-                          {opt}
+<span
+  className="prose max-w-none"
+  dangerouslySetInnerHTML={{ __html: opt }}
+/>
                         </label>
                       ))}
                     </div>

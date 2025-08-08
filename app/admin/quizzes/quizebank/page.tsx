@@ -44,14 +44,39 @@ import { ArrowRight, BookOpen, Calendar, Clock, Play, Pencil, Eye, Trash2 } from
 import Link from 'next/link';
 
 function getQuizStatus(startDate: string, endDate: string, startTime?: string, endTime?: string) {
-const now = new Date(); // ✅ Use system time
-  const start = new Date(`${startDate}T${startTime || '00:00'}`);
-  const end = new Date(`${endDate}T${endTime || '23:59'}`);
-  console.log(`Now: ${now}, Start: ${start}, End: ${end}`);
+  const now = new Date();
+
+  // Parse start time (or default to full-day start)
+  let start: Date;
+  if (startTime && /^\d{2}:\d{2}$/.test(startTime)) {
+    const [y, m, d] = startDate.split('-').map(Number);
+    const [h, min] = startTime.split(':').map(Number);
+    start = new Date(y, m - 1, d, h, min);
+  } else {
+    start = new Date(startDate);
+    start.setHours(0, 0, 0, 0);
+  }
+
+  // Parse end time (or default to full-day end)
+  let end: Date;
+  if (endTime && /^\d{2}:\d{2}$/.test(endTime)) {
+    const [y, m, d] = endDate.split('-').map(Number);
+    const [h, min] = endTime.split(':').map(Number);
+    end = new Date(y, m - 1, d, h, min);
+  } else {
+    end = new Date(endDate);
+    end.setHours(23, 59, 59, 999);
+  }
+
+  console.log("🕐 Now:", now.toString());
+  console.log("🚀 Start:", start.toString());
+  console.log("🛑 End:", end.toString());
+
   if (now < start) return 'upcoming';
   if (now >= start && now <= end) return 'active';
   return 'ended';
 }
+
 
 export default function QuizBankPage() {
   const [quizzes, setQuizzes] = useState<any[]>([]);
@@ -81,14 +106,18 @@ export default function QuizBankPage() {
 const fetchQuizzes = async (startAfterDoc: any = null) => {
   if (!currentUser) return;
 
+  setLoading(true); // ✅ Add this here
+
   const isAdmin = currentUser.isAdmin;
-  let courseNames: string[] = enrolledCourses;
+  const courseNames: string[] = enrolledCourses;
 
-  const constraints = [orderBy('createdAt', 'desc'), limit(2)];
+  const constraints = [orderBy('createdAt', 'desc'), limit(10)];
 
-  if (!isAdmin && courseNames.length > 0) {
+  if (!isAdmin) {
     constraints.push(where('published', '==', true));
-    constraints.push(where('course.name', 'in', courseNames)); // ✅ key fix
+    if (courseNames.length > 0) {
+      constraints.push(where('course.name', 'in', courseNames));
+    }
   }
 
   if (startAfterDoc) {
@@ -104,7 +133,6 @@ const fetchQuizzes = async (startAfterDoc: any = null) => {
   const unsubscribe = onSnapshot(q, (snapshot) => {
     const data = snapshot.docs.map((doc) => {
       const quizData = doc.data();
-
       const course = quizData.course?.name || '';
       const subject = Array.isArray(quizData.subjects)
         ? quizData.subjects.map((s: any) => s.name || s).join(', ')
@@ -124,11 +152,12 @@ const fetchQuizzes = async (startAfterDoc: any = null) => {
     setQuizzes((prev) => (startAfterDoc ? [...prev, ...data] : data));
     setLastVisible(snapshot.docs[snapshot.docs.length - 1]);
     setHasMore(snapshot.docs.length === 2);
-    setLoading(false);
+    setLoading(false); // ✅ Already here – good
   });
 
   unsubscribeRef.current = unsubscribe;
 };
+
 
   useEffect(() => {
     const auth = getAuth();
@@ -148,7 +177,7 @@ const fetchQuizzes = async (startAfterDoc: any = null) => {
         }
 
         setCurrentUser({ ...user, isAdmin, plan: userPlan });
-        fetchQuizzes();
+        // fetchQuizzes();
 
         const attemptsSnapshot = await getDocs(
           collection(db, 'users', user.uid, 'quizAttempts')
@@ -177,14 +206,13 @@ const fetchQuizzes = async (startAfterDoc: any = null) => {
     };
   }, []);
 
-  useEffect(() => {
-    if (userLoaded && currentUser) {
-      setQuizzes([]);
-      setLastVisible(null);
-      setHasMore(true);
-      fetchQuizzes();
-    }
-  }, [filters, currentUser, enrolledCourses, userLoaded]);
+useEffect(() => {
+  if (userLoaded && currentUser) {
+    setLastVisible(null);
+    setHasMore(true);
+    fetchQuizzes();
+  }
+}, [filters, currentUser, enrolledCourses, userLoaded]);
 
   const filteredQuizzes = quizzes.filter((quiz) => {
     const { course, subject, chapter, accessType, searchTerm, status, date } = filters;
@@ -240,7 +268,6 @@ const fetchQuizzes = async (startAfterDoc: any = null) => {
       try {
         await deleteDoc(doc(db, 'quizzes', quizToDelete.id));
         setQuizzes(quizzes.filter((q) => q.id !== quizToDelete.id));
-        setFilteredQuizzes(filteredQuizzes.filter((q) => q.id !== quizToDelete.id));
         setDeleteModal(false);
       } catch (err) {
         console.error('Error deleting quiz:', err);

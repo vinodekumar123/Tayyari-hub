@@ -2,7 +2,13 @@
 
 import { useState, useEffect } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
-import { collection, doc, getDoc, getDocs, updateDoc } from 'firebase/firestore';
+import {
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  updateDoc,
+} from 'firebase/firestore';
 import { db, auth } from '../../firebase';
 
 import * as RadixSelect from '@radix-ui/react-select';
@@ -33,6 +39,7 @@ export default function TeacherProfilePage() {
   });
 
   const [allCourses, setAllCourses] = useState<any[]>([]);
+  const [allSubjects, setAllSubjects] = useState<any[]>([]);
   const [availableSubjects, setAvailableSubjects] = useState<string[]>([]);
   const [availableChapters, setAvailableChapters] = useState<string[]>([]);
   const difficulties = ['Easy', 'Medium', 'Hard'];
@@ -42,19 +49,34 @@ export default function TeacherProfilePage() {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
         setUserId(user.uid);
-        setForm(prev => ({ ...prev, email: user.email || '' }));
+        setForm((prev) => ({ ...prev, email: user.email || '' }));
         await fetchUserData(user.uid);
       }
     });
 
     fetchCoursesFromFirestore();
+    fetchAllSubjects();
+
     return () => unsubscribe();
   }, []);
 
   const fetchCoursesFromFirestore = async () => {
     const snapshot = await getDocs(collection(db, 'courses'));
-    const courseData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    const courseData = snapshot.docs.map((doc) => ({
+      id: doc.id,
+      ...doc.data(),
+    }));
     setAllCourses(courseData);
+  };
+
+  const fetchAllSubjects = async () => {
+    const snapshot = await getDocs(collection(db, 'subjects'));
+    const subjects = snapshot.docs.map((doc) => ({
+      id: doc.id,
+      ...doc.data(),
+    }));
+    setAllSubjects(subjects);
+    setAvailableSubjects(subjects.map((s) => s.name));
   };
 
   const fetchUserData = async (uid: string) => {
@@ -90,7 +112,10 @@ export default function TeacherProfilePage() {
   };
 
   const handleInputChange = (field: string, value: any) => {
-    setForm(prev => ({ ...prev, metadata: { ...(prev.metadata || {}), [field]: value } }));
+    setForm((prev) => ({
+      ...prev,
+      metadata: { ...(prev.metadata || {}), [field]: value },
+    }));
   };
 
   const handleSave = async () => {
@@ -105,7 +130,7 @@ export default function TeacherProfilePage() {
         },
         updatedAt: new Date(),
       });
-      alert('✅ Info saved successfully!');
+      toast.success('✅ Info saved successfully!');
     } catch (err) {
       toast.error('Failed to update profile.');
     } finally {
@@ -114,7 +139,7 @@ export default function TeacherProfilePage() {
   };
 
   const handleCourseSelect = async (courseName: string) => {
-    const selected = allCourses.find(c => c.name === courseName);
+    const selected = allCourses.find((c) => c.name === courseName);
     if (!selected) return;
 
     handleInputChange('course', courseName);
@@ -124,19 +149,6 @@ export default function TeacherProfilePage() {
     handleInputChange('chapter', '');
     handleInputChange('chapterId', '');
     setAvailableChapters([]);
-    setAvailableSubjects([]);
-
-    const subjectNames: string[] = [];
-    for (const subjectId of selected.subjectIds || []) {
-      const subjectRef = doc(db, 'subjects', subjectId);
-      const subjectSnap = await getDoc(subjectRef);
-      if (subjectSnap.exists()) {
-        const subjectData = subjectSnap.data();
-        subjectNames.push(subjectData.name);
-      }
-    }
-
-    setAvailableSubjects(subjectNames);
   };
 
   const handleSubjectSelect = async (subjectName: string) => {
@@ -146,44 +158,36 @@ export default function TeacherProfilePage() {
     handleInputChange('chapterId', '');
     setAvailableChapters([]);
 
-    const selectedCourse = allCourses.find(c => c.name === form.metadata?.course);
-    if (!selectedCourse || !selectedCourse.subjectIds) return;
+    const selectedSubject = allSubjects.find((s) => s.name === subjectName);
+    if (!selectedSubject) return;
 
-    for (const subjectId of selectedCourse.subjectIds) {
-      const subjectRef = doc(db, 'subjects', subjectId);
-      const subjectSnap = await getDoc(subjectRef);
-      if (subjectSnap.exists()) {
-        const subjectData = subjectSnap.data();
-        if (subjectData.name === subjectName) {
-          const chapters = subjectData.chapters || {};
-          setAvailableChapters(Object.keys(chapters));
-          handleInputChange('subjectId', subjectId);
-          break;
-        }
-      }
-    }
+    handleInputChange('subjectId', selectedSubject.id);
+    const chapters = selectedSubject.chapters || {};
+    setAvailableChapters(Object.keys(chapters));
   };
 
   const handleChapterSelect = (chapterName: string) => {
     handleInputChange('chapter', chapterName);
-    handleInputChange('chapterId', chapterName); // If chapter has its own ID, replace here
+    handleInputChange('chapterId', chapterName); // Adjust if you use unique IDs
   };
 
-  if (loading) return <p className="text-center py-10">Loading profile...</p>;
+  if (loading)
+    return <p className="text-center py-10">Loading profile...</p>;
 
   return (
     <div className="min-h-screen bg-slate-50 py-10 px-4 flex justify-center">
-      <div className="w-full  bg-white shadow-lg rounded-lg p-8 space-y-8">
-        <h2 className="text-2xl  font-bold text-left">👨‍🏫 Teacher Profile</h2>
+      <div className="w-full bg-white shadow-lg rounded-lg p-8 space-y-8">
+        <h2 className="text-2xl font-bold text-left">👨‍🏫 Teacher Profile</h2>
 
-        {/* Basic Info */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
             <label className="block mb-1">Full Name</label>
             <input
               className="w-full border px-3 py-2 rounded"
               value={form.fullName}
-              onChange={(e) => setForm(prev => ({ ...prev, fullName: e.target.value }))}
+              onChange={(e) =>
+                setForm((prev) => ({ ...prev, fullName: e.target.value }))
+              }
             />
           </div>
           <div>
@@ -199,12 +203,14 @@ export default function TeacherProfilePage() {
             <input
               className="w-full border px-3 py-2 rounded"
               value={form.phone}
-              onChange={(e) => setForm(prev => ({ ...prev, phone: e.target.value }))}
+              onChange={(e) =>
+                setForm((prev) => ({ ...prev, phone: e.target.value }))
+              }
             />
           </div>
         </div>
 
-        {/* Metadata */}
+        {/* Metadata Section */}
         <div className="space-y-6 border-t pt-6">
           <h3 className="text-xl font-semibold">📘 Question Metadata Defaults</h3>
 
@@ -220,7 +226,6 @@ export default function TeacherProfilePage() {
               value={form.metadata?.subject || ''}
               options={availableSubjects}
               onChange={handleSubjectSelect}
-              disabled={!form.metadata?.course}
             />
             <RadixDropdown
               label="Chapter"
@@ -246,7 +251,9 @@ export default function TeacherProfilePage() {
               <input
                 className="w-full border px-3 py-2 rounded"
                 value={form.metadata?.book || ''}
-                onChange={(e) => handleInputChange('book', e.target.value)}
+                onChange={(e) =>
+                  handleInputChange('book', e.target.value)
+                }
               />
             </div>
           </div>
