@@ -151,6 +151,11 @@
 ::-webkit-scrollbar-thumb:hover {
   background: hsl(var(--primary) / 0.8);
 }
+.prose img {
+  max-width: 100%;
+  height: auto;
+  display: inline-block;
+}
 
 * {
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);

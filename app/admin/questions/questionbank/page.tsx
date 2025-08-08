@@ -437,7 +437,10 @@ const QuestionBankPage = () => {
           </SelectContent>
         </Select>
       </div>
-
+{/* ✅ Show counts here */}
+<div className="mb-4 text-sm font-medium text-gray-700">
+  Showing {filtered.length} of {questions.length} total questions
+</div>
       {/* Content */}
       {loading ? (
         <div className="grid grid-cols-1 gap-6">
@@ -485,40 +488,45 @@ const QuestionBankPage = () => {
                 key={id}
                 className="p-4 bg-white shadow-md hover:shadow-lg transition-shadow duration-300 rounded-xl"
               >
-                <div className="flex items-start gap-3 mb-4">
-                  <Checkbox
-                    checked={selectedQuestions.includes(id)}
-                    onCheckedChange={() => handleSelectQuestion(id)}
-                    className="mt-1"
-                  />
-                  <div className="flex-1">
-                    <h2 className="text-base sm:text-lg font-semibold text-gray-800 flex items-start gap-1">
-                      {idx + 1}.{' '}
-                      <span
-                        className="prose max-w-prose inline"
-                        dangerouslySetInnerHTML={{ __html: questionText }}
-                      />
-                    </h2>
-                    <div className="flex flex-wrap gap-2 mt-2">
-                      {course && <Badge className="bg-blue-100 text-blue-800">{course}</Badge>}
-                      {subject && (
-                        <Badge variant="outline" className="border-blue-200 text-gray-700">
-                          {subject}
-                        </Badge>
-                      )}
-                      {chapter && (
-                        <Badge variant="secondary" className="bg-gray-100 text-gray-700">
-                          {chapter}
-                        </Badge>
-                      )}
-                      {difficulty && (
-                        <Badge className="bg-green-100 text-green-800">{difficulty}</Badge>
-                      )}
-                    </div>
-                  </div>
-                </div>
+           <div className="flex items-start gap-3 mb-4">
+  <Checkbox
+    checked={selectedQuestions.includes(id)}
+    onCheckedChange={() => handleSelectQuestion(id)}
+    className="mt-1"
+  />
+  <div className="flex-1">
+    <h2 className="text-base sm:text-lg font-semibold text-gray-800 flex items-start gap-1">
+      {idx + 1}.{' '}
+      <span
+        className="prose max-w-prose inline"
+        dangerouslySetInnerHTML={{ __html: questionText }}
+      />
+    </h2>
 
-                <div className="grid grid-cols-1 gap-2 mb-4">
+    <div className="flex flex-wrap gap-2 mt-2">
+      {course && <Badge className="bg-blue-100 text-blue-800">{course}</Badge>}
+      {subject && (
+        <Badge variant="outline" className="border-blue-200 text-gray-700">
+          {subject}
+        </Badge>
+      )}
+      {chapter && (
+        <Badge variant="secondary" className="bg-gray-100 text-gray-700">
+          {chapter}
+        </Badge>
+      )}
+      {difficulty && (
+        <Badge className="bg-green-100 text-green-800">{difficulty}</Badge>
+      )}
+    </div>
+
+    {/* ✅ Add this below badges */}
+
+  </div>
+</div>
+
+
+                <div className="grid grid-cols-1 gap-2 mt-4">
                   {options.map((opt, i) => (
                     <div
                       key={i}
@@ -551,6 +559,16 @@ const QuestionBankPage = () => {
                     <Trash className="h-4 w-4 mr-1" /> Delete
                   </Button>
                 </div>
+                    {question.createdAt && (
+      <p className="text-sm text-gray-500 mt-1">
+        Created on:{' '}
+        {new Date(question.createdAt).toLocaleDateString(undefined, {
+          year: 'numeric',
+          month: 'short',
+          day: 'numeric',
+        })}
+      </p>
+    )}
               </Card>
             );
           })}

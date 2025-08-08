@@ -70,13 +70,14 @@ export default function PricingPage() {
     <div className="min-h-screen flex items-center justify-center bg-gray-50 p-6">
       <Card className="w-full max-w-xl p-6 shadow-xl rounded-2xl">
         
-         <div className="mt-6">
-  <Link href="/" className="text-primary hover:underline font-medium inline-flex items-center gap-1">
-    <ChevronLeft size={18} />
-    Back
-  </Link>
-  {status && <p className="text-sm mt-4 text-center text-blue-600">{status}</p>}
-</div>
+   <button
+        type="button"
+        onClick={() => router.back()}
+        className="text-primary hover:underline font-medium inline-flex items-center gap-1"
+      >
+        <ChevronLeft size={18} />
+        Back
+      </button>
 
         <CardContent>
           <h1 className="text-3xl font-bold mb-4 text-center">🎓 Upgrade to Premium</h1>

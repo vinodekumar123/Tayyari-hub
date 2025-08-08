@@ -42,7 +42,8 @@ type Question = {
   year?: string;
   book?: string;
   teacher?: string;
-  enableExplanation?: boolean;
+  enableExplanation?: boolean;  createdAt?: Date; // ✅ add this
+
 };
 
 const QuestionBankPage = () => {
@@ -60,11 +61,18 @@ const QuestionBankPage = () => {
   useEffect(() => {
     const fetchQuestions = async () => {
       try {
-        const snapshot = await getDocs(collection(db, 'mock-questions'));
-        const fetched: Question[] = snapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...(doc.data() as Omit<Question, 'id'>),
-        }));
+       const snapshot = await getDocs(collection(db, 'mock-questions'));
+const fetched: Question[] = snapshot.docs.map((d) => {
+  const data = d.data() as any;
+  return {
+    id: d.id,
+    ...data,
+    createdAt: data?.createdAt?.toDate
+      ? data.createdAt.toDate()
+      : undefined, // fallback if older docs don't have it
+  };
+});
+
         setQuestions(fetched);
         setFiltered(fetched);
       } catch (error) {
@@ -462,40 +470,24 @@ const QuestionBankPage = () => {
                 key={id}
                 className="p-4 bg-white shadow-md hover:shadow-lg transition-shadow duration-300 rounded-xl"
               >
-                <div className="flex items-start gap-3 mb-4">
-                  <Checkbox
-                    checked={selectedQuestions.includes(id)}
-                    onCheckedChange={() => handleSelectQuestion(id)}
-                    className="mt-1"
-                  />
-                  <div className="flex-1">
-                    <h2 className="text-base sm:text-lg font-semibold text-gray-800 flex items-start gap-1">
-                      {idx + 1}.{' '}
-                      <span
-                        className="prose max-w-prose inline"
-                        dangerouslySetInnerHTML={{ __html: questionText }}
-                      />
-                    </h2>
-                    <div className="flex flex-wrap gap-2 mt-2">
-                      {course && <Badge className="bg-blue-100 text-blue-800">{course}</Badge>}
-                      {subject && (
-                        <Badge variant="outline" className="border-blue-200 text-gray-700">
-                          {subject}
-                        </Badge>
-                      )}
-                      {chapter && (
-                        <Badge variant="secondary" className="bg-gray-100 text-gray-700">
-                          {chapter}
-                        </Badge>
-                      )}
-                      {difficulty && (
-                        <Badge className="bg-green-100 text-green-800">{difficulty}</Badge>
-                      )}
-                    </div>
-                  </div>
-                </div>
+                <div className="flex flex-wrap gap-2 mt-2">
+  {course && <Badge className="bg-blue-100 text-blue-800">{course}</Badge>}
+  {subject && (
+    <Badge variant="outline" className="border-blue-200 text-gray-700">
+      {subject}
+    </Badge>
+  )}
+  {chapter && (
+    <Badge variant="secondary" className="bg-gray-100 text-gray-700">
+      {chapter}
+    </Badge>
+  )}
+  {difficulty && (
+    <Badge className="bg-green-100 text-green-800">{difficulty}</Badge>
+  )}
+</div>
 
-                <div className="grid grid-cols-1 gap-2 mb-4">
+                <div className="grid grid-cols-1 gap-2 mt-4">
                   {options.map((opt, i) => (
                     <div
                       key={i}
@@ -528,6 +520,20 @@ const QuestionBankPage = () => {
                     <Trash className="h-4 w-4 mr-1" /> Delete
                   </Button>
                 </div>
+                
+{/* ✅ created date */}
+{question.createdAt && (
+  <p className="text-xs text-gray-500 mt-1">
+    Created on:{' '}
+    {question.createdAt.toLocaleDateString(undefined, {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    })}{' '}
+    • {question.createdAt.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
+  </p>
+)}
+
               </Card>
             );
           })}
