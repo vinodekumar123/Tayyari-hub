@@ -45,45 +45,58 @@ import Link from 'next/link';
 
 function getQuizStatus(startDate: string, endDate: string, startTime?: string, endTime?: string) {
   const now = new Date();
-
-  // Parse start time (or default to full-day start)
   let start: Date;
-  if (startTime && /^\d{2}:\d{2}$/.test(startTime)) {
-    const [y, m, d] = startDate.split('-').map(Number);
-    const [h, min] = startTime.split(':').map(Number);
-    start = new Date(y, m - 1, d, h, min);
-  } else {
-    start = new Date(startDate);
-    start.setHours(0, 0, 0, 0);
-  }
-
-  // Parse end time (or default to full-day end)
   let end: Date;
-  if (endTime && /^\d{2}:\d{2}$/.test(endTime)) {
-    const [y, m, d] = endDate.split('-').map(Number);
-    const [h, min] = endTime.split(':').map(Number);
-    end = new Date(y, m - 1, d, h, min);
-  } else {
-    end = new Date(endDate);
-    end.setHours(23, 59, 59, 999);
+
+  try {
+    if (!startDate || !endDate) {
+      console.warn('Invalid startDate or endDate:', { startDate, endDate });
+      return 'ended';
+    }
+
+    if (startTime && /^\d{2}:\d{2}$/.test(startTime)) {
+      const [y, m, d] = startDate.split('-').map(Number);
+      const [h, min] = startTime.split(':').map(Number);
+      start = new Date(y, m - 1, d, h, min);
+    } else {
+      start = new Date(startDate);
+      start.setHours(0, 0, 0, 0);
+    }
+
+    if (endTime && /^\d{2}:\d{2}$/.test(endTime)) {
+      const [y, m, d] = endDate.split('-').map(Number);
+      const [h, min] = endTime.split(':').map(Number);
+      end = new Date(y, m - 1, d, h, min);
+    } else {
+      end = new Date(endDate);
+      end.setHours(23, 59, 59, 999);
+    }
+
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+      console.warn('Invalid date parsed:', { start, end });
+      return 'ended';
+    }
+
+    console.log('🕐 Now:', now.toString());
+    console.log('🚀 Start:', start.toString());
+    console.log('🛑 End:', end.toString());
+
+    if (now < start) return 'upcoming';
+    if (now >= start && now <= end) return 'active';
+    return 'ended';
+  } catch (error) {
+    console.error('Error in getQuizStatus:', error);
+    return 'ended';
   }
-
-  console.log("🕐 Now:", now.toString());
-  console.log("🚀 Start:", start.toString());
-  console.log("🛑 End:", end.toString());
-
-  if (now < start) return 'upcoming';
-  if (now >= start && now <= end) return 'active';
-  return 'ended';
 }
-
 
 export default function QuizBankPage() {
   const [quizzes, setQuizzes] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [attemptedQuizzes, setAttemptedQuizzes] = useState<{ [key: string]: number }>({});
-  const [enrolledCourses, setEnrolledCourses] = useState<string[]>([]);
+  const [enrolledCourse, setEnrolledCourse] = useState<string | null>(null); // Single course name
   const [userLoaded, setUserLoaded] = useState(false);
   const [lastVisible, setLastVisible] = useState<any>(null);
   const [hasMore, setHasMore] = useState(true);
@@ -103,99 +116,60 @@ export default function QuizBankPage() {
   const unsubscribeRef = useRef<(() => void) | null>(null);
   const router = useRouter();
 
-const fetchQuizzes = async (startAfterDoc: any = null) => {
-  if (!currentUser) return;
-
-  setLoading(true); // ✅ Add this here
-
-  const isAdmin = currentUser.isAdmin;
-  const courseNames: string[] = enrolledCourses;
-
-  const constraints = [orderBy('createdAt', 'desc'), limit(10)];
-
-  if (!isAdmin) {
-    constraints.push(where('published', '==', true));
-    if (courseNames.length > 0) {
-      constraints.push(where('course.name', 'in', courseNames));
-    }
-  }
-
-  if (startAfterDoc) {
-    constraints.push(startAfter(startAfterDoc));
-  }
-
-  const q = query(collection(db, 'quizzes'), ...constraints);
-
-  if (unsubscribeRef.current) {
-    unsubscribeRef.current();
-  }
-
-  const unsubscribe = onSnapshot(q, (snapshot) => {
-    const data = snapshot.docs.map((doc) => {
-      const quizData = doc.data();
-      const course = quizData.course?.name || '';
-      const subject = Array.isArray(quizData.subjects)
-        ? quizData.subjects.map((s: any) => s.name || s).join(', ')
-        : quizData.subject?.name || quizData.subject || '';
-      const chapter = quizData.chapter?.name || quizData.chapter || '';
-
-      return {
-        id: doc.id,
-        ...quizData,
-        course,
-        subject,
-        chapter,
-        maxAttempts: quizData.maxAttempts || 1,
-      };
-    });
-
-    setQuizzes((prev) => (startAfterDoc ? [...prev, ...data] : data));
-    setLastVisible(snapshot.docs[snapshot.docs.length - 1]);
-    setHasMore(snapshot.docs.length === 2);
-    setLoading(false); // ✅ Already here – good
-  });
-
-  unsubscribeRef.current = unsubscribe;
-};
-
-
   useEffect(() => {
     const auth = getAuth();
     const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
+      setLoading(true);
+      setError(null);
+
       if (user) {
-        const userRef = doc(db, 'users', user.uid);
-        const userSnap = await getDoc(userRef);
-        const userData = userSnap.exists() ? userSnap.data() : {};
-        const isAdmin = userData.admin === true;
-        const userPlan = userData.plan || 'free';
+        try {
+          const userRef = doc(db, 'users', user.uid);
+          const userSnap = await getDoc(userRef);
+          const userData = userSnap.exists() ? userSnap.data() : {} as any;
+          const isAdmin = (userData as any).admin === true;
+          const userPlan = (userData as any).plan || 'free';
+          const course = (userData as any).course; // Fetch course directly from user document
 
-        let courseIds: string[] = [];
-        if (!isAdmin) {
-          const coursesSnapshot = await getDocs(collection(db, 'users', user.uid, 'courses'));
-          courseIds = coursesSnapshot.docs.map((doc) => doc.id);
-          setEnrolledCourses(courseIds);
-        }
+          console.log('User Data:', userData);
 
-        setCurrentUser({ ...user, isAdmin, plan: userPlan });
-        // fetchQuizzes();
-
-        const attemptsSnapshot = await getDocs(
-          collection(db, 'users', user.uid, 'quizAttempts')
-        );
-        const attempted: { [key: string]: number } = {};
-        attemptsSnapshot.docs.forEach((doc) => {
-          if (doc.data()?.completed) {
-            attempted[doc.id] = doc.data().attemptNumber || 1;
+          if (!isAdmin && (!course || typeof course !== 'string')) {
+            console.error('Invalid or missing course for user:', user.uid, course);
+            setError('Invalid enrollment: You must be enrolled in a course.');
+            setLoading(false);
+            setUserLoaded(true);
+            return;
           }
-        });
-        setAttemptedQuizzes(attempted);
+
+          setCurrentUser({ ...user, isAdmin, plan: userPlan });
+          setEnrolledCourse(isAdmin ? null : course); // Set single course for non-admins
+
+          const attemptsSnapshot = await getDocs(
+            collection(db, 'users', user.uid, 'quizAttempts')
+          );
+          const attempted: { [key: string]: number } = {};
+          attemptsSnapshot.docs.forEach((d) => {
+            const data = d.data() as any;
+            if (data?.completed) {
+              attempted[d.id] = data.attemptNumber || 1;
+            }
+          });
+          setAttemptedQuizzes(attempted);
+          setUserLoaded(true);
+        } catch (err) {
+          console.error('Error fetching user data:', err);
+          setError('Failed to load user data. Please try again.');
+          setLoading(false);
+          setUserLoaded(true);
+        }
       } else {
         setQuizzes([]);
-        setLoading(false);
+        setEnrolledCourse(null);
         setCurrentUser(null);
         setHasMore(false);
+        setUserLoaded(true);
+        setLoading(false);
       }
-      setUserLoaded(true);
     });
 
     return () => {
@@ -206,13 +180,96 @@ const fetchQuizzes = async (startAfterDoc: any = null) => {
     };
   }, []);
 
-useEffect(() => {
-  if (userLoaded && currentUser) {
-    setLastVisible(null);
-    setHasMore(true);
-    fetchQuizzes();
-  }
-}, [filters, currentUser, enrolledCourses, userLoaded]);
+  useEffect(() => {
+    if (userLoaded && currentUser) {
+      setLastVisible(null);
+      setHasMore(true);
+      fetchQuizzes();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filters, currentUser, enrolledCourse, userLoaded]);
+
+  const fetchQuizzes = async (startAfterDoc: any = null) => {
+    if (!currentUser) return;
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      console.log('Fetching quizzes for user:', currentUser.uid, 'Enrolled Course:', enrolledCourse);
+
+      const isAdmin = currentUser.isAdmin;
+      const courseName = enrolledCourse;
+
+      const constraints: any[] = [ limit(10)];
+
+      if (!isAdmin) {
+        if (!courseName) {
+          setError('No course enrolled. Please enroll in a course to view quizzes.');
+          setQuizzes([]);
+          setLoading(false);
+          setHasMore(false);
+          return;
+        }
+        constraints.push(where('published', '==', true));
+        constraints.push(where('course.name', '==', courseName));
+        console.log('Query Constraints:', constraints);
+      }
+
+      if (startAfterDoc) {
+        constraints.push(startAfter(startAfterDoc));
+      }
+
+      const q = query(collection(db, 'quizzes'), ...constraints);
+
+      if (unsubscribeRef.current) {
+        unsubscribeRef.current();
+      }
+
+      const unsubscribe = onSnapshot(
+        q,
+        (snapshot) => {
+          const data = snapshot.docs.map((d) => {
+            const quizData = d.data() as any;
+            const course = quizData.course?.name || quizData.course || 'Unknown';
+            const subject = Array.isArray(quizData.subjects)
+              ? quizData.subjects.map((s: any) => s.name || s).join(', ')
+              : quizData.subject?.name || quizData.subject || '';
+            const chapter = quizData.chapter?.name || quizData.chapter || '';
+
+            return {
+              id: d.id,
+              ...quizData,
+              course,
+              subject,
+              chapter,
+              maxAttempts: quizData.maxAttempts || 1,
+            } as any;
+          });
+
+          console.log('Fetched Quizzes:', data);
+
+          setQuizzes((prev) => (startAfterDoc ? [...prev, ...data] : data));
+          setLastVisible(snapshot.docs[snapshot.docs.length - 1]);
+          setHasMore(snapshot.docs.length === 10);
+          setLoading(false);
+        },
+        (error) => {
+          console.error('Firestore Query Error:', error.code, error.message);
+          setError(`Failed to fetch quizzes: ${error.message}. Please try again or create the required index at the provided link.`);
+          setLoading(false);
+          setHasMore(false);
+        }
+      );
+
+      unsubscribeRef.current = unsubscribe;
+    } catch (err) {
+      console.error('Error in fetchQuizzes:', err);
+      setError('Failed to fetch quizzes. Please try again.');
+      setLoading(false);
+      setHasMore(false);
+    }
+  };
 
   const filteredQuizzes = quizzes.filter((quiz) => {
     const { course, subject, chapter, accessType, searchTerm, status, date } = filters;
@@ -230,7 +287,7 @@ useEffect(() => {
   });
 
   const uniqueValues = (key: string) => {
-    return [...new Set(quizzes.map((q) => q[key]).filter(Boolean))];
+    return [...new Set(quizzes.map((q: any) => (q as any)[key]).filter(Boolean))];
   };
 
   const handleQuizClick = async (quiz: any) => {
@@ -274,11 +331,17 @@ useEffect(() => {
         alert('Failed to delete quiz.');
       }
     }
-  };
+  }; // ✅ closes only handleDeleteConfirm
 
   return (
     <div className="w-full max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
       <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-6 sm:mb-8">📝 Available Quizzes</h1>
+
+      {error && (
+        <div className="mb-6 p-4 bg-red-100 text-red-700 rounded-lg">
+          {error}
+        </div>
+      )}
 
       <Card className="border-0 shadow-lg mb-8 sm:mb-10">
         <CardContent className="p-4 sm:p-6">
@@ -307,10 +370,10 @@ useEffect(() => {
                 <SelectContent>
                   {uniqueValues(key).map((val) => (
                     <SelectItem
-                      key={typeof val === 'object' ? val?.id : val}
-                      value={typeof val === 'object' ? val?.name : val}
+                      key={typeof val === 'object' ? (val as any)?.id : String(val)}
+                      value={typeof val === 'object' ? (val as any)?.name : String(val)}
                     >
-                      {typeof val === 'object' ? val?.name : val}
+                      {typeof val === 'object' ? (val as any)?.name : String(val)}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -394,7 +457,7 @@ useEffect(() => {
         </div>
       ) : filteredQuizzes.length === 0 ? (
         <p className="text-gray-500 text-center py-10 text-base sm:text-lg">
-          No quizzes available for your enrolled courses.
+          No quizzes available for your enrolled course.
         </p>
       ) : (
         <>
@@ -406,15 +469,15 @@ useEffect(() => {
 
               const courseName =
                 typeof quiz.course === 'object' && 'name' in quiz.course
-                  ? quiz.course.name
+                  ? (quiz.course as any).name
                   : quiz.course || '';
               const subjectName =
                 typeof quiz.subject === 'object' && 'name' in quiz.subject
-                  ? quiz.subject.name
+                  ? (quiz.subject as any).name
                   : quiz.subject || '';
               const chapterName =
                 typeof quiz.chapter === 'object' && 'name' in quiz.chapter
-                  ? quiz.chapter.name
+                  ? (quiz.chapter as any).name
                   : quiz.chapter || '';
 
               return (
@@ -547,4 +610,4 @@ useEffect(() => {
       )}
     </div>
   );
-}
+} // ✅ closes QuizBankPage
