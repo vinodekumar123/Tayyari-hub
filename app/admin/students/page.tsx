@@ -143,7 +143,7 @@ export default function Enrollment() {
     const studentsQuery = query(
       collection(db, 'users'),
       orderBy('fullName'),
-      limit(3),
+      limit(1000),
       ...(append && lastDoc ? [startAfter(lastDoc)] : [])
     );
     const unsubscribe = onSnapshot(studentsQuery, (snapshot) => {

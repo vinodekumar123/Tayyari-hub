@@ -51,7 +51,7 @@ type Course = {
 type Subject = {
   id: string;
   name: string;
-  chapters: { [key: string]: string[] };
+  chapters: { [key: string]: string[] | Record<string, unknown> | string };
 };
 
 type Question = {
@@ -108,10 +108,10 @@ export default function CreateQuestion() {
     const fetchCourses = async () => {
       try {
         const snapshot = await getDocs(collection(db, 'courses'));
-        const courses = snapshot.docs.map(doc => ({
-          id: doc.id,
-          name: doc.data().name as string,
-          subjectIds: doc.data().subjectIds as string[] || [],
+        const courses = snapshot.docs.map(docSnap => ({
+          id: docSnap.id,
+          name: docSnap.data().name as string,
+          subjectIds: (docSnap.data().subjectIds as string[]) || [],
         })) as Course[];
         setFirestoreCourses(courses);
       } catch (err) {
@@ -129,10 +129,10 @@ export default function CreateQuestion() {
     const fetchSubjects = async () => {
       try {
         const snapshot = await getDocs(collection(db, 'subjects'));
-        const subjects = snapshot.docs.map(doc => ({
-          id: doc.id,
-          name: doc.data().name as string,
-          chapters: doc.data().chapters as { [key: string]: string[] } || {},
+        const subjects = snapshot.docs.map(docSnap => ({
+          id: docSnap.id,
+          name: docSnap.data().name as string,
+          chapters: (docSnap.data().chapters as Subject['chapters']) || {},
         })) as Subject[];
         setFirestoreSubjects(subjects);
       } catch (err) {
@@ -150,7 +150,7 @@ export default function CreateQuestion() {
       try {
         const snapshot = await getDoc(doc(db, "mock-questions", id));
         if (snapshot.exists()) {
-          setQuestionData({ ...questionData, ...snapshot.data() } as Question);
+          setQuestionData(prev => ({ ...prev, ...(snapshot.data() as Question) }));
         }
       } catch (err) {
         console.error("Failed to load question:", err);
@@ -167,7 +167,7 @@ export default function CreateQuestion() {
         try {
           const userDoc = await getDoc(doc(db, 'users', user.uid));
           if (userDoc.exists()) {
-            const userData = userDoc.data();
+            const userData = userDoc.data() as any;
             const metadata = userData.metadata || {};
             setQuestionData(prev => ({
               ...prev,
@@ -191,7 +191,7 @@ export default function CreateQuestion() {
   }, [id]);
 
   const handleInputChange = (field: keyof Question, value: string | boolean) => {
-    setQuestionData(prev => ({ ...prev, [field]: value }));
+    setQuestionData(prev => ({ ...prev, [field]: value as any }));
     if (errors[field]) {
       setErrors(prev => ({ ...prev, [field]: '' }));
     }
@@ -204,6 +204,10 @@ export default function CreateQuestion() {
       ...prev,
       options: newOptions,
     }));
+    // Keep correctAnswer in sync (clear if it no longer exists)
+    if (questionData.correctAnswer && !newOptions.includes(questionData.correctAnswer)) {
+      setQuestionData(prev => ({ ...prev, correctAnswer: '' }));
+    }
   };
 
   const addOption = () => {
@@ -217,11 +221,12 @@ export default function CreateQuestion() {
 
   const removeOption = (index: number) => {
     if (questionData.options.length > 2) {
+      const removed = questionData.options[index];
       const newOptions = questionData.options.filter((_, i) => i !== index);
       setQuestionData(prev => ({
         ...prev,
         options: newOptions,
-        correctAnswer: prev.correctAnswer === prev.options[index] ? '' : prev.correctAnswer,
+        correctAnswer: prev.correctAnswer === removed ? '' : prev.correctAnswer,
       }));
     }
   };
@@ -332,7 +337,7 @@ export default function CreateQuestion() {
             book: row.book || '',
             teacher: row.teacher || questionData.teacher,
             course: row.course,
-            enableExplanation: row.enableExplanation ? row.enableExplanation.toLowerCase() === 'true' : true,
+            enableExplanation: row.enableExplanation ? String(row.enableExplanation).toLowerCase() === 'true' : true,
             createdAt: new Date(),
           });
         });
@@ -344,8 +349,8 @@ export default function CreateQuestion() {
         }
 
         try {
-          for (const question of validQuestions) {
-            await addDoc(collection(db, 'mock-questions'), question);
+          for (const q of validQuestions) {
+            await addDoc(collection(db, 'mock-questions'), q);
           }
           setIsCsvDialogOpen(false);
           setCsvFile(null);
@@ -365,41 +370,67 @@ export default function CreateQuestion() {
     });
   };
 
-const handleSave = async () => {
-  if (!validateForm()) return;
-  setIsSaving(true);
+  const handleSave = async () => {
+    if (!validateForm()) return;
+    setIsSaving(true);
 
-  try {
-    if (id) {
-      await updateDoc(doc(db, 'mock-questions', id), questionData);
-    } else {
-      await addDoc(collection(db, 'mock-questions'), {
-        ...questionData,
-        createdAt: new Date(),
-      });
+    try {
+      if (id) {
+        await updateDoc(doc(db, 'mock-questions', id), questionData);
+      } else {
+        await addDoc(collection(db, 'mock-questions'), {
+          ...questionData,
+          createdAt: new Date(),
+        });
 
-      // Reset form fields after adding a new question
-      setQuestionData({
-        question: '',
-        options: ['', '', '', ''],
-        correctAnswer: '',
-        explanation: '',
-      });
+        // Reset form fields after adding a new question (use correct shape)
+        setQuestionData({
+          questionText: '',
+          options: ['', '', '', ''],
+          correctAnswer: '',
+          explanation: '',
+          subject: '',
+          chapter: '',
+          topic: '',
+          difficulty: '',
+          year: '',
+          book: '',
+          teacher: questionData.teacher || '',
+          course: '',
+          enableExplanation: true,
+        });
+      }
+      router.push('/admin/mockquestions/questionbank');
+    } catch (err) {
+      console.error('Failed to save question:', err);
+    } finally {
+      setIsSaving(false);
     }
-  } catch (err) {
-    console.error('Failed to save question:', err);
-  } finally {
-    setIsSaving(false);
-  }
-};
+  };
 
   const selectedCourse = firestoreCourses.find(c => c.name === questionData.course);
-  const availableSubjects = firestoreSubjects
-    .filter(s => selectedCourse?.subjectIds.includes(s.id))
-    .map(s => s.name);
+  const availableSubjects =
+    selectedCourse?.subjectIds?.length
+      ? firestoreSubjects.filter(s => selectedCourse.subjectIds.includes(s.id)).map(s => s.name)
+      : [];
+
   const selectedSubject = firestoreSubjects.find(s => s.name === questionData.subject);
-  const availableChapters = selectedSubject ? Object.keys(selectedSubject.chapters) : [];
-  const availableTopics = selectedSubject?.chapters?.[questionData.chapter] || [];
+  const availableChapters = selectedSubject ? Object.keys(selectedSubject.chapters || {}) : [];
+
+  // 🔐 Normalize topics so it's ALWAYS an array
+  const rawTopics =
+    selectedSubject && questionData.chapter
+      ? selectedSubject.chapters?.[questionData.chapter]
+      : null;
+
+  const availableTopics: string[] = Array.isArray(rawTopics)
+    ? rawTopics
+    : rawTopics && typeof rawTopics === 'object'
+      ? Object.keys(rawTopics as Record<string, unknown>)
+      : typeof rawTopics === 'string'
+        ? [rawTopics]
+        : [];
+
   const difficulties = ['Easy', 'Medium', 'Hard'];
   const years = Array.from({ length: new Date().getFullYear() - 2000 + 1 }, (_, i) => (2000 + i).toString());
 
@@ -428,7 +459,7 @@ const handleSave = async () => {
         <div className="space-y-2">
           <div className="h-6 w-32 bg-gray-200 rounded"></div>
           <div className="space-y-2">
-            {[...Array(4)].map((_, idx) => (
+            {Array.from({ length: 4 }).map((_, idx) => (
               <div key={idx} className="h-12 w-full bg-gray-200 rounded"></div>
             ))}
           </div>
@@ -690,9 +721,13 @@ const handleSave = async () => {
                         <SelectValue placeholder="Select topic" />
                       </SelectTrigger>
                       <SelectContent>
-                        {availableTopics.map(topic => (
-                          <SelectItem key={topic} value={topic} className="text-lg">{topic}</SelectItem>
-                        ))}
+                        {availableTopics.length > 0 ? (
+                          availableTopics.map(topic => (
+                            <SelectItem key={topic} value={topic} className="text-lg">{topic}</SelectItem>
+                          ))
+                        ) : (
+                          <div className="px-3 py-2 text-sm text-gray-500">No topics</div>
+                        )}
                       </SelectContent>
                     </Select>
                   </div>
