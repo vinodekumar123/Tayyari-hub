@@ -3,10 +3,12 @@
 import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { onAuthStateChanged } from 'firebase/auth';
-import {
-  db,
-  auth
-} from '../../../firebase';
+import dynamic from 'next/dynamic';
+import Papa from 'papaparse';
+import 'react-quill/dist/quill.snow.css';
+
+import { db, auth } from '../../../firebase';
+
 import {
   collection,
   getDoc,
@@ -14,9 +16,10 @@ import {
   addDoc,
   updateDoc,
   onSnapshot,
-  QuerySnapshot,
-  DocumentData
+  type QuerySnapshot,
+  type DocumentData,
 } from 'firebase/firestore';
+
 import {
   BookOpen,
   Plus,
@@ -25,6 +28,7 @@ import {
   Upload,
   AlertCircle
 } from 'lucide-react';
+
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
@@ -41,9 +45,6 @@ import {
   DialogFooter,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import Papa from 'papaparse';
-import dynamic from 'next/dynamic';
-import 'react-quill/dist/quill.snow.css';
 
 // Dynamically import ReactQuill to avoid SSR issues
 const ReactQuill = dynamic(() => import('react-quill'), { ssr: false });
@@ -59,7 +60,7 @@ interface Course {
 interface Subject {
   id: string;
   name: string;
-  chapters: { [chapter: string]: string[] };
+  chapters: { [chapter: string]: string[] | Record<string, unknown> | string };
 }
 
 interface Question {
@@ -113,30 +114,38 @@ export default function CreateQuestion() {
 
   // Fetch courses and subjects instantly with onSnapshot
   useEffect(() => {
-    const unsubscribeCourses = onSnapshot(collection(db, 'courses'), (snapshot: QuerySnapshot<DocumentData>) => {
-      const coursesData: Course[] = snapshot.docs.map(doc => ({
-        id: doc.id,
-        name: doc.data().name as string,
-        description: doc.data().description as string,
-        subjectIds: (doc.data().subjectIds as string[]) || [],
-      }));
-      setFirestoreCourses(coursesData);
-      setIsLoading(false);
-    }, (error) => {
-      setErrors({ fetch: 'Failed to load courses' });
-      setIsLoading(false);
-    });
+    const unsubscribeCourses = onSnapshot(
+      collection(db, 'courses'),
+      (snapshot: QuerySnapshot<DocumentData>) => {
+        const coursesData: Course[] = snapshot.docs.map(docSnap => ({
+          id: docSnap.id,
+          name: docSnap.data().name as string,
+          description: docSnap.data().description as string,
+          subjectIds: (docSnap.data().subjectIds as string[]) || [],
+        }));
+        setFirestoreCourses(coursesData);
+        setIsLoading(false);
+      },
+      () => {
+        setErrors({ fetch: 'Failed to load courses' });
+        setIsLoading(false);
+      }
+    );
 
-    const unsubscribeSubjects = onSnapshot(collection(db, 'subjects'), (snapshot: QuerySnapshot<DocumentData>) => {
-      const subjectsData: Subject[] = snapshot.docs.map(doc => ({
-        id: doc.id,
-        name: doc.data().name as string,
-        chapters: (doc.data().chapters as { [chapter: string]: string[] }) || {},
-      }));
-      setFirestoreSubjects(subjectsData);
-    }, (error) => {
-      setErrors({ fetch: 'Failed to load subjects' });
-    });
+    const unsubscribeSubjects = onSnapshot(
+      collection(db, 'subjects'),
+      (snapshot: QuerySnapshot<DocumentData>) => {
+        const subjectsData: Subject[] = snapshot.docs.map(docSnap => ({
+          id: docSnap.id,
+          name: docSnap.data().name as string,
+          chapters: (docSnap.data().chapters as Subject['chapters']) || {},
+        }));
+        setFirestoreSubjects(subjectsData);
+      },
+      () => {
+        setErrors({ fetch: 'Failed to load subjects' });
+      }
+    );
 
     return () => {
       unsubscribeCourses();
@@ -151,9 +160,9 @@ export default function CreateQuestion() {
       try {
         const snapshot = await getDoc(doc(db, "questions", id));
         if (snapshot.exists()) {
-          setQuestionData({ ...questionData, ...snapshot.data() } as Question);
+          setQuestionData(prev => ({ ...prev, ...(snapshot.data() as Question) }));
         }
-      } catch (err) {
+      } catch {
         setErrors({ fetch: 'Failed to load question' });
       }
     };
@@ -167,7 +176,7 @@ export default function CreateQuestion() {
       if (user && !id) {
         const userDoc = await getDoc(doc(db, 'users', user.uid));
         if (userDoc.exists()) {
-          const userData = userDoc.data();
+          const userData = userDoc.data() as any;
           const metadata = userData.metadata || {};
           setQuestionData(prev => ({
             ...prev,
@@ -188,7 +197,7 @@ export default function CreateQuestion() {
   }, [id]);
 
   const handleInputChange = (field: keyof Question, value: string | boolean) => {
-    setQuestionData(prev => ({ ...prev, [field]: value }));
+    setQuestionData(prev => ({ ...prev, [field]: value as any }));
     if (errors[field]) {
       setErrors(prev => ({ ...prev, [field]: '' }));
     }
@@ -201,6 +210,9 @@ export default function CreateQuestion() {
       ...prev,
       options: newOptions
     }));
+    if (questionData.correctAnswer && !newOptions.includes(questionData.correctAnswer)) {
+      setQuestionData(prev => ({ ...prev, correctAnswer: '' }));
+    }
   };
 
   const addOption = () => {
@@ -214,11 +226,12 @@ export default function CreateQuestion() {
 
   const removeOption = (index: number) => {
     if (questionData.options.length > 2) {
+      const removed = questionData.options[index];
       const newOptions = questionData.options.filter((_, i) => i !== index);
       setQuestionData(prev => ({
         ...prev,
         options: newOptions,
-        correctAnswer: prev.correctAnswer === prev.options[index] ? '' : prev.correctAnswer
+        correctAnswer: prev.correctAnswer === removed ? '' : prev.correctAnswer
       }));
     }
   };
@@ -229,23 +242,18 @@ export default function CreateQuestion() {
     if (!questionData.questionText.trim()) {
       newErrors.questionText = 'Question text is required';
     }
-
     if (questionData.options.some(option => !option.trim())) {
       newErrors.options = 'All options must be filled';
     }
-
     if (!questionData.correctAnswer) {
       newErrors.correctAnswer = 'Please select the correct answer';
     }
-
     if (!questionData.course) {
       newErrors.course = 'Course is required';
     }
-
     if (!questionData.subject) {
       newErrors.subject = 'Subject is required';
     }
-
     if (!questionData.difficulty) {
       newErrors.difficulty = 'Difficulty level is required';
     }
@@ -255,41 +263,39 @@ export default function CreateQuestion() {
   };
 
   const validateCsvQuestion = (row: any, index: number) => {
-    const errors: string[] = [];
+    const errs: string[] = [];
     const requiredFields = ['questionText', 'options', 'correctAnswer', 'course', 'subject', 'difficulty'];
-    
+
     requiredFields.forEach(field => {
       if (!row[field] || (typeof row[field] === 'string' && !row[field].trim())) {
-        errors.push(`Row ${index + 1}: ${field} is required`);
+        errs.push(`Row ${index + 1}: ${field} is required`);
       }
     });
 
     if (row.options) {
       const options = row.options.split('|').map((opt: string) => opt.trim());
       if (options.length < 2) {
-        errors.push(`Row ${index + 1}: At least 2 options are required`);
+        errs.push(`Row ${index + 1}: At least 2 options are required`);
       }
       if (options.some((opt: string) => !opt)) {
-        errors.push(`Row ${index + 1}: All options must be non-empty`);
+        errs.push(`Row ${index + 1}: All options must be non-empty`);
       }
       if (!options.includes(row.correctAnswer)) {
-        errors.push(`Row ${index + 1}: Correct answer must match one of the options`);
+        errs.push(`Row ${index + 1}: Correct answer must match one of the options`);
       }
     }
 
     if (row.course && !firestoreCourses.some(c => c.name === row.course)) {
-      errors.push(`Row ${index + 1}: Invalid course name`);
+      errs.push(`Row ${index + 1}: Invalid course name`);
     }
-
     if (row.subject && !firestoreSubjects.some(s => s.name === row.subject)) {
-      errors.push(`Row ${index + 1}: Invalid subject name`);
+      errs.push(`Row ${index + 1}: Invalid subject name`);
     }
-
     if (row.difficulty && !['Easy', 'Medium', 'Hard'].includes(row.difficulty)) {
-      errors.push(`Row ${index + 1}: Invalid difficulty level`);
+      errs.push(`Row ${index + 1}: Invalid difficulty level`);
     }
 
-    return errors;
+    return errs;
   };
 
   const handleCsvUpload = async () => {
@@ -306,13 +312,13 @@ export default function CreateQuestion() {
       skipEmptyLines: true,
       complete: async (result) => {
         const questions = result.data as any[];
-        const errors: string[] = [];
+        const errs: string[] = [];
         const validQuestions: Question[] = [];
 
         questions.forEach((row, index) => {
           const rowErrors = validateCsvQuestion(row, index);
           if (rowErrors.length > 0) {
-            errors.push(...rowErrors);
+            errs.push(...rowErrors);
             return;
           }
 
@@ -329,20 +335,20 @@ export default function CreateQuestion() {
             book: row.book || '',
             teacher: row.teacher || questionData.teacher,
             course: row.course,
-            enableExplanation: row.enableExplanation ? row.enableExplanation.toLowerCase() === 'true' : true,
+            enableExplanation: row.enableExplanation ? String(row.enableExplanation).toLowerCase() === 'true' : true,
             createdAt: new Date(),
           });
         });
 
-        if (errors.length > 0) {
-          setCsvErrors(errors);
+        if (errs.length > 0) {
+          setCsvErrors(errs);
           setIsSaving(false);
           return;
         }
 
         try {
-          for (const question of validQuestions) {
-            await addDoc(collection(db, 'questions'), question);
+          for (const q of validQuestions) {
+            await addDoc(collection(db, 'questions'), q);
           }
           setIsCsvDialogOpen(false);
           setCsvFile(null);
@@ -361,53 +367,68 @@ export default function CreateQuestion() {
       },
     });
   };
-const handleSave = async () => {
-  if (!validateForm()) return;
-  setIsSaving(true);
 
-  try {
-    if (id) {
-      // Update existing question
-      await updateDoc(doc(db, "questions", id), questionData);
-      router.push("/admin/questions/questionbank");
-    } else {
-      // Add new question
-      await addDoc(collection(db, "questions"), {
-        ...questionData,
-        createdAt: new Date()
-      });
-      // Reset form fields
-      setQuestionData({
-        question: '',
-        options: ['', '', '', ''],
-        correctOption: '',
-        explanation: '',
-        subject: '',
-        topic: '',
-        difficulty: '',
-      });
+  const handleSave = async () => {
+    if (!validateForm()) return;
+    setIsSaving(true);
+
+    try {
+      if (id) {
+        await updateDoc(doc(db, "questions", id), questionData);
+        router.push("/admin/questions/questionbank");
+      } else {
+        await addDoc(collection(db, "questions"), {
+          ...questionData,
+          createdAt: new Date()
+        });
+        setQuestionData({
+          questionText: '',
+          options: ['', '', '', ''],
+          correctAnswer: '',
+          explanation: '',
+          subject: '',
+          chapter: '',
+          topic: '',
+          difficulty: '',
+          year: '',
+          book: '',
+          teacher: questionData.teacher || '',
+          course: '',
+          enableExplanation: true,
+        });
+      }
+    } catch {
+      setErrors({ save: 'Failed to save question' });
+    } finally {
+      setIsSaving(false);
     }
-  } catch (err) {
-    setErrors({ save: 'Failed to save question' });
-  } finally {
-    setIsSaving(false);
-  }
-};
-
+  };
 
   const selectedCourse = firestoreCourses.find(c => c.name === questionData.course);
   const availableSubjects = selectedCourse?.subjectIds
     ? firestoreSubjects.filter(s => selectedCourse.subjectIds.includes(s.id)).map(s => s.name)
     : [];
   const selectedSubject = firestoreSubjects.find(s => s.name === questionData.subject);
-  const availableChapters = selectedSubject ? Object.keys(selectedSubject.chapters) : [];
-  const availableTopics = selectedSubject && questionData.chapter
-    ? selectedSubject.chapters[questionData.chapter] || []
-    : [];
+
+  // Normalize topics to ALWAYS be an array
+  const rawTopics =
+    selectedSubject && questionData.chapter
+      ? selectedSubject.chapters?.[questionData.chapter]
+      : null;
+
+  const availableTopics: string[] = Array.isArray(rawTopics)
+    ? rawTopics
+    : rawTopics && typeof rawTopics === 'object'
+      ? Object.keys(rawTopics as Record<string, unknown>)
+      : typeof rawTopics === 'string'
+        ? [rawTopics]
+        : [];
+
+  const availableChapters = selectedSubject ? Object.keys(selectedSubject.chapters || {}) : [];
   const difficulties = ['Easy', 'Medium', 'Hard'];
   const years = Array.from({ length: new Date().getFullYear() - 2000 + 1 }, (_, i) => (2000 + i).toString());
 
-  // Skeleton Loader Component
+  // Skeleton Loader Component (fixed)
   const SkeletonCard = () => (
     <Card className="animate-pulse">
       <CardHeader>
@@ -421,7 +442,7 @@ const handleSave = async () => {
         <div className="space-y-2">
           <div className="h-6 w-32 bg-gray-200 rounded"></div>
           <div className="space-y-2">
-            {[...Array(4)].map((_, idx) => (
+            {Array.from({ length: 4 }).map((_, idx) => (
               <div key={idx} className="h-12 w-full bg-gray-200 rounded"></div>
             ))}
           </div>
@@ -528,7 +549,6 @@ const handleSave = async () => {
           </div>
         ) : (
           <div className="space-y-8">
-            {/* Error Alert */}
             {(errors.fetch || errors.save) && (
               <Alert variant="destructive" className="animate-in fade-in">
                 <AlertDescription className="flex items-center text-lg">
@@ -766,9 +786,13 @@ const handleSave = async () => {
                       <SelectContent>
                         {isLoading ? (
                           <div className="h-10 w-full bg-gray-200 rounded animate-pulse"></div>
-                        ) : availableTopics.map(topic => (
-                          <SelectItem key={topic} value={topic} className="text-lg">{topic}</SelectItem>
-                        ))}
+                        ) : availableTopics.length > 0 ? (
+                          availableTopics.map(topic => (
+                            <SelectItem key={topic} value={topic} className="text-lg">{topic}</SelectItem>
+                          ))
+                        ) : (
+                          <div className="px-3 py-2 text-sm text-gray-500">No topics</div>
+                        )}
                       </SelectContent>
                     </Select>
                   </div>

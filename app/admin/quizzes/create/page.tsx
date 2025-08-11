@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
-import { collection, getDocs, addDoc, Timestamp, updateDoc, getDoc, doc } from "firebase/firestore";
+import { collection, getDocs, addDoc, Timestamp,query, updateDoc, getDoc, doc, orderBy } from "firebase/firestore";
 import { db } from "../../../firebase";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useSearchParams, useRouter } from 'next/navigation';
@@ -126,7 +126,12 @@ export default function CreateQuiz() {
   useEffect(() => {
     const fetchQuestions = async () => {
       try {
-        const snapshot = await getDocs(collection(db, "questions"));
+
+const q = query(
+  collection(db, "questions"),
+  orderBy("createdAt", "desc") // latest first
+);
+const snapshot = await getDocs(q);
         const questions = snapshot.docs.map((doc) => ({
           id: doc.id,
           ...(doc.data()),
