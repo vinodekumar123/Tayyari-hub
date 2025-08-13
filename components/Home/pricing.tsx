@@ -56,12 +56,12 @@ const PricingSection = () => {
             </div>
 
             <h3 className="text-2xl font-bold mb-2">Premium Plan</h3>
-            <p className="text-blue-100 mb-6">Unlock full potential with unlimited access and custom tools.</p>
+            <p className="text-blue-100 mb-6">Unlock full potential with 22+ Mocks access and custom tools.</p>
 
             <ul className="space-y-4 text-left text-sm text-white/90 mb-6">
               <li className="flex items-center gap-2">
                 <FaCheckCircle className="text-white" />
-                Unlimited quizzes
+                22+ Mock Quizzes quizzes
               </li>
             
               <li className="flex items-center gap-2">
