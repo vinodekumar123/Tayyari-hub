@@ -96,7 +96,7 @@ export default function QuizBankPage() {
   const [lastVisible, setLastVisible] = useState<any>(null);
   const [hasMore, setHasMore] = useState(true);
   const [filters, setFilters] = useState({
-    accessType: '',
+    accessType: 'all', // Changed from '' to 'all'
     searchTerm: '',
   });
   const [showPremiumDialog, setShowPremiumDialog] = useState(false);
@@ -316,7 +316,7 @@ export default function QuizBankPage() {
   const filteredQuizzes = quizzes.filter((quiz) => {
     const { accessType, searchTerm } = filters;
     const matches = [
-      !accessType || quiz.accessType === accessType,
+      accessType === 'all' || quiz.accessType === accessType,
       !searchTerm || (quiz.title || '').toLowerCase().includes(searchTerm.toLowerCase()),
     ];
     return matches.every(Boolean);
@@ -419,7 +419,7 @@ export default function QuizBankPage() {
                 <SelectValue placeholder="Access Type" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All</SelectItem>
+                <SelectItem value="all">All</SelectItem>
                 {uniqueAccessTypes.map((val) => (
                   <SelectItem key={val} value={val}>
                     {val.charAt(0).toUpperCase() + val.slice(1)}
