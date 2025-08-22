@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   collection,
@@ -77,9 +77,12 @@ function getQuizStatus(startDate: string, endDate: string, startTime?: string, e
       return 'ended';
     }
 
-    console.log('🕐 Now:', now.toString());
-    console.log('🚀 Start:', start.toString());
-    console.log('🛑 End:', end.toString());
+    // Only log in development
+    if (process.env.NODE_ENV === 'development') {
+      console.log('🕐 Now:', now.toString());
+      console.log('🚀 Start:', start.toString());
+      console.log('🛑 End:', end.toString());
+    }
 
     if (now < start) return 'upcoming';
     if (now >= start && now <= end) return 'active';
@@ -116,6 +119,16 @@ export default function QuizBankPage() {
   const unsubscribeRef = useRef<(() => void) | null>(null);
   const router = useRouter();
 
+  // Cleanup Firestore listeners on unmount
+  useEffect(() => {
+    return () => {
+      if (unsubscribeRef.current) {
+        unsubscribeRef.current();
+        unsubscribeRef.current = null;
+      }
+    };
+  }, []);
+
   useEffect(() => {
     const auth = getAuth();
     const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
@@ -129,12 +142,9 @@ export default function QuizBankPage() {
           const userData = userSnap.exists() ? userSnap.data() : {} as any;
           const isAdmin = (userData as any).admin === true;
           const userPlan = (userData as any).plan || 'free';
-          const course = (userData as any).course; // Fetch course directly from user document
-
-          console.log('User Data:', userData);
+          const course = (userData as any).course;
 
           if (!isAdmin && (!course || typeof course !== 'string')) {
-            console.error('Invalid or missing course for user:', user.uid, course);
             setError('Invalid enrollment: You must be enrolled in a course.');
             setLoading(false);
             setUserLoaded(true);
@@ -142,8 +152,9 @@ export default function QuizBankPage() {
           }
 
           setCurrentUser({ ...user, isAdmin, plan: userPlan });
-          setEnrolledCourse(isAdmin ? null : course); // Set single course for non-admins
+          setEnrolledCourse(isAdmin ? null : course);
 
+          // Fetch quiz attempts
           const attemptsSnapshot = await getDocs(
             collection(db, 'users', user.uid, 'quizAttempts')
           );
@@ -157,7 +168,6 @@ export default function QuizBankPage() {
           setAttemptedQuizzes(attempted);
           setUserLoaded(true);
         } catch (err) {
-          console.error('Error fetching user data:', err);
           setError('Failed to load user data. Please try again.');
           setLoading(false);
           setUserLoaded(true);
@@ -180,84 +190,97 @@ export default function QuizBankPage() {
     };
   }, []);
 
+  // Memoize fetchQuizzes to avoid redefining on every render
+  const fetchQuizzes = useCallback(
+    async (startAfterDoc: any = null) => {
+      if (!currentUser) return;
+
+      setLoading(true);
+      setError(null);
+
+      try {
+        const isAdmin = currentUser.isAdmin;
+        const courseName = enrolledCourse;
+        const constraints: any[] = [limit(10)];
+
+        if (!isAdmin) {
+          if (!courseName) {
+            setError('No course enrolled. Please enroll in a course to view quizzes.');
+            setQuizzes([]);
+            setLoading(false);
+            setHasMore(false);
+            return;
+          }
+          constraints.push(where('published', '==', true));
+          constraints.push(where('course.name', '==', courseName));
+        }
+
+        if (startAfterDoc) {
+          constraints.push(startAfter(startAfterDoc));
+        }
+
+        const q = query(collection(db, 'quizzes'), ...constraints);
+
+        // Unsubscribe from previous snapshot before setting new one
+        if (unsubscribeRef.current) {
+          unsubscribeRef.current();
+          unsubscribeRef.current = null;
+        }
+
+        unsubscribeRef.current = onSnapshot(
+          q,
+          (snapshot) => {
+            const data = snapshot.docs.map((d) => {
+              const quizData = d.data() as any;
+              const course = quizData.course?.name || quizData.course || 'Unknown';
+              const subject = Array.isArray(quizData.subjects)
+                ? quizData.subjects.map((s: any) => s.name || s).join(', ')
+                : quizData.subject?.name || quizData.subject || '';
+              const chapter = quizData.chapter?.name || quizData.chapter || '';
+
+              return {
+                id: d.id,
+                ...quizData,
+                course,
+                subject,
+                chapter,
+                maxAttempts: quizData.maxAttempts || 1,
+              } as any;
+            });
+
+            setQuizzes((prev) => (startAfterDoc ? [...prev, ...data] : data));
+            setLastVisible(snapshot.docs[snapshot.docs.length - 1]);
+            setHasMore(snapshot.docs.length === 10);
+            setLoading(false);
+          },
+          (error) => {
+            setError(
+              `Failed to fetch quizzes: ${error.message}. Please try again or create the required index at the provided link.`
+            );
+            setLoading(false);
+            setHasMore(false);
+          }
+        );
+      } catch (err: any) {
+        setError('Failed to fetch quizzes. Please try again.');
+        setLoading(false);
+        setHasMore(false);
+      }
+    },
+    [currentUser, enrolledCourse]
+  );
+
+  // Only fetch quizzes after userLoaded, currentUser set
   useEffect(() => {
     if (userLoaded && currentUser) {
       setLastVisible(null);
       setHasMore(true);
       fetchQuizzes();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters, currentUser, enrolledCourse, userLoaded]);
+    // Only depend on stable references
+  }, [filters, currentUser, enrolledCourse, userLoaded, fetchQuizzes]);
 
-  const fetchQuizzes = async (startAfterDoc: any = null) => {
-    if (!currentUser) return;
+  // Add your UI rendering logic below...
+  // ...
 
-    setLoading(true);
-    setError(null);
-
-    try {
-      console.log('Fetching quizzes for user:', currentUser.uid, 'Enrolled Course:', enrolledCourse);
-
-      const isAdmin = currentUser.isAdmin;
-      const courseName = enrolledCourse;
-
-      const constraints: any[] = [ limit(10)];
-
-      if (!isAdmin) {
-        if (!courseName) {
-          setError('No course enrolled. Please enroll in a course to view quizzes.');
-          setQuizzes([]);
-          setLoading(false);
-          setHasMore(false);
-          return;
-        }
-        constraints.push(where('published', '==', true));
-        constraints.push(where('course.name', '==', courseName));
-        console.log('Query Constraints:', constraints);
-      }
-
-      if (startAfterDoc) {
-        constraints.push(startAfter(startAfterDoc));
-      }
-
-      const q = query(collection(db, 'quizzes'), ...constraints);
-
-      if (unsubscribeRef.current) {
-        unsubscribeRef.current();
-      }
-
-      const unsubscribe = onSnapshot(
-        q,
-        (snapshot) => {
-          const data = snapshot.docs.map((d) => {
-            const quizData = d.data() as any;
-            const course = quizData.course?.name || quizData.course || 'Unknown';
-            const subject = Array.isArray(quizData.subjects)
-              ? quizData.subjects.map((s: any) => s.name || s).join(', ')
-              : quizData.subject?.name || quizData.subject || '';
-            const chapter = quizData.chapter?.name || quizData.chapter || '';
-
-            return {
-              id: d.id,
-              ...quizData,
-              course,
-              subject,
-              chapter,
-              maxAttempts: quizData.maxAttempts || 1,
-            } as any;
-          });
-
-          console.log('Fetched Quizzes:', data);
-
-          setQuizzes((prev) => (startAfterDoc ? [...prev, ...data] : data));
-          setLastVisible(snapshot.docs[snapshot.docs.length - 1]);
-          setHasMore(snapshot.docs.length === 10);
-          setLoading(false);
-        },
-        (error) => {
-          console.error('Firestore Query Error:', error.code, error.message);
-          setError(`Failed to fetch quizzes: ${error.message}. Please try again or create the required index at the provided link.`);
-          setLoading(false);
-          setHasMore(false);
-        }
-      );
+}
