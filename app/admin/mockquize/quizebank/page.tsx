@@ -77,7 +77,6 @@ function getQuizStatus(startDate: string, endDate: string, startTime?: string, e
       return 'ended';
     }
 
-    // Only log in development
     if (process.env.NODE_ENV === 'development') {
       console.log('🕐 Now:', now.toString());
       console.log('🚀 Start:', start.toString());
@@ -99,18 +98,14 @@ export default function QuizBankPage() {
   const [error, setError] = useState<string | null>(null);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [attemptedQuizzes, setAttemptedQuizzes] = useState<{ [key: string]: number }>({});
-  const [enrolledCourse, setEnrolledCourse] = useState<string | null>(null); // Single course name
+  const [enrolledCourse, setEnrolledCourse] = useState<string | null>(null);
   const [userLoaded, setUserLoaded] = useState(false);
   const [lastVisible, setLastVisible] = useState<any>(null);
   const [hasMore, setHasMore] = useState(true);
+  // Only keep searchTerm and accessType in filters
   const [filters, setFilters] = useState({
-    course: '',
-    subject: '',
-    chapter: '',
-    accessType: '',
     searchTerm: '',
-    status: '',
-    date: '',
+    accessType: '',
   });
   const [showPremiumDialog, setShowPremiumDialog] = useState(false);
   const [selectedQuizId, setSelectedQuizId] = useState<string | null>(null);
@@ -119,7 +114,6 @@ export default function QuizBankPage() {
   const unsubscribeRef = useRef<(() => void) | null>(null);
   const router = useRouter();
 
-  // Cleanup Firestore listeners on unmount
   useEffect(() => {
     return () => {
       if (unsubscribeRef.current) {
@@ -190,7 +184,6 @@ export default function QuizBankPage() {
     };
   }, []);
 
-  // Memoize fetchQuizzes to avoid redefining on every render
   const fetchQuizzes = useCallback(
     async (startAfterDoc: any = null) => {
       if (!currentUser) return;
@@ -201,7 +194,10 @@ export default function QuizBankPage() {
       try {
         const isAdmin = currentUser.isAdmin;
         const courseName = enrolledCourse;
-        const constraints: any[] = [limit(10)];
+        const constraints: any[] = [
+          orderBy('publishedAt', 'desc'), // sort by published date, newest first
+          limit(30),
+        ];
 
         if (!isAdmin) {
           if (!courseName) {
@@ -215,13 +211,17 @@ export default function QuizBankPage() {
           constraints.push(where('course.name', '==', courseName));
         }
 
+        // Access type filter
+        if (filters.accessType) {
+          constraints.push(where('accessType', '==', filters.accessType));
+        }
+
         if (startAfterDoc) {
           constraints.push(startAfter(startAfterDoc));
         }
 
         const q = query(collection(db, 'quizzes'), ...constraints);
 
-        // Unsubscribe from previous snapshot before setting new one
         if (unsubscribeRef.current) {
           unsubscribeRef.current();
           unsubscribeRef.current = null;
@@ -230,14 +230,13 @@ export default function QuizBankPage() {
         unsubscribeRef.current = onSnapshot(
           q,
           (snapshot) => {
-            const data = snapshot.docs.map((d) => {
+            let data = snapshot.docs.map((d) => {
               const quizData = d.data() as any;
               const course = quizData.course?.name || quizData.course || 'Unknown';
               const subject = Array.isArray(quizData.subjects)
                 ? quizData.subjects.map((s: any) => s.name || s).join(', ')
                 : quizData.subject?.name || quizData.subject || '';
               const chapter = quizData.chapter?.name || quizData.chapter || '';
-
               return {
                 id: d.id,
                 ...quizData,
@@ -248,9 +247,19 @@ export default function QuizBankPage() {
               } as any;
             });
 
-            setQuizzes((prev) => (startAfterDoc ? [...prev, ...data] : data));
+            // Search filter (client side, since Firestore doesn't support full text search)
+            if (filters.searchTerm) {
+              const search = filters.searchTerm.toLowerCase();
+              data = data.filter((quiz) =>
+                (quiz.title || '')
+                  .toLowerCase()
+                  .includes(search)
+              );
+            }
+
+            setQuizzes(data);
             setLastVisible(snapshot.docs[snapshot.docs.length - 1]);
-            setHasMore(snapshot.docs.length === 10);
+            setHasMore(snapshot.docs.length === 30);
             setLoading(false);
           },
           (error) => {
@@ -267,20 +276,93 @@ export default function QuizBankPage() {
         setHasMore(false);
       }
     },
-    [currentUser, enrolledCourse]
+    [currentUser, enrolledCourse, filters.accessType, filters.searchTerm]
   );
 
-  // Only fetch quizzes after userLoaded, currentUser set
   useEffect(() => {
     if (userLoaded && currentUser) {
       setLastVisible(null);
       setHasMore(true);
       fetchQuizzes();
     }
-    // Only depend on stable references
   }, [filters, currentUser, enrolledCourse, userLoaded, fetchQuizzes]);
 
-  // Add your UI rendering logic below...
-  // ...
+  // Group quizzes by published date (yyyy-mm-dd)
+  const quizzesByDate = quizzes.reduce((acc: Record<string, any[]>, quiz) => {
+    const date = quiz.publishedAt
+      ? new Date(quiz.publishedAt.seconds ? quiz.publishedAt.seconds * 1000 : quiz.publishedAt)
+      : null;
+    const dateStr = date
+      ? date.toLocaleDateString('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit' })
+      : 'Unknown Date';
+    if (!acc[dateStr]) acc[dateStr] = [];
+    acc[dateStr].push(quiz);
+    return acc;
+  }, {});
 
+  // Sort dates descending (newest first)
+  const sortedDates = Object.keys(quizzesByDate).sort((a, b) => (a < b ? 1 : -1));
+
+  return (
+    <div className="container py-4">
+      <div className="flex items-center gap-4 mb-6">
+        <Input
+          placeholder="Search quizzes..."
+          value={filters.searchTerm}
+          onChange={e => setFilters(f => ({ ...f, searchTerm: e.target.value }))}
+          className="max-w-xs"
+        />
+
+        <Select
+          value={filters.accessType}
+          onValueChange={val => setFilters(f => ({ ...f, accessType: val }))}
+        >
+          <SelectTrigger className="w-44">
+            <SelectValue placeholder="Access type" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="">All Types</SelectItem>
+            <SelectItem value="free">Free</SelectItem>
+            <SelectItem value="premium">Premium</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      {loading && <div>Loading quizzes...</div>}
+      {error && <div className="text-red-500">{error}</div>}
+      {!loading && quizzes.length === 0 && <div>No quizzes found.</div>}
+      {sortedDates.map(date => (
+        <div key={date} className="mb-8">
+          <h2 className="text-xl font-bold mb-3">
+            {date === 'Unknown Date' ? date : `Published: ${date}`}
+          </h2>
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {quizzesByDate[date].map((quiz) => (
+              <Card key={quiz.id}>
+                <CardHeader>
+                  <CardTitle>{quiz.title}</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex flex-col gap-2 text-sm">
+                    <div>Course: {quiz.course}</div>
+                    <div>Subject: {quiz.subject}</div>
+                    <div>Chapter: {quiz.chapter}</div>
+                    <div>Status: {getQuizStatus(quiz.startDate, quiz.endDate, quiz.startTime, quiz.endTime)}</div>
+                    <div>Access: {quiz.accessType}</div>
+                  </div>
+                  <div className="flex gap-2 mt-4">
+                    <Link href={`/admin/mockquize/quizebank/${quiz.id}`}>
+                      <Button size="sm" variant="outline" className="flex items-center gap-1">
+                        <Eye size={16} /> View
+                      </Button>
+                    </Link>
+                    {/* Add other actions if needed */}
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
 }
