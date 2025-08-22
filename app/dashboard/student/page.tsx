@@ -34,6 +34,7 @@ import {
   RefreshCw,
   Activity,
   PlusCircle,
+ClipboardList,
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
