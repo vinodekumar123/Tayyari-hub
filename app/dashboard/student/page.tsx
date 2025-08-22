@@ -473,7 +473,7 @@ export default function EnhancedStudentDashboard() {
           </ResponsiveContainer>
         </div>
 
-          {*/ <div className="rounded-lg p-4 sm:p-6 bg-white shadow">
+          {/* <div className="rounded-lg p-4 sm:p-6 bg-white shadow">
           <h2 className="text-lg sm:text-xl font-bold mb-4 text-gray-800">📊 Practice Subject Accuracy</h2>
           <ResponsiveContainer width="100%" height={250} minHeight={200}>
             <PieChart>
