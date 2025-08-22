@@ -366,10 +366,26 @@ export default function EnhancedStudentDashboard() {
           </CardContent>
         </Card>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
-          <Card><CardContent className="p-3 sm:p-4 text-center"><p className="font-semibold text-sm sm:text-base">📝 Quiz Questions Attempted</p><p className="text-xl sm:text-2xl">{quizStats.attempted}</p><p className="text-green-600 font-bold text-sm sm:text-base">{quizStats.correct} Correct</p></CardContent></Card>
-          <Card><CardContent className="p-3 sm:p-4 text-center"><p className="font-semibold text-sm sm:text-base">🧪 Practice Questions Attempted</p><p className="text-xl sm:text-2xl">{mockStats.attempted}</p><p className="text-green-600 font-bold text-sm sm:text-base">{mockStats.correct} Correct</p></CardContent></Card>
-        </div>
+        <div className="grid grid-cols-1 gap-4 sm:gap-6">
+  <Card>
+    <CardContent className="p-3 sm:p-4 text-center">
+      <p className="font-semibold text-sm sm:text-base">📝 Quiz Questions Attempted</p>
+      <p className="text-xl sm:text-2xl">{quizStats.attempted}</p>
+      <p className="text-green-600 font-bold text-sm sm:text-base">{quizStats.correct} Correct</p>
+    </CardContent>
+  </Card>
+
+  {/* 
+  <Card>
+    <CardContent className="p-3 sm:p-4 text-center">
+      <p className="font-semibold text-sm sm:text-base">🧪 Practice Questions Attempted</p>
+      <p className="text-xl sm:text-2xl">{mockStats.attempted}</p>
+      <p className="text-green-600 font-bold text-sm sm:text-base">{mockStats.correct} Correct</p>
+    </CardContent>
+  </Card>
+  */}
+</div>
+
 
         {/* Quiz Subject Stats Table */}
         <Card>
