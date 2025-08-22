@@ -62,6 +62,9 @@ export default function StudentProfilePage() {
 
   if (loading) return <div className="p-6">Loading...</div>;
 
+  // Only show upgrade link if user is on free plan
+  const isFreePlan = (form.plan || "").toLowerCase() === "free";
+
   return (
     <div className="w-full min-h-screen bg-gradient-to-br from-slate-100 to-white px-10 py-10">
       <h1 className="text-4xl font-bold text-gray-800 mb-10">
@@ -95,12 +98,14 @@ export default function StudentProfilePage() {
           );
         })}
 
-        <Link
-          href="/pricing"
-          className="inline-flex items-center justify-center bg-white border border-blue-600 text-blue-600 font-semibold px-6 py-3 rounded-xl hover:bg-blue-100 transition"
-        >
-          Upgrade Plan <ArrowRightCircle className="ml-2 w-5 h-5" />
-        </Link>
+        {isFreePlan && (
+          <Link
+            href="/pricing"
+            className="inline-flex items-center justify-center bg-white border border-blue-600 text-blue-600 font-semibold px-6 py-3 rounded-xl hover:bg-blue-100 transition"
+          >
+            Upgrade Plan <ArrowRightCircle className="ml-2 w-5 h-5" />
+          </Link>
+        )}
 
         <div className="md:col-span-2 flex gap-4 mt-6">
           <button
