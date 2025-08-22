@@ -50,7 +50,6 @@ function getQuizStatus(startDate: string, endDate: string, startTime?: string, e
 
   try {
     if (!startDate || !endDate) {
-      console.warn('Invalid startDate or endDate:', { startDate, endDate });
       return 'ended';
     }
 
@@ -73,7 +72,6 @@ function getQuizStatus(startDate: string, endDate: string, startTime?: string, e
     }
 
     if (isNaN(start.getTime()) || isNaN(end.getTime())) {
-      console.warn('Invalid date parsed:', { start, end });
       return 'ended';
     }
 
@@ -81,7 +79,6 @@ function getQuizStatus(startDate: string, endDate: string, startTime?: string, e
     if (now >= start && now <= end) return 'active';
     return 'ended';
   } catch (error) {
-    console.error('Error in getQuizStatus:', error);
     return 'ended';
   }
 }
@@ -231,10 +228,14 @@ export default function QuizBankPage() {
             } as any;
           });
 
-          // Sort newest to oldest by startDate (descending)
+          // Defensive sort: fallback to "" if missing
           data = data.sort((a, b) => {
-            // fallback to '' if missing
-            return (b.startDate || '').localeCompare(a.startDate || '');
+            const dateA = typeof a.startDate === 'string' ? a.startDate : '';
+            const dateB = typeof b.startDate === 'string' ? b.startDate : '';
+            if (dateA === '' && dateB === '') return 0;
+            if (dateA === '') return 1;
+            if (dateB === '') return -1;
+            return dateB.localeCompare(dateA);
           });
 
           setQuizzes((prev) => (startAfterDoc ? [...prev, ...data] : data));
@@ -269,14 +270,22 @@ export default function QuizBankPage() {
 
   // Group quizzes by date for date headings (newest first)
   const groupedByDate = filteredQuizzes.reduce((acc: Record<string, any[]>, quiz) => {
-    const date = quiz.startDate || 'Unknown Date';
+    // Defensive: only use startDate if it's a nonempty string, else 'Unknown Date'
+    let date =
+      typeof quiz.startDate === 'string' && quiz.startDate.trim() !== ''
+        ? quiz.startDate
+        : 'Unknown Date';
     if (!acc[date]) acc[date] = [];
     acc[date].push(quiz);
     return acc;
   }, {});
 
-  // Sorted date keys newest on top
-  const sortedDateKeys = Object.keys(groupedByDate).sort((a, b) => b.localeCompare(a));
+  // Sorted date keys newest on top, 'Unknown Date' always last
+  const sortedDateKeys = Object.keys(groupedByDate).sort((a, b) => {
+    if (a === 'Unknown Date') return 1;
+    if (b === 'Unknown Date') return -1;
+    return b.localeCompare(a);
+  });
 
   const handleQuizClick = async (quiz: any) => {
     if (!currentUser?.isAdmin && currentUser?.plan === 'free' && quiz.accessType === 'paid') {
@@ -426,147 +435,149 @@ export default function QuizBankPage() {
       ) : (
         <>
           <div>
-            {sortedDateKeys.map((date) => (
-              <div key={date} className="mb-8">
-                <h2 className="text-lg sm:text-xl font-semibold mb-3 sm:mb-4 text-gray-800 border-b pb-1">
-                  {date}
-                </h2>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-                  {groupedByDate[date].map((quiz) => {
-                    const status = getQuizStatus(quiz.startDate, quiz.endDate, quiz.startTime, quiz.endTime);
-                    const attemptCount = attemptedQuizzes[quiz.id] || 0;
-                    const canAttempt = attemptCount < (quiz.maxAttempts || 1);
+            {sortedDateKeys.map((date) =>
+              groupedByDate[date]?.length > 0 ? (
+                <div key={date} className="mb-8">
+                  <h2 className="text-lg sm:text-xl font-semibold mb-3 sm:mb-4 text-gray-800 border-b pb-1">
+                    {date}
+                  </h2>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+                    {groupedByDate[date].map((quiz) => {
+                      const status = getQuizStatus(quiz.startDate, quiz.endDate, quiz.startTime, quiz.endTime);
+                      const attemptCount = attemptedQuizzes[quiz.id] || 0;
+                      const canAttempt = attemptCount < (quiz.maxAttempts || 1);
 
-                    const courseName =
-                      typeof quiz.course === 'object' && 'name' in quiz.course
-                        ? (quiz.course as any).name
-                        : quiz.course || '';
-                    const subjectName =
-                      typeof quiz.subject === 'object' && 'name' in quiz.subject
-                        ? (quiz.subject as any).name
-                        : quiz.subject || '';
-                    const chapterName =
-                      typeof quiz.chapter === 'object' && 'name' in quiz.chapter
-                        ? (quiz.chapter as any).name
-                        : quiz.chapter || '';
+                      const courseName =
+                        typeof quiz.course === 'object' && 'name' in quiz.course
+                          ? (quiz.course as any).name
+                          : quiz.course || '';
+                      const subjectName =
+                        typeof quiz.subject === 'object' && 'name' in quiz.subject
+                          ? (quiz.subject as any).name
+                          : quiz.subject || '';
+                      const chapterName =
+                        typeof quiz.chapter === 'object' && 'name' in quiz.chapter
+                          ? (quiz.chapter as any).name
+                          : quiz.chapter || '';
 
-                    return (
-                      <Card
-                        key={quiz.id}
-                        className="shadow-md hover:shadow-lg transition-all duration-300 w-full h-[460px] sm:h-[480px] lg:h-[500px] flex flex-col"
-                      >
-                        <CardHeader className="pb-2 sm:pb-3">
-                          <CardTitle className="text-lg sm:text-xl font-bold text-gray-900 mb-1 line-clamp-2">
-                            {quiz.title}
-                          </CardTitle>
-                          <p className="text-gray-600 text-sm line-clamp-2">
-                            {quiz.description}
-                          </p>
-                        </CardHeader>
-                        <CardContent className="space-y-4 flex-grow flex flex-col justify-between">
-                          <div className="space-y-4">
-                            <div className="grid grid-cols-2 gap-3 sm:gap-4 text-sm text-gray-700">
-                              <div className="flex items-center space-x-2">
-                                <BookOpen className="h-4 w-4 text-gray-500" />
-                                <span>{quiz.selectedQuestions?.length || 0} questions</span>
-                              </div>
-                              <div className="flex items-center space-x-2">
-                                <Clock className="h-4 w-4 text-gray-500" />
-                                <span>{quiz.duration} min</span>
-                              </div>
-                              <div className="col-span-2 line-clamp-1">
-                                <strong>Course:</strong> {courseName}
-                              </div>
-                              <div className="col-span-2 line-clamp-1">
-                                <strong>Subject:</strong> {subjectName}
-                              </div>
-                              {chapterName && (
+                      return (
+                        <Card
+                          key={quiz.id}
+                          className="shadow-md hover:shadow-lg transition-all duration-300 w-full h-[460px] sm:h-[480px] lg:h-[500px] flex flex-col"
+                        >
+                          <CardHeader className="pb-2 sm:pb-3">
+                            <CardTitle className="text-lg sm:text-xl font-bold text-gray-900 mb-1 line-clamp-2">
+                              {quiz.title}
+                            </CardTitle>
+                            <p className="text-gray-600 text-sm line-clamp-2">
+                              {quiz.description}
+                            </p>
+                          </CardHeader>
+                          <CardContent className="space-y-4 flex-grow flex flex-col justify-between">
+                            <div className="space-y-4">
+                              <div className="grid grid-cols-2 gap-3 sm:gap-4 text-sm text-gray-700">
+                                <div className="flex items-center space-x-2">
+                                  <BookOpen className="h-4 w-4 text-gray-500" />
+                                  <span>{quiz.selectedQuestions?.length || 0} questions</span>
+                                </div>
+                                <div className="flex items-center space-x-2">
+                                  <Clock className="h-4 w-4 text-gray-500" />
+                                  <span>{quiz.duration} min</span>
+                                </div>
                                 <div className="col-span-2 line-clamp-1">
-                                  <strong>Chapter:</strong> {chapterName}
+                                  <strong>Course:</strong> {courseName}
                                 </div>
-                              )}
+                                <div className="col-span-2 line-clamp-1">
+                                  <strong>Subject:</strong> {subjectName}
+                                </div>
+                                {chapterName && (
+                                  <div className="col-span-2 line-clamp-1">
+                                    <strong>Chapter:</strong> {chapterName}
+                                  </div>
+                                )}
+                              </div>
+
+                              <div className="bg-gray-50 p-3 rounded-lg text-sm space-y-1">
+                                <div className="flex justify-between">
+                                  <span className="text-gray-600">Access:</span>
+                                  <span className="font-medium capitalize">{quiz.accessType}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span className="text-gray-600">Attempts:</span>
+                                  <span className="font-medium">{attemptCount} / {quiz.maxAttempts}</span>
+                                </div>
+                                <div className="flex items-center justify-between mt-1">
+                                  <div className="flex items-center gap-1 text-gray-600">
+                                    <Calendar className="h-4 w-4" />
+                                    <span>
+                                      {quiz.startDate} - {quiz.endDate}
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
                             </div>
 
-                            <div className="bg-gray-50 p-3 rounded-lg text-sm space-y-1">
-                              <div className="flex justify-between">
-                                <span className="text-gray-600">Access:</span>
-                                <span className="font-medium capitalize">{quiz.accessType}</span>
-                              </div>
-                              <div className="flex justify-between">
-                                <span className="text-gray-600">Attempts:</span>
-                                <span className="font-medium">{attemptCount} / {quiz.maxAttempts}</span>
-                              </div>
-                              <div className="flex items-center justify-between mt-1">
-                                <div className="flex items-center gap-1 text-gray-600">
-                                  <Calendar className="h-4 w-4" />
-                                  <span>
-                                    {quiz.startDate} - {quiz.endDate}
-                                  </span>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-
-                          <div className="pt-2">
-                            {currentUser?.isAdmin ? (
-                              <Button className="w-full h-10 sm:h-12 bg-blue-600 text-white" asChild>
-                                <Link href={`/quiz/start?id=${quiz.id}`}>
-                                  <Eye className="h-4 w-4 mr-2" />
-                                  Preview Quiz
-                                  <ArrowRight className="h-4 w-4 ml-2" />
-                                </Link>
-                              </Button>
-                            ) : status === 'ended' ? (
-                              <Button variant="outline" disabled className="w-full h-10 sm:h-12">
-                                Quiz Ended
-                              </Button>
-                            ) : status === 'upcoming' ? (
-                              <Button variant="outline" disabled className="w-full h-10 sm:h-12">
-                                Upcoming
-                              </Button>
-                            ) : !canAttempt ? (
-                              <Button variant="outline" disabled className="w-full h-10 sm:h-12">
-                                Max Attempts Reached
-                              </Button>
-                            ) : (
-                              <Button
-                                className="w-full h-10 sm:h-12 bg-green-600 text-white"
-                                onClick={() => handleQuizClick(quiz)}
-                              >
-                                <Play className="h-4 w-4 mr-2" />
-                                {attemptCount > 0 ? 'Retake Quiz' : 'Start Quiz'}
-                                <ArrowRight className="h-4 w-4 ml-2" />
-                              </Button>
-                            )}
-
-                            {currentUser?.isAdmin && (
-                              <>
-                                <Button
-                                  variant="secondary"
-                                  className="w-full h-9 sm:h-10 mt-2 rounded-xl"
-                                  asChild
-                                >
-                                  <Link href={`/admin/quizzes/create?id=${quiz.id}`}>
-                                    <Pencil className="h-4 w-4 mr-2" /> Edit Quiz
+                            <div className="pt-2">
+                              {currentUser?.isAdmin ? (
+                                <Button className="w-full h-10 sm:h-12 bg-blue-600 text-white" asChild>
+                                  <Link href={`/quiz/start?id=${quiz.id}`}>
+                                    <Eye className="h-4 w-4 mr-2" />
+                                    Preview Quiz
+                                    <ArrowRight className="h-4 w-4 ml-2" />
                                   </Link>
                                 </Button>
-                                <Button
-                                  variant="destructive"
-                                  className="w-full h-9 sm:h-10 mt-2 rounded-xl"
-                                  onClick={() => handleDeleteClick(quiz)}
-                                >
-                                  <Trash2 className="h-4 w-4 mr-2" /> Delete Quiz
+                              ) : status === 'ended' ? (
+                                <Button variant="outline" disabled className="w-full h-10 sm:h-12">
+                                  Quiz Ended
                                 </Button>
-                              </>
-                            )}
-                          </div>
-                        </CardContent>
-                      </Card>
-                    );
-                  })}
+                              ) : status === 'upcoming' ? (
+                                <Button variant="outline" disabled className="w-full h-10 sm:h-12">
+                                  Upcoming
+                                </Button>
+                              ) : !canAttempt ? (
+                                <Button variant="outline" disabled className="w-full h-10 sm:h-12">
+                                  Max Attempts Reached
+                                </Button>
+                              ) : (
+                                <Button
+                                  className="w-full h-10 sm:h-12 bg-green-600 text-white"
+                                  onClick={() => handleQuizClick(quiz)}
+                                >
+                                  <Play className="h-4 w-4 mr-2" />
+                                  {attemptCount > 0 ? 'Retake Quiz' : 'Start Quiz'}
+                                  <ArrowRight className="h-4 w-4 ml-2" />
+                                </Button>
+                              )}
+
+                              {currentUser?.isAdmin && (
+                                <>
+                                  <Button
+                                    variant="secondary"
+                                    className="w-full h-9 sm:h-10 mt-2 rounded-xl"
+                                    asChild
+                                  >
+                                    <Link href={`/admin/quizzes/create?id=${quiz.id}`}>
+                                      <Pencil className="h-4 w-4 mr-2" /> Edit Quiz
+                                    </Link>
+                                  </Button>
+                                  <Button
+                                    variant="destructive"
+                                    className="w-full h-9 sm:h-10 mt-2 rounded-xl"
+                                    onClick={() => handleDeleteClick(quiz)}
+                                  >
+                                    <Trash2 className="h-4 w-4 mr-2" /> Delete Quiz
+                                  </Button>
+                                </>
+                              )}
+                            </div>
+                          </CardContent>
+                        </Card>
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
-            ))}
+              ) : null
+            )}
           </div>
           {hasMore && (
             <div className="mt-6 sm:mt-8 text-center">
