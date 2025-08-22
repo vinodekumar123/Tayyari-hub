@@ -423,41 +423,43 @@ export default function EnhancedStudentDashboard() {
           </CardContent>
         </Card>
 
-        {/* Mock Subject Stats Table */}
-          {/* <Card>
-          <CardContent className="p-3 sm:p-4">
-            <h2 className="text-lg sm:text-xl font-bold mb-4 text-gray-800">🧪 Practice Subject Statistics</h2>
-            {mockSubjectStats.length === 0 ? (
-              <p className="text-gray-500 text-center text-sm sm:text-base">No practice quiz data available.</p>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm sm:text-base">
-                  <thead>
-                    <tr className="bg-gray-100">
-                      <th className="p-2 text-left">Subject</th>
-                      <th className="p-2 text-center">Total Attempts</th>
-                      <th className="p-2 text-center">Correct</th>
-                      <th className="p-2 text-center">Wrong</th>
-                      <th className="p-2 text-center">Accuracy (%)</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {mockSubjectStats.map((stat, index) => (
-                      <tr key={index} className="border-b">
-                        <td className="p-2">{stat.subject}</td>
-                        <td className="p-2 text-center">{stat.attempted}</td>
-                        <td className="p-2 text-center text-green-600">{stat.correct}</td>
-                        <td className="p-2 text-center text-red-600">{stat.wrong}</td>
-                        <td className="p-2 text-center">{stat.accuracy}%</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+       {/* 
+  Mock Subject Stats Table
+  <Card>
+    <CardContent className="p-3 sm:p-4">
+      <h2 className="text-lg sm:text-xl font-bold mb-4 text-gray-800">🧪 Practice Subject Statistics</h2>
+      {mockSubjectStats.length === 0 ? (
+        <p className="text-gray-500 text-center text-sm sm:text-base">No practice quiz data available.</p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm sm:text-base">
+            <thead>
+              <tr className="bg-gray-100">
+                <th className="p-2 text-left">Subject</th>
+                <th className="p-2 text-center">Total Attempts</th>
+                <th className="p-2 text-center">Correct</th>
+                <th className="p-2 text-center">Wrong</th>
+                <th className="p-2 text-center">Accuracy (%)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {mockSubjectStats.map((stat, index) => (
+                <tr key={index} className="border-b">
+                  <td className="p-2">{stat.subject}</td>
+                  <td className="p-2 text-center">{stat.attempted}</td>
+                  <td className="p-2 text-center text-green-600">{stat.correct}</td>
+                  <td className="p-2 text-center text-red-600">{stat.wrong}</td>
+                  <td className="p-2 text-center">{stat.accuracy}%</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </CardContent>
+  </Card>
 */}
+
 
         <div className="rounded-lg p-4 sm:p-6 bg-white shadow">
           <h2 className="text-lg sm:text-xl font-bold mb-4 text-gray-800">📈 Quiz Subject Accuracy</h2>
@@ -473,20 +475,28 @@ export default function EnhancedStudentDashboard() {
           </ResponsiveContainer>
         </div>
 
-          {/* <div className="rounded-lg p-4 sm:p-6 bg-white shadow">
-          <h2 className="text-lg sm:text-xl font-bold mb-4 text-gray-800">📊 Practice Subject Accuracy</h2>
-          <ResponsiveContainer width="100%" height={250} minHeight={200}>
-            <PieChart>
-              <Pie data={mockSubjectStats} dataKey="accuracy" nameKey="subject" outerRadius={80} label={{ fontSize: 12 }}>
-                {mockSubjectStats.map((entry, index) => <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />)}
-              </Pie>
-              <Tooltip />
-              <Legend />
-            </PieChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-    </div>
-  );
-
+         {/*
+  <div className="rounded-lg p-4 sm:p-6 bg-white shadow">
+    <h2 className="text-lg sm:text-xl font-bold mb-4 text-gray-800">📊 Practice Subject Accuracy</h2>
+    <ResponsiveContainer width="100%" height={250} minHeight={200}>
+      <PieChart>
+        <Pie 
+          data={mockSubjectStats} 
+          dataKey="accuracy" 
+          nameKey="subject" 
+          outerRadius={80} 
+          label={{ fontSize: 12 }}
+        >
+          {mockSubjectStats.map((entry, index) => (
+            <Cell 
+              key={`cell-${index}`} 
+              fill={PIE_COLORS[index % PIE_COLORS.length]} 
+            />
+          ))}
+        </Pie>
+        <Tooltip />
+        <Legend />
+      </PieChart>
+    </ResponsiveContainer>
+  </div>
 */}
