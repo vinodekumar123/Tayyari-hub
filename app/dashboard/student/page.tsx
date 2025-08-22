@@ -375,7 +375,7 @@ export default function EnhancedStudentDashboard() {
     </CardContent>
   </Card>
 
-  {/* 
+   
   <Card>
     <CardContent className="p-3 sm:p-4 text-center">
       <p className="font-semibold text-sm sm:text-base">🧪 Practice Questions Attempted</p>
@@ -383,7 +383,7 @@ export default function EnhancedStudentDashboard() {
       <p className="text-green-600 font-bold text-sm sm:text-base">{mockStats.correct} Correct</p>
     </CardContent>
   </Card>
-  */}
+
 </div>
 
 
