@@ -77,10 +77,6 @@ function getQuizStatus(startDate: string, endDate: string, startTime?: string, e
       return 'ended';
     }
 
-    console.log('🕐 Now:', now.toString());
-    console.log('🚀 Start:', start.toString());
-    console.log('🛑 End:', end.toString());
-
     if (now < start) return 'upcoming';
     if (now >= start && now <= end) return 'active';
     return 'ended';
@@ -96,18 +92,13 @@ export default function QuizBankPage() {
   const [error, setError] = useState<string | null>(null);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [attemptedQuizzes, setAttemptedQuizzes] = useState<{ [key: string]: number }>({});
-  const [enrolledCourse, setEnrolledCourse] = useState<string | null>(null); // Single course name
+  const [enrolledCourse, setEnrolledCourse] = useState<string | null>(null);
   const [userLoaded, setUserLoaded] = useState(false);
   const [lastVisible, setLastVisible] = useState<any>(null);
   const [hasMore, setHasMore] = useState(true);
   const [filters, setFilters] = useState({
-    course: '',
-    subject: '',
-    chapter: '',
     accessType: '',
     searchTerm: '',
-    status: '',
-    date: '',
   });
   const [showPremiumDialog, setShowPremiumDialog] = useState(false);
   const [selectedQuizId, setSelectedQuizId] = useState<string | null>(null);
@@ -129,12 +120,9 @@ export default function QuizBankPage() {
           const userData = userSnap.exists() ? userSnap.data() : {} as any;
           const isAdmin = (userData as any).admin === true;
           const userPlan = (userData as any).plan || 'free';
-          const course = (userData as any).course; // Fetch course directly from user document
-
-          console.log('User Data:', userData);
+          const course = (userData as any).course;
 
           if (!isAdmin && (!course || typeof course !== 'string')) {
-            console.error('Invalid or missing course for user:', user.uid, course);
             setError('Invalid enrollment: You must be enrolled in a course.');
             setLoading(false);
             setUserLoaded(true);
@@ -142,7 +130,7 @@ export default function QuizBankPage() {
           }
 
           setCurrentUser({ ...user, isAdmin, plan: userPlan });
-          setEnrolledCourse(isAdmin ? null : course); // Set single course for non-admins
+          setEnrolledCourse(isAdmin ? null : course);
 
           const attemptsSnapshot = await getDocs(
             collection(db, 'users', user.uid, 'quizAttempts')
@@ -157,7 +145,6 @@ export default function QuizBankPage() {
           setAttemptedQuizzes(attempted);
           setUserLoaded(true);
         } catch (err) {
-          console.error('Error fetching user data:', err);
           setError('Failed to load user data. Please try again.');
           setLoading(false);
           setUserLoaded(true);
@@ -196,12 +183,10 @@ export default function QuizBankPage() {
     setError(null);
 
     try {
-      console.log('Fetching quizzes for user:', currentUser.uid, 'Enrolled Course:', enrolledCourse);
-
       const isAdmin = currentUser.isAdmin;
       const courseName = enrolledCourse;
 
-      const constraints: any[] = [ limit(10)];
+      const constraints: any[] = [ orderBy('startDate', 'desc'), limit(20) ];
 
       if (!isAdmin) {
         if (!courseName) {
@@ -213,7 +198,6 @@ export default function QuizBankPage() {
         }
         constraints.push(where('published', '==', true));
         constraints.push(where('course.name', '==', courseName));
-        console.log('Query Constraints:', constraints);
       }
 
       if (startAfterDoc) {
@@ -229,7 +213,7 @@ export default function QuizBankPage() {
       const unsubscribe = onSnapshot(
         q,
         (snapshot) => {
-          const data = snapshot.docs.map((d) => {
+          let data = snapshot.docs.map((d) => {
             const quizData = d.data() as any;
             const course = quizData.course?.name || quizData.course || 'Unknown';
             const subject = Array.isArray(quizData.subjects)
@@ -247,15 +231,18 @@ export default function QuizBankPage() {
             } as any;
           });
 
-          console.log('Fetched Quizzes:', data);
+          // Sort newest to oldest by startDate (descending)
+          data = data.sort((a, b) => {
+            // fallback to '' if missing
+            return (b.startDate || '').localeCompare(a.startDate || '');
+          });
 
           setQuizzes((prev) => (startAfterDoc ? [...prev, ...data] : data));
           setLastVisible(snapshot.docs[snapshot.docs.length - 1]);
-          setHasMore(snapshot.docs.length === 10);
+          setHasMore(snapshot.docs.length === 20);
           setLoading(false);
         },
         (error) => {
-          console.error('Firestore Query Error:', error.code, error.message);
           setError(`Failed to fetch quizzes: ${error.message}. Please try again or create the required index at the provided link.`);
           setLoading(false);
           setHasMore(false);
@@ -264,31 +251,32 @@ export default function QuizBankPage() {
 
       unsubscribeRef.current = unsubscribe;
     } catch (err) {
-      console.error('Error in fetchQuizzes:', err);
       setError('Failed to fetch quizzes. Please try again.');
       setLoading(false);
       setHasMore(false);
     }
   };
 
+  // Only Search and Access Type filtering
   const filteredQuizzes = quizzes.filter((quiz) => {
-    const { course, subject, chapter, accessType, searchTerm, status, date } = filters;
-    const quizStatus = getQuizStatus(quiz.startDate, quiz.endDate, quiz.startTime, quiz.endTime);
+    const { accessType, searchTerm } = filters;
     const matches = [
-      !course || quiz.course === course,
-      !subject || quiz.subject === subject,
-      !chapter || quiz.chapter === chapter,
       !accessType || quiz.accessType === accessType,
       !searchTerm || (quiz.title || '').toLowerCase().includes(searchTerm.toLowerCase()),
-      !status || status === quizStatus,
-      !date || quiz.startDate === date,
     ];
     return matches.every(Boolean);
   });
 
-  const uniqueValues = (key: string) => {
-    return [...new Set(quizzes.map((q: any) => (q as any)[key]).filter(Boolean))];
-  };
+  // Group quizzes by date for date headings (newest first)
+  const groupedByDate = filteredQuizzes.reduce((acc: Record<string, any[]>, quiz) => {
+    const date = quiz.startDate || 'Unknown Date';
+    if (!acc[date]) acc[date] = [];
+    acc[date].push(quiz);
+    return acc;
+  }, {});
+
+  // Sorted date keys newest on top
+  const sortedDateKeys = Object.keys(groupedByDate).sort((a, b) => b.localeCompare(a));
 
   const handleQuizClick = async (quiz: any) => {
     if (!currentUser?.isAdmin && currentUser?.plan === 'free' && quiz.accessType === 'paid') {
@@ -327,11 +315,13 @@ export default function QuizBankPage() {
         setQuizzes(quizzes.filter((q) => q.id !== quizToDelete.id));
         setDeleteModal(false);
       } catch (err) {
-        console.error('Error deleting quiz:', err);
         alert('Failed to delete quiz.');
       }
     }
-  }; // ✅ closes only handleDeleteConfirm
+  };
+
+  // Unique accessType values for filter dropdown
+  const uniqueAccessTypes = Array.from(new Set(quizzes.map((q) => q.accessType).filter(Boolean)));
 
   return (
     <div className="w-full max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
@@ -345,7 +335,7 @@ export default function QuizBankPage() {
 
       <Card className="border-0 shadow-lg mb-8 sm:mb-10">
         <CardContent className="p-4 sm:p-6">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Input
               placeholder="Search quizzes..."
               value={filters.searchTerm}
@@ -357,50 +347,24 @@ export default function QuizBankPage() {
               }
               className="w-full"
             />
-            {['course', 'subject', 'chapter', 'accessType'].map((key) => (
-              <Select
-                key={key}
-                onValueChange={(v) =>
-                  setFilters((prev) => ({ ...prev, [key]: v }))
-                }
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder={key.charAt(0).toUpperCase() + key.slice(1)} />
-                </SelectTrigger>
-                <SelectContent>
-                  {uniqueValues(key).map((val) => (
-                    <SelectItem
-                      key={typeof val === 'object' ? (val as any)?.id : String(val)}
-                      value={typeof val === 'object' ? (val as any)?.name : String(val)}
-                    >
-                      {typeof val === 'object' ? (val as any)?.name : String(val)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            ))}
             <Select
               onValueChange={(v) =>
-                setFilters((prev) => ({ ...prev, status: v }))
+                setFilters((prev) => ({ ...prev, accessType: v }))
               }
+              value={filters.accessType}
             >
               <SelectTrigger className="w-full">
-                <SelectValue placeholder="Status" />
+                <SelectValue placeholder="Access Type" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="upcoming">Upcoming</SelectItem>
-                <SelectItem value="active">Active</SelectItem>
-                <SelectItem value="ended">Ended</SelectItem>
+                <SelectItem value="">All</SelectItem>
+                {uniqueAccessTypes.map((val) => (
+                  <SelectItem key={val} value={val}>
+                    {val.charAt(0).toUpperCase() + val.slice(1)}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
-            <Input
-              type="date"
-              value={filters.date}
-              onChange={(e) =>
-                setFilters((prev) => ({ ...prev, date: e.target.value }))
-              }
-              className="w-full"
-            />
           </div>
         </CardContent>
       </Card>
@@ -461,139 +425,148 @@ export default function QuizBankPage() {
         </p>
       ) : (
         <>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-            {filteredQuizzes.map((quiz) => {
-              const status = getQuizStatus(quiz.startDate, quiz.endDate, quiz.startTime, quiz.endTime);
-              const attemptCount = attemptedQuizzes[quiz.id] || 0;
-              const canAttempt = attemptCount < (quiz.maxAttempts || 1);
+          <div>
+            {sortedDateKeys.map((date) => (
+              <div key={date} className="mb-8">
+                <h2 className="text-lg sm:text-xl font-semibold mb-3 sm:mb-4 text-gray-800 border-b pb-1">
+                  {date}
+                </h2>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+                  {groupedByDate[date].map((quiz) => {
+                    const status = getQuizStatus(quiz.startDate, quiz.endDate, quiz.startTime, quiz.endTime);
+                    const attemptCount = attemptedQuizzes[quiz.id] || 0;
+                    const canAttempt = attemptCount < (quiz.maxAttempts || 1);
 
-              const courseName =
-                typeof quiz.course === 'object' && 'name' in quiz.course
-                  ? (quiz.course as any).name
-                  : quiz.course || '';
-              const subjectName =
-                typeof quiz.subject === 'object' && 'name' in quiz.subject
-                  ? (quiz.subject as any).name
-                  : quiz.subject || '';
-              const chapterName =
-                typeof quiz.chapter === 'object' && 'name' in quiz.chapter
-                  ? (quiz.chapter as any).name
-                  : quiz.chapter || '';
+                    const courseName =
+                      typeof quiz.course === 'object' && 'name' in quiz.course
+                        ? (quiz.course as any).name
+                        : quiz.course || '';
+                    const subjectName =
+                      typeof quiz.subject === 'object' && 'name' in quiz.subject
+                        ? (quiz.subject as any).name
+                        : quiz.subject || '';
+                    const chapterName =
+                      typeof quiz.chapter === 'object' && 'name' in quiz.chapter
+                        ? (quiz.chapter as any).name
+                        : quiz.chapter || '';
 
-              return (
-                <Card
-                  key={quiz.id}
-                  className="shadow-md hover:shadow-lg transition-all duration-300 w-full h-[460px] sm:h-[480px] lg:h-[500px] flex flex-col"
-                >
-                  <CardHeader className="pb-2 sm:pb-3">
-                    <CardTitle className="text-lg sm:text-xl font-bold text-gray-900 mb-1 line-clamp-2">
-                      {quiz.title}
-                    </CardTitle>
-                    <p className="text-gray-600 text-sm line-clamp-2">
-                      {quiz.description}
-                    </p>
-                  </CardHeader>
-                  <CardContent className="space-y-4 flex-grow flex flex-col justify-between">
-                    <div className="space-y-4">
-                      <div className="grid grid-cols-2 gap-3 sm:gap-4 text-sm text-gray-700">
-                        <div className="flex items-center space-x-2">
-                          <BookOpen className="h-4 w-4 text-gray-500" />
-                          <span>{quiz.selectedQuestions?.length || 0} questions</span>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <Clock className="h-4 w-4 text-gray-500" />
-                          <span>{quiz.duration} min</span>
-                        </div>
-                        <div className="col-span-2 line-clamp-1">
-                          <strong>Course:</strong> {courseName}
-                        </div>
-                        <div className="col-span-2 line-clamp-1">
-                          <strong>Subject:</strong> {subjectName}
-                        </div>
-                        {chapterName && (
-                          <div className="col-span-2 line-clamp-1">
-                            <strong>Chapter:</strong> {chapterName}
+                    return (
+                      <Card
+                        key={quiz.id}
+                        className="shadow-md hover:shadow-lg transition-all duration-300 w-full h-[460px] sm:h-[480px] lg:h-[500px] flex flex-col"
+                      >
+                        <CardHeader className="pb-2 sm:pb-3">
+                          <CardTitle className="text-lg sm:text-xl font-bold text-gray-900 mb-1 line-clamp-2">
+                            {quiz.title}
+                          </CardTitle>
+                          <p className="text-gray-600 text-sm line-clamp-2">
+                            {quiz.description}
+                          </p>
+                        </CardHeader>
+                        <CardContent className="space-y-4 flex-grow flex flex-col justify-between">
+                          <div className="space-y-4">
+                            <div className="grid grid-cols-2 gap-3 sm:gap-4 text-sm text-gray-700">
+                              <div className="flex items-center space-x-2">
+                                <BookOpen className="h-4 w-4 text-gray-500" />
+                                <span>{quiz.selectedQuestions?.length || 0} questions</span>
+                              </div>
+                              <div className="flex items-center space-x-2">
+                                <Clock className="h-4 w-4 text-gray-500" />
+                                <span>{quiz.duration} min</span>
+                              </div>
+                              <div className="col-span-2 line-clamp-1">
+                                <strong>Course:</strong> {courseName}
+                              </div>
+                              <div className="col-span-2 line-clamp-1">
+                                <strong>Subject:</strong> {subjectName}
+                              </div>
+                              {chapterName && (
+                                <div className="col-span-2 line-clamp-1">
+                                  <strong>Chapter:</strong> {chapterName}
+                                </div>
+                              )}
+                            </div>
+
+                            <div className="bg-gray-50 p-3 rounded-lg text-sm space-y-1">
+                              <div className="flex justify-between">
+                                <span className="text-gray-600">Access:</span>
+                                <span className="font-medium capitalize">{quiz.accessType}</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-gray-600">Attempts:</span>
+                                <span className="font-medium">{attemptCount} / {quiz.maxAttempts}</span>
+                              </div>
+                              <div className="flex items-center justify-between mt-1">
+                                <div className="flex items-center gap-1 text-gray-600">
+                                  <Calendar className="h-4 w-4" />
+                                  <span>
+                                    {quiz.startDate} - {quiz.endDate}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
                           </div>
-                        )}
-                      </div>
 
-                      <div className="bg-gray-50 p-3 rounded-lg text-sm space-y-1">
-                        <div className="flex justify-between">
-                          <span className="text-gray-600">Access:</span>
-                          <span className="font-medium capitalize">{quiz.accessType}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-gray-600">Attempts:</span>
-                          <span className="font-medium">{attemptCount} / {quiz.maxAttempts}</span>
-                        </div>
-                        <div className="flex items-center justify-between mt-1">
-                          <div className="flex items-center gap-1 text-gray-600">
-                            <Calendar className="h-4 w-4" />
-                            <span>
-                              {quiz.startDate} - {quiz.endDate}
-                            </span>
+                          <div className="pt-2">
+                            {currentUser?.isAdmin ? (
+                              <Button className="w-full h-10 sm:h-12 bg-blue-600 text-white" asChild>
+                                <Link href={`/quiz/start?id=${quiz.id}`}>
+                                  <Eye className="h-4 w-4 mr-2" />
+                                  Preview Quiz
+                                  <ArrowRight className="h-4 w-4 ml-2" />
+                                </Link>
+                              </Button>
+                            ) : status === 'ended' ? (
+                              <Button variant="outline" disabled className="w-full h-10 sm:h-12">
+                                Quiz Ended
+                              </Button>
+                            ) : status === 'upcoming' ? (
+                              <Button variant="outline" disabled className="w-full h-10 sm:h-12">
+                                Upcoming
+                              </Button>
+                            ) : !canAttempt ? (
+                              <Button variant="outline" disabled className="w-full h-10 sm:h-12">
+                                Max Attempts Reached
+                              </Button>
+                            ) : (
+                              <Button
+                                className="w-full h-10 sm:h-12 bg-green-600 text-white"
+                                onClick={() => handleQuizClick(quiz)}
+                              >
+                                <Play className="h-4 w-4 mr-2" />
+                                {attemptCount > 0 ? 'Retake Quiz' : 'Start Quiz'}
+                                <ArrowRight className="h-4 w-4 ml-2" />
+                              </Button>
+                            )}
+
+                            {currentUser?.isAdmin && (
+                              <>
+                                <Button
+                                  variant="secondary"
+                                  className="w-full h-9 sm:h-10 mt-2 rounded-xl"
+                                  asChild
+                                >
+                                  <Link href={`/admin/quizzes/create?id=${quiz.id}`}>
+                                    <Pencil className="h-4 w-4 mr-2" /> Edit Quiz
+                                  </Link>
+                                </Button>
+                                <Button
+                                  variant="destructive"
+                                  className="w-full h-9 sm:h-10 mt-2 rounded-xl"
+                                  onClick={() => handleDeleteClick(quiz)}
+                                >
+                                  <Trash2 className="h-4 w-4 mr-2" /> Delete Quiz
+                                </Button>
+                              </>
+                            )}
                           </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="pt-2">
-                      {currentUser?.isAdmin ? (
-                        <Button className="w-full h-10 sm:h-12 bg-blue-600 text-white" asChild>
-                          <Link href={`/quiz/start?id=${quiz.id}`}>
-                            <Eye className="h-4 w-4 mr-2" />
-                            Preview Quiz
-                            <ArrowRight className="h-4 w-4 ml-2" />
-                          </Link>
-                        </Button>
-                      ) : status === 'ended' ? (
-                        <Button variant="outline" disabled className="w-full h-10 sm:h-12">
-                          Quiz Ended
-                        </Button>
-                      ) : status === 'upcoming' ? (
-                        <Button variant="outline" disabled className="w-full h-10 sm:h-12">
-                          Upcoming
-                        </Button>
-                      ) : !canAttempt ? (
-                        <Button variant="outline" disabled className="w-full h-10 sm:h-12">
-                          Max Attempts Reached
-                        </Button>
-                      ) : (
-                        <Button
-                          className="w-full h-10 sm:h-12 bg-green-600 text-white"
-                          onClick={() => handleQuizClick(quiz)}
-                        >
-                          <Play className="h-4 w-4 mr-2" />
-                          {attemptCount > 0 ? 'Retake Quiz' : 'Start Quiz'}
-                          <ArrowRight className="h-4 w-4 ml-2" />
-                        </Button>
-                      )}
-
-                      {currentUser?.isAdmin && (
-                        <>
-                          <Button
-                            variant="secondary"
-                            className="w-full h-9 sm:h-10 mt-2 rounded-xl"
-                            asChild
-                          >
-                            <Link href={`/admin/quizzes/create?id=${quiz.id}`}>
-                              <Pencil className="h-4 w-4 mr-2" /> Edit Quiz
-                            </Link>
-                          </Button>
-                          <Button
-                            variant="destructive"
-                            className="w-full h-9 sm:h-10 mt-2 rounded-xl"
-                            onClick={() => handleDeleteClick(quiz)}
-                          >
-                            <Trash2 className="h-4 w-4 mr-2" /> Delete Quiz
-                          </Button>
-                        </>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
           </div>
           {hasMore && (
             <div className="mt-6 sm:mt-8 text-center">
@@ -610,4 +583,4 @@ export default function QuizBankPage() {
       )}
     </div>
   );
-} // ✅ closes QuizBankPage
+}
