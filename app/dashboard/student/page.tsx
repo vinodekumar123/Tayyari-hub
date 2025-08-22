@@ -376,7 +376,7 @@ export default function EnhancedStudentDashboard() {
     </CardContent>
   </Card>
 
-   
+          {/*
   <Card>
     <CardContent className="p-3 sm:p-4 text-center">
       <p className="font-semibold text-sm sm:text-base">🧪 Practice Questions Attempted</p>
@@ -386,7 +386,7 @@ export default function EnhancedStudentDashboard() {
   </Card>
 
 </div>
-
+*/}
 
         {/* Quiz Subject Stats Table */}
         <Card>
@@ -424,7 +424,7 @@ export default function EnhancedStudentDashboard() {
         </Card>
 
         {/* Mock Subject Stats Table */}
-        <Card>
+          {/* <Card>
           <CardContent className="p-3 sm:p-4">
             <h2 className="text-lg sm:text-xl font-bold mb-4 text-gray-800">🧪 Practice Subject Statistics</h2>
             {mockSubjectStats.length === 0 ? (
@@ -457,6 +457,7 @@ export default function EnhancedStudentDashboard() {
             )}
           </CardContent>
         </Card>
+*/}
 
         <div className="rounded-lg p-4 sm:p-6 bg-white shadow">
           <h2 className="text-lg sm:text-xl font-bold mb-4 text-gray-800">📈 Quiz Subject Accuracy</h2>
@@ -472,7 +473,7 @@ export default function EnhancedStudentDashboard() {
           </ResponsiveContainer>
         </div>
 
-        <div className="rounded-lg p-4 sm:p-6 bg-white shadow">
+          {*/ <div className="rounded-lg p-4 sm:p-6 bg-white shadow">
           <h2 className="text-lg sm:text-xl font-bold mb-4 text-gray-800">📊 Practice Subject Accuracy</h2>
           <ResponsiveContainer width="100%" height={250} minHeight={200}>
             <PieChart>
@@ -488,3 +489,4 @@ export default function EnhancedStudentDashboard() {
     </div>
   );
 }
+*/}
