@@ -14,6 +14,8 @@ import {
   limit,
   startAfter,
   deleteDoc,
+  QueryDocumentSnapshot,
+  DocumentData,
 } from 'firebase/firestore';
 import { getAuth, onAuthStateChanged } from 'firebase/auth';
 import { db } from '../../../firebase';
@@ -104,8 +106,10 @@ export default function QuizBankPage() {
   const unsubscribeRef = useRef<(() => void) | null>(null);
   const router = useRouter();
 
+  // -- AUTH AND USER LOADING --
   useEffect(() => {
     const auth = getAuth();
+    let mounted = true;
     const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
       setLoading(true);
       setError(null);
@@ -120,43 +124,52 @@ export default function QuizBankPage() {
           const course = (userData as any).course;
 
           if (!isAdmin && (!course || typeof course !== 'string')) {
-            setError('Invalid enrollment: You must be enrolled in a course.');
-            setLoading(false);
-            setUserLoaded(true);
+            if (mounted) {
+              setError('Invalid enrollment: You must be enrolled in a course.');
+              setLoading(false);
+              setUserLoaded(true);
+            }
             return;
           }
 
-          setCurrentUser({ ...user, isAdmin, plan: userPlan });
-          setEnrolledCourse(isAdmin ? null : course);
+          if (mounted) {
+            setCurrentUser({ ...user, isAdmin, plan: userPlan });
+            setEnrolledCourse(isAdmin ? null : course);
 
-          const attemptsSnapshot = await getDocs(
-            collection(db, 'users', user.uid, 'quizAttempts')
-          );
-          const attempted: { [key: string]: number } = {};
-          attemptsSnapshot.docs.forEach((d) => {
-            const data = d.data() as any;
-            if (data?.completed) {
-              attempted[d.id] = data.attemptNumber || 1;
-            }
-          });
-          setAttemptedQuizzes(attempted);
-          setUserLoaded(true);
+            const attemptsSnapshot = await getDocs(
+              collection(db, 'users', user.uid, 'quizAttempts')
+            );
+            const attempted: { [key: string]: number } = {};
+            attemptsSnapshot.docs.forEach((d) => {
+              const data = d.data() as any;
+              if (data?.completed) {
+                attempted[d.id] = data.attemptNumber || 1;
+              }
+            });
+            setAttemptedQuizzes(attempted);
+            setUserLoaded(true);
+          }
         } catch (err) {
-          setError('Failed to load user data. Please try again.');
-          setLoading(false);
-          setUserLoaded(true);
+          if (mounted) {
+            setError('Failed to load user data. Please try again.');
+            setLoading(false);
+            setUserLoaded(true);
+          }
         }
       } else {
-        setQuizzes([]);
-        setEnrolledCourse(null);
-        setCurrentUser(null);
-        setHasMore(false);
-        setUserLoaded(true);
-        setLoading(false);
+        if (mounted) {
+          setQuizzes([]);
+          setEnrolledCourse(null);
+          setCurrentUser(null);
+          setHasMore(false);
+          setUserLoaded(true);
+          setLoading(false);
+        }
       }
     });
 
     return () => {
+      mounted = false;
       if (unsubscribeRef.current) {
         unsubscribeRef.current();
       }
@@ -164,16 +177,22 @@ export default function QuizBankPage() {
     };
   }, []);
 
+  // -- QUIZZES FETCH --
+  // Only use onSnapshot for real-time on initial fetch. Use getDocs for "Load More".
   useEffect(() => {
     if (userLoaded && currentUser) {
       setLastVisible(null);
       setHasMore(true);
+      if (unsubscribeRef.current) {
+        unsubscribeRef.current();
+        unsubscribeRef.current = null;
+      }
       fetchQuizzes();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters, currentUser, enrolledCourse, userLoaded]);
 
-  const fetchQuizzes = async (startAfterDoc: any = null) => {
+  const fetchQuizzes = async (startAfterDoc: QueryDocumentSnapshot<DocumentData> | null = null, paginated = false) => {
     if (!currentUser) return;
 
     setLoading(true);
@@ -203,54 +222,89 @@ export default function QuizBankPage() {
 
       const q = query(collection(db, 'quizzes'), ...constraints);
 
-      if (unsubscribeRef.current) {
-        unsubscribeRef.current();
-      }
+      if (startAfterDoc || paginated) {
+        // Use getDocs for pagination (no real-time for "Load More")
+        const snapshot = await getDocs(q);
 
-      const unsubscribe = onSnapshot(
-        q,
-        (snapshot) => {
-          let data = snapshot.docs.map((d) => {
-            const quizData = d.data() as any;
-            const course = quizData.course?.name || quizData.course || 'Unknown';
-            const subject = Array.isArray(quizData.subjects)
-              ? quizData.subjects.map((s: any) => s.name || s).join(', ')
-              : quizData.subject?.name || quizData.subject || '';
-            const chapter = quizData.chapter?.name || quizData.chapter || '';
+        let data = snapshot.docs.map((d) => {
+          const quizData = d.data() as any;
+          const course = quizData.course?.name || quizData.course || 'Unknown';
+          const subject = Array.isArray(quizData.subjects)
+            ? quizData.subjects.map((s: any) => s.name || s).join(', ')
+            : quizData.subject?.name || quizData.subject || '';
+          const chapter = quizData.chapter?.name || quizData.chapter || '';
 
-            return {
-              id: d.id,
-              ...quizData,
-              course,
-              subject,
-              chapter,
-              maxAttempts: quizData.maxAttempts || 1,
-            } as any;
-          });
+          return {
+            id: d.id,
+            ...quizData,
+            course,
+            subject,
+            chapter,
+            maxAttempts: quizData.maxAttempts || 1,
+          } as any;
+        });
 
-          // Defensive sort: fallback to "" if missing
-          data = data.sort((a, b) => {
-            const dateA = typeof a.startDate === 'string' ? a.startDate : '';
-            const dateB = typeof b.startDate === 'string' ? b.startDate : '';
-            if (dateA === '' && dateB === '') return 0;
-            if (dateA === '') return 1;
-            if (dateB === '') return -1;
-            return dateB.localeCompare(dateA);
-          });
+        data = data.sort((a, b) => {
+          const dateA = typeof a.startDate === 'string' ? a.startDate : '';
+          const dateB = typeof b.startDate === 'string' ? b.startDate : '';
+          if (dateA === '' && dateB === '') return 0;
+          if (dateA === '') return 1;
+          if (dateB === '') return -1;
+          return dateB.localeCompare(dateA);
+        });
 
-          setQuizzes((prev) => (startAfterDoc ? [...prev, ...data] : data));
-          setLastVisible(snapshot.docs[snapshot.docs.length - 1]);
-          setHasMore(snapshot.docs.length === 20);
-          setLoading(false);
-        },
-        (error) => {
-          setError(`Failed to fetch quizzes: ${error.message}. Please try again or create the required index at the provided link.`);
-          setLoading(false);
-          setHasMore(false);
+        setQuizzes((prev) => (startAfterDoc ? [...prev, ...data] : data));
+        setLastVisible(snapshot.docs[snapshot.docs.length - 1]);
+        setHasMore(snapshot.docs.length === 20);
+        setLoading(false);
+      } else {
+        // Use onSnapshot only for initial fetch (real-time)
+        if (unsubscribeRef.current) {
+          unsubscribeRef.current(); // cleanup before new subscription
         }
-      );
+        const unsubscribe = onSnapshot(
+          q,
+          (snapshot) => {
+            let data = snapshot.docs.map((d) => {
+              const quizData = d.data() as any;
+              const course = quizData.course?.name || quizData.course || 'Unknown';
+              const subject = Array.isArray(quizData.subjects)
+                ? quizData.subjects.map((s: any) => s.name || s).join(', ')
+                : quizData.subject?.name || quizData.subject || '';
+              const chapter = quizData.chapter?.name || quizData.chapter || '';
 
-      unsubscribeRef.current = unsubscribe;
+              return {
+                id: d.id,
+                ...quizData,
+                course,
+                subject,
+                chapter,
+                maxAttempts: quizData.maxAttempts || 1,
+              } as any;
+            });
+
+            data = data.sort((a, b) => {
+              const dateA = typeof a.startDate === 'string' ? a.startDate : '';
+              const dateB = typeof b.startDate === 'string' ? b.startDate : '';
+              if (dateA === '' && dateB === '') return 0;
+              if (dateA === '') return 1;
+              if (dateB === '') return -1;
+              return dateB.localeCompare(dateA);
+            });
+
+            setQuizzes(data);
+            setLastVisible(snapshot.docs[snapshot.docs.length - 1]);
+            setHasMore(snapshot.docs.length === 20);
+            setLoading(false);
+          },
+          (error) => {
+            setError(`Failed to fetch quizzes: ${error.message}. Please try again or create the required index at the provided link.`);
+            setLoading(false);
+            setHasMore(false);
+          }
+        );
+        unsubscribeRef.current = unsubscribe;
+      }
     } catch (err) {
       setError('Failed to fetch quizzes. Please try again.');
       setLoading(false);
@@ -270,7 +324,6 @@ export default function QuizBankPage() {
 
   // Group quizzes by date for date headings (newest first)
   const groupedByDate = filteredQuizzes.reduce((acc: Record<string, any[]>, quiz) => {
-    // Defensive: only use startDate if it's a nonempty string, else 'Unknown Date'
     let date =
       typeof quiz.startDate === 'string' && quiz.startDate.trim() !== ''
         ? quiz.startDate
@@ -306,9 +359,9 @@ export default function QuizBankPage() {
   };
 
   const handleLoadMore = () => {
-    if (hasMore && !loading) {
+    if (hasMore && !loading && lastVisible) {
       setLoading(true);
-      fetchQuizzes(lastVisible);
+      fetchQuizzes(lastVisible, true); // Use getDocs for pagination
     }
   };
 
