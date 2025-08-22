@@ -334,7 +334,7 @@ export default function EnhancedStudentDashboard() {
               <Activity className="w-4 h-4" /> Results
             </a>
             <a href="/admin/quizzes/quizebank" className="flex items-center gap-1 bg-green-600 text-white px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg shadow text-xs sm:text-sm font-medium hover:bg-green-700">
-              <PlusCircle className="w-4 h-4" /> Quizzes 
+              <ClipboardList className="w-4 h-4" /> Quizzes 
             </a>
           </div>
         </div>
