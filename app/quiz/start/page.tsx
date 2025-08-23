@@ -50,7 +50,7 @@ const StartQuizPage: React.FC = () => {
   const [timeLeft, setTimeLeft] = useState(0);
   const [hasLoadedTime, setHasLoadedTime] = useState(false);
 
-  const [darkMode, setDarkMode] = useState(false); // Dark mode state
+  const [darkMode, setDarkMode] = useState(false);
   const hasSubmittedRef = useRef(false);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -133,11 +133,15 @@ const StartQuizPage: React.FC = () => {
     const updatedAnswers = { ...answers, [qid]: val };
     setAnswers(updatedAnswers);
     if (user && quiz) {
-      setDoc(doc(db, 'users', user.uid, 'quizAttempts', quizId!), {
-        answers: updatedAnswers,
-        currentIndex: currentPage * (quiz.questionsPerPage || 1),
-        remainingTime: timeLeft,
-      }, { merge: true });
+      setDoc(
+        doc(db, 'users', user.uid, 'quizAttempts', quizId!),
+        {
+          answers: updatedAnswers,
+          currentIndex: currentPage * (quiz.questionsPerPage || 1),
+          remainingTime: timeLeft,
+        },
+        { merge: true }
+      );
     }
   };
 
@@ -147,16 +151,24 @@ const StartQuizPage: React.FC = () => {
     setSubmitLoading(true);
 
     if (!user || !quiz) return;
-    await setDoc(doc(db, 'users', user.uid, 'quizAttempts', quizId!), {
-      submittedAt: serverTimestamp(),
-      completed: true,
-      answers,
-    }, { merge: true });
+    await setDoc(
+      doc(db, 'users', user.uid, 'quizAttempts', quizId!),
+      {
+        submittedAt: serverTimestamp(),
+        completed: true,
+        answers,
+      },
+      { merge: true }
+    );
 
     setShowSubmissionModal(true);
     setTimeout(() => {
       setShowSubmissionModal(false);
-      router.push(isAdmin || quiz.resultVisibility === 'immediate' ? '/quiz/results?id=' + quizId : '/dashboard/student');
+      router.push(
+        isAdmin || quiz.resultVisibility === 'immediate'
+          ? '/quiz/results?id=' + quizId
+          : '/dashboard/student'
+      );
     }, 2000);
   };
 
@@ -182,11 +194,13 @@ const StartQuizPage: React.FC = () => {
     <div className={darkMode ? 'min-h-screen bg-gray-900 text-white px-4' : 'min-h-screen bg-gray-50 text-black px-4'}>
       {/* Dark mode toggle button */}
       <div className="fixed top-5 right-5 z-50">
-        <Button onClick={() => setDarkMode(!darkMode)}>{darkMode ? 'Light Mode' : 'Dark Mode'}</Button>
+        <Button onClick={() => setDarkMode(!darkMode)}>
+          {darkMode ? 'Light Mode' : 'Dark Mode'}
+        </Button>
       </div>
 
       {/* Sticky Header */}
-      <header className={darkMode ? 'bg-gray-800 border-b border-gray-700 sticky top-0 z-50 shadow-md' : 'bg-white border-b border-black sticky top-0 z-50 shadow-md'}>
+      <header className={darkMode ? 'bg-gray-800 border-b border-gray-700 sticky top-0 z-50 shadow-md' : 'bg-white border-b border-gray-200 sticky top-0 z-50 shadow-md'}>
         <div className="max-w-7xl mx-auto px-4 py-3 flex justify-between items-center">
           <div className="flex items-center gap-3">
             <BookOpen className={darkMode ? 'h-6 w-6 text-blue-400' : 'h-6 w-6 text-blue-600'} />
@@ -197,32 +211,69 @@ const StartQuizPage: React.FC = () => {
             <span className="font-mono font-semibold">{formatTime(timeLeft)}</span>
           </div>
         </div>
-        <Progress value={progressValue} className="h-3 rounded-sm bg-gray-300 dark:bg-gray-700 border border-black dark:border-gray-600" />
+        <Progress value={progressValue} className="h-3 rounded-sm bg-gray-200 dark:bg-gray-700" />
       </header>
 
       <main className="max-w-4xl w-full mx-auto p-4">
         {qSlice.map((q, idx) => (
-          <Card key={q.id} className={`mb-5 border rounded-sm shadow-sm ${darkMode ? 'border-gray-700 bg-gray-800' : 'border-black bg-white'}`}>
+          <Card
+            key={q.id}
+            className={`mb-6 rounded-2xl shadow-md transition ${
+              darkMode
+                ? 'border border-gray-700 bg-gray-800'
+                : 'border border-gray-200 bg-white'
+            }`}
+          >
             <CardHeader>
-              <CardTitle className="text-lg font-semibold">Q{startIdx + idx + 1}: {stripHtml(q.questionText)}</CardTitle>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-3">
-              {q.options.map((opt) => (
-                <Button
-                  key={opt}
-                  variant={answers[q.id] === opt ? 'default' : 'outline'}
-                  onClick={() => handleAnswer(q.id, opt)}
-                  className={`text-left border rounded-sm ${darkMode ? 'border-gray-600' : 'border-black'} ${answers[q.id] === opt ? (darkMode ? 'bg-blue-600 text-white' : 'bg-blue-600 text-white') : ''}`}
+              <div className="flex items-center gap-3">
+                <div
+                  className={`w-8 h-8 flex items-center justify-center rounded-full text-white font-semibold shadow-sm ${
+                    darkMode
+                      ? 'bg-gradient-to-r from-blue-600 to-cyan-400'
+                      : 'bg-gradient-to-r from-blue-500 to-cyan-400'
+                  }`}
                 >
-                  {stripHtml(opt)}
-                </Button>
-              ))}
+                  {startIdx + idx + 1}
+                </div>
+                <CardTitle className="text-lg font-semibold">
+                  {stripHtml(q.questionText)}
+                </CardTitle>
+              </div>
+            </CardHeader>
+
+            <CardContent className="flex flex-col gap-3">
+              {q.options.map((opt) => {
+                const isSelected = answers[q.id] === opt;
+                return (
+                  <button
+                    key={opt}
+                    onClick={() => handleAnswer(q.id, opt)}
+                    className={`w-full px-4 py-3 rounded-xl text-left font-medium transition border shadow-sm
+                      ${
+                        darkMode
+                          ? `border-gray-600 bg-gray-700 hover:border-blue-400 ${
+                              isSelected ? 'bg-blue-600 text-white' : 'text-gray-200'
+                            }`
+                          : `border-gray-300 bg-white hover:border-blue-500 hover:shadow-md ${
+                              isSelected
+                                ? 'bg-blue-600 text-white border-blue-600'
+                                : 'text-gray-800'
+                            }`
+                      }`}
+                  >
+                    {stripHtml(opt)}
+                  </button>
+                );
+              })}
             </CardContent>
           </Card>
         ))}
 
         <div className="flex justify-between mt-4">
-          <Button onClick={() => setCurrentPage((p) => Math.max(0, p - 1))} disabled={currentPage === 0}>
+          <Button
+            onClick={() => setCurrentPage((p) => Math.max(0, p - 1))}
+            disabled={currentPage === 0}
+          >
             <ArrowLeft className="mr-2" /> Previous
           </Button>
           {!isLastPage && (
