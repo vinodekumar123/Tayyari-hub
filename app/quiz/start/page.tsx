@@ -14,98 +14,120 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 
-// Types
 interface Question {
   id: string;
   text: string;
   options: string[];
-  correctAnswer?: string; // (hidden for students)
+  correctAnswer?: string;
 }
 
 interface Quiz {
   id: string;
   title: string;
-  duration: number; // minutes
+  duration: number;
   questions: Question[];
 }
 
 export default function QuizStartPage() {
+  const [user, setUser] = useState<any>(null);
+  const [loadingAuth, setLoadingAuth] = useState(true);
   const [quiz, setQuiz] = useState<Quiz | null>(null);
   const [answers, setAnswers] = useState<Record<string, string>>({});
-  const [user, setUser] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  const [loadingQuiz, setLoadingQuiz] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
   // ✅ Track Auth
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (u) => {
       setUser(u);
+      setLoadingAuth(false);
     });
     return () => unsub();
   }, []);
 
-  // ✅ Fetch Quiz + Auto Resume
+  // ✅ Fetch quiz and previous attempt
   useEffect(() => {
     if (!user) return;
 
-    const quizRef = doc(db, "quizzes", "sampleQuiz"); // <-- Replace with dynamic ID
-    const attemptRef = doc(db, "attempts", `${user.uid}_sampleQuiz`);
+    const quizId = "sampleQuiz"; // <-- Replace with dynamic ID
+    const quizRef = doc(db, "quizzes", quizId);
+    const attemptRef = doc(db, "attempts", `${user.uid}_${quizId}`);
 
-    const unsubQuiz = onSnapshot(quizRef, (snapshot) => {
-      if (snapshot.exists()) {
-        setQuiz(snapshot.data() as Quiz);
-      }
-    });
+    const fetchData = async () => {
+      try {
+        const quizSnap = await getDoc(quizRef);
+        if (!quizSnap.exists()) {
+          alert("❌ Quiz not found!");
+          setLoadingQuiz(false);
+          return;
+        }
+        const quizData = quizSnap.data() as Quiz;
+        setQuiz(quizData);
 
-    const fetchAttempt = async () => {
-      const attemptSnap = await getDoc(attemptRef);
-      if (attemptSnap.exists()) {
-        setAnswers(attemptSnap.data().answers || {});
+        const attemptSnap = await getDoc(attemptRef);
+        if (attemptSnap.exists()) {
+          setAnswers(attemptSnap.data().answers || {});
+        }
+      } catch (err) {
+        console.error("Error fetching quiz:", err);
+        alert("❌ Failed to load quiz.");
+      } finally {
+        setLoadingQuiz(false);
       }
-      setLoading(false);
     };
 
-    fetchAttempt();
+    fetchData();
 
-    return () => unsubQuiz();
+    // ✅ Subscribe to realtime updates for auto-sync
+    const unsub = onSnapshot(quizRef, (snapshot) => {
+      if (snapshot.exists()) setQuiz(snapshot.data() as Quiz);
+    });
+
+    return () => unsub();
   }, [user]);
 
-  // ✅ Save answers live (auto sync)
   const handleAnswerChange = async (qId: string, option: string) => {
     if (!user || !quiz) return;
 
     const newAnswers = { ...answers, [qId]: option };
     setAnswers(newAnswers);
 
-    await setDoc(
-      doc(db, "attempts", `${user.uid}_${quiz.id}`),
-      {
-        userId: user.uid,
-        quizId: quiz.id,
-        answers: newAnswers,
-        updatedAt: new Date(),
-      },
-      { merge: true }
-    );
+    try {
+      await setDoc(
+        doc(db, "attempts", `${user.uid}_${quiz.id}`),
+        {
+          userId: user.uid,
+          quizId: quiz.id,
+          answers: newAnswers,
+          updatedAt: new Date(),
+        },
+        { merge: true }
+      );
+    } catch (err) {
+      console.error("Error saving answer:", err);
+    }
   };
 
-  // ✅ Submit final answers
   const handleSubmit = async () => {
     if (!user || !quiz) return;
     setSubmitting(true);
-
-    await updateDoc(doc(db, "attempts", `${user.uid}_${quiz.id}`), {
-      submitted: true,
-      submittedAt: new Date(),
-    });
-
-    setSubmitting(false);
-    alert("✅ Quiz Submitted!");
+    try {
+      await updateDoc(doc(db, "attempts", `${user.uid}_${quiz.id}`), {
+        submitted: true,
+        submittedAt: new Date(),
+      });
+      alert("✅ Quiz Submitted!");
+    } catch (err) {
+      console.error("Submit error:", err);
+      alert("❌ Failed to submit quiz.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
-  if (loading || !quiz) return <p className="p-4">Loading quiz...</p>;
+  if (loadingAuth || loadingQuiz) return <p className="p-4">Loading quiz...</p>;
+  if (!quiz) return <p className="p-4 text-red-500">Quiz not available!</p>;
 
-  // ✅ Progress
   const total = quiz.questions.length;
   const attempted = Object.keys(answers).length;
   const progress = Math.round((attempted / total) * 100);
@@ -117,15 +139,11 @@ export default function QuizStartPage() {
         Duration: {quiz.duration} minutes | Questions: {total}
       </p>
 
-      {/* ✅ Progress Bar */}
-      <div>
-        <Progress value={progress} className="h-3" />
-        <p className="text-sm mt-1">
-          {attempted}/{total} answered ({progress}%)
-        </p>
-      </div>
+      <Progress value={progress} className="h-3" />
+      <p className="text-sm mt-1">
+        {attempted}/{total} answered ({progress}%)
+      </p>
 
-      {/* ✅ Questions in Cards */}
       <div className="space-y-4">
         {quiz.questions.map((q, idx) => (
           <Card key={q.id}>
@@ -160,13 +178,8 @@ export default function QuizStartPage() {
         ))}
       </div>
 
-      {/* ✅ Submit Button with Loader */}
       <div className="text-center">
-        <Button
-          onClick={handleSubmit}
-          disabled={submitting}
-          className="px-6 py-3 text-lg"
-        >
+        <Button onClick={handleSubmit} disabled={submitting} className="px-6 py-3 text-lg">
           {submitting ? "Submitting..." : "Submit Quiz"}
         </Button>
       </div>
