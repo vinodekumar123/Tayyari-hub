@@ -10,9 +10,11 @@ import {
   getDocs,
   onSnapshot,
   doc,
+  DocumentData,
+  QueryDocumentSnapshot,
 } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
-import { onAuthStateChanged } from 'firebase/auth';
+import { onAuthStateChanged, User } from 'firebase/auth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -27,7 +29,7 @@ type Student = {
 
 export default function StudentPage() {
   const [students, setStudents] = useState<Student[]>([]);
-  const [lastDoc, setLastDoc] = useState<any>(null);
+  const [lastDoc, setLastDoc] = useState<QueryDocumentSnapshot<DocumentData> | null>(null);
   const [hasMore, setHasMore] = useState(true);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState('');
@@ -55,7 +57,7 @@ export default function StudentPage() {
 
         setStudents((prev) => [...prev, ...newStudents]);
         setLastDoc(snapshot.docs[snapshot.docs.length - 1]);
-        setHasMore(snapshot.docs.length === 20); // ✅ only true if we really got full page
+        setHasMore(snapshot.docs.length === 20);
       } else {
         setHasMore(false);
       }
@@ -69,29 +71,39 @@ export default function StudentPage() {
   // 🔹 Auth Listener (Superadmin check)
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
+      let unsubscribeUser: (() => void) | undefined;
       if (user) {
         const userDoc = doc(db, 'users', user.uid);
-        const unsubscribeUser = onSnapshot(userDoc, (docSnap) => {
+        unsubscribeUser = onSnapshot(userDoc, (docSnap) => {
           const data = docSnap.data();
           setIsSuperadmin(data?.superadmin === true);
         });
-        return unsubscribeUser; // cleanup user snapshot
       } else {
         setIsSuperadmin(false);
       }
+      // Cleanup for both auth and user snapshot
+      return () => {
+        if (unsubscribeUser) unsubscribeUser();
+      };
     });
 
-    return () => unsubscribeAuth();
+    return () => {
+      if (typeof unsubscribeAuth === 'function') {
+        unsubscribeAuth();
+      }
+    };
   }, []);
 
-  // 🔹 Initial Fetch
+  // 🔹 Initial Fetch (only run once!)
   useEffect(() => {
     fetchStudents();
-  }, [fetchStudents]);
+    // We don't want to re-fetch if fetchStudents changes, so disable exhaustive-deps warning for this
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // 🔹 Filtered Students
   const filteredStudents = students.filter((s) =>
-    s.FullName.toLowerCase().includes(search.toLowerCase())
+    s.FullName?.toLowerCase().includes(search.toLowerCase())
   );
 
   return (
