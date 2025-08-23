@@ -127,6 +127,7 @@ export default function StudentResultsPage() {
         await Promise.all(
           attemptsSnap.docs.map(async (attemptDoc) => {
             const quizId = attemptDoc.id;
+            // get result and quiz meta in parallel
             const [resultSnap, quizSnap] = await Promise.all([
               getDoc(doc(db, 'users', userId, attemptPath, quizId, 'results', quizId)),
               getDoc(
@@ -167,15 +168,25 @@ export default function StudentResultsPage() {
               // Course
               const courseName = quizMeta.course?.name || quizMeta.course || 'Unknown';
 
+              // ========== LIVE SCORE CALCULATION ==========
+              // Use selectedQuestions and answers to calculate score live
+              const questions: any[] = quizMeta.selectedQuestions || [];
+              const answers: Record<string, string> = resultData.answers || {};
+              const correct = questions.filter(q => answers[q.id] === q.correctAnswer).length;
+              const total = questions.length;
+
               allResults.push({
                 id: quizId,
-                ...resultData,
+                // ...resultData, // Don't spread score/total from db, use live ones!
+                answers, // for debugging, not needed for display
                 title: quizMeta.title || 'Untitled Quiz',
                 subject: subjectNames,
                 chapter: chapterNames,
                 course: courseName,
                 isMock,
                 timestamp: resultData.timestamp,
+                score: correct,
+                total: total,
               });
             }
           })
