@@ -42,8 +42,6 @@ interface Score {
   name: string;
   fatherName: string;
   district: string;
-  score: number;
-  total: number;
   answers: Record<string, string>;
 }
 
@@ -107,8 +105,6 @@ export default function QuizStudentScores() {
             name: userData.fullName || 'Unknown',
             fatherName: userData.fatherName || '-',
             district: userData.district || '-',
-            score: resultData.score || 0,
-            total: resultData.total || 0,
             answers: resultData.answers || {},
           };
         }
@@ -116,12 +112,25 @@ export default function QuizStudentScores() {
       });
 
       const scoreList = (await Promise.all(scorePromises)).filter((score): score is Score => score !== null);
-      setScores(scoreList.sort((a, b) => sortByScore === 'desc' ? b.score - a.score : a.score - b.score));
+
+      // Sort by live-calculated total correct answers
+      const sorted = scoreList.sort((a, b) => {
+        const aCorrect = countCorrectAnswers(a.answers, quizQuestions);
+        const bCorrect = countCorrectAnswers(b.answers, quizQuestions);
+        return sortByScore === 'desc' ? bCorrect - aCorrect : aCorrect - bCorrect;
+      });
+
+      setScores(sorted);
     } catch (error) {
       console.error('Error fetching scores:', error);
     } finally {
       setLoading(false);
     }
+  };
+
+  // Helper to count correct answers for a student (live calculation)
+  const countCorrectAnswers = (answers: Record<string, string>, questions: Question[]) => {
+    return questions.filter(q => answers[q.id] === q.correctAnswer).length;
   };
 
   const calculateSubjectScores = (score: Score) => {
@@ -134,17 +143,22 @@ export default function QuizStudentScores() {
       }
     });
 
-    const totalCorrect = score.score;
-    const totalWrong = score.total - score.score;
-    const totalQuestions = score.total;
+    const totalCorrect = countCorrectAnswers(score.answers, quizQuestions);
+    const totalWrong = quizQuestions.length - totalCorrect;
+    const totalQuestions = quizQuestions.length;
 
     return { subjectScores, totalCorrect, totalWrong, totalQuestions };
   };
 
   useEffect(() => {
     fetchMetadata();
-    fetchScores();
-  }, [quizId, sortByScore]);
+    // Delay fetchScores until questions are loaded
+  }, [quizId]);
+
+  useEffect(() => {
+    if (quizQuestions.length > 0) fetchScores();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [quizQuestions, sortByScore]);
 
   const exportToPDF = async () => {
     if (!pdfRef.current) return;
