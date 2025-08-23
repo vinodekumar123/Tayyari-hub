@@ -1,6 +1,11 @@
+"use client";
+
 import React, { useState, useEffect } from "react";
 
 export default function EnhancedQuizApp({ quiz }) {
+  ...
+}
+
   const questionsPerPage = 5;
   const [currentPage, setCurrentPage] = useState(0);
   const [answers, setAnswers] = useState({});
