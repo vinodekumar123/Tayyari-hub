@@ -9,24 +9,17 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { ArrowLeft, ArrowRight, Info, BookOpen, Clock, Send, Download, CheckCircle } from 'lucide-react';
-import jsPDF from 'jspdf';
+import { ArrowLeft, ArrowRight, Clock, BookOpen, Send } from 'lucide-react';
 
 interface Question {
   id: string;
   questionText: string;
   options: string[];
   correctAnswer?: string;
-  explanation?: string;
-  showExplanation?: boolean;
-  subject?: string | { id: string; name: string };
 }
 
 interface QuizData {
   title: string;
-  course?: { id: string; name: string } | string;
-  chapter?: { id: string; name: string } | string;
-  subject?: { id: string; name: string } | string | { id: string; name: string }[];
   duration: number;
   resultVisibility: string;
   selectedQuestions: Question[];
@@ -34,7 +27,7 @@ interface QuizData {
   maxAttempts: number;
 }
 
-const stripHtml = (html: string): string => {
+const stripHtml = (html: string) => {
   if (typeof window === 'undefined') return html;
   const div = document.createElement('div');
   div.innerHTML = html;
@@ -44,7 +37,7 @@ const stripHtml = (html: string): string => {
 const StartQuizPage: React.FC = () => {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const quizId = searchParams.get('id'); // dynamic ID from URL
+  const quizId = searchParams.get('id');
 
   const [user, setUser] = useState<User | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -53,12 +46,9 @@ const StartQuizPage: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(0);
   const [loading, setLoading] = useState(true);
   const [submitLoading, setSubmitLoading] = useState(false);
-  const [showTimeoutModal, setShowTimeoutModal] = useState(false);
-  const [showDownloadModal, setShowDownloadModal] = useState(false);
   const [showSubmissionModal, setShowSubmissionModal] = useState(false);
   const [timeLeft, setTimeLeft] = useState(0);
   const [hasLoadedTime, setHasLoadedTime] = useState(false);
-  const [attemptCount, setAttemptCount] = useState(0);
 
   const hasSubmittedRef = useRef(false);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
@@ -70,101 +60,61 @@ const StartQuizPage: React.FC = () => {
       if (u) {
         const userSnap = await getDoc(doc(db, 'users', u.uid));
         if (userSnap.exists()) {
-          const data = userSnap.data();
-          setIsAdmin(data.admin === true);
+          setIsAdmin(userSnap.data().admin === true);
         }
       }
     });
     return () => unsub();
   }, []);
 
-  // Load quiz dynamically
+  // Load quiz
   useEffect(() => {
     if (!quizId || !user) return;
-
     const loadQuiz = async () => {
       setLoading(true);
-      const quizRef = doc(db, 'quizzes', quizId);
-      const quizSnap = await getDoc(quizRef);
-
+      const quizSnap = await getDoc(doc(db, 'quizzes', quizId));
       if (!quizSnap.exists()) {
         alert('❌ Quiz not found!');
         router.push('/quiz-bank');
         return;
       }
-
       const data = quizSnap.data();
       const quizData: QuizData = {
         title: data.title || 'Untitled Quiz',
-        course: data.course || '',
-        chapter: data.chapter || '',
-        subject: data.subjects || data.subject || '',
         duration: data.duration || 60,
         resultVisibility: data.resultVisibility || 'immediate',
-        selectedQuestions: (data.selectedQuestions || []).map((q: any) => ({
-          ...q,
-          subject: q.subject || (data.subjects?.[0]?.name || data.subject?.name || 'Uncategorized'),
-        })),
+        selectedQuestions: data.selectedQuestions || [],
         questionsPerPage: data.questionsPerPage || 1,
         maxAttempts: data.maxAttempts || 1,
       };
-
       setQuiz(quizData);
 
-      // Check attempts
-      const attemptsSnap = await getDocs(collection(db, 'users', user.uid, 'quizAttempts'));
-      let currentAttempt = 0;
-      attemptsSnap.docs.forEach((doc) => {
-        if (doc.id === quizId && doc.data()?.completed) {
-          currentAttempt = doc.data().attemptNumber || 1;
-        }
-      });
-
-      if (currentAttempt >= quizData.maxAttempts && !isAdmin) {
-        alert('You have reached the maximum number of attempts for this quiz.');
-        router.push('/quiz-bank');
-        return;
-      }
-      setAttemptCount(currentAttempt);
-
-      // Auto-resume
-      const resumeSnap = await getDoc(doc(db, 'users', user.uid, 'quizAttempts', quizId));
-      if (resumeSnap.exists() && !resumeSnap.data().completed) {
-        const rt = resumeSnap.data();
-        setAnswers(rt.answers || {});
-        const questionIndex = rt.currentIndex || 0;
-        setCurrentPage(Math.floor(questionIndex / quizData.questionsPerPage));
-        setTimeLeft(!isAdmin && rt.remainingTime !== undefined ? rt.remainingTime : quizData.duration * 60);
+      // Load previous answers if exists
+      const attemptSnap = await getDoc(doc(db, 'users', user.uid, 'quizAttempts', quizId));
+      if (attemptSnap.exists() && !attemptSnap.data()?.completed) {
+        const saved = attemptSnap.data();
+        setAnswers(saved.answers || {});
+        setCurrentPage(Math.floor((saved.currentIndex || 0) / quizData.questionsPerPage));
+        setTimeLeft(saved.remainingTime || quizData.duration * 60);
       } else {
-        // New attempt
         setAnswers({});
         setCurrentPage(0);
         setTimeLeft(quizData.duration * 60);
-        await setDoc(doc(db, 'users', user.uid, 'quizAttempts', quizId), {
-          startedAt: serverTimestamp(),
-          answers: {},
-          currentIndex: 0,
-          completed: false,
-          remainingTime: quizData.duration * 60,
-        }, { merge: true });
       }
 
       setHasLoadedTime(true);
       setLoading(false);
     };
-
     loadQuiz();
-  }, [quizId, user, isAdmin]);
+  }, [quizId, user]);
 
   // Timer
   useEffect(() => {
-    if (loading || !quiz || showTimeoutModal || showSubmissionModal || !hasLoadedTime || isAdmin) return;
-
+    if (!quiz || !hasLoadedTime || isAdmin) return;
     if (timeLeft <= 0) {
       handleSubmit();
       return;
     }
-
     if (timerRef.current) clearInterval(timerRef.current);
     timerRef.current = setInterval(() => {
       setTimeLeft((prev) => {
@@ -176,29 +126,13 @@ const StartQuizPage: React.FC = () => {
         return prev - 1;
       });
     }, 1000);
-
     return () => clearInterval(timerRef.current!);
-  }, [loading, quiz, showTimeoutModal, showSubmissionModal, hasLoadedTime, timeLeft, isAdmin]);
-
-  // Auto-save on unload
-  useEffect(() => {
-    const handleUnload = () => {
-      if (user && quiz && !isAdmin && !hasSubmittedRef.current) {
-        setDoc(doc(db, 'users', user.uid, 'quizAttempts', quizId!), {
-          answers,
-          currentIndex: currentPage * (quiz?.questionsPerPage || 1),
-          remainingTime: timeLeft,
-        }, { merge: true });
-      }
-    };
-    window.addEventListener('beforeunload', handleUnload);
-    return () => window.removeEventListener('beforeunload', handleUnload);
-  }, [answers, currentPage, timeLeft, quiz, user, isAdmin, quizId]);
+  }, [timeLeft, quiz, hasLoadedTime, isAdmin]);
 
   const handleAnswer = (qid: string, val: string) => {
     const updatedAnswers = { ...answers, [qid]: val };
     setAnswers(updatedAnswers);
-    if (user && quiz && !isAdmin) {
+    if (user && quiz) {
       setDoc(doc(db, 'users', user.uid, 'quizAttempts', quizId!), {
         answers: updatedAnswers,
         currentIndex: currentPage * (quiz.questionsPerPage || 1),
@@ -213,45 +147,23 @@ const StartQuizPage: React.FC = () => {
     setSubmitLoading(true);
 
     if (!user || !quiz) return;
-
     const total = quiz.selectedQuestions.length;
     let score = 0;
-    for (const question of quiz.selectedQuestions) {
-      if (answers[question.id] === question.correctAnswer) score++;
+    for (const q of quiz.selectedQuestions) {
+      if (answers[q.id] === q.correctAnswer) score++;
     }
-
-    const newAttemptCount = attemptCount + 1;
-    const resultData = {
-      quizId,
-      title: quiz.title,
-      course: typeof quiz.course === 'object' ? quiz.course.name : quiz.course || 'Unknown',
-      subject: Array.isArray(quiz.subject)
-        ? quiz.subject.map((s) => s.name).join(', ') || 'Unknown'
-        : typeof quiz.subject === 'object'
-        ? quiz.subject?.name || 'Unknown'
-        : quiz.subject || 'Unknown',
-      score,
-      total,
-      timestamp: serverTimestamp(),
-      answers,
-      attemptNumber: newAttemptCount,
-    };
 
     await setDoc(doc(db, 'users', user.uid, 'quizAttempts', quizId!), {
       submittedAt: serverTimestamp(),
-      answers,
       completed: true,
-      remainingTime: 0,
-      attemptNumber: newAttemptCount,
+      answers,
     }, { merge: true });
-
-    await setDoc(doc(db, 'users', user.uid, 'quizAttempts', quizId!, 'results', quizId!), resultData);
 
     setShowSubmissionModal(true);
     setTimeout(() => {
       setShowSubmissionModal(false);
       router.push(isAdmin || quiz.resultVisibility === 'immediate' ? '/quiz/results?id=' + quizId : '/dashboard/student');
-    }, 2500);
+    }, 2000);
   };
 
   const formatTime = (sec: number) => {
@@ -263,37 +175,36 @@ const StartQuizPage: React.FC = () => {
   if (loading || !quiz) return <p className="text-center py-10">Loading Quiz...</p>;
 
   const questionsPerPage = quiz.questionsPerPage || 1;
-
   const totalPages = Math.ceil(quiz.selectedQuestions.length / questionsPerPage);
-  const isLastPage = currentPage >= totalPages - 1;
   const startIdx = currentPage * questionsPerPage;
   const endIdx = startIdx + questionsPerPage;
   const qSlice = quiz.selectedQuestions.slice(startIdx, endIdx);
+  const isLastPage = currentPage >= totalPages - 1;
+
+  // Progress based on answered questions
+  const totalAnswered = Object.keys(answers).length;
+  const progressValue = (totalAnswered / quiz.selectedQuestions.length) * 100;
 
   return (
     <div className="min-h-screen bg-gray-50 px-4">
-      {/* Timer Header */}
-      {!isAdmin && (
-        <header className="bg-white border-b sticky top-0 z-40 shadow-sm">
-          <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
-            <div className="flex items-center gap-3">
-              <BookOpen className="h-6 w-6 text-blue-600" />
-              <h1 className="text-lg font-semibold">{quiz.title}</h1>
-            </div>
-            <div className="flex items-center gap-2">
-              <Clock className="h-5 w-5 text-red-600" />
-              <span className="font-mono font-semibold text-red-600">{formatTime(timeLeft)}</span>
-            </div>
+      {/* Sticky Header */}
+      <header className="bg-white border-b border-black sticky top-0 z-50 shadow-md">
+        <div className="max-w-7xl mx-auto px-4 py-3 flex justify-between items-center">
+          <div className="flex items-center gap-3">
+            <BookOpen className="h-6 w-6 text-blue-600" />
+            <h1 className="text-lg font-semibold">{quiz.title}</h1>
           </div>
-        </header>
-      )}
+          <div className="flex items-center gap-2">
+            <Clock className="h-5 w-5 text-red-600" />
+            <span className="font-mono font-semibold text-red-600">{formatTime(timeLeft)}</span>
+          </div>
+        </div>
+        <Progress value={progressValue} className="h-3 rounded-sm bg-gray-200 border-black border" />
+      </header>
 
-      {/* Quiz Content */}
       <main className="max-w-4xl w-full mx-auto p-4">
-        <Progress value={((currentPage + 1) / totalPages) * 100} className="mb-6" />
-
         {qSlice.map((q, idx) => (
-          <Card key={q.id} className="mb-6 shadow-lg hover:shadow-xl transition">
+          <Card key={q.id} className="mb-5 border border-black rounded-sm shadow-sm">
             <CardHeader>
               <CardTitle className="text-lg font-semibold">Q{startIdx + idx + 1}: {stripHtml(q.questionText)}</CardTitle>
             </CardHeader>
@@ -303,7 +214,7 @@ const StartQuizPage: React.FC = () => {
                   key={opt}
                   variant={answers[q.id] === opt ? 'default' : 'outline'}
                   onClick={() => handleAnswer(q.id, opt)}
-                  className="text-left"
+                  className={`text-left border border-black rounded-sm ${answers[q.id] === opt ? 'bg-blue-600 text-white' : ''}`}
                 >
                   {stripHtml(opt)}
                 </Button>
@@ -312,12 +223,8 @@ const StartQuizPage: React.FC = () => {
           </Card>
         ))}
 
-        {/* Navigation */}
         <div className="flex justify-between mt-4">
-          <Button
-            onClick={() => setCurrentPage((p) => Math.max(0, p - 1))}
-            disabled={currentPage === 0}
-          >
+          <Button onClick={() => setCurrentPage((p) => Math.max(0, p - 1))} disabled={currentPage === 0}>
             <ArrowLeft className="mr-2" /> Previous
           </Button>
           {!isLastPage && (
@@ -333,7 +240,6 @@ const StartQuizPage: React.FC = () => {
         </div>
       </main>
 
-      {/* Submission Modal */}
       <Dialog open={showSubmissionModal} onOpenChange={setShowSubmissionModal}>
         <DialogContent>
           <DialogHeader>
