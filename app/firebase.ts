@@ -1,8 +1,9 @@
-// firebase.ts
+// app/firebase.ts
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { getAuth, GoogleAuthProvider } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
+// ✅ Your Firebase project config
 const firebaseConfig = {
   apiKey: "AIzaSyD30ttpHoP4xaQEjuPgCbyguZ8yMDOw0RM",
   authDomain: "tayyarihub.firebaseapp.com",
@@ -13,14 +14,18 @@ const firebaseConfig = {
   measurementId: "G-H21039HJ2F",
 };
 
-// ✅ Prevent multiple Firebase instances (important for Next.js/React)
+// ✅ Prevent multiple instances in Next.js/React
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 
-export const auth = getAuth(app);
-export const provider = new GoogleAuthProvider();
-export const db = getFirestore(app);
+// 🔑 Firebase services
+const auth = getAuth(app);
+const provider = new GoogleAuthProvider();
+const db = getFirestore(app);
 
-// Debug: ensure always [DEFAULT] app
+// ✅ Export everything you might need
+export { app, auth, provider, db };
+
+// Debug only (won’t run in prod build)
 if (process.env.NODE_ENV === "development") {
   console.log("✅ Firebase App initialized:", app.name);
 }
