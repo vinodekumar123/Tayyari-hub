@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { doc, getDoc, setDoc, serverTimestamp, getDocs, collection } from 'firebase/firestore';
+import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { db, auth } from '../../firebase';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
@@ -50,6 +50,7 @@ const StartQuizPage: React.FC = () => {
   const [timeLeft, setTimeLeft] = useState(0);
   const [hasLoadedTime, setHasLoadedTime] = useState(false);
 
+  const [darkMode, setDarkMode] = useState(false); // Dark mode state
   const hasSubmittedRef = useRef(false);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -89,7 +90,6 @@ const StartQuizPage: React.FC = () => {
       };
       setQuiz(quizData);
 
-      // Load previous answers if exists
       const attemptSnap = await getDoc(doc(db, 'users', user.uid, 'quizAttempts', quizId));
       if (attemptSnap.exists() && !attemptSnap.data()?.completed) {
         const saved = attemptSnap.data();
@@ -147,12 +147,6 @@ const StartQuizPage: React.FC = () => {
     setSubmitLoading(true);
 
     if (!user || !quiz) return;
-    const total = quiz.selectedQuestions.length;
-    let score = 0;
-    for (const q of quiz.selectedQuestions) {
-      if (answers[q.id] === q.correctAnswer) score++;
-    }
-
     await setDoc(doc(db, 'users', user.uid, 'quizAttempts', quizId!), {
       submittedAt: serverTimestamp(),
       completed: true,
@@ -181,30 +175,34 @@ const StartQuizPage: React.FC = () => {
   const qSlice = quiz.selectedQuestions.slice(startIdx, endIdx);
   const isLastPage = currentPage >= totalPages - 1;
 
-  // Progress based on answered questions
   const totalAnswered = Object.keys(answers).length;
   const progressValue = (totalAnswered / quiz.selectedQuestions.length) * 100;
 
   return (
-    <div className="min-h-screen bg-gray-50 px-4">
+    <div className={darkMode ? 'min-h-screen bg-gray-900 text-white px-4' : 'min-h-screen bg-gray-50 text-black px-4'}>
+      {/* Dark mode toggle button */}
+      <div className="fixed top-5 right-5 z-50">
+        <Button onClick={() => setDarkMode(!darkMode)}>{darkMode ? 'Light Mode' : 'Dark Mode'}</Button>
+      </div>
+
       {/* Sticky Header */}
-      <header className="bg-white border-b border-black sticky top-0 z-50 shadow-md">
+      <header className={darkMode ? 'bg-gray-800 border-b border-gray-700 sticky top-0 z-50 shadow-md' : 'bg-white border-b border-black sticky top-0 z-50 shadow-md'}>
         <div className="max-w-7xl mx-auto px-4 py-3 flex justify-between items-center">
           <div className="flex items-center gap-3">
-            <BookOpen className="h-6 w-6 text-blue-600" />
+            <BookOpen className={darkMode ? 'h-6 w-6 text-blue-400' : 'h-6 w-6 text-blue-600'} />
             <h1 className="text-lg font-semibold">{quiz.title}</h1>
           </div>
           <div className="flex items-center gap-2">
-            <Clock className="h-5 w-5 text-red-600" />
-            <span className="font-mono font-semibold text-red-600">{formatTime(timeLeft)}</span>
+            <Clock className={darkMode ? 'h-5 w-5 text-red-400' : 'h-5 w-5 text-red-600'} />
+            <span className="font-mono font-semibold">{formatTime(timeLeft)}</span>
           </div>
         </div>
-        <Progress value={progressValue} className="h-3 rounded-sm bg-gray-200 border-black border" />
+        <Progress value={progressValue} className="h-3 rounded-sm bg-gray-300 dark:bg-gray-700 border border-black dark:border-gray-600" />
       </header>
 
       <main className="max-w-4xl w-full mx-auto p-4">
         {qSlice.map((q, idx) => (
-          <Card key={q.id} className="mb-5 border border-black rounded-sm shadow-sm">
+          <Card key={q.id} className={`mb-5 border rounded-sm shadow-sm ${darkMode ? 'border-gray-700 bg-gray-800' : 'border-black bg-white'}`}>
             <CardHeader>
               <CardTitle className="text-lg font-semibold">Q{startIdx + idx + 1}: {stripHtml(q.questionText)}</CardTitle>
             </CardHeader>
@@ -214,7 +212,7 @@ const StartQuizPage: React.FC = () => {
                   key={opt}
                   variant={answers[q.id] === opt ? 'default' : 'outline'}
                   onClick={() => handleAnswer(q.id, opt)}
-                  className={`text-left border border-black rounded-sm ${answers[q.id] === opt ? 'bg-blue-600 text-white' : ''}`}
+                  className={`text-left border rounded-sm ${darkMode ? 'border-gray-600' : 'border-black'} ${answers[q.id] === opt ? (darkMode ? 'bg-blue-600 text-white' : 'bg-blue-600 text-white') : ''}`}
                 >
                   {stripHtml(opt)}
                 </Button>
