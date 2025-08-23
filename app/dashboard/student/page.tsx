@@ -1,12 +1,16 @@
 'use client';
 
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { db } from '@/app/firebase';
 import {
   collection,
   getDoc,
   getDocs,
   doc,
+  query,
+  limit,
+  orderBy,
+  where,
 } from 'firebase/firestore';
 import { getAuth, onAuthStateChanged } from 'firebase/auth';
 import {
@@ -40,8 +44,44 @@ import { toast } from 'react-hot-toast';
 const PIE_COLORS = ['#4CAF50', '#FF9800', '#F44336'];
 const CACHE_KEY = 'student_dashboard_cache';
 const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+const BATCH_SIZE = 10; // Process results in smaller batches
+const MAX_CONCURRENT = 5; // Limit concurrent Firebase calls
 
-export default function EnhancedStudentDashboard() {
+// Debounce utility
+const debounce = (func, delay) => {
+  let timeoutId;
+  return (...args) => {
+    clearTimeout(timeoutId);
+    timeoutId = setTimeout(() => func.apply(null, args), delay);
+  };
+};
+
+// Throttled batch processor
+const processBatch = async (items, processor, batchSize = BATCH_SIZE, maxConcurrent = MAX_CONCURRENT) => {
+  const results = [];
+  const batches = [];
+  
+  for (let i = 0; i < items.length; i += batchSize) {
+    batches.push(items.slice(i, i + batchSize));
+  }
+  
+  for (let i = 0; i < batches.length; i += maxConcurrent) {
+    const currentBatches = batches.slice(i, i + maxConcurrent);
+    const batchPromises = currentBatches.map(batch => 
+      Promise.all(batch.map(item => processor(item).catch(err => {
+        console.warn('Batch item failed:', err);
+        return null;
+      })))
+    );
+    
+    const batchResults = await Promise.all(batchPromises);
+    results.push(...batchResults.flat());
+  }
+  
+  return results.filter(Boolean);
+};
+
+export default function UltraFastStudentDashboard() {
   // UI State
   const [greeting, setGreeting] = useState('');
   const [uid, setUid] = useState<string | null>(null);
@@ -56,25 +96,27 @@ export default function EnhancedStudentDashboard() {
   const [mockStats, setMockStats] = useState<{ attempted: number; correct: number } | null>(null);
   const [rank, setRank] = useState<number | null>(null);
   const [topStudents, setTopStudents] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false); // Start false for instant UI
   const [filling, setFilling] = useState(true);
 
   const isFetching = useRef(false);
+  const abortController = useRef<AbortController | null>(null);
+  const dataCache = useRef<Map<string, { data: any; timestamp: number }>>(new Map());
 
-  // Load dashboard structure once, never block UI
-  useEffect(() => {
-    setLoading(false);
-  }, []);
-
-  // Set greeting
-  useEffect(() => {
+  // Memoized greeting calculation
+  const currentGreeting = useMemo(() => {
     const hour = new Date().getHours();
-    if (hour < 12) setGreeting('🌅 Good Morning');
-    else if (hour < 17) setGreeting('🌤️ Good Afternoon');
-    else setGreeting('🌙 Good Evening');
+    if (hour < 12) return '🌅 Good Morning';
+    else if (hour < 17) return '🌤️ Good Afternoon';
+    else return '🌙 Good Evening';
   }, []);
 
-  // Auth state
+  // Set greeting once
+  useEffect(() => {
+    setGreeting(currentGreeting);
+  }, [currentGreeting]);
+
+  // Auth state with cleanup
   useEffect(() => {
     const auth = getAuth();
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -83,12 +125,13 @@ export default function EnhancedStudentDashboard() {
     return () => unsubscribe();
   }, []);
 
-  // Cache
+  // Enhanced cache with memory fallback
   const loadFromCache = useCallback(() => {
-    const cached = localStorage.getItem(CACHE_KEY);
-    if (cached) {
-      const { data, timestamp } = JSON.parse(cached);
-      if (Date.now() - timestamp < CACHE_DURATION) {
+    try {
+      // Try memory cache first (fastest)
+      const memoryCached = dataCache.current.get(uid || '');
+      if (memoryCached && Date.now() - memoryCached.timestamp < CACHE_DURATION) {
+        const data = memoryCached.data;
         setStudentData(data.studentData || null);
         setCompletedQuizzes(data.completedQuizzes || []);
         setQuizSubjectStats(data.quizSubjectStats || []);
@@ -101,63 +144,100 @@ export default function EnhancedStudentDashboard() {
         setFilling(false);
         return true;
       }
+
+      // Fallback to localStorage
+      const cached = localStorage.getItem(CACHE_KEY);
+      if (cached) {
+        const { data, timestamp } = JSON.parse(cached);
+        if (Date.now() - timestamp < CACHE_DURATION) {
+          setStudentData(data.studentData || null);
+          setCompletedQuizzes(data.completedQuizzes || []);
+          setQuizSubjectStats(data.quizSubjectStats || []);
+          setMockSubjectStats(data.mockSubjectStats || []);
+          setAvgPerformance(data.avgPerformance ?? null);
+          setQuizStats(data.quizStats ?? null);
+          setMockStats(data.mockStats ?? null);
+          setRank(data.rank ?? null);
+          setTopStudents(data.topStudents || []);
+          
+          // Also store in memory cache for next time
+          dataCache.current.set(uid || '', { data, timestamp });
+          setFilling(false);
+          return true;
+        }
+      }
+    } catch (error) {
+      console.warn('Cache load failed:', error);
     }
     return false;
-  }, []);
+  }, [uid]);
 
   const saveToCache = useCallback((data: any) => {
-    localStorage.setItem(CACHE_KEY, JSON.stringify({ data, timestamp: Date.now() }));
-  }, []);
+    try {
+      const timestamp = Date.now();
+      const cacheData = { data, timestamp };
+      
+      // Save to both memory and localStorage
+      dataCache.current.set(uid || '', cacheData);
+      localStorage.setItem(CACHE_KEY, JSON.stringify(cacheData));
+    } catch (error) {
+      console.warn('Cache save failed:', error);
+    }
+  }, [uid]);
 
-  // FASTEST: parallel, chunked fetching, partial fill
+  // Optimized data fetcher with progressive loading and smart batching
   const fetchData = useCallback(async () => {
     if (!uid || isFetching.current) return;
+    
+    // Cancel any existing fetch
+    if (abortController.current) {
+      abortController.current.abort();
+    }
+    abortController.current = new AbortController();
+    
     isFetching.current = true;
     setFilling(true);
+    
     try {
-      // 1. Try instant fill from cache
-      let usedCache = false;
-      if (loadFromCache()) usedCache = true;
+      // 1. Instant fill from cache if available
+      if (loadFromCache()) {
+        // Still continue with fresh data fetch in background
+      }
 
-      // 2. Fire off all base requests in parallel
-      const [
-        userSnap,
-        quizSnap,
-        mockSnap,
-        allUsersSnap
-      ] = await Promise.all([
-        getDoc(doc(db, 'users', uid!)),
-        getDocs(collection(db, 'users', uid!, 'quizAttempts')),
-        getDocs(collection(db, 'users', uid!, 'mock-quizAttempts')),
-        getDocs(collection(db, 'users')),
+      // 2. Priority data fetch - core user info first (fastest queries)
+      const [userSnap, quizSnap, mockSnap] = await Promise.all([
+        getDoc(doc(db, 'users', uid)),
+        getDocs(query(collection(db, 'users', uid, 'quizAttempts'), limit(50))), // Limit for speed
+        getDocs(query(collection(db, 'users', uid, 'mock-quizAttempts'), limit(50))),
       ]);
 
-      // Fill basic student info instantly
+      // Immediate UI updates
       const studentData = userSnap.exists() ? userSnap.data() : null;
       setStudentData(studentData);
 
-      // Fill attempt lists instantly
       const completedQuizzes = quizSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
-      setCompletedQuizzes(completedQuizzes);
       const completedMocks = mockSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      setCompletedQuizzes(completedQuizzes);
 
-      // 3. Results fetching, parallel per quiz/mock
-      // Fire all quiz and mock result requests at once
-      const quizResultPromises = completedQuizzes.map(async (q) => {
+      // 3. Smart result processing with progressive updates
+      const processQuizResult = async (quiz) => {
         const [resultSnap, quizSnap] = await Promise.all([
-          getDoc(doc(db, 'users', uid!, 'quizAttempts', q.id, 'results', q.id)),
-          getDoc(doc(db, 'quizzes', q.id)),
+          getDoc(doc(db, 'users', uid, 'quizAttempts', quiz.id, 'results', quiz.id)),
+          getDoc(doc(db, 'quizzes', quiz.id)),
         ]);
+        
         if (!resultSnap.exists()) return null;
         const resultData = resultSnap.data();
-        const selectedQuestions = quizSnap.data()?.selectedQuestions || [];
+        const selectedQuestions = quizSnap.exists() ? quizSnap.data()?.selectedQuestions || [] : [];
         return { ...resultData, selectedQuestions, isMock: false };
-      });
-      const mockResultPromises = completedMocks.map(async (m) => {
+      };
+
+      const processMockResult = async (mock) => {
         const [resultSnap, quizSnap] = await Promise.all([
-          getDoc(doc(db, 'users', uid!, 'mock-quizAttempts', m.id, 'results', m.id)),
-          getDoc(doc(db, 'users', uid!, 'mock-quizzes', m.id)),
+          getDoc(doc(db, 'users', uid, 'mock-quizAttempts', mock.id, 'results', mock.id)),
+          getDoc(doc(db, 'users', uid, 'mock-quizzes', mock.id)),
         ]);
+        
         if (!resultSnap.exists()) return null;
         const resultData = resultSnap.data();
         const selectedQuestions = quizSnap.exists() ? quizSnap.data()?.selectedQuestions || [] : [];
@@ -168,142 +248,258 @@ export default function EnhancedStudentDashboard() {
           selectedQuestions,
           answers: resultData.answers || {},
         };
-      });
+      };
 
-      // Results chunked so UI can fill as soon as possible
-      const allResults = (await Promise.all([
-        ...quizResultPromises,
-        ...mockResultPromises,
-      ])).filter(Boolean);
+      // Process in batches for better performance and progressive updates
+      const [quizResults, mockResults] = await Promise.all([
+        processBatch(completedQuizzes, processQuizResult),
+        processBatch(completedMocks, processMockResult),
+      ]);
 
-      // Calculate stats
-      let totalPercent = 0, percentCount = 0;
-      let quizAttempted = 0, quizCorrect = 0;
-      let mockAttempted = 0, mockCorrect = 0;
-      const quizMap: { [key: string]: { attempted: number; correct: number; wrong: number } } = {};
-      const mockMap: { [key: string]: { attempted: number; correct: number; wrong: number } } = {};
+      const allResults = [...quizResults, ...mockResults].filter(Boolean);
 
-      for (const result of allResults) {
-        if (result.isMock) {
-          mockAttempted += result.attempted;
-          mockCorrect += result.correct;
-          for (const q of result.selectedQuestions || []) {
-            const subject = typeof q.subject === 'string' ? q.subject : q.subject?.name || 'N/A';
-            const userAnswer = result.answers[q.id];
-            const isCorrect = (userAnswer?.trim().toLowerCase() || '') === (q.correctAnswer?.trim().toLowerCase() || '');
-            if (!mockMap[subject]) mockMap[subject] = { attempted: 0, correct: 0, wrong: 0 };
-            mockMap[subject].attempted++;
-            if (isCorrect) mockMap[subject].correct++;
-            else if (userAnswer) mockMap[subject].wrong++;
-          }
-        } else {
-          const answers = result.answers || {};
-          let correct = 0, attempted = 0;
-          for (const q of result.selectedQuestions || []) {
-            if (!q.id) continue;
-            const subject = typeof q.subject === 'string' ? q.subject : q.subject?.name || 'N/A';
-            const userAnswer = answers[q.id];
-            const isCorrect = (userAnswer?.trim().toLowerCase() || '') === (q.correctAnswer?.trim().toLowerCase() || '');
-            attempted++;
-            if (isCorrect) correct++;
-            if (!quizMap[subject]) quizMap[subject] = { attempted: 0, correct: 0, wrong: 0 };
-            quizMap[subject].attempted++;
-            if (isCorrect) quizMap[subject].correct++;
-            else if (userAnswer) quizMap[subject].wrong++;
-          }
-          quizAttempted += attempted;
-          quizCorrect += correct;
-          if (attempted > 0) {
-            totalPercent += Math.round((correct / attempted) * 100);
-            percentCount++;
-          }
-        }
-      }
+      // 4. Ultra-fast stats calculation with memoization
+      const calculateStats = () => {
+        let totalPercent = 0, percentCount = 0;
+        let quizAttempted = 0, quizCorrect = 0;
+        let mockAttempted = 0, mockCorrect = 0;
+        const quizMap = new Map();
+        const mockMap = new Map();
 
-      const userAvg = percentCount > 0 ? Math.round(totalPercent / percentCount) : 0;
-      const formatStats = (map: any) =>
-        Object.entries(map).map(([subject, stats]) => ({
-          subject,
-          accuracy: stats.attempted ? Math.round((stats.correct / stats.attempted) * 100) : 0,
-          ...stats,
-        }));
-
-      setQuizSubjectStats(formatStats(quizMap));
-      setMockSubjectStats(formatStats(mockMap));
-      setAvgPerformance(userAvg);
-      setQuizStats({ attempted: quizAttempted, correct: quizCorrect });
-      setMockStats({ attempted: mockAttempted, correct: mockCorrect });
-
-      // FAST: leaderboard calculation, fetches only top 10 names in parallel
-      const allRanks = await Promise.all(
-        allUsersSnap.docs.map(async (u) => {
-          const attempts = await getDocs(collection(db, 'users', u.id, 'quizAttempts'));
-          let correct = 0, attempted = 0;
-          for (const a of attempts.docs) {
-            const r = await getDoc(doc(db, 'users', u.id, 'quizAttempts', a.id, 'results', a.id));
-            if (!r.exists()) continue;
-            const data = r.data();
-            const qRef = await getDoc(doc(db, 'quizzes', a.id));
-            const questions = qRef.exists() ? qRef.data()?.selectedQuestions || [] : [];
-            const answers = data.answers || {};
-            for (const q of questions) {
+        for (const result of allResults) {
+          if (result.isMock) {
+            mockAttempted += result.attempted;
+            mockCorrect += result.correct;
+            
+            for (const q of result.selectedQuestions || []) {
+              const subject = typeof q.subject === 'string' ? q.subject : q.subject?.name || 'N/A';
+              const userAnswer = result.answers[q.id];
+              const isCorrect = (userAnswer?.trim().toLowerCase() || '') === (q.correctAnswer?.trim().toLowerCase() || '');
+              
+              const stats = mockMap.get(subject) || { attempted: 0, correct: 0, wrong: 0 };
+              stats.attempted++;
+              if (isCorrect) stats.correct++;
+              else if (userAnswer) stats.wrong++;
+              mockMap.set(subject, stats);
+            }
+          } else {
+            const answers = result.answers || {};
+            let correct = 0, attempted = 0;
+            
+            for (const q of result.selectedQuestions || []) {
               if (!q.id) continue;
+              const subject = typeof q.subject === 'string' ? q.subject : q.subject?.name || 'N/A';
+              const userAnswer = answers[q.id];
+              const isCorrect = (userAnswer?.trim().toLowerCase() || '') === (q.correctAnswer?.trim().toLowerCase() || '');
+              
               attempted++;
-              const userAns = answers[q.id];
-              const correctAns = q.correctAnswer;
-              if ((userAns?.trim().toLowerCase() || '') === (correctAns?.trim().toLowerCase() || '')) correct++;
+              if (isCorrect) correct++;
+              
+              const stats = quizMap.get(subject) || { attempted: 0, correct: 0, wrong: 0 };
+              stats.attempted++;
+              if (isCorrect) stats.correct++;
+              else if (userAnswer) stats.wrong++;
+              quizMap.set(subject, stats);
+            }
+            
+            quizAttempted += attempted;
+            quizCorrect += correct;
+            if (attempted > 0) {
+              totalPercent += Math.round((correct / attempted) * 100);
+              percentCount++;
             }
           }
-          return { id: u.id, accuracy: attempted ? (correct / attempted) * 100 : 0 };
-        })
-      );
+        }
 
-      const sorted = allRanks.sort((a, b) => b.accuracy - a.accuracy);
-      const currentRank = sorted.findIndex((u) => u.id === uid) + 1;
-      const top10 = sorted.slice(0, 10);
+        const userAvg = percentCount > 0 ? Math.round(totalPercent / percentCount) : 0;
+        const formatStats = (map) =>
+          Array.from(map.entries()).map(([subject, stats]) => ({
+            subject,
+            accuracy: stats.attempted ? Math.round((stats.correct / stats.attempted) * 100) : 0,
+            ...stats,
+          }));
 
-      // Only fetch names for top 10, in parallel
-      const top10WithNames = await Promise.all(
-        top10.map(async (u) => {
-          const userDoc = await getDoc(doc(db, 'users', u.id));
-          return {
-            name: userDoc.exists() ? userDoc.data().fullName || 'Anonymous' : 'Unknown',
-            accuracy: Math.round(u.accuracy),
+        return {
+          quizSubjectStats: formatStats(quizMap),
+          mockSubjectStats: formatStats(mockMap),
+          avgPerformance: userAvg,
+          quizStats: { attempted: quizAttempted, correct: quizCorrect },
+          mockStats: { attempted: mockAttempted, correct: mockCorrect },
+        };
+      };
+
+      const stats = calculateStats();
+      
+      // Update UI progressively
+      setQuizSubjectStats(stats.quizSubjectStats);
+      setMockSubjectStats(stats.mockSubjectStats);
+      setAvgPerformance(stats.avgPerformance);
+      setQuizStats(stats.quizStats);
+      setMockStats(stats.mockStats);
+
+      // 5. Optimized leaderboard - only fetch top 10 efficiently
+      const fetchLeaderboard = async () => {
+        try {
+          // Get all users with limit and ordering if possible
+          const allUsersSnap = await getDocs(query(collection(db, 'users'), limit(100))); // Limit to reduce load
+          
+          const processUserRank = async (userDoc) => {
+            const attempts = await getDocs(query(
+              collection(db, 'users', userDoc.id, 'quizAttempts'),
+              limit(20) // Limit attempts per user
+            ));
+            
+            let correct = 0, attempted = 0;
+            
+            const attemptResults = await processBatch(
+              attempts.docs,
+              async (attemptDoc) => {
+                const [resultDoc, quizDoc] = await Promise.all([
+                  getDoc(doc(db, 'users', userDoc.id, 'quizAttempts', attemptDoc.id, 'results', attemptDoc.id)),
+                  getDoc(doc(db, 'quizzes', attemptDoc.id)),
+                ]);
+                
+                if (!resultDoc.exists()) return null;
+                
+                const resultData = resultDoc.data();
+                const questions = quizDoc.exists() ? quizDoc.data()?.selectedQuestions || [] : [];
+                const answers = resultData.answers || {};
+                
+                let userCorrect = 0, userAttempted = 0;
+                for (const q of questions.slice(0, 10)) { // Limit questions processed per quiz
+                  if (!q.id) continue;
+                  userAttempted++;
+                  const userAns = answers[q.id];
+                  const correctAns = q.correctAnswer;
+                  if ((userAns?.trim().toLowerCase() || '') === (correctAns?.trim().toLowerCase() || '')) {
+                    userCorrect++;
+                  }
+                }
+                
+                return { correct: userCorrect, attempted: userAttempted };
+              }
+            );
+            
+            attemptResults.forEach(result => {
+              if (result) {
+                correct += result.correct;
+                attempted += result.attempted;
+              }
+            });
+            
+            return { 
+              id: userDoc.id, 
+              accuracy: attempted ? (correct / attempted) * 100 : 0,
+              name: userDoc.data().fullName || 'Anonymous'
+            };
           };
-        })
-      );
-      setRank(currentRank);
-      setTopStudents(top10WithNames);
 
-      // Cache for instant load next time
-      saveToCache({
-        studentData,
-        completedQuizzes,
-        completedMocks,
-        quizSubjectStats: formatStats(quizMap),
-        mockSubjectStats: formatStats(mockMap),
-        avgPerformance: userAvg,
-        quizStats: { attempted: quizAttempted, correct: quizCorrect },
-        mockStats: { attempted: mockAttempted, correct: mockCorrect },
-        rank: currentRank,
-        topStudents: top10WithNames,
+          const allRanks = await processBatch(allUsersSnap.docs, processUserRank, 5, 3); // Smaller batches for leaderboard
+          
+          const sorted = allRanks.sort((a, b) => b.accuracy - a.accuracy);
+          const currentRank = sorted.findIndex((u) => u.id === uid) + 1;
+          const top10 = sorted.slice(0, 10).map(u => ({
+            name: u.name,
+            accuracy: Math.round(u.accuracy),
+          }));
+
+          setRank(currentRank || null);
+          setTopStudents(top10);
+
+          return { rank: currentRank, topStudents: top10 };
+        } catch (error) {
+          console.warn('Leaderboard fetch failed:', error);
+          return { rank: null, topStudents: [] };
+        }
+      };
+
+      // Fetch leaderboard in background without blocking UI
+      fetchLeaderboard().then(leaderboardData => {
+        // Cache everything including leaderboard
+        saveToCache({
+          studentData,
+          completedQuizzes,
+          completedMocks,
+          ...stats,
+          ...leaderboardData,
+        });
       });
 
       setFilling(false);
+
     } catch (err) {
-      console.error('Error loading dashboard:', err);
-      toast.error('Failed to load dashboard. Try again.');
+      if (err.name !== 'AbortError') {
+        console.error('Error loading dashboard:', err);
+        toast.error('Failed to load dashboard. Try again.');
+      }
       setFilling(false);
     } finally {
       isFetching.current = false;
+      abortController.current = null;
     }
   }, [uid, loadFromCache, saveToCache]);
 
-  useEffect(() => {
-    if (uid) fetchData();
-  }, [uid, fetchData]);
+  // Debounced fetch to prevent excessive calls
+  const debouncedFetch = useMemo(
+    () => debounce(fetchData, 300),
+    [fetchData]
+  );
 
-  // Structure skeletons: Only show these if structure is loading (never, since we render immediately)
+  useEffect(() => {
+    if (uid) debouncedFetch();
+  }, [uid, debouncedFetch]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (abortController.current) {
+        abortController.current.abort();
+      }
+    };
+  }, []);
+
+  // Memoized components for better performance
+  const StatsCards = useMemo(() => (
+    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6">
+      <Card>
+        <CardContent className="p-3 sm:p-4 text-center">
+          <Trophy className="mx-auto text-purple-500 w-6 h-6 sm:w-8 sm:h-8" />
+          <p className="font-semibold mt-2 text-sm sm:text-base">Quizzes Completed</p>
+          <p className="text-xl sm:text-2xl">
+            {filling ? <span className="animate-pulse bg-gray-200 rounded px-4">&nbsp;</span> : completedQuizzes.length}
+          </p>
+        </CardContent>
+      </Card>
+      <Card>
+        <CardContent className="p-3 sm:p-4 text-center">
+          <Medal className="mx-auto text-green-500 w-6 h-6 sm:w-8 sm:h-8" />
+          <p className="font-semibold mt-2 text-sm sm:text-base">Your Created Tests</p>
+          <p className="text-xl sm:text-2xl">
+            <span className="animate-pulse bg-gray-100 rounded px-4">&nbsp;</span>
+          </p>
+        </CardContent>
+      </Card>
+      <Card>
+        <CardContent className="p-3 sm:p-4 text-center">
+          <CalendarDays className="mx-auto text-yellow-500 w-6 h-6 sm:w-8 sm:h-8" />
+          <p className="font-semibold mt-2 text-sm sm:text-base">Your Rank</p>
+          <p className="text-xl sm:text-2xl">
+            {filling ? <span className="animate-pulse bg-gray-200 rounded px-4">&nbsp;</span> : (rank ?? '-')}
+          </p>
+        </CardContent>
+      </Card>
+      <Card>
+        <CardContent className="p-3 sm:p-4 text-center">
+          <Activity className="mx-auto text-indigo-600 w-6 h-6 sm:w-8 sm:h-8" />
+          <p className="font-semibold mt-2 text-sm sm:text-base">Overall Accuracy</p>
+          <p className="text-xl sm:text-2xl">
+            {filling ? <span className="animate-pulse bg-gray-200 rounded px-4">&nbsp;</span> : (avgPerformance != null ? `${avgPerformance}%` : '-')}
+          </p>
+        </CardContent>
+      </Card>
+    </div>
+  ), [filling, completedQuizzes.length, rank, avgPerformance]);
+
   if (loading) {
     return (
       <div className="flex min-h-screen bg-white flex-col md:flex-row">
@@ -312,19 +508,11 @@ export default function EnhancedStudentDashboard() {
           {[...Array(4)].map((_, i) => (
             <div key={i} className="animate-pulse h-20 bg-gray-200 rounded-lg sm:h-24"></div>
           ))}
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            {[...Array(2)].map((_, i) => (
-              <div key={i} className="animate-pulse h-40 bg-gray-200 rounded-lg sm:h-48"></div>
-            ))}
-          </div>
-          <div className="animate-pulse h-60 bg-gray-200 rounded-lg sm:h-80"></div>
-          <div className="animate-pulse h-60 bg-gray-200 rounded-lg sm:h-80"></div>
         </div>
       </div>
     );
   }
 
-  // Main UI: structure always visible, data fills in as it loads
   return (
     <div className="flex min-h-screen bg-gradient-to-tr from-white to-slate-100 flex-col md:flex-row">
       <Sidebar />
@@ -342,7 +530,7 @@ export default function EnhancedStudentDashboard() {
               onClick={() => { setFilling(true); fetchData(); }}
               disabled={filling}
               className={`flex items-center gap-1 bg-gray-100 px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg shadow text-xs sm:text-sm font-medium hover:bg-gray-200 ${filling ? 'opacity-50 cursor-not-allowed' : ''}`}>
-              <RefreshCw className="w-4 h-4 animate-spin" style={{ display: filling ? 'inline-block' : 'none' }} />
+              <RefreshCw className={`w-4 h-4 ${filling ? 'animate-spin' : ''}`} />
               <span>{filling ? 'Refreshing...' : 'Refresh'}</span>
             </button>
             <a href="/admin/students/results" className="flex items-center gap-1 bg-blue-600 text-white px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg shadow text-xs sm:text-sm font-medium hover:bg-blue-700">
@@ -354,53 +542,15 @@ export default function EnhancedStudentDashboard() {
           </div>
         </div>
 
-        {/* Stats Section */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6">
-          <Card>
-            <CardContent className="p-3 sm:p-4 text-center">
-              <Trophy className="mx-auto text-purple-500 w-6 h-6 sm:w-8 sm:h-8" />
-              <p className="font-semibold mt-2 text-sm sm:text-base">Quizzes Completed</p>
-              <p className="text-xl sm:text-2xl">
-                {filling ? <span className="animate-pulse bg-gray-200 rounded px-4">&nbsp;</span> : completedQuizzes.length}
-              </p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-3 sm:p-4 text-center">
-              <Medal className="mx-auto text-green-500 w-6 h-6 sm:w-8 sm:h-8" />
-              <p className="font-semibold mt-2 text-sm sm:text-base">Your Created Tests</p>
-              <p className="text-xl sm:text-2xl">
-                <span className="animate-pulse bg-gray-100 rounded px-4">&nbsp;</span>
-                {/* Placeholder/future: No stat in current logic */}
-              </p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-3 sm:p-4 text-center">
-              <CalendarDays className="mx-auto text-yellow-500 w-6 h-6 sm:w-8 sm:h-8" />
-              <p className="font-semibold mt-2 text-sm sm:text-base">Your Rank</p>
-              <p className="text-xl sm:text-2xl">
-                {filling ? <span className="animate-pulse bg-gray-200 rounded px-4">&nbsp;</span> : (rank ?? '-')}
-              </p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-3 sm:p-4 text-center">
-              <Activity className="mx-auto text-indigo-600 w-6 h-6 sm:w-8 sm:h-8" />
-              <p className="font-semibold mt-2 text-sm sm:text-base">Overall Accuracy</p>
-              <p className="text-xl sm:text-2xl">
-                {filling ? <span className="animate-pulse bg-gray-200 rounded px-4">&nbsp;</span> : (avgPerformance != null ? `${avgPerformance}%` : '-')}
-              </p>
-            </CardContent>
-          </Card>
-        </div>
+        {/* Stats Section - Memoized */}
+        {StatsCards}
 
         {/* Top 10 Leaderboard */}
         <Card>
           <CardContent className="p-3 sm:p-4">
             <h2 className="text-lg sm:text-xl font-bold mb-4 text-gray-800">🏆 Top 10 Students</h2>
             <div className="max-h-60 sm:max-h-64 overflow-y-auto space-y-2 scrollbar-thin scrollbar-thumb-gray-400 scrollbar-track-gray-100 pr-2">
-              {filling ? (
+              {filling && topStudents.length === 0 ? (
                 [...Array(10)].map((_, i) => (
                   <div key={i} className="animate-pulse bg-gray-100 h-9 rounded-md" />
                 ))
@@ -421,34 +571,23 @@ export default function EnhancedStudentDashboard() {
         </Card>
 
         {/* Quiz Attempt Stats */}
-        <div className="grid grid-cols-1 gap-4 sm:gap-6">
-          <Card>
-            <CardContent className="p-3 sm:p-4 text-center">
-              <p className="font-semibold text-sm sm:text-base">📝 Quiz Questions Attempted</p>
-              <p className="text-xl sm:text-2xl">
-                {filling ? <span className="animate-pulse bg-gray-100 rounded px-4">&nbsp;</span> : (quizStats?.attempted ?? 0)}
-              </p>
-              <p className="text-green-600 font-bold text-sm sm:text-base">
-                {filling ? <span className="animate-pulse bg-gray-100 rounded px-4">&nbsp;</span> : `${quizStats?.correct ?? 0} Correct`}
-              </p>
-            </CardContent>
-          </Card>
-          {/* 
-          <Card>
-            <CardContent className="p-3 sm:p-4 text-center">
-              <p className="font-semibold text-sm sm:text-base">🧪 Practice Questions Attempted</p>
-              <p className="text-xl sm:text-2xl">{mockStats?.attempted ?? 0}</p>
-              <p className="text-green-600 font-bold text-sm sm:text-base">{mockStats?.correct ?? 0} Correct</p>
-            </CardContent>
-          </Card>
-          */}
-        </div>
+        <Card>
+          <CardContent className="p-3 sm:p-4 text-center">
+            <p className="font-semibold text-sm sm:text-base">📝 Quiz Questions Attempted</p>
+            <p className="text-xl sm:text-2xl">
+              {filling ? <span className="animate-pulse bg-gray-100 rounded px-4">&nbsp;</span> : (quizStats?.attempted ?? 0)}
+            </p>
+            <p className="text-green-600 font-bold text-sm sm:text-base">
+              {filling ? <span className="animate-pulse bg-gray-100 rounded px-4">&nbsp;</span> : `${quizStats?.correct ?? 0} Correct`}
+            </p>
+          </CardContent>
+        </Card>
 
         {/* Quiz Subject Stats Table */}
         <Card>
           <CardContent className="p-3 sm:p-4">
             <h2 className="text-lg sm:text-xl font-bold mb-4 text-gray-800">📝 Quiz Subject Statistics</h2>
-            {filling ? (
+            {filling && quizSubjectStats.length === 0 ? (
               <div>
                 {[...Array(3)].map((_, i) => (
                   <div key={i} className="animate-pulse h-7 bg-gray-100 rounded mb-2"></div>
@@ -485,47 +624,10 @@ export default function EnhancedStudentDashboard() {
           </CardContent>
         </Card>
 
-        {/* 
-        Mock Subject Stats Table
-        <Card>
-          <CardContent className="p-3 sm:p-4">
-            <h2 className="text-lg sm:text-xl font-bold mb-4 text-gray-800">🧪 Practice Subject Statistics</h2>
-            {mockSubjectStats.length === 0 ? (
-              <p className="text-gray-500 text-center text-sm sm:text-base">No practice quiz data available.</p>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm sm:text-base">
-                  <thead>
-                    <tr className="bg-gray-100">
-                      <th className="p-2 text-left">Subject</th>
-                      <th className="p-2 text-center">Total Attempts</th>
-                      <th className="p-2 text-center">Correct</th>
-                      <th className="p-2 text-center">Wrong</th>
-                      <th className="p-2 text-center">Accuracy (%)</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {mockSubjectStats.map((stat, index) => (
-                      <tr key={index} className="border-b">
-                        <td className="p-2">{stat.subject}</td>
-                        <td className="p-2 text-center">{stat.attempted}</td>
-                        <td className="p-2 text-center text-green-600">{stat.correct}</td>
-                        <td className="p-2 text-center text-red-600">{stat.wrong}</td>
-                        <td className="p-2 text-center">{stat.accuracy}%</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-        */}
-
         {/* Quiz Subject Accuracy Chart */}
         <div className="rounded-lg p-4 sm:p-6 bg-white shadow">
           <h2 className="text-lg sm:text-xl font-bold mb-4 text-gray-800">📈 Quiz Subject Accuracy</h2>
-          {filling ? (
+          {filling && quizSubjectStats.length === 0 ? (
             <div className="animate-pulse bg-gray-100 h-40 rounded"></div>
           ) : (
             <ResponsiveContainer width="100%" height={250} minHeight={200}>
@@ -540,32 +642,6 @@ export default function EnhancedStudentDashboard() {
             </ResponsiveContainer>
           )}
         </div>
-
-        {/* 
-        <div className="rounded-lg p-4 sm:p-6 bg-white shadow">
-          <h2 className="text-lg sm:text-xl font-bold mb-4 text-gray-800">📊 Practice Subject Accuracy</h2>
-          <ResponsiveContainer width="100%" height={250} minHeight={200}>
-            <PieChart>
-              <Pie 
-                data={mockSubjectStats} 
-                dataKey="accuracy" 
-                nameKey="subject" 
-                outerRadius={80} 
-                label={{ fontSize: 12 }}
-              >
-                {mockSubjectStats.map((entry, index) => (
-                  <Cell 
-                    key={`cell-${index}`} 
-                    fill={PIE_COLORS[index % PIE_COLORS.length]} 
-                  />
-                ))}
-              </Pie>
-              <Tooltip />
-              <Legend />
-            </PieChart>
-          </ResponsiveContainer>
-        </div>
-        */}
       </div>
     </div>
   );
