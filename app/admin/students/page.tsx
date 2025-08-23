@@ -50,7 +50,8 @@ import {
   Search,
   Filter,
   Trash2,
-  X
+  X,
+  User
 } from 'lucide-react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { useRouter } from 'next/navigation';
@@ -242,48 +243,103 @@ export default function Enrollment() {
     const student = filteredStudents[index];
     if (!student) return null;
     return (
-      <div style={style}>
-        <Card key={student.id} className="shadow-xl mx-2 my-2">
-          <CardContent className="p-4 space-y-3">
-            <div className="flex flex-col sm:flex-row justify-between items-center">
-              <div className="flex items-center space-x-3">
-                <img src={student.profileImage} alt="Profile" className="w-12 h-12 rounded-full" />
-                <div>
-                  <h3 className="text-lg font-bold truncate max-w-[200px]">
-                    {highlightText(student.fullName, debouncedSearchTerm)}
+      <div style={style} className="px-2 sm:px-4">
+        <Card className="shadow-lg mb-2 hover:shadow-xl transition-shadow duration-200">
+          <CardContent className="p-3 sm:p-4">
+            {/* Header with profile and badges */}
+            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-3">
+              <div className="flex items-center gap-3 min-w-0 flex-1">
+                <div className="flex-shrink-0">
+                  <img 
+                    src={student.profileImage} 
+                    alt="Profile" 
+                    className="w-10 h-10 sm:w-12 sm:h-12 rounded-full object-cover" 
+                  />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h3 className="text-sm sm:text-base font-semibold text-gray-900 truncate">
+                    {highlightText(student.fullName || 'N/A', debouncedSearchTerm)}
                   </h3>
-                  <p className="text-sm text-gray-600 truncate max-w-[200px]">
-                    {highlightText(student.email, debouncedSearchTerm)}
+                  <p className="text-xs sm:text-sm text-gray-600 truncate">
+                    {highlightText(student.email || 'No email', debouncedSearchTerm)}
                   </p>
                 </div>
               </div>
-              <div className="flex flex-col items-end space-y-1 mt-2 sm:mt-0">
-                <Badge className={`mt-1 ${student.plan === 'premium' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'}`}>
-                  {student.plan === 'premium' ? 'Active' : 'Inactive'}
+              
+              {/* Badges */}
+              <div className="flex flex-wrap gap-1 sm:flex-col sm:items-end">
+                <Badge 
+                  className={`text-xs px-2 py-0.5 ${
+                    student.plan === 'premium' 
+                      ? 'bg-green-100 text-green-800 border-green-300' 
+                      : 'bg-gray-100 text-gray-700 border-gray-300'
+                  }`}
+                  variant="outline"
+                >
+                  {student.plan === 'premium' ? 'Premium' : 'Free'}
                 </Badge>
                 {student.admin && (
-                  <Badge className="bg-blue-100 text-blue-700">Admin</Badge>
+                  <Badge className="bg-blue-100 text-blue-800 border-blue-300 text-xs px-2 py-0.5" variant="outline">
+                    Admin
+                  </Badge>
                 )}
               </div>
             </div>
-            <p className="text-sm text-gray-600 truncate">
-              <Phone className="inline h-4 w-4 mr-1" />{highlightText(student.phone, debouncedSearchTerm)}
-            </p>
-            <p className="text-sm text-gray-600 truncate">
-              <BookOpen className="inline h-4 w-4 mr-1" />{highlightText(student.course, debouncedSearchTerm)}
-            </p>
-            <p className="text-sm text-gray-600 truncate">
-              <MapPin className="inline h-4 w-4 mr-1" />{highlightText(student.district, debouncedSearchTerm)}
-            </p>
-            <div className="flex flex-col sm:flex-row justify-end space-y-2 sm:space-y-0 sm:space-x-2">
-              <Button variant="outline" size="sm" onClick={() => handleEditClick(student)}>
-                <Edit className="h-4 w-4 mr-1" /> Edit
-              </Button>
-              <Button variant="outline" size="sm" onClick={() => router.push(`/admin/students/foradmin?studentId=${student.id}`)}>
-                <BarChart2 className="h-4 w-4 mr-1" /> Check Results
-              </Button>
-              <Button variant="destructive" size="sm" onClick={() => handleDeleteClick(student)}>
-                <Trash2 className="h-4 w-4 mr-1" /> Delete
+
+            {/* Student details in grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3 text-xs sm:text-sm text-gray-600">
+              <div className="flex items-center gap-2 truncate">
+                <Phone className="h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0 text-gray-400" />
+                <span className="truncate">
+                  {highlightText(student.phone || 'No phone', debouncedSearchTerm)}
+                </span>
+              </div>
+              
+              <div className="flex items-center gap-2 truncate">
+                <BookOpen className="h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0 text-gray-400" />
+                <span className="truncate">
+                  {highlightText(student.course || 'No course', debouncedSearchTerm)}
+                </span>
+              </div>
+              
+              <div className="flex items-center gap-2 truncate sm:col-span-2">
+                <MapPin className="h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0 text-gray-400" />
+                <span className="truncate">
+                  {highlightText(student.district || 'No district', debouncedSearchTerm)}
+                </span>
+              </div>
+            </div>
+
+            {/* Action buttons */}
+            <div className="flex flex-col sm:flex-row gap-2 sm:justify-end">
+              <div className="grid grid-cols-2 sm:grid-cols-none sm:flex gap-2">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => handleEditClick(student)}
+                  className="text-xs px-2 py-1 h-8"
+                >
+                  <Edit className="h-3 w-3 mr-1" />
+                  <span className="hidden xs:inline">Edit</span>
+                </Button>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => router.push(`/admin/students/foradmin?studentId=${student.id}`)}
+                  className="text-xs px-2 py-1 h-8"
+                >
+                  <BarChart2 className="h-3 w-3 mr-1" />
+                  <span className="hidden xs:inline">Results</span>
+                </Button>
+              </div>
+              <Button 
+                variant="destructive" 
+                size="sm" 
+                onClick={() => handleDeleteClick(student)}
+                className="text-xs px-2 py-1 h-8 sm:w-auto"
+              >
+                <Trash2 className="h-3 w-3 mr-1" />
+                <span className="hidden xs:inline">Delete</span>
               </Button>
             </div>
           </CardContent>
@@ -357,43 +413,51 @@ export default function Enrollment() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      <main className="max-w-7xl mx-auto px-4 py-6 sm:px-6 lg:px-8">
-        <div className="mb-6 flex flex-col sm:flex-row items-center gap-4">
-          <div className="relative w-full sm:w-80">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-            <Input
-              className="pl-10 pr-10"
-              placeholder="Search students..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              aria-label="Search students"
-            />
-            {searchTerm && (
-              <button
-                type="button"
-                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                onClick={() => setSearchTerm('')}
-                aria-label="Clear search"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            )}
+    <div className="min-h-screen bg-gray-50">
+      <main className="w-full px-2 sm:px-4 lg:px-6 py-4 sm:py-6 max-w-7xl mx-auto">
+        {/* Search and filters section */}
+        <div className="mb-4 sm:mb-6 space-y-3 sm:space-y-4">
+          {/* Search bar */}
+          <div className="flex flex-col sm:flex-row gap-2 sm:gap-4">
+            <div className="relative flex-1 max-w-md">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Input
+                className="pl-10 pr-10 text-sm"
+                placeholder="Search students..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                aria-label="Search students"
+              />
+              {searchTerm && (
+                <button
+                  type="button"
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  onClick={() => setSearchTerm('')}
+                  aria-label="Clear search"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+            
+            {/* Search field selector */}
+            <Select value={searchField} onValueChange={setSearchField}>
+              <SelectTrigger className="w-full sm:w-32" aria-label="Choose search field">
+                <SelectValue placeholder="Field" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Fields</SelectItem>
+                <SelectItem value="fullName">Name</SelectItem>
+                <SelectItem value="email">Email</SelectItem>
+                <SelectItem value="phone">Phone</SelectItem>
+                <SelectItem value="course">Course</SelectItem>
+                <SelectItem value="district">District</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
-          <Select value={searchField} onValueChange={setSearchField}>
-            <SelectTrigger className="w-28" aria-label="Choose search field">
-              <SelectValue placeholder="Field" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Fields</SelectItem>
-              <SelectItem value="fullName">Name</SelectItem>
-              <SelectItem value="email">Email</SelectItem>
-              <SelectItem value="phone">Phone</SelectItem>
-              <SelectItem value="course">Course</SelectItem>
-              <SelectItem value="district">District</SelectItem>
-            </SelectContent>
-          </Select>
-          <div className="flex gap-4 w-full sm:w-auto">
+
+          {/* Filter selectors */}
+          <div className="flex flex-col sm:flex-row gap-2 sm:gap-4">
             <Select value={filterType} onValueChange={setFilterType}>
               <SelectTrigger className="w-full sm:w-40">
                 <Filter className="h-4 w-4 mr-2" />
@@ -406,6 +470,7 @@ export default function Enrollment() {
                 <SelectItem value="admin">Admins</SelectItem>
               </SelectContent>
             </Select>
+            
             <Select value={courseFilter} onValueChange={setCourseFilter}>
               <SelectTrigger className="w-full sm:w-40">
                 <BookOpen className="h-4 w-4 mr-2" />
@@ -422,56 +487,65 @@ export default function Enrollment() {
             </Select>
           </div>
         </div>
-        <div className="mb-2 text-gray-700 text-sm">
+
+        {/* Results count */}
+        <div className="mb-3 text-gray-700 text-xs sm:text-sm px-1">
           Showing {filteredStudents.length} of {students.length} students
+          {fetchingAll && (
+            <span className="ml-2 text-blue-600 animate-pulse">Loading all students...</span>
+          )}
         </div>
+
+        {/* Students list */}
         <Tabs defaultValue="students">
-          <TabsContent value="students">
-            <div className="relative" style={{ minHeight: 400 }}>
+          <TabsContent value="students" className="mt-0">
+            <div className="relative">
               {loading && (
-                <div className="flex flex-col items-center justify-center mt-10">
-                  <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-gray-500 mb-4"></div>
-                  Loading students...
+                <div className="flex flex-col items-center justify-center py-12">
+                  <div className="animate-spin rounded-full h-8 w-8 sm:h-10 sm:w-10 border-t-2 border-b-2 border-blue-500 mb-3"></div>
+                  <p className="text-gray-600 text-sm">Loading students...</p>
                 </div>
               )}
+              
               {!loading && filteredStudents.length === 0 && (
-                <p className="text-center text-gray-600 mt-6">
-                  No students found.
-                  <br />
-                  <span className="text-xs text-gray-400">
-                    Try searching by other fields or check your filters.
-                  </span>
-                </p>
+                <div className="flex flex-col items-center justify-center py-12 px-4">
+                  <User className="h-12 w-12 text-gray-300 mb-3" />
+                  <p className="text-center text-gray-600 text-sm sm:text-base mb-1">
+                    No students found
+                  </p>
+                  <p className="text-center text-gray-400 text-xs sm:text-sm">
+                    Try adjusting your search terms or filters
+                  </p>
+                </div>
               )}
+              
               {!loading && filteredStudents.length > 0 && (
                 <VirtualList
-                  height={Math.min(filteredStudents.length * 180, 720)}
+                  height={Math.min(filteredStudents.length * 200, 800)}
                   itemCount={filteredStudents.length}
-                  itemSize={180}
+                  itemSize={200}
                   width="100%"
-                  overscanCount={6}
+                  overscanCount={5}
                 >
                   {Row}
                 </VirtualList>
-              )}
-              {fetchingAll && (
-                <p className="text-center text-gray-400 mt-4">Loading all students...</p>
               )}
             </div>
           </TabsContent>
         </Tabs>
       </main>
 
+      {/* Edit Modal */}
       <Dialog open={editModal} onOpenChange={setEditModal}>
-        <DialogContent className="max-w-md sm:max-w-lg">
+        <DialogContent className="w-[95vw] max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Edit Student</DialogTitle>
           </DialogHeader>
           {currentStudent && (
-            <div className="space-y-4">
+            <div className="space-y-4 py-2">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {['fullName', 'email', 'phone', 'fatherName', 'district'].map((field) => (
-                  <div key={field} className="space-y-1">
+                  <div key={field} className="space-y-2">
                     <Label htmlFor={field} className="text-sm font-medium text-gray-700">
                       {field.charAt(0).toUpperCase() + field.slice(1).replace(/([A-Z])/g, ' $1').trim()}
                     </Label>
@@ -480,10 +554,12 @@ export default function Enrollment() {
                       placeholder={field.charAt(0).toUpperCase() + field.slice(1)}
                       value={String(editData[field] ?? '')}
                       onChange={(e) => handleEditChange(field, e.target.value)}
+                      className="w-full"
                     />
                   </div>
                 ))}
-                <div className="space-y-1">
+                
+                <div className="space-y-2">
                   <Label htmlFor="course" className="text-sm font-medium text-gray-700">
                     Course
                   </Label>
@@ -491,7 +567,7 @@ export default function Enrollment() {
                     value={editData.course ?? 'none'}
                     onValueChange={(value) => handleEditChange('course', value)}
                   >
-                    <SelectTrigger id="course">
+                    <SelectTrigger id="course" className="w-full">
                       <SelectValue placeholder="Select course" />
                     </SelectTrigger>
                     <SelectContent>
@@ -505,7 +581,8 @@ export default function Enrollment() {
                   </Select>
                 </div>
               </div>
-              <div className="space-y-1">
+              
+              <div className="space-y-2">
                 <Label htmlFor="plan" className="text-sm font-medium text-gray-700">
                   Plan
                 </Label>
@@ -513,7 +590,7 @@ export default function Enrollment() {
                   value={editData.plan ?? 'free'}
                   onValueChange={(value) => handleEditChange('plan', value)}
                 >
-                  <SelectTrigger id="plan">
+                  <SelectTrigger id="plan" className="w-full">
                     <SelectValue placeholder="Select plan" />
                   </SelectTrigger>
                   <SelectContent>
@@ -522,42 +599,66 @@ export default function Enrollment() {
                   </SelectContent>
                 </Select>
               </div>
+              
               {isSuperadmin && (
-                <div className="flex items-center space-x-2">
+                <div className="flex items-center space-x-3 pt-2">
                   <input
                     type="checkbox"
                     id="admin"
                     checked={editData.admin ?? false}
                     onChange={(e) => handleEditChange('admin', e.target.checked)}
-                    className="h-4 w-4"
+                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                   />
                   <Label htmlFor="admin" className="text-sm font-medium text-gray-700">
-                    Admin
+                    Make this user an admin
                   </Label>
                 </div>
               )}
             </div>
           )}
-          <DialogFooter className="mt-4">
-            <Button onClick={handleEditSave}>Save Changes</Button>
+          <DialogFooter className="flex flex-col sm:flex-row gap-2 pt-4">
+            <Button 
+              variant="outline" 
+              onClick={() => setEditModal(false)}
+              className="w-full sm:w-auto order-2 sm:order-1"
+            >
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleEditSave}
+              className="w-full sm:w-auto order-1 sm:order-2"
+            >
+              Save Changes
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
+      {/* Delete Modal */}
       <Dialog open={deleteModal} onOpenChange={setDeleteModal}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="w-[95vw] max-w-md">
           <DialogHeader>
-            <DialogTitle>Confirm Delete</DialogTitle>
+            <DialogTitle className="text-red-600">Confirm Delete</DialogTitle>
           </DialogHeader>
-          <DialogDescription>
-            Are you sure you want to delete <strong>{currentStudent?.fullName}</strong>? This action cannot be undone.
+          <DialogDescription className="py-4">
+            Are you sure you want to delete <strong className="text-gray-900">{currentStudent?.fullName}</strong>? 
+            <br />
+            <span className="text-red-600 text-sm">This action cannot be undone.</span>
           </DialogDescription>
-          <DialogFooter className="mt-4">
-            <Button variant="outline" onClick={() => setDeleteModal(false)}>
+          <DialogFooter className="flex flex-col sm:flex-row gap-2">
+            <Button 
+              variant="outline" 
+              onClick={() => setDeleteModal(false)}
+              className="w-full sm:w-auto order-2 sm:order-1"
+            >
               Cancel
             </Button>
-            <Button variant="destructive" onClick={handleDeleteConfirm}>
-              Delete
+            <Button 
+              variant="destructive" 
+              onClick={handleDeleteConfirm}
+              className="w-full sm:w-auto order-1 sm:order-2"
+            >
+              Delete Student
             </Button>
           </DialogFooter>
         </DialogContent>
