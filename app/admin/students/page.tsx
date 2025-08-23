@@ -10,11 +10,10 @@ import {
   getDocs,
   onSnapshot,
   doc,
-  DocumentData,
-  QueryDocumentSnapshot,
 } from 'firebase/firestore';
+import type { DocumentData, QueryDocumentSnapshot } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
-import { onAuthStateChanged, User } from 'firebase/auth';
+import { onAuthStateChanged } from 'firebase/auth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -68,10 +67,11 @@ export default function StudentPage() {
     }
   }, [loading, hasMore, lastDoc]);
 
-  // 🔹 Auth Listener (Superadmin check)
+  // 🔹 Auth Listener (Superadmin check) with correct cleanup
   useEffect(() => {
+    let unsubscribeUser: (() => void) | undefined;
+
     const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
-      let unsubscribeUser: (() => void) | undefined;
       if (user) {
         const userDoc = doc(db, 'users', user.uid);
         unsubscribeUser = onSnapshot(userDoc, (docSnap) => {
@@ -80,30 +80,28 @@ export default function StudentPage() {
         });
       } else {
         setIsSuperadmin(false);
+        if (unsubscribeUser) {
+          unsubscribeUser();
+          unsubscribeUser = undefined;
+        }
       }
-      // Cleanup for both auth and user snapshot
-      return () => {
-        if (unsubscribeUser) unsubscribeUser();
-      };
     });
 
     return () => {
-      if (typeof unsubscribeAuth === 'function') {
-        unsubscribeAuth();
-      }
+      if (unsubscribeUser) unsubscribeUser();
+      unsubscribeAuth();
     };
   }, []);
 
   // 🔹 Initial Fetch (only run once!)
   useEffect(() => {
     fetchStudents();
-    // We don't want to re-fetch if fetchStudents changes, so disable exhaustive-deps warning for this
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // 🔹 Filtered Students
   const filteredStudents = students.filter((s) =>
-    s.FullName?.toLowerCase().includes(search.toLowerCase())
+    (s.FullName ?? '').toLowerCase().includes(search.toLowerCase())
   );
 
   return (
