@@ -218,7 +218,7 @@ const PrivacyPolicy = () => {
 
       {/* Footer */}
       <div className="mt-8 text-center text-sm text-gray-500 border-t border-gray-200 pt-6">
-        <p>© 2024 Tayyari Hub. All rights reserved.</p>
+        <p>© 2025 Tayyari Hub. All rights reserved.</p>
         <p className="mt-1">This Privacy Policy is effective immediately and applies to all users of our platform.</p>
       </div>
     </div>
