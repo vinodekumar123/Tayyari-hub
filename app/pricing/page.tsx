@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { CheckCircle, ArrowRightCircle, ChevronLeft, Shield, Star, Zap, Crown, Upload, Phone, MessageCircle, Copy, Check } from 'lucide-react';
+import { CheckCircle, ArrowRightCircle, ChevronLeft, Shield, Star, Zap, Crown, Phone, MessageCircle, Copy, Check } from 'lucide-react';
 import { auth, db } from "@/app/firebase";
 import { doc, updateDoc } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
@@ -12,8 +12,7 @@ import Link from 'next/link';
 
 export default function PricingPage() {
   const [price] = useState(1500);
-  const [file, setFile] = useState<File | null>(null);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+
   const [user, setUser] = useState<any>(null);
   const [status, setStatus] = useState('');
   const [copiedNumber, setCopiedNumber] = useState<string | null>(null);
@@ -30,10 +29,6 @@ export default function PricingPage() {
   }, []);
 
   const handleUpgrade = async () => {
-    if (!file) {
-      alert("📸 Please attach a payment screenshot before submitting.");
-      return;
-    }
     if (!user) {
       alert("🔐 Please login to continue.");
       return;
@@ -45,7 +40,6 @@ export default function PricingPage() {
       await updateDoc(docRef, {
         plan: "premium",
         pricePaid: price,
-        paymentScreenshotFileName: file.name,
         upgradedAt: new Date()
       });
       setStatus("✅ Plan upgraded successfully! Redirecting...");
@@ -58,16 +52,7 @@ export default function PricingPage() {
     }
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const selected = e.target.files?.[0] || null;
-    setFile(selected);
-    if (selected) {
-      const url = URL.createObjectURL(selected);
-      setPreviewUrl(url);
-    } else {
-      setPreviewUrl(null);
-    }
-  };
+
 
   const copyToClipboard = async (text: string, type: string) => {
     try {
@@ -226,43 +211,10 @@ export default function PricingPage() {
                 </div>
               </div>
 
-              {/* File Upload Section */}
-              <div className="border-2 border-dashed border-slate-300 rounded-xl p-6 text-center hover:border-blue-400 transition-colors mb-6">
-                <Upload className="w-12 h-12 text-slate-400 mx-auto mb-4" />
-                <div className="mb-4">
-                  <label htmlFor="screenshot" className="cursor-pointer">
-                    <span className="text-lg font-semibold text-slate-700 hover:text-blue-600">
-                      Upload Payment Screenshot
-                    </span>
-                    <p className="text-sm text-slate-500 mt-1">
-                      Click to select or drag and drop your payment screenshot
-                    </p>
-                  </label>
-                  <input
-                    id="screenshot"
-                    type="file"
-                    accept="image/*"
-                    onChange={handleFileChange}
-                    className="hidden"
-                  />
-                </div>
-                
-                {previewUrl && (
-                  <div className="mt-4">
-                    <img
-                      src={previewUrl}
-                      alt="Payment screenshot preview"
-                      className="max-h-48 mx-auto rounded-lg border shadow-sm"
-                    />
-                    <p className="text-sm text-green-600 mt-2 font-medium">✅ Screenshot uploaded</p>
-                  </div>
-                )}
-              </div>
-
               {/* Submit Button */}
               <Button
                 onClick={handleUpgrade}
-                disabled={!file || isUploading}
+                disabled={isUploading}
                 className="w-full h-12 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-bold text-lg rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isUploading ? (
