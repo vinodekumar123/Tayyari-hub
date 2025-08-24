@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { CheckCircle, ArrowRightCircle, ChevronLeft, Shield, Star, Zap, Crown, Phone, MessageCircle, Copy, Check } from 'lucide-react';
+import { CheckCircle, ChevronLeft, Shield, Star, Zap, Crown, Phone, MessageCircle, Copy, Check } from 'lucide-react';
 import { auth, db } from "@/app/firebase";
 import { doc, updateDoc } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
@@ -14,9 +14,7 @@ export default function PricingPage() {
   const [price] = useState(1500);
 
   const [user, setUser] = useState<any>(null);
-  const [status, setStatus] = useState('');
   const [copiedNumber, setCopiedNumber] = useState<string | null>(null);
-  const [isUploading, setIsUploading] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -28,29 +26,7 @@ export default function PricingPage() {
     return () => unsubscribe();
   }, []);
 
-  const handleUpgrade = async () => {
-    if (!user) {
-      alert("🔐 Please login to continue.");
-      return;
-    }
 
-    setIsUploading(true);
-    try {
-      const docRef = doc(db, "users", user.uid);
-      await updateDoc(docRef, {
-        plan: "premium",
-        pricePaid: price,
-        upgradedAt: new Date()
-      });
-      setStatus("✅ Plan upgraded successfully! Redirecting...");
-      setTimeout(() => router.push("/dashboard/student"), 2000);
-    } catch (error) {
-      console.error(error);
-      setStatus("❌ Failed to update plan. Please try again.");
-    } finally {
-      setIsUploading(false);
-    }
-  };
 
 
 
@@ -65,7 +41,7 @@ export default function PricingPage() {
   };
 
   const premiumFeatures = [
-    { icon: Zap, text: "22 Mock Tests Access", color: "text-yellow-500" },
+    { icon: Zap, text: "Unlimited Quiz Access", color: "text-yellow-500" },
     { icon: Crown, text: "Premium Content Library", color: "text-purple-500" },
     { icon: Star, text: "Advanced Analytics", color: "text-blue-500" },
     { icon: Shield, text: "Priority Support", color: "text-green-500" }
@@ -101,7 +77,7 @@ export default function PricingPage() {
                 <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-3">
                   Upgrade to Premium
                 </h1>
-                <p className="text-slate-600 text-lg">Unlock your learning potential with 22 Mock tests access</p>
+                <p className="text-slate-600 text-lg">Unlock your learning potential with unlimited access</p>
               </div>
 
               {/* Price Display */}
@@ -109,7 +85,7 @@ export default function PricingPage() {
                 <div className="bg-gradient-to-r from-blue-500 to-purple-600 rounded-2xl p-6 text-white">
                   <p className="text-lg opacity-90 mb-2">One-Time Payment</p>
                   <div className="text-5xl font-bold mb-2">PKR {price}</div>
-                  <p className="opacity-90"> Upto MDCAT-2025 Access • No Recurring Fees</p>
+                  <p className="opacity-90">Lifetime Access • No Recurring Fees</p>
                 </div>
               </div>
 
@@ -147,7 +123,7 @@ export default function PricingPage() {
           </Card>
 
           {/* Right Column - Payment Instructions */}
-          <Card className="shadow-2xl border-0 bg-white/80 backdrop-blur-sm">
+          <Card className="shadow-2xl border-0 bg-white/80 backdrop-blur-sm h-full">
             <CardContent className="p-8">
               <h2 className="text-2xl font-bold text-slate-800 mb-6 flex items-center gap-2">
                 <MessageCircle className="text-blue-500" />
@@ -209,37 +185,31 @@ export default function PricingPage() {
                     </div>
                   </div>
                 </div>
-              </div>
 
-              {/* Submit Button 
-              <Button
-                onClick={handleUpgrade}
-                disabled={isUploading}
-                className="w-full h-12 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-bold text-lg rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {isUploading ? (
-                  <>
-                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
-                    Processing...
-                  </>
-                ) : (
-                  <>
-                    Confirm Upgrade
-                    <ArrowRightCircle className="ml-2" size={20} />
-                  </>
-                )}
-              </Button> */}
-
-              {/* Status Message */}
-              {status && (
-                <div className={`mt-4 p-3 rounded-lg text-center font-medium ${
-                  status.includes('✅') 
-                    ? 'bg-green-50 text-green-800 border border-green-200' 
-                    : 'bg-red-50 text-red-800 border border-red-200'
-                }`}>
-                  {status}
+                {/* Support Contact */}
+                <div className="bg-gradient-to-r from-amber-50 to-orange-50 rounded-xl p-6 border border-amber-200">
+                  <h3 className="font-bold text-amber-800 mb-4 text-lg">📞 Need Help?</h3>
+                  <div className="space-y-3">
+                    <p className="text-slate-700">For any questions or support:</p>
+                    <div className="flex items-center justify-between bg-white rounded-lg p-3 shadow-sm">
+                      <div>
+                        <p className="text-sm text-slate-600">For support contact</p>
+                        <p className="font-bold text-slate-800">03237507673</p>
+                      </div>
+                      <button
+                        onClick={() => copyToClipboard('03237507673', 'support')}
+                        className="p-2 hover:bg-slate-50 rounded-lg transition-colors"
+                      >
+                        {copiedNumber === 'support' ? (
+                          <Check className="w-4 h-4 text-green-500" />
+                        ) : (
+                          <Copy className="w-4 h-4 text-slate-500" />
+                        )}
+                      </button>
+                    </div>
+                  </div>
                 </div>
-              )}
+              </div>
             </CardContent>
           </Card>
         </div>
