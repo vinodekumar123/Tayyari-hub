@@ -142,7 +142,7 @@ export default function ForAdminStudentResults() {
             Performance Overview: {analytics.scored} / {analytics.total} ({analytics.average}%)
           </p>
         </div>
-        <Button variant="outline" onClick={() => router.push('/admin/students/enrollment')}>
+        <Button variant="outline" onClick={() => router.push('/admin/students')}>
           ← Back to Students
         </Button>
       </div>

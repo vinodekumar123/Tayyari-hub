@@ -1,8 +1,21 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
+import {
+  collection,
+  onSnapshot,
+  query,
+  orderBy,
+  getDoc,
+  doc,
+  getDocs,
+  where,
+  limit,
+  startAfter,
+  deleteDoc,
+} from 'firebase/firestore';
+import { getAuth, onAuthStateChanged } from 'firebase/auth';
 import { db } from '../../../firebase';
 import {
   Card,
@@ -19,223 +32,337 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
-import { Skeleton } from '@/components/ui/skeleton';
 import {
-  ArrowRight,
-  BookOpen,
-  Calendar,
-  Clock,
-  Play,
-} from 'lucide-react';
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import { ArrowRight, BookOpen, Calendar, Clock, Play, Pencil, Eye, Trash2 } from 'lucide-react';
 import Link from 'next/link';
-import { onAuthStateChanged } from 'firebase/auth';
-import { auth } from '@/app/firebase'; // or adjust the path accordingly
 
-function getQuizStatus(startDate?: string, endDate?: string) {
-  // If either is missing, consider it always available
-  if (!startDate || !endDate) return 'active';
-
+function getQuizStatus(startDate: string, endDate: string, startTime?: string, endTime?: string) {
   const now = new Date();
-  const start = new Date(startDate);
-  const end = new Date(endDate);
+  let start: Date;
+  let end: Date;
 
-  if (now < start) return 'upcoming';
-  if (now >= start && now <= end) return 'active';
-  return 'ended';
+  try {
+    if (!startDate || !endDate) {
+      console.warn('Invalid startDate or endDate:', { startDate, endDate });
+      return 'ended';
+    }
+
+    if (startTime && /^\d{2}:\d{2}$/.test(startTime)) {
+      const [y, m, d] = startDate.split('-').map(Number);
+      const [h, min] = startTime.split(':').map(Number);
+      start = new Date(y, m - 1, d, h, min);
+    } else {
+      start = new Date(startDate);
+      start.setHours(0, 0, 0, 0);
+    }
+
+    if (endTime && /^\d{2}:\d{2}$/.test(endTime)) {
+      const [y, m, d] = endDate.split('-').map(Number);
+      const [h, min] = endTime.split(':').map(Number);
+      end = new Date(y, m - 1, d, h, min);
+    } else {
+      end = new Date(endDate);
+      end.setHours(23, 59, 59, 999);
+    }
+
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+      console.warn('Invalid date parsed:', { start, end });
+      return 'ended';
+    }
+
+    if (process.env.NODE_ENV === 'development') {
+      console.log('🕐 Now:', now.toString());
+      console.log('🚀 Start:', start.toString());
+      console.log('🛑 End:', end.toString());
+    }
+
+    if (now < start) return 'upcoming';
+    if (now >= start && now <= end) return 'active';
+    return 'ended';
+  } catch (error) {
+    console.error('Error in getQuizStatus:', error);
+    return 'ended';
+  }
 }
 
-
-export default function QuizListPage() {
+export default function QuizBankPage() {
   const [quizzes, setQuizzes] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [attemptedQuizzes, setAttemptedQuizzes] = useState<{ [key: string]: number }>({});
+  const [enrolledCourse, setEnrolledCourse] = useState<string | null>(null);
+  const [userLoaded, setUserLoaded] = useState(false);
+  const [lastVisible, setLastVisible] = useState<any>(null);
+  const [hasMore, setHasMore] = useState(true);
+  // Only keep searchTerm and accessType in filters
   const [filters, setFilters] = useState({
-    course: '',
-    subject: '',
-    chapter: '',
-    accessType: '',
     searchTerm: '',
-    status: '',
-    date: '',
+    accessType: '',
   });
-
+  const [showPremiumDialog, setShowPremiumDialog] = useState(false);
+  const [selectedQuizId, setSelectedQuizId] = useState<string | null>(null);
+  const [deleteModal, setDeleteModal] = useState(false);
+  const [quizToDelete, setQuizToDelete] = useState<any>(null);
+  const unsubscribeRef = useRef<(() => void) | null>(null);
   const router = useRouter();
 
-useEffect(() => {
-  const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
-    if (!user) return;
+  useEffect(() => {
+    return () => {
+      if (unsubscribeRef.current) {
+        unsubscribeRef.current();
+        unsubscribeRef.current = null;
+      }
+    };
+  }, []);
 
-    const q = query(
-      collection(db, 'users', user.uid, 'mock-quizzes'),
-      orderBy('createdAt', 'desc')
-    );
+  useEffect(() => {
+    const auth = getAuth();
+    const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
+      setLoading(true);
+      setError(null);
 
-    const unsubscribeSnapshot = onSnapshot(q, (snapshot) => {
-      const data = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
-      setQuizzes(data);
-      setLoading(false);
+      if (user) {
+        try {
+          const userRef = doc(db, 'users', user.uid);
+          const userSnap = await getDoc(userRef);
+          const userData = userSnap.exists() ? userSnap.data() : {} as any;
+          const isAdmin = (userData as any).admin === true;
+          const userPlan = (userData as any).plan || 'free';
+          const course = (userData as any).course;
+
+          if (!isAdmin && (!course || typeof course !== 'string')) {
+            setError('Invalid enrollment: You must be enrolled in a course.');
+            setLoading(false);
+            setUserLoaded(true);
+            return;
+          }
+
+          setCurrentUser({ ...user, isAdmin, plan: userPlan });
+          setEnrolledCourse(isAdmin ? null : course);
+
+          // Fetch quiz attempts
+          const attemptsSnapshot = await getDocs(
+            collection(db, 'users', user.uid, 'quizAttempts')
+          );
+          const attempted: { [key: string]: number } = {};
+          attemptsSnapshot.docs.forEach((d) => {
+            const data = d.data() as any;
+            if (data?.completed) {
+              attempted[d.id] = data.attemptNumber || 1;
+            }
+          });
+          setAttemptedQuizzes(attempted);
+          setUserLoaded(true);
+        } catch (err) {
+          setError('Failed to load user data. Please try again.');
+          setLoading(false);
+          setUserLoaded(true);
+        }
+      } else {
+        setQuizzes([]);
+        setEnrolledCourse(null);
+        setCurrentUser(null);
+        setHasMore(false);
+        setUserLoaded(true);
+        setLoading(false);
+      }
     });
 
-    return unsubscribeSnapshot;
-  });
+    return () => {
+      if (unsubscribeRef.current) {
+        unsubscribeRef.current();
+      }
+      unsubscribeAuth();
+    };
+  }, []);
 
-  return () => unsubscribeAuth();
-}, []);
-  const filteredQuizzes = quizzes.filter((quiz) => {
-    const {
-      course,
-      subject,
-      chapter,
-      accessType,
-      searchTerm,
-      status,
-      date,
-    } = filters;
-    const quizStatus = getQuizStatus(quiz.startDate, quiz.endDate);
-    const matches = [
-      !course || quiz.course === course,
-      !subject || quiz.subject === subject,
-      !chapter || quiz.chapter === chapter,
-      !accessType || quiz.accessType === accessType,
-      !searchTerm ||
-        (quiz.title || '').toLowerCase().includes(searchTerm.toLowerCase()),
-      !status || status === quizStatus,
-      !date || quiz.startDate === date,
-    ];
-    return matches.every(Boolean);
-  });
+  const fetchQuizzes = useCallback(
+    async (startAfterDoc: any = null) => {
+      if (!currentUser) return;
 
-  const uniqueValues = (key: string) => {
-    return [...new Set(quizzes.map((q) => q[key]).filter(Boolean))];
-  };
+      setLoading(true);
+      setError(null);
+
+      try {
+        const isAdmin = currentUser.isAdmin;
+        const courseName = enrolledCourse;
+        const constraints: any[] = [
+          orderBy('publishedAt', 'desc'), // sort by published date, newest first
+          limit(30),
+        ];
+
+        if (!isAdmin) {
+          if (!courseName) {
+            setError('No course enrolled. Please enroll in a course to view quizzes.');
+            setQuizzes([]);
+            setLoading(false);
+            setHasMore(false);
+            return;
+          }
+          constraints.push(where('published', '==', true));
+          constraints.push(where('course.name', '==', courseName));
+        }
+
+        // Access type filter
+        if (filters.accessType) {
+          constraints.push(where('accessType', '==', filters.accessType));
+        }
+
+        if (startAfterDoc) {
+          constraints.push(startAfter(startAfterDoc));
+        }
+
+        const q = query(collection(db, 'quizzes'), ...constraints);
+
+        if (unsubscribeRef.current) {
+          unsubscribeRef.current();
+          unsubscribeRef.current = null;
+        }
+
+        unsubscribeRef.current = onSnapshot(
+          q,
+          (snapshot) => {
+            let data = snapshot.docs.map((d) => {
+              const quizData = d.data() as any;
+              const course = quizData.course?.name || quizData.course || 'Unknown';
+              const subject = Array.isArray(quizData.subjects)
+                ? quizData.subjects.map((s: any) => s.name || s).join(', ')
+                : quizData.subject?.name || quizData.subject || '';
+              const chapter = quizData.chapter?.name || quizData.chapter || '';
+              return {
+                id: d.id,
+                ...quizData,
+                course,
+                subject,
+                chapter,
+                maxAttempts: quizData.maxAttempts || 1,
+              } as any;
+            });
+
+            // Search filter (client side, since Firestore doesn't support full text search)
+            if (filters.searchTerm) {
+              const search = filters.searchTerm.toLowerCase();
+              data = data.filter((quiz) =>
+                (quiz.title || '')
+                  .toLowerCase()
+                  .includes(search)
+              );
+            }
+
+            setQuizzes(data);
+            setLastVisible(snapshot.docs[snapshot.docs.length - 1]);
+            setHasMore(snapshot.docs.length === 30);
+            setLoading(false);
+          },
+          (error) => {
+            setError(
+              `Failed to fetch quizzes: ${error.message}. Please try again or create the required index at the provided link.`
+            );
+            setLoading(false);
+            setHasMore(false);
+          }
+        );
+      } catch (err: any) {
+        setError('Failed to fetch quizzes. Please try again.');
+        setLoading(false);
+        setHasMore(false);
+      }
+    },
+    [currentUser, enrolledCourse, filters.accessType, filters.searchTerm]
+  );
+
+  useEffect(() => {
+    if (userLoaded && currentUser) {
+      setLastVisible(null);
+      setHasMore(true);
+      fetchQuizzes();
+    }
+  }, [filters, currentUser, enrolledCourse, userLoaded, fetchQuizzes]);
+
+  // Group quizzes by published date (yyyy-mm-dd)
+  const quizzesByDate = quizzes.reduce((acc: Record<string, any[]>, quiz) => {
+    const date = quiz.publishedAt
+      ? new Date(quiz.publishedAt.seconds ? quiz.publishedAt.seconds * 1000 : quiz.publishedAt)
+      : null;
+    const dateStr = date
+      ? date.toLocaleDateString('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit' })
+      : 'Unknown Date';
+    if (!acc[dateStr]) acc[dateStr] = [];
+    acc[dateStr].push(quiz);
+    return acc;
+  }, {});
+
+  // Sort dates descending (newest first)
+  const sortedDates = Object.keys(quizzesByDate).sort((a, b) => (a < b ? 1 : -1));
 
   return (
-    <div className="w-full max-w-screen-2xl mx-auto px-6 py-10">
-      <h1 className="text-3xl font-bold text-gray-900 mb-8">
-        📝 Available Mock Quizzes
-      </h1>
+    <div className="container py-4">
+      <div className="flex items-center gap-4 mb-6">
+        <Input
+          placeholder="Search quizzes..."
+          value={filters.searchTerm}
+          onChange={e => setFilters(f => ({ ...f, searchTerm: e.target.value }))}
+          className="max-w-xs"
+        />
 
-      {/* Filters */}
-      <Card className="border-0 shadow-lg mb-10">
-        <CardContent className="p-6">
-          <div className="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-6 gap-4">
-            <Input
-              placeholder="Search quizzes..."
-              value={filters.searchTerm}
-              onChange={(e) =>
-                setFilters((prev) => ({
-                  ...prev,
-                  searchTerm: e.target.value,
-                }))
-              }
-            />
-            {['course', 'subject', 'chapter'].map((key) => (
-              <Select
-                key={key}
-                onValueChange={(v) =>
-                  setFilters((prev) => ({ ...prev, [key]: v }))
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue
-                    placeholder={key.charAt(0).toUpperCase() + key.slice(1)}
-                  />
-                </SelectTrigger>
-                <SelectContent>
-                  {uniqueValues(key).map((val) => (
-                    <SelectItem key={val} value={val}>
-                      {val}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            ))}
-           
-        
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Grid */}
-      {loading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <Card key={i} className="p-6 space-y-3 rounded-2xl">
-              <Skeleton className="h-7 w-3/4 rounded" />
-              <Skeleton className="h-5 w-1/2" />
-              <Skeleton className="h-4 w-full" />
-              <Skeleton className="h-12 w-full rounded" />
-            </Card>
-          ))}
-        </div>
-      ) : filteredQuizzes.length === 0 ? (
-        <p className="text-gray-500 text-center py-10">
-          No quizzes match your filters.
-        </p>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {filteredQuizzes.map((quiz) => {
-            const status = getQuizStatus(quiz.startDate, quiz.endDate);
-            return (
-              <Card
-                key={quiz.id}
-                className="shadow-xl hover:shadow-2xl transition-all duration-300 transform hover:scale-[1.02] overflow-hidden"
-              >
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-xl font-bold text-gray-900 mb-1 line-clamp-2">
-                    {quiz.title}
-                  </CardTitle>
-                  <p className="text-gray-600 text-sm line-clamp-2">
-                    {quiz.description}
-                  </p>
+        <Select
+          value={filters.accessType}
+          onValueChange={val => setFilters(f => ({ ...f, accessType: val }))}
+        >
+          <SelectTrigger className="w-44">
+            <SelectValue placeholder="Access type" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="">All Types</SelectItem>
+            <SelectItem value="free">Free</SelectItem>
+            <SelectItem value="premium">Premium</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      {loading && <div>Loading quizzes...</div>}
+      {error && <div className="text-red-500">{error}</div>}
+      {!loading && quizzes.length === 0 && <div>No quizzes found.</div>}
+      {sortedDates.map(date => (
+        <div key={date} className="mb-8">
+          <h2 className="text-xl font-bold mb-3">
+            {date === 'Unknown Date' ? date : `Published: ${date}`}
+          </h2>
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {quizzesByDate[date].map((quiz) => (
+              <Card key={quiz.id}>
+                <CardHeader>
+                  <CardTitle>{quiz.title}</CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4 text-sm text-gray-700">
-                    <div className="flex items-center space-x-2">
-                      <BookOpen className="h-4 w-4 text-gray-500" />
-                      <span>{quiz.selectedQuestions?.length || 0} questions</span>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <Clock className="h-4 w-4 text-gray-500" />
-                      <span>{quiz.duration} min</span>
-                    </div>
-                    <div className="col-span-2">
-                      <strong>Course:</strong> {quiz.course} | <strong>Subject:</strong> {quiz.subject}
-                    </div>
+                <CardContent>
+                  <div className="flex flex-col gap-2 text-sm">
+                    <div>Course: {quiz.course}</div>
+                    <div>Subject: {quiz.subject}</div>
+                    <div>Chapter: {quiz.chapter}</div>
+                    <div>Status: {getQuizStatus(quiz.startDate, quiz.endDate, quiz.startTime, quiz.endTime)}</div>
+                    <div>Access: {quiz.accessType}</div>
                   </div>
-
-                 
-
-                  <div className="pt-2">
-                    {status === 'active' || status === 'upcoming' ? (
-                      <Button
-                        className="w-full h-12 bg-gradient-to-r from-green-600 to-emerald-600 text-white hover:brightness-110 font-medium rounded-xl"
-                        asChild
-                      >
-                        <Link href={`/dashboard/quiz/start?id=${quiz.id}`}>
-                          <Play className="h-4 w-4 mr-2" />
-                          Start Quiz
-                          <ArrowRight className="h-4 w-4 ml-2" />
-                        </Link>
+                  <div className="flex gap-2 mt-4">
+                    <Link href={`/admin/mockquize/quizebank/${quiz.id}`}>
+                      <Button size="sm" variant="outline" className="flex items-center gap-1">
+                        <Eye size={16} /> View
                       </Button>
-                    ) : (
-                      <Button
-                        variant="outline"
-                        className="w-full h-12 border-2 border-gray-200 text-gray-600 font-medium rounded-xl"
-                        disabled
-                      >
-                        Quiz Ended
-                      </Button>
-                    )}
+                    </Link>
+                    {/* Add other actions if needed */}
                   </div>
                 </CardContent>
               </Card>
-            );
-          })}
+            ))}
+          </div>
         </div>
-      )}
+      ))}
     </div>
   );
 }
