@@ -41,7 +41,7 @@ export default function PricingPage() {
   };
 
   const premiumFeatures = [
-    { icon: Zap, text: "Unlimited Quiz Access", color: "text-yellow-500" },
+    { icon: Zap, text: "22 Mock  tests Access", color: "text-yellow-500" },
     { icon: Crown, text: "Premium Content Library", color: "text-purple-500" },
     { icon: Star, text: "Advanced Analytics", color: "text-blue-500" },
     { icon: Shield, text: "Priority Support", color: "text-green-500" }
@@ -77,7 +77,7 @@ export default function PricingPage() {
                 <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-3">
                   Upgrade to Premium
                 </h1>
-                <p className="text-slate-600 text-lg">Unlock your learning potential with unlimited access</p>
+                <p className="text-slate-600 text-lg">Unlock your learning potential with 22 Mdcat Mocks access</p>
               </div>
 
               {/* Price Display */}
@@ -85,7 +85,7 @@ export default function PricingPage() {
                 <div className="bg-gradient-to-r from-blue-500 to-purple-600 rounded-2xl p-6 text-white">
                   <p className="text-lg opacity-90 mb-2">One-Time Payment</p>
                   <div className="text-5xl font-bold mb-2">PKR {price}</div>
-                  <p className="opacity-90">Lifetime Access • No Recurring Fees</p>
+                  <p className="opacity-90">Upto Mdcat-2025 Access • No Recurring Fees</p>
                 </div>
               </div>
 
