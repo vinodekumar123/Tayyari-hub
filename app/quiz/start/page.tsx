@@ -8,7 +8,7 @@ import { db, auth } from '../../firebase';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ArrowLeft, ArrowRight, Clock, BookOpen, Send, Flag, Check, ArrowUp, ArrowDown } from 'lucide-react';
 
 interface Question {
@@ -20,7 +20,7 @@ interface Question {
 
 interface QuizData {
   title: string;
-  duration: number; // in minutes
+  duration: number; // minutes
   resultVisibility: string;
   selectedQuestions: Question[];
   questionsPerPage?: number;
@@ -46,35 +46,51 @@ const StartQuizPage: React.FC = () => {
   const [flags, setFlags] = useState<Set<string>>(new Set());
   const [currentPage, setCurrentPage] = useState(0);
   const [loading, setLoading] = useState(true);
+
   const [submitLoading, setSubmitLoading] = useState(false);
   const [showSubmissionModal, setShowSubmissionModal] = useState(false);
-  const [showConfirmDialog, setShowConfirmDialog] = useState(false); // NEW confirmation dialog
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+
   const [timeLeft, setTimeLeft] = useState(0); // seconds
   const [hasLoadedTime, setHasLoadedTime] = useState(false);
-
   const [darkMode, setDarkMode] = useState(false);
-  const hasSubmittedRef = useRef(false);
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
-  const fiveMinWarnedRef = useRef(false);
 
-  // --- Auth listener ---
+  const hasSubmittedRef = useRef(false);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const fiveMinWarnedRef = useRef(false);
+  const lastTimeSaveRef = useRef(0);
+
+  // --- helpers ---
+  const persistAttempt = (updated: Partial<{
+    answers: Record<string, string>;
+    currentIndex: number;
+    remainingTime: number;
+    flags: string[];
+    completed: boolean;
+  }>) => {
+    if (!user || !quizId) return;
+    return setDoc(doc(db, 'users', user.uid, 'quizAttempts', quizId), updated, { merge: true });
+  };
+
+  const questionsPerPage = quiz?.questionsPerPage || 1;
+  const totalPages = quiz ? Math.ceil(quiz.selectedQuestions.length / questionsPerPage) : 0;
+
+  // --- Auth ---
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (u) => {
       setUser(u);
       if (u) {
         const userSnap = await getDoc(doc(db, 'users', u.uid));
-        if (userSnap.exists()) {
-          setIsAdmin(userSnap.data().admin === true);
-        }
+        if (userSnap.exists()) setIsAdmin(userSnap.data().admin === true);
       }
     });
     return () => unsub();
   }, []);
 
-  // --- Load quiz and existing attempt ---
+  // --- Load quiz + attempt ---
   useEffect(() => {
     if (!quizId || !user) return;
-    const loadQuiz = async () => {
+    (async () => {
       setLoading(true);
       const quizSnap = await getDoc(doc(db, 'quizzes', quizId));
       if (!quizSnap.exists()) {
@@ -97,89 +113,132 @@ const StartQuizPage: React.FC = () => {
       if (attemptSnap.exists() && !attemptSnap.data()?.completed) {
         const saved = attemptSnap.data();
         setAnswers(saved.answers || {});
-        setCurrentPage(Math.floor((saved.currentIndex || 0) / quizData.questionsPerPage));
-        setTimeLeft(saved.remainingTime || quizData.duration * 60);
         setFlags(new Set(saved.flags || []));
+        const idx = Math.max(0, Math.min((saved.currentIndex ?? 0), Math.max(0, quizData.selectedQuestions.length - 1)));
+        setCurrentPage(Math.floor(idx / (quizData.questionsPerPage || 1)));
+        setTimeLeft(saved.remainingTime ?? quizData.duration * 60);
       } else {
         setAnswers({});
+        setFlags(new Set());
         setCurrentPage(0);
         setTimeLeft(quizData.duration * 60);
+        // create a fresh attempt shell so subsequent merges always succeed
+        await persistAttempt({
+          answers: {},
+          flags: [],
+          currentIndex: 0,
+          remainingTime: quizData.duration * 60,
+          completed: false,
+        });
       }
 
       setHasLoadedTime(true);
       setLoading(false);
-    };
-    loadQuiz();
-  }, [quizId, user]);
+    })();
+  }, [quizId, user, router]);
 
-  // --- Timer with auto-submit ---
+  // --- Timer + auto-submit on 0 ---
   useEffect(() => {
     if (!quiz || !hasLoadedTime || isAdmin) return;
     if (timeLeft <= 0) {
-      confirmSubmit(); // auto submit
+      handleSubmit(); // on timeout, submit immediately (no confirm to avoid blocking)
       return;
     }
     if (!fiveMinWarnedRef.current && timeLeft <= 300) {
       fiveMinWarnedRef.current = true;
-      if (typeof window !== 'undefined') {
-        try { alert('⏰ 5 minutes remaining! Please review flagged questions.'); } catch {}
-      }
+      try { alert('⏰ 5 minutes remaining! Please review flagged questions.'); } catch {}
     }
     if (timerRef.current) clearInterval(timerRef.current);
     timerRef.current = setInterval(() => {
-      setTimeLeft((prev) => {
-        if (prev <= 1) {
-          clearInterval(timerRef.current!);
-          confirmSubmit();
-          return 0;
-        }
-        return prev - 1;
-      });
+      setTimeLeft((prev) => (prev > 0 ? prev - 1 : 0));
     }, 1000);
-    return () => clearInterval(timerRef.current!);
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
   }, [timeLeft, quiz, hasLoadedTime, isAdmin]);
 
-  const persistAttempt = (updated: Partial<{ answers: Record<string, string>; currentIndex: number; remainingTime: number; flags: string[] }>) => {
-    if (!user || !quizId) return;
-    setDoc(doc(db, 'users', user.uid, 'quizAttempts', quizId), updated, { merge: true });
-  };
-
-  const handleAnswer = (qid: string, val: string) => {
-    const updatedAnswers = { ...answers, [qid]: val };
-    setAnswers(updatedAnswers);
-    if (quiz) {
+  // --- Debounced autosave of time + currentIndex (every ~5s) ---
+  useEffect(() => {
+    if (!quiz || !user) return;
+    const now = Date.now();
+    if (now - lastTimeSaveRef.current > 5000) {
+      lastTimeSaveRef.current = now;
       persistAttempt({
-        answers: updatedAnswers,
-        currentIndex: currentPage * (quiz.questionsPerPage || 1),
         remainingTime: timeLeft,
+        currentIndex: currentPage * questionsPerPage,
       });
     }
+  }, [timeLeft, currentPage, questionsPerPage, quiz, user]);
+
+  // --- Save on visibility change / tab close ---
+  useEffect(() => {
+    if (!quiz || !user) return;
+    const saveNow = () => {
+      persistAttempt({
+        remainingTime: timeLeft,
+        currentIndex: currentPage * questionsPerPage,
+        answers,
+        flags: Array.from(flags),
+      });
+    };
+    const onHide = () => {
+      if (document.hidden) saveNow();
+    };
+    window.addEventListener('visibilitychange', onHide);
+    window.addEventListener('beforeunload', saveNow);
+    return () => {
+      window.removeEventListener('visibilitychange', onHide);
+      window.removeEventListener('beforeunload', saveNow);
+    };
+  }, [quiz, user, timeLeft, currentPage, questionsPerPage, answers, flags]);
+
+  // --- Handlers ---
+  const handleAnswer = (qid: string, val: string) => {
+    const updated = { ...answers, [qid]: val };
+    setAnswers(updated);
+    persistAttempt({
+      answers: updated,
+      currentIndex: currentPage * questionsPerPage,
+      remainingTime: timeLeft,
+    });
   };
 
   const toggleFlag = (qid: string) => {
     setFlags((prev) => {
-      const newFlags = new Set(prev);
-      if (newFlags.has(qid)) newFlags.delete(qid); else newFlags.add(qid);
-      persistAttempt({ flags: Array.from(newFlags) });
-      return newFlags;
+      const next = new Set(prev);
+      next.has(qid) ? next.delete(qid) : next.add(qid);
+      persistAttempt({ flags: Array.from(next) });
+      return next;
     });
   };
 
-  // NEW: Confirmation first
-  const confirmSubmit = () => {
-    if (hasSubmittedRef.current) return;
-    setShowConfirmDialog(true);
+  const gotoPage = (p: number) => {
+    const newPage = Math.max(0, Math.min(p, totalPages - 1));
+    setCurrentPage(newPage);
+    persistAttempt({
+      currentIndex: newPage * questionsPerPage,
+      remainingTime: timeLeft,
+    });
+    scrollToTop();
   };
+
+  const confirmSubmit = () => setShowConfirmDialog(true);
 
   const handleSubmit = async () => {
     if (hasSubmittedRef.current) return;
     hasSubmittedRef.current = true;
     setSubmitLoading(true);
+    if (!user || !quizId) return;
 
-    if (!user || !quiz) return;
     await setDoc(
-      doc(db, 'users', user.uid, 'quizAttempts', quizId!),
-      { submittedAt: serverTimestamp(), completed: true, answers },
+      doc(db, 'users', user.uid, 'quizAttempts', quizId),
+      {
+        submittedAt: serverTimestamp(),
+        completed: true,
+        answers,
+        flags: Array.from(flags),
+        remainingTime: Math.max(0, timeLeft),
+      },
       { merge: true }
     );
 
@@ -187,8 +246,8 @@ const StartQuizPage: React.FC = () => {
     setTimeout(() => {
       setShowSubmissionModal(false);
       router.push(
-        isAdmin || quiz.resultVisibility === 'immediate'
-          ? '/quiz/results?id=' + quizId
+        isAdmin || quiz?.resultVisibility === 'immediate'
+          ? `/quiz/results?id=${quizId}`
           : '/dashboard/student'
       );
     }, 1600);
@@ -203,10 +262,9 @@ const StartQuizPage: React.FC = () => {
   const scrollToTop = () => window.scrollTo({ top: 0, behavior: 'smooth' });
   const scrollToBottom = () => window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
 
+  // --- render ---
   if (loading || !quiz) return <p className="text-center py-10">Loading Quiz...</p>;
 
-  const questionsPerPage = quiz.questionsPerPage || 1;
-  const totalPages = Math.ceil(quiz.selectedQuestions.length / questionsPerPage);
   const startIdx = currentPage * questionsPerPage;
   const endIdx = startIdx + questionsPerPage;
   const qSlice = quiz.selectedQuestions.slice(startIdx, endIdx);
@@ -221,7 +279,9 @@ const StartQuizPage: React.FC = () => {
     <div className={darkMode ? 'min-h-screen bg-gray-900 text-white px-4' : 'min-h-screen bg-gray-50 text-black px-4'}>
       {/* Dark mode toggle */}
       <div className="fixed top-5 right-5 z-50">
-        <Button onClick={() => setDarkMode(!darkMode)}>{darkMode ? '☀ Light' : '🌙 Dark'}</Button>
+        <Button onClick={() => setDarkMode(!darkMode)} aria-label="Toggle dark mode">
+          {darkMode ? '☀ Light Mode' : '🌙 Dark Mode'}
+        </Button>
       </div>
 
       {/* Header */}
@@ -233,7 +293,7 @@ const StartQuizPage: React.FC = () => {
           </div>
           <div className="flex items-center gap-2">
             <Clock className="h-5 w-5" />
-            <span className="font-mono font-semibold">{formatTime(timeLeft)}</span>
+            <span className="font-mono font-semibold" aria-live="polite">{formatTime(timeLeft)}</span>
           </div>
         </div>
         <div className="flex items-center justify-between px-4 pb-3">
@@ -242,7 +302,6 @@ const StartQuizPage: React.FC = () => {
         </div>
       </header>
 
-      {/* Questions */}
       <main className="max-w-4xl w-full mx-auto p-4">
         {qSlice.map((q, idx) => (
           <Card key={q.id} className="mb-6 rounded-2xl shadow-md border bg-white dark:bg-gray-800">
@@ -252,11 +311,17 @@ const StartQuizPage: React.FC = () => {
                   {startIdx + idx + 1}
                 </div>
                 <CardTitle className="flex-1">{stripHtml(q.questionText)}</CardTitle>
-                <button onClick={() => toggleFlag(q.id)}>
+                <button
+                  onClick={() => toggleFlag(q.id)}
+                  className="ml-2 p-2 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-red-400"
+                  aria-pressed={flags.has(q.id)}
+                  aria-label={flags.has(q.id) ? 'Unflag question' : 'Flag question'}
+                >
                   <Flag className={`h-5 w-5 ${flags.has(q.id) ? 'text-red-500' : 'text-gray-400'}`} />
                 </button>
               </div>
             </CardHeader>
+
             <CardContent className="flex flex-col gap-3">
               {q.options.map((opt, optIdx) => {
                 const isSelected = answers[q.id] === opt;
@@ -268,10 +333,11 @@ const StartQuizPage: React.FC = () => {
                       ${darkMode
                         ? `${isSelected ? 'bg-blue-600 text-white border-blue-600' : 'bg-gray-700 text-gray-200 hover:bg-gray-600'}`
                         : `${isSelected ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-800 hover:bg-blue-50 border-gray-300'}`}`}
+                    aria-pressed={isSelected}
                   >
-                    <span className="font-bold">{String.fromCharCode(65 + optIdx)}.</span>
+                    <span className="font-bold" aria-hidden="true">{String.fromCharCode(65 + optIdx)}.</span>
                     <span>{stripHtml(opt)}</span>
-                    {isSelected && <Check className="ml-auto h-5 w-5" />}
+                    {isSelected && <Check className="ml-auto h-5 w-5" aria-label="Selected" />}
                   </button>
                 );
               })}
@@ -281,11 +347,11 @@ const StartQuizPage: React.FC = () => {
 
         {/* Navigation */}
         <div className="flex justify-between mt-4 gap-2">
-          <Button onClick={() => { setCurrentPage((p) => Math.max(0, p - 1)); scrollToTop(); }} disabled={currentPage === 0}>
+          <Button onClick={() => gotoPage(currentPage - 1)} disabled={currentPage === 0}>
             <ArrowLeft className="mr-2" /> Previous
           </Button>
           {!isLastPage && (
-            <Button onClick={() => { setCurrentPage((p) => Math.min(totalPages - 1, p + 1)); scrollToTop(); }}>
+            <Button onClick={() => gotoPage(currentPage + 1)}>
               Next <ArrowRight className="ml-2" />
             </Button>
           )}
@@ -295,6 +361,34 @@ const StartQuizPage: React.FC = () => {
             </Button>
           )}
         </div>
+
+        {/* Flagged quick nav */}
+        {flags.size > 0 && (
+          <div className="mt-6 p-4 rounded-xl border bg-yellow-50 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300">
+            <h3 className="font-semibold mb-2">🚩 Flagged Questions</h3>
+            <div className="flex flex-wrap gap-2">
+              {Array.from(flags).map((qid) => {
+                const qIndex = quiz.selectedQuestions.findIndex((qq) => qq.id === qid);
+                if (qIndex === -1) return null;
+                return (
+                  <button
+                    key={qid}
+                    onClick={() => gotoPage(Math.floor(qIndex / questionsPerPage))}
+                    className="px-3 py-1 rounded-lg bg-red-100 dark:bg-red-800 hover:bg-red-200 dark:hover:bg-red-700 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-red-400"
+                    aria-label={`Go to question ${qIndex + 1}`}
+                  >
+                    Q{qIndex + 1}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Unanswered hint */}
+        {unansweredCount > 0 && (
+          <p className="mt-4 text-sm text-gray-600 dark:text-gray-300">Unanswered: {unansweredCount}</p>
+        )}
       </main>
 
       {/* Floating scroll buttons */}
@@ -303,13 +397,13 @@ const StartQuizPage: React.FC = () => {
         <Button onClick={scrollToBottom} size="icon" className="rounded-full shadow-md"><ArrowDown /></Button>
       </div>
 
-      {/* Confirm submission dialog */}
+      {/* Confirm submission dialog (shows counts) */}
       <Dialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Confirm Submission</DialogTitle>
             <DialogDescription>
-              You have <b>{unansweredCount}</b> unanswered and <b>{flaggedCount}</b> flagged questions.  
+              You have <b>{unansweredCount}</b> unanswered and <b>{flaggedCount}</b> flagged questions.
               Are you sure you want to submit?
             </DialogDescription>
           </DialogHeader>
