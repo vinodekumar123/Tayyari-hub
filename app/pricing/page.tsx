@@ -65,7 +65,7 @@ export default function PricingPage() {
   };
 
   const premiumFeatures = [
-    { icon: Zap, text: "Unlimited Quiz Access", color: "text-yellow-500" },
+    { icon: Zap, text: "22 Mock Tests Access", color: "text-yellow-500" },
     { icon: Crown, text: "Premium Content Library", color: "text-purple-500" },
     { icon: Star, text: "Advanced Analytics", color: "text-blue-500" },
     { icon: Shield, text: "Priority Support", color: "text-green-500" }
@@ -86,9 +86,9 @@ export default function PricingPage() {
           </button>
         </div>
 
-        <div className="grid lg:grid-cols-2 gap-8 items-start">
+        <div className="grid lg:grid-cols-2 gap-8 items-stretch">
           {/* Left Column - Pricing Card */}
-          <Card className="relative overflow-hidden shadow-2xl border-0 bg-white/80 backdrop-blur-sm">
+          <Card className="relative overflow-hidden shadow-2xl border-0 bg-white/80 backdrop-blur-sm h-full">
             {/* Premium Badge */}
             <div className="absolute top-4 right-4 bg-gradient-to-r from-yellow-400 to-orange-500 text-white px-3 py-1 rounded-full text-sm font-bold flex items-center gap-1">
               <Crown size={14} />
@@ -101,7 +101,7 @@ export default function PricingPage() {
                 <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-3">
                   Upgrade to Premium
                 </h1>
-                <p className="text-slate-600 text-lg">Unlock your learning potential with unlimited access</p>
+                <p className="text-slate-600 text-lg">Unlock your learning potential with 22 Mock tests access</p>
               </div>
 
               {/* Price Display */}
@@ -109,7 +109,7 @@ export default function PricingPage() {
                 <div className="bg-gradient-to-r from-blue-500 to-purple-600 rounded-2xl p-6 text-white">
                   <p className="text-lg opacity-90 mb-2">One-Time Payment</p>
                   <div className="text-5xl font-bold mb-2">PKR {price}</div>
-                  <p className="opacity-90">Lifetime Access • No Recurring Fees</p>
+                  <p className="opacity-90"> Upto MDCAT-2025 Access • No Recurring Fees</p>
                 </div>
               </div>
 
