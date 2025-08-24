@@ -1,18 +1,40 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { ArrowLeft } from "lucide-react";
 
-export default function PrivacyPolicy() {
+export default function PrivacyPolicyPage() {
+  const router = useRouter();
+
   return (
     <div className="max-w-4xl mx-auto p-6">
-      <Card className="shadow-lg rounded-2xl">
-        <CardHeader>
-          <CardTitle className="text-2xl font-bold">Privacy Policy</CardTitle>
-          <p className="text-sm text-gray-500">Effective Date: [Insert Date]</p>
+      {/* Back Button */}
+      <Button
+        variant="outline"
+        onClick={() => router.back()}
+        className="mb-6 flex items-center gap-2 rounded-xl shadow-sm"
+      >
+        <ArrowLeft size={18} />
+        Back
+      </Button>
+
+      <Card className="shadow-xl rounded-2xl border border-gray-200">
+        <CardHeader className="pb-4">
+          <CardTitle className="text-3xl font-bold text-center text-gray-800">
+            Privacy Policy
+          </CardTitle>
+          <p className="text-sm text-gray-500 text-center">
+            Effective Date: [Insert Date]
+          </p>
         </CardHeader>
-        <CardContent className="space-y-6 text-gray-700 leading-relaxed">
+
+        <CardContent className="space-y-8 text-gray-700 leading-relaxed">
           <section>
-            <h2 className="text-lg font-semibold">1. Payments & Refunds</h2>
+            <h2 className="text-xl font-semibold mb-2 text-gray-800">
+              1. Payments & Refunds
+            </h2>
             <p>
               - All fees are <strong>refundable</strong>. <br />
               - Fees must be deposited <strong>only</strong> into our officially
@@ -25,7 +47,9 @@ export default function PrivacyPolicy() {
           </section>
 
           <section>
-            <h2 className="text-lg font-semibold">2. Official Communication</h2>
+            <h2 className="text-xl font-semibold mb-2 text-gray-800">
+              2. Official Communication
+            </h2>
             <p>
               - Our official customer care number is:{" "}
               <strong>+92 323 7507673</strong>. <br />
@@ -35,7 +59,9 @@ export default function PrivacyPolicy() {
           </section>
 
           <section>
-            <h2 className="text-lg font-semibold">3. Information We Collect</h2>
+            <h2 className="text-xl font-semibold mb-2 text-gray-800">
+              3. Information We Collect
+            </h2>
             <p>
               - Basic details you provide at the time of enrollment (such as
               name, email, or any identifier you choose). <br />
@@ -44,7 +70,9 @@ export default function PrivacyPolicy() {
           </section>
 
           <section>
-            <h2 className="text-lg font-semibold">4. How We Use Your Information</h2>
+            <h2 className="text-xl font-semibold mb-2 text-gray-800">
+              4. How We Use Your Information
+            </h2>
             <p>
               - To manage your enrollment and provide premium services. <br />
               - To identify your account for test results and premium access.{" "}
@@ -56,7 +84,9 @@ export default function PrivacyPolicy() {
           </section>
 
           <section>
-            <h2 className="text-lg font-semibold">5. Data Accuracy & Flexibility</h2>
+            <h2 className="text-xl font-semibold mb-2 text-gray-800">
+              5. Data Accuracy & Flexibility
+            </h2>
             <p>
               - You are <strong>not required</strong> to provide fully accurate
               personal information. <br />
@@ -66,7 +96,9 @@ export default function PrivacyPolicy() {
           </section>
 
           <section>
-            <h2 className="text-lg font-semibold">6. Data Sharing & Security</h2>
+            <h2 className="text-xl font-semibold mb-2 text-gray-800">
+              6. Data Sharing & Security
+            </h2>
             <p>
               - We <strong>do not sell, share, or rent</strong> your personal
               data to any third party. <br />
@@ -77,7 +109,9 @@ export default function PrivacyPolicy() {
           </section>
 
           <section>
-            <h2 className="text-lg font-semibold">7. Your Choices</h2>
+            <h2 className="text-xl font-semibold mb-2 text-gray-800">
+              7. Your Choices
+            </h2>
             <p>
               - You may request to unsubscribe from promotional emails at any
               time. <br />
@@ -87,7 +121,9 @@ export default function PrivacyPolicy() {
           </section>
 
           <section>
-            <h2 className="text-lg font-semibold">8. Contact Us</h2>
+            <h2 className="text-xl font-semibold mb-2 text-gray-800">
+              8. Contact Us
+            </h2>
             <p>
               For any questions regarding this Privacy Policy or your data,
               please contact us: <br />
