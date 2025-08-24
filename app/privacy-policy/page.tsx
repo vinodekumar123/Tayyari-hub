@@ -26,7 +26,7 @@ export default function PrivacyPolicyPage() {
             Privacy Policy
           </CardTitle>
           <p className="text-sm text-gray-500 text-center">
-            Effective Date: [Insert Date]
+            Effective Date: 01 August 2025
           </p>
         </CardHeader>
 
