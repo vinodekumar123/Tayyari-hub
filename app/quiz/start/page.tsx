@@ -5,20 +5,24 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { doc, getDoc, setDoc, serverTimestamp, getDocs, collection } from 'firebase/firestore';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { db, auth } from '../../firebase';
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardContent,
+} from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { ArrowLeft, ArrowRight, CheckCircle, Clock, Download, Send, BookOpen, Info } from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { ArrowLeft, ArrowRight, Info, BookOpen, Clock, Send, Download, CheckCircle } from 'lucide-react';
 import jsPDF from 'jspdf';
 
-// --- UI Helper ---
-const stripHtml = (html: string): string => {
-  if (typeof window === 'undefined') return html;
-  const div = document.createElement('div');
-  div.innerHTML = html;
-  return div.textContent || div.innerText || '';
-};
-
-// --- Types ---
 interface Question {
   id: string;
   questionText: string;
@@ -41,7 +45,13 @@ interface QuizData {
   maxAttempts: number;
 }
 
-// --- Main ---
+const stripHtml = (html: string): string => {
+  if (typeof window === 'undefined') return html;
+  const div = document.createElement('div');
+  div.innerHTML = html;
+  return div.textContent || div.innerText || '';
+};
+
 const StartQuizPage: React.FC = () => {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -61,29 +71,30 @@ const StartQuizPage: React.FC = () => {
   const hasSubmittedRef = useRef(false);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // --- Auth & Admin ---
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (u) => {
       setUser(u);
       if (u) {
         const userSnap = await getDoc(doc(db, 'users', u.uid));
         if (userSnap.exists()) {
-          setIsAdmin(userSnap.data().admin === true);
+          const data = userSnap.data();
+          setIsAdmin(data.admin === true);
         }
       }
     });
     return () => unsub();
   }, []);
 
-  // --- Quiz Loading & Resume ---
   useEffect(() => {
     if (!quizId || !user) return;
+
     const load = async () => {
       const qSnap = await getDoc(doc(db, 'quizzes', quizId));
       if (!qSnap.exists()) {
         router.push('/quiz-bank');
         return;
       }
+
       const data = qSnap.data();
       const quizData: QuizData = {
         title: data.title || 'Untitled Quiz',
@@ -99,9 +110,10 @@ const StartQuizPage: React.FC = () => {
         questionsPerPage: data.questionsPerPage || 1,
         maxAttempts: data.maxAttempts || 1,
       };
+
       setQuiz(quizData);
 
-      // Check attempts
+      // Fetch completed attempts to check eligibility
       const attemptsSnapshot = await getDocs(collection(db, 'users', user.uid, 'quizAttempts'));
       let currentAttemptCount = 0;
       attemptsSnapshot.docs.forEach((doc) => {
@@ -109,23 +121,30 @@ const StartQuizPage: React.FC = () => {
           currentAttemptCount = doc.data().attemptNumber || 1;
         }
       });
+
       if (currentAttemptCount >= quizData.maxAttempts && !isAdmin) {
         alert('You have reached the maximum number of attempts for this quiz.');
         router.push('/quiz-bank');
         return;
       }
+
       setAttemptCount(currentAttemptCount);
 
-      // Resume or start
+      // Check for an incomplete attempt
       const resumeSnap = await getDoc(doc(db, 'users', user.uid, 'quizAttempts', quizId));
       if (resumeSnap.exists() && !resumeSnap.data().completed && resumeSnap.data().attemptNumber === undefined) {
-        // Resume
+        // Resume incomplete attempt
         const rt = resumeSnap.data();
         setAnswers(rt.answers || {});
-        setCurrentPage(Math.floor((rt.currentIndex || 0) / quizData.questionsPerPage));
-        setTimeLeft(!isAdmin && rt.remainingTime !== undefined ? rt.remainingTime : quizData.duration * 60);
+        const questionIndex = rt.currentIndex || 0;
+        setCurrentPage(Math.floor(questionIndex / quizData.questionsPerPage));
+        if (!isAdmin && rt.remainingTime !== undefined) {
+          setTimeLeft(rt.remainingTime);
+        } else {
+          setTimeLeft(quizData.duration * 60);
+        }
       } else {
-        // New
+        // New attempt: reset timer and initialize quizAttempts
         setTimeLeft(quizData.duration * 60);
         setAnswers({});
         setCurrentPage(0);
@@ -137,19 +156,22 @@ const StartQuizPage: React.FC = () => {
           remainingTime: quizData.duration * 60,
         }, { merge: true });
       }
+
       setHasLoadedTime(true);
       setLoading(false);
     };
+
     load();
   }, [quizId, user, isAdmin]);
 
-  // --- Timer ---
   useEffect(() => {
     if (loading || !quiz || showTimeoutModal || showSubmissionModal || !hasLoadedTime || isAdmin) return;
+
     if (timeLeft <= 0) {
       handleSubmit();
       return;
     }
+
     if (timerRef.current) clearInterval(timerRef.current);
     timerRef.current = setInterval(() => {
       setTimeLeft((prev) => {
@@ -161,10 +183,10 @@ const StartQuizPage: React.FC = () => {
         return prev - 1;
       });
     }, 1000);
+
     return () => clearInterval(timerRef.current!);
   }, [loading, quiz, showTimeoutModal, showSubmissionModal, hasLoadedTime, timeLeft, isAdmin]);
 
-  // --- Auto Sync ---
   useEffect(() => {
     const handleUnload = () => {
       if (user && quiz && !isAdmin && !hasSubmittedRef.current) {
@@ -179,10 +201,10 @@ const StartQuizPage: React.FC = () => {
     return () => window.removeEventListener('beforeunload', handleUnload);
   }, [answers, currentPage, timeLeft, quiz, user, isAdmin]);
 
-  // --- Answer ---
   const handleAnswer = (qid: string, val: string) => {
     const updatedAnswers = { ...answers, [qid]: val };
     setAnswers(updatedAnswers);
+
     if (user && quiz && !isAdmin) {
       setDoc(doc(db, 'users', user.uid, 'quizAttempts', quizId), {
         answers: updatedAnswers,
@@ -192,16 +214,21 @@ const StartQuizPage: React.FC = () => {
     }
   };
 
-  // --- Submit ---
   const handleSubmit = async () => {
     if (hasSubmittedRef.current) return;
     hasSubmittedRef.current = true;
+
     if (!user || !quiz) return;
+
     const total = quiz.selectedQuestions.length;
     let score = 0;
+
     for (const question of quiz.selectedQuestions) {
-      if (answers[question.id] === question.correctAnswer) score += 1;
+      if (answers[question.id] === question.correctAnswer) {
+        score += 1;
+      }
     }
+
     const newAttemptCount = attemptCount + 1;
     const resultData = {
       quizId,
@@ -218,6 +245,7 @@ const StartQuizPage: React.FC = () => {
       answers,
       attemptNumber: newAttemptCount,
     };
+
     await setDoc(doc(db, 'users', user.uid, 'quizAttempts', quizId), {
       submittedAt: serverTimestamp(),
       answers,
@@ -225,7 +253,9 @@ const StartQuizPage: React.FC = () => {
       remainingTime: 0,
       attemptNumber: newAttemptCount,
     }, { merge: true });
+
     await setDoc(doc(db, 'users', user.uid, 'quizAttempts', quizId, 'results', quizId), resultData);
+
     setShowSubmissionModal(true);
     setTimeout(() => {
       setShowSubmissionModal(false);
@@ -237,51 +267,59 @@ const StartQuizPage: React.FC = () => {
     }, 3000);
   };
 
-  // --- Time Format ---
   const formatTime = (sec: number) => {
     const m = Math.floor(sec / 60).toString().padStart(2, '0');
     const s = (sec % 60).toString().padStart(2, '0');
     return `${m}:${s}`;
   };
 
-  // --- PDF ---
   const generatePDF = (includeAnswers: boolean) => {
     if (!quiz) return;
+
     const doc = new jsPDF();
     const pageWidth = doc.internal.pageSize.getWidth();
     const margin = 20;
     const maxWidth = pageWidth - 2 * margin;
     let y = margin;
+
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(20);
     doc.setTextColor(0, 51, 102);
     doc.text(quiz.title, pageWidth / 2, y, { align: 'center' });
     y += 10;
+
     doc.setFontSize(12);
     doc.setTextColor(100);
     doc.text(`Date: August 04, 2025`, pageWidth / 2, y, { align: 'center' });
     y += 20;
+
     const groupedQuestions = quiz.selectedQuestions.reduce((acc, question) => {
       const subjectName = typeof question.subject === 'object' ? question.subject?.name : question.subject || 'Uncategorized';
-      if (!acc[subjectName]) acc[subjectName] = [];
+      if (!acc[subjectName]) {
+        acc[subjectName] = [];
+      }
       acc[subjectName].push(question);
       return acc;
     }, {} as Record<string, Question[]>);
+
     Object.entries(groupedQuestions).sort(([a], [b]) => a.localeCompare(b)).forEach(([subject, questions], subjectIndex) => {
       if (y > doc.internal.pageSize.getHeight() - 30) {
         doc.addPage();
         y = margin;
       }
+
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(16);
       doc.setTextColor(0, 51, 102);
       doc.text(subject, margin, y);
       y += 10;
+
       questions.forEach((q, qIndex) => {
         if (y > doc.internal.pageSize.getHeight() - 50) {
           doc.addPage();
           y = margin;
         }
+
         doc.setFont('helvetica', 'normal');
         doc.setFontSize(12);
         doc.setTextColor(0);
@@ -289,12 +327,14 @@ const StartQuizPage: React.FC = () => {
         const questionLines = doc.splitTextToSize(questionText, maxWidth);
         doc.text(questionLines, margin, y);
         y += questionLines.length * 7 + 5;
+
         q.options.forEach((opt, i) => {
           const optionText = `${String.fromCharCode(65 + i)}. ${stripHtml(opt)}`;
           const optionLines = doc.splitTextToSize(optionText, maxWidth - 10);
           doc.text(optionLines, margin + 10, y);
           y += optionLines.length * 7 + 3;
         });
+
         if (includeAnswers && q.correctAnswer) {
           doc.setFont('helvetica', 'bold');
           doc.setTextColor(0, 128, 0);
@@ -306,39 +346,52 @@ const StartQuizPage: React.FC = () => {
           doc.setTextColor(0);
         }
       });
+
       y += 10;
     });
+
     const fileName = `${quiz.title}${includeAnswers ? '_with_answers' : ''}.pdf`;
     doc.save(fileName);
   };
 
-  // --- Loading ---
   if (loading || !quiz) return <p className="text-center py-10">Loading...</p>;
 
-  // --- Data ---
   const questionsPerPage = quiz.questionsPerPage || 1;
+
   const groupedQuestions = quiz.selectedQuestions.reduce((acc, question) => {
     const subjectName = typeof question.subject === 'object' ? question.subject?.name : question.subject || 'Uncategorized';
-    if (!acc[subjectName]) acc[subjectName] = [];
+    if (!acc[subjectName]) {
+      acc[subjectName] = [];
+    }
     acc[subjectName].push(question);
     return acc;
   }, {} as Record<string, Question[]>);
+
   const flattenedQuestions = Object.entries(groupedQuestions)
     .sort(([a], [b]) => a.localeCompare(b))
     .flatMap(([_, questions]) => questions);
+
   const startIdx = currentPage * questionsPerPage;
   const endIdx = startIdx + questionsPerPage;
   const qSlice = flattenedQuestions.slice(startIdx, endIdx);
+
+  const pageGroupedQuestions = qSlice.reduce((acc, question) => {
+    const subjectName = typeof question.subject === 'object' ? question.subject?.name : question.subject || 'Uncategorized';
+    if (!acc[subjectName]) {
+      acc[subjectName] = [];
+    }
+    acc[subjectName].push(question);
+    return acc;
+  }, {} as Record<string, Question[]>);
+
   const totalPages = Math.ceil(flattenedQuestions.length / questionsPerPage);
   const isLastPage = currentPage >= totalPages - 1;
 
-  // --- Modern Card UI ---
   return (
-    <div className="min-h-screen bg-gray-50 px-2 sm:px-4 font-sans">
-      {/* --- Modals --- */}
+    <div className="min-h-screen bg-gray-50 px-4">
       {showTimeoutModal && (
         <Dialog open={showTimeoutModal} onOpenChange={setShowTimeoutModal}>
-          <DialogContent className="max-w-md sm:max-w-lg rounded-xl shadow-2xl">
+          <DialogContent className="w-[90vw] max-w-md sm:max-w-lg">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <Clock className="h-6 w-6 text-red-600" />
@@ -351,9 +404,10 @@ const StartQuizPage: React.FC = () => {
           </DialogContent>
         </Dialog>
       )}
+
       {showSubmissionModal && (
         <Dialog open={showSubmissionModal}>
-          <DialogContent className="max-w-md sm:max-w-lg bg-white rounded-xl shadow-2xl animate-fade-in">
+          <DialogContent className="w-[90vw] max-w-md sm:max-w-lg bg-white rounded-xl shadow-2xl animate-fade-in">
             <DialogHeader className="text-center">
               <DialogTitle className="flex flex-col items-center gap-2">
                 <CheckCircle className="h-12 w-12 text-green-600 animate-bounce" />
@@ -366,39 +420,40 @@ const StartQuizPage: React.FC = () => {
           </DialogContent>
         </Dialog>
       )}
+
       {showDownloadModal && (
         <Dialog open={showDownloadModal} onOpenChange={setShowDownloadModal}>
-          <DialogContent className="max-w-md sm:max-w-lg rounded-xl shadow-2xl">
+          <DialogContent className="w-[90vw] max-w-md sm:max-w-lg">
             <DialogHeader>
               <DialogTitle>Download Quiz as PDF</DialogTitle>
               <DialogDescription>Choose an option for downloading the quiz:</DialogDescription>
             </DialogHeader>
             <div className="mt-4 flex flex-col gap-2">
-              <button
+              <Button
                 onClick={() => {
                   generatePDF(false);
                   setShowDownloadModal(false);
                 }}
-                className="bg-blue-600 text-white hover:bg-blue-700 rounded-lg px-4 py-2 shadow flex items-center justify-center"
+                className="bg-blue-600 text-white hover:bg-blue-700"
               >
                 <Download className="mr-2 h-5 w-5" />
                 Download Questions Only
-              </button>
-              <button
+              </Button>
+              <Button
                 onClick={() => {
                   generatePDF(true);
                   setShowDownloadModal(false);
                 }}
-                className="bg-green-600 text-white hover:bg-green-700 rounded-lg px-4 py-2 shadow flex items-center justify-center"
+                className="bg-green-600 text-white hover:bg-green-700"
               >
                 <Download className="mr-2 h-5 w-5" />
                 Download with Answers
-              </button>
+              </Button>
             </div>
           </DialogContent>
         </Dialog>
       )}
-      {/* --- Header --- */}
+
       <header className="bg-white border-b sticky top-0 z-40 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
           <div className="flex items-center gap-3">
@@ -420,118 +475,113 @@ const StartQuizPage: React.FC = () => {
           )}
         </div>
       </header>
-      {/* --- Main --- */}
-      <main className="max-w-xl w-full mx-auto py-8">
+
+      <main className="max-w-6xl w-full mx-auto p-4">
         {isAdmin && (
           <div className="bg-yellow-100 text-yellow-800 px-4 py-2 rounded-md text-sm mb-4">
             <p>🛠 Admin Mode: Timer is disabled.</p>
             <div className="mt-2 flex gap-2">
-              <button
+              <Button
+                variant="outline"
                 onClick={() => setShowDownloadModal(true)}
-                className="flex items-center gap-2 border border-yellow-400 rounded-lg px-3 py-1 hover:bg-yellow-200"
+                className="flex items-center gap-2"
               >
                 <Download className="h-5 w-5" />
                 Download PDF
-              </button>
+              </Button>
             </div>
           </div>
         )}
-        {/* --- Quiz Card --- */}
-        <div className="rounded-2xl shadow-xl bg-white p-6 mb-6 flex flex-col gap-8">
-          <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center gap-2">
-              <span className="inline-flex items-center justify-center rounded-full bg-blue-600 text-white font-semibold w-8 h-8 mr-2">
-                {startIdx + 1}
-              </span>
-              <span className="font-bold text-lg text-gray-900">
-                {stripHtml(qSlice[0]?.questionText || '')}
-              </span>
-            </div>
-            <span className="text-gray-500 text-sm font-medium">
-              {`Question ${startIdx + 1} of ${flattenedQuestions.length}`}
-            </span>
-          </div>
-          {/* --- Options --- */}
-          <div className="flex flex-col gap-4 mt-4">
-            {qSlice[0]?.options.map((opt, i) => {
-              const selected = answers[qSlice[0].id] === opt;
-              return (
-                <button
-                  key={i}
-                  type="button"
-                  onClick={() => handleAnswer(qSlice[0].id, opt)}
-                  className={`transition flex items-center justify-between px-4 py-3 rounded-xl shadow 
-                    border text-left font-medium text-base
-                    ${selected
-                      ? 'bg-blue-600 text-white border-blue-600'
-                      : 'bg-white text-black border-gray-200 hover:bg-gray-100'}
-                  `}
-                  style={{
-                    boxShadow: selected
-                      ? '0 2px 8px -2px #2563EB33'
-                      : '0 2px 8px -2px #CBD5E133',
-                  }}
-                >
-                  <span className="flex items-center gap-2">
-                    <span className="font-semibold">{String.fromCharCode(65 + i)}.</span>
-                    <span dangerouslySetInnerHTML={{ __html: opt }} />
-                  </span>
-                  {selected && (
-                    <span className="flex items-center ml-2">
-                      <CheckCircle className="h-5 w-5 text-white" />
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-          {/* --- Explanation --- */}
-          {quiz.resultVisibility === 'immediate' &&
-            qSlice[0]?.showExplanation &&
-            answers[qSlice[0].id] && (
-              <div className="bg-blue-50 border border-blue-200 p-3 text-blue-800 rounded-md flex items-start gap-2 mt-4">
-                <Info className="h-5 w-5 mt-1" />
-                <p>{qSlice[0].explanation}</p>
-              </div>
-            )}
-          {/* --- Progress & Navigation --- */}
-          <div className="flex items-center justify-between pt-6">
-            <button
-              type="button"
-              onClick={() => setCurrentPage((i) => Math.max(0, i - 1))}
-              disabled={currentPage === 0 || showTimeoutModal || showSubmissionModal}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-300 bg-white text-gray-700 font-medium hover:bg-gray-100 transition"
-            >
-              <ArrowLeft className="mr-1" /> Previous
-            </button>
-            <button
-              type="button"
-              onClick={isLastPage ? handleSubmit : () => setCurrentPage((i) => i + 1)}
-              disabled={showTimeoutModal || showSubmissionModal}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition ${
-                isLastPage
-                  ? 'bg-red-600 text-white hover:bg-red-700'
-                  : 'bg-blue-600 text-white hover:bg-blue-700'
-              }`}
-            >
-              {isLastPage ? (
-                <>
-                  <Send className="mr-2" /> Submit
-                </>
-              ) : (
-                <>
-                  Next <ArrowRight className="ml-2" />
-                </>
-              )}
-            </button>
-          </div>
-          <div className="mt-6">
+
+        <Card className="shadow-md w-full">
+          <CardHeader>
+            <CardTitle className="text-lg font-semibold">
+              Questions {startIdx + 1}–{Math.min(endIdx, flattenedQuestions.length)} / {flattenedQuestions.length}
+            </CardTitle>
             <Progress
-              value={((startIdx + 1) / flattenedQuestions.length) * 100}
-              className="h-2 rounded-lg bg-gray-100"
+              value={((startIdx + questionsPerPage) / flattenedQuestions.length) * 100}
+              className="mt-2"
             />
-          </div>
-        </div>
+          </CardHeader>
+
+          <CardContent className="space-y-10">
+            {Object.entries(pageGroupedQuestions).map(([subject, questions]) => (
+              <div key={subject} className="space-y-6">
+                <h2 className="text-xl font-semibold text-gray-900 border-b-2 border-blue-500 pb-2">
+                  {subject}
+                </h2>
+                {questions.map((q, idx) => (
+                  <div key={q.id} className="space-y-4">
+                  <div className="text-lg font-medium prose max-w-none">
+  <span className="font-semibold">Q{startIdx + idx + 1}. </span>
+  <span
+    dangerouslySetInnerHTML={{ __html: q.questionText }}
+  />
+</div>
+
+                    <div className="grid gap-3">
+                      {q.options.map((opt, i) => (
+                        <label
+                          key={i}
+                          htmlFor={`opt-${q.id}-${i}`}
+                          className={`flex items-center p-3 border rounded-lg cursor-pointer transition hover:bg-gray-100 ${
+                            answers[q.id] === opt ? 'border-blue-500 bg-blue-50' : ''
+                          }`}
+                        >
+                          <input
+                            type="radio"
+                            id={`opt-${q.id}-${i}`}
+                            name={q.id}
+                            value={opt}
+                            checked={answers[q.id] === opt}
+                            onChange={() => handleAnswer(q.id, opt)}
+                            className="h-5 w-5 text-blue-600 mr-3"
+                          />
+                          <span className="font-semibold mr-2">{String.fromCharCode(65 + i)}.</span>
+<span
+  className="prose max-w-none"
+  dangerouslySetInnerHTML={{ __html: opt }}
+/>
+                        </label>
+                      ))}
+                    </div>
+                    {quiz.resultVisibility === 'immediate' && q.showExplanation && answers[q.id] && (
+                      <div className="bg-blue-50 border border-blue-200 p-3 text-blue-800 rounded-md flex items-start gap-2">
+                        <Info className="h-5 w-5 mt-1" />
+                        <p>{q.explanation}</p>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ))}
+
+            <div className="flex justify-between pt-6">
+              <Button
+                variant="outline"
+                onClick={() => setCurrentPage((i) => Math.max(0, i - 1))}
+                disabled={currentPage === 0 || showTimeoutModal || showSubmissionModal}
+              >
+                <ArrowLeft className="mr-2" /> Previous
+              </Button>
+              <Button
+                onClick={isLastPage ? handleSubmit : () => setCurrentPage((i) => i + 1)}
+                disabled={showTimeoutModal || showSubmissionModal}
+                className={isLastPage ? 'bg-red-600 text-white hover:bg-red-700' : ''}
+              >
+                {isLastPage ? (
+                  <>
+                    <Send className="mr-2" /> Submit
+                  </>
+                ) : (
+                  <>
+                    Next <ArrowRight className="ml-2" />
+                  </>
+                )}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
       </main>
     </div>
   );
