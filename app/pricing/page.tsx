@@ -211,7 +211,7 @@ export default function PricingPage() {
                 </div>
               </div>
 
-              {/* Submit Button */}
+              {/* Submit Button 
               <Button
                 onClick={handleUpgrade}
                 disabled={isUploading}
@@ -228,7 +228,7 @@ export default function PricingPage() {
                     <ArrowRightCircle className="ml-2" size={20} />
                   </>
                 )}
-              </Button>
+              </Button> */}
 
               {/* Status Message */}
               {status && (
