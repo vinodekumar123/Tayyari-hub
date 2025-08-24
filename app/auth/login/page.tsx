@@ -61,7 +61,7 @@ export default function LoginPage() {
               router.push('/dashboard/student');
             }
           } else {
-            router.push('/onboarding'); // redirect to onboarding if doc does not exist
+            router.push('/auth/onboarding'); // redirect to onboarding if doc does not exist
           }
         } catch (err) {
           console.error('Auth redirect error:', err);
@@ -110,7 +110,7 @@ export default function LoginPage() {
           router.push('/dashboard/student');
         }
       } else {
-        router.push('/onboarding');
+        router.push('/auth/onboarding');
       }
     } catch (error) {
       console.error('Google Sign-In Error:', error);
