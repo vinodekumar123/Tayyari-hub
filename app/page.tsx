@@ -15,10 +15,10 @@ const HomePage = () => {
     <>
       <HeroSection />
 <Navbar/>   
-
 <CoursesSection/>
-<DashboardShowcase/>
 <Whytojoin/>
+<DashboardShowcase/>
+
 <PricingSection/>
 <WhatsappInviteSection/>
 <TestimonialSection/>
