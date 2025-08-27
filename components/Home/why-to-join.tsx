@@ -1,3 +1,5 @@
+"use client";
+
 import React, { useState, useEffect } from 'react';
 import { CheckCircle, Target, Users, Award, TrendingUp, BookOpen, Shield, Zap, Gift, Eye, Trophy, BarChart3 } from 'lucide-react';
 
