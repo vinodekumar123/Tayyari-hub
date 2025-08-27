@@ -8,6 +8,7 @@ import TestimonialSection from "@/components/Home/reviews";
 import PricingSection from "@/components/Home/pricing";
 import WhatsappInviteSection from "@/components/Home/whatsapp";
 import DashboardShowcase from "@/components/Home/screenshot";
+import Whytojoin from "@/components/Home/Why-to-join";
 
 const HomePage = () => {
   return (
@@ -17,6 +18,7 @@ const HomePage = () => {
 
 <CoursesSection/>
 <DashboardShowcase/>
+<Whytojoin/>
 <PricingSection/>
 <WhatsappInviteSection/>
 <TestimonialSection/>
