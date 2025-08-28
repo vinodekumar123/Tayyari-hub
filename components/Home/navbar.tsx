@@ -1,9 +1,9 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { getAuth, onAuthStateChanged } from "firebase/auth";
+import { getAuth } from "firebase/auth";
 import { getFirestore, doc, getDoc } from "firebase/firestore";
 import { Menu, X } from "lucide-react";
 import { app } from "../../app/firebase";
@@ -60,7 +60,7 @@ const Navbar = () => {
   return (
     <header className="fixed top-0 left-0 w-full z-50 backdrop-blur-md bg-white/70 shadow-sm transition-all">
       <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-        {/* Logo (default size: h-10) */}
+        {/* Logo */}
         <Link href="/" className="flex items-center">
           <Image
             src={logo}
@@ -75,11 +75,20 @@ const Navbar = () => {
           <a href="#courses" className="hover:text-blue-600 transition">
             Courses
           </a>
+          <a href="#why-to-join" className="hover:text-blue-600 transition">
+            Why To Join
+          </a>
+          <a href="#screenshot" className="hover:text-blue-600 transition">
+            Schedule 
+          </a>
           <a href="#reviews" className="hover:text-blue-600 transition">
             Reviews
           </a>
           <a href="#pricing" className="hover:text-blue-600 transition">
             Pricing
+          </a>
+          <a href="#whatsapp" className="hover:text-blue-600 transition">
+            WhatsApp Groups
           </a>
           <button
             onClick={handleLoginClick}
@@ -101,11 +110,20 @@ const Navbar = () => {
           <a href="#courses" onClick={toggleMenu} className="block hover:text-blue-600">
             Courses
           </a>
-          <a href="#features" onClick={toggleMenu} className="block hover:text-blue-600">
-            Features
+          <a href="#why-to-join" onClick={toggleMenu} className="block hover:text-blue-600">
+            Why To Join
+          </a>
+          <a href="#screenshot" onClick={toggleMenu} className="block hover:text-blue-600">
+            Schedule
           </a>
           <a href="#reviews" onClick={toggleMenu} className="block hover:text-blue-600">
             Reviews
+          </a>
+          <a href="#pricing" onClick={toggleMenu} className="block hover:text-blue-600">
+            Pricing
+          </a>
+          <a href="#whatsapp" onClick={toggleMenu} className="block hover:text-blue-600">
+            WhatsApp Groupd
           </a>
           <button
             onClick={() => {
