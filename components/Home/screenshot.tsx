@@ -243,7 +243,8 @@ const TayyariHubTimetable = () => {
           </div>
         )}
 
-      
+      </div>   
+    </div> 
   );
 };
 
