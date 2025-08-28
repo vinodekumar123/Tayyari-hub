@@ -117,7 +117,7 @@ const TayyariHubBenefits = () => {
           </div>
           
           <h1 className="text-5xl md:text-7xl font-bold mb-6 leading-tight" style={{background: `linear-gradient(135deg, rgb(37, 99, 235), rgb(30, 64, 175))`, WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent'}}>
-            Why Join
+            Why To Join
             <span className="block" style={{background: `linear-gradient(135deg, rgb(37, 99, 235), rgb(59, 130, 246))`, WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent'}}>
               TayyariHub?
             </span>
