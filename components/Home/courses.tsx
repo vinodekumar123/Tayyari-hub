@@ -194,28 +194,16 @@ const CoursesSection = () => {
 
                   {/* CTA */}
                   <div className="mt-auto">
-                   import Link from "next/link";
-import { ArrowRight } from "lucide-react"; // if you're using lucide-react
-
-<Link href="/pricing" passHref>
-  <button
-    className={`w-full py-4 rounded-2xl font-bold transition-all duration-300 flex items-center justify-center gap-3 ${
-      activeCard === index
-        ? 'bg-white/25 text-white shadow-xl backdrop-blur-sm border border-white/30 hover:bg-white/30'
-        : 'bg-blue-600 text-white shadow-lg hover:bg-blue-700 hover:shadow-xl transform hover:scale-105'
-    }`}
-  >
-    <span>Start Learning</span>
-    <ArrowRight
-      className={`w-5 h-5 transition-transform duration-300 ${
-        activeCard === index
-          ? 'translate-x-2'
-          : 'group-hover:translate-x-1'
-      }`}
-    />
-  </button>
-</Link>
-
+                    <a href="/pricing" className={`w-full py-4 rounded-2xl font-bold transition-all duration-300 flex items-center justify-center gap-3 ${
+                      activeCard === index
+                        ? 'bg-white/25 text-white shadow-xl backdrop-blur-sm border border-white/30 hover:bg-white/30'
+                        : 'bg-blue-600 text-white shadow-lg hover:bg-blue-700 hover:shadow-xl transform hover:scale-105'
+                    }`}>
+                      <span>Start Learning</span>
+                      <ArrowRight className={`w-5 h-5 transition-transform duration-300 ${
+                        activeCard === index ? 'translate-x-2' : 'group-hover:translate-x-1'
+                      }`} />
+                    </a>
                   </div>
                 </div>
 
@@ -240,17 +228,14 @@ import { ArrowRight } from "lucide-react"; // if you're using lucide-react
         {/* Modern light CTA section */}
         <div className="text-center">
           <div className="inline-flex flex-col items-center gap-8">
-           <a
-  href="/pricing"
-  className="group relative px-16 py-5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 rounded-2xl font-bold text-xl text-white shadow-2xl shadow-blue-500/25 transition-all duration-300 hover:scale-105 hover:shadow-blue-500/40"
->
-  <div className="absolute inset-0 bg-gradient-to-r from-blue-400 to-indigo-400 rounded-2xl blur-lg opacity-30 group-hover:opacity-50 transition-opacity duration-300 -z-10"></div>
-  <div className="relative flex items-center gap-4">
-    <Sparkles className="w-6 h-6" />
-    <span>BEGIN YOUR JOURNEY</span>
-    <ArrowRight className="w-6 h-6 group-hover:translate-x-2 transition-transform duration-300" />
-  </div>
-</a>
+            <a href="/pricing" className="group relative px-16 py-5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 rounded-2xl font-bold text-xl text-white shadow-2xl shadow-blue-500/25 transition-all duration-300 hover:scale-105 hover:shadow-blue-500/40">
+              <div className="absolute inset-0 bg-gradient-to-r from-blue-400 to-indigo-400 rounded-2xl blur-lg opacity-30 group-hover:opacity-50 transition-opacity duration-300 -z-10"></div>
+              <div className="relative flex items-center gap-4">
+                <Sparkles className="w-6 h-6" />
+                <span>BEGIN YOUR JOURNEY</span>
+                <ArrowRight className="w-6 h-6 group-hover:translate-x-2 transition-transform duration-300" />
+              </div>
+            </a>
             
 
           </div>
