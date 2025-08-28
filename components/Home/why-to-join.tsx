@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { Target, Users, Award, TrendingUp, BookOpen, Shield, Zap, Gift, Eye, Trophy, BarChart3 } from 'lucide-react';
+import { CheckCircle, Target, Users, Award, TrendingUp, BookOpen, Shield, Zap, Gift, Eye, Trophy, BarChart3 } from 'lucide-react';
 
 const TayyariHubBenefits = () => {
   const [visibleItems, setVisibleItems] = useState(new Set());
@@ -100,11 +100,12 @@ const TayyariHubBenefits = () => {
   ];
 
   return (
-    <section
+ <section
       id="why-to-join"
       className="min-h-screen bg-gradient-to-br from-blue-50 via-blue-100 to-blue-50 relative overflow-hidden"
       style={{ backgroundColor: 'rgb(243, 248, 255)' }}
     >
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-blue-100 to-blue-50 relative overflow-hidden" style={{backgroundColor: 'rgb(243, 248, 255)'}}>
       {/* Animated Background Elements */}
       <div className="absolute inset-0">
         <div className="absolute top-20 left-10 w-72 h-72 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-pulse" style={{backgroundColor: 'rgb(37, 99, 235)'}}></div>
@@ -146,10 +147,8 @@ const TayyariHubBenefits = () => {
                 className={`benefit-item group relative bg-white/90 backdrop-blur-lg rounded-2xl p-6 hover:bg-white hover:shadow-xl transition-all duration-700 transform ${
                   isVisible ? 'translate-y-0 opacity-100' : 'translate-y-8 opacity-0'
                 }`}
-                style={{
-                  border: `1px solid rgba(37, 99, 235, 0.2)`,
-                  transitionDelay: `${index * 100}ms`
-                }}
+                style={{border: `1px solid rgba(37, 99, 235, 0.2)`}}
+                style={{ transitionDelay: `${index * 100}ms` }}
               >
                 {/* Gradient Border Effect */}
                 <div className="absolute inset-0 opacity-0 group-hover:opacity-20 transition-opacity duration-500 rounded-2xl blur-sm" style={{background: `linear-gradient(135deg, rgb(37, 99, 235), rgb(59, 130, 246))`}}></div>
@@ -160,7 +159,7 @@ const TayyariHubBenefits = () => {
                 </div>
                 
                 {/* Icon */}
-                <div className="relative mb-4 w-14 h-14 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300" style={{background: `linear-gradient(135deg, ${benefit.gradient})`}}>
+                <div className="relative mb-4 w-14 h-14 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300" style={{background: `linear-gradient(135deg, ${benefit.gradient.includes('blue') ? 'rgb(37, 99, 235), rgb(59, 130, 246)' : benefit.gradient.includes('purple') ? 'rgb(147, 51, 234), rgb(168, 85, 247)' : benefit.gradient.includes('green') ? 'rgb(34, 197, 94), rgb(74, 222, 128)' : benefit.gradient.includes('orange') ? 'rgb(249, 115, 22), rgb(251, 146, 60)' : benefit.gradient.includes('red') ? 'rgb(239, 68, 68), rgb(248, 113, 113)' : benefit.gradient.includes('pink') ? 'rgb(236, 72, 153), rgb(244, 114, 182)' : benefit.gradient.includes('indigo') ? 'rgb(99, 102, 241), rgb(129, 140, 248)' : benefit.gradient.includes('teal') ? 'rgb(20, 184, 166), rgb(45, 212, 191)' : benefit.gradient.includes('yellow') ? 'rgb(245, 158, 11), rgb(251, 191, 36)' : benefit.gradient.includes('violet') ? 'rgb(139, 92, 246), rgb(167, 139, 250)' : benefit.gradient.includes('cyan') ? 'rgb(6, 182, 212), rgb(34, 211, 238)' : benefit.gradient.includes('emerald') ? 'rgb(16, 185, 129), rgb(52, 211, 153)' : 'rgb(37, 99, 235), rgb(59, 130, 246)'})`}}>
                   <IconComponent className="w-7 h-7 text-white" />
                 </div>
                 
@@ -172,6 +171,11 @@ const TayyariHubBenefits = () => {
                   <p className="text-gray-600 leading-relaxed group-hover:text-gray-700 transition-colors duration-300">
                     {benefit.description}
                   </p>
+                </div>
+                
+                {/* Hover Glow Effect */}
+                <div className="absolute inset-0 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none">
+                  <div className={`absolute inset-0 bg-gradient-to-r ${benefit.gradient} opacity-20 rounded-2xl blur-xl`}></div>
                 </div>
               </div>
             );
@@ -191,17 +195,14 @@ const TayyariHubBenefits = () => {
               </p>
               <div className="flex flex-col sm:flex-row gap-4 justify-center">
                 <a
-                  href="/auth/login"
-                  className="bg-white text-blue-600 px-8 py-4 rounded-xl font-bold hover:bg-blue-50 transform hover:scale-105 transition-all duration-300 shadow-lg inline-block"
-                >
-                  Start Free Trial
-                </a>
-                <a
-                  href="/pricing"
-                  className="border-2 border-white text-white px-8 py-4 rounded-xl font-bold hover:bg-white hover:text-blue-600 transform hover:scale-105 transition-all duration-300 inline-block"
-                >
-                  View Pricing
-                </a>
+  href="/auth/login"
+  className="bg-white text-blue-600 px-8 py-4 rounded-xl font-bold hover:bg-blue-50 transform hover:scale-105 transition-all duration-300 shadow-lg inline-block"
+>
+  Start Free Trial
+</a>
+
+                <a href="/pricing" className="border-2 border-white text-white px-8 py-4 rounded-xl font-bold hover:bg-white hover:text-blue-600 transform hover:scale-105 transition-all duration-300 inline-block">
+                  View Pricing</a>
               </div>
             </div>
           </div>
@@ -223,8 +224,12 @@ const TayyariHubBenefits = () => {
         .animation-delay-2000 { animation-delay: 2s; }
         .animation-delay-4000 { animation-delay: 4s; }
       `}</style>
-    </section>
+    </div>
+
+</section>
   );
 };
+
+
 
 export default TayyariHubBenefits;
