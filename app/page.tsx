@@ -8,15 +8,17 @@ import TestimonialSection from "@/components/Home/reviews";
 import PricingSection from "@/components/Home/pricing";
 import WhatsappInviteSection from "@/components/Home/whatsapp";
 import DashboardShowcase from "@/components/Home/screenshot";
+import Whytojoin from "@/components/Home/why-to-join";
 
 const HomePage = () => {
   return (
     <>
       <HeroSection />
 <Navbar/>   
-
 <CoursesSection/>
+<Whytojoin/>
 <DashboardShowcase/>
+
 <PricingSection/>
 <WhatsappInviteSection/>
 <TestimonialSection/>

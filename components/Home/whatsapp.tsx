@@ -27,7 +27,10 @@ const groups = [
 
 export default function WhatsappInviteSection() {
   return (
-    <section className="relative bg-gradient-to-br from-white to-green-50 py-20 px-4 sm:px-6 lg:px-8 overflow-hidden">
+    <section
+      id="whatsapp"
+      className="relative bg-gradient-to-br from-white to-green-50 py-20 px-4 sm:px-6 lg:px-8 overflow-hidden"
+    >
       <div className="absolute top-[-100px] left-[-80px] w-72 h-72 bg-green-200 rounded-full blur-3xl opacity-30" />
       <div className="absolute bottom-[-100px] right-[-80px] w-72 h-72 bg-green-100 rounded-full blur-3xl opacity-20" />
 
