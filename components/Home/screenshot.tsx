@@ -1,89 +1,89 @@
 "use client";
 
-
-import React, { useState, useMemo } from 'react';
-import { Calendar, Clock, BookOpen, Users, Filter, Search } from 'lucide-react';
+import React, { useState, useMemo } from "react";
+import { Calendar, Clock, BookOpen, Users, Filter, Search } from "lucide-react";
 
 const TayyariHubTimetable = () => {
-  const [selectedSubject, setSelectedSubject] = useState('all');
-  const [selectedType, setSelectedType] = useState('all');
-  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedSubject, setSelectedSubject] = useState("all");
+  const [selectedType, setSelectedType] = useState("all");
+  const [searchQuery, setSearchQuery] = useState("");
 
   const testData = [
-    { id: 1, subject: 'Biology XI', testName: 'Biology XI Test 1', date: '7 Aug, 2025', type: 'Free', gap: '' },
-    { id: 2, subject: 'Biology XI', testName: 'Biology XI Test 2', date: '8 Aug, 2025', type: 'Paid', gap: '9-10 August, 2025' },
-    { id: 3, subject: 'Chemistry XI', testName: 'Chemistry XI Test 1', date: '11 Aug, 2025', type: 'Paid', gap: '' },
-    { id: 4, subject: 'Chemistry XI', testName: 'Chemistry XI Test 2', date: '12 Aug, 2025', type: 'Paid', gap: '13-14 August, 2025' },
-    { id: 5, subject: 'Physics XI', testName: 'Physics XI Test 1', date: '15 Aug, 2025', type: 'Paid', gap: '' },
-    { id: 6, subject: 'Physics XI', testName: 'Physics XI Test 2', date: '16 Aug, 2025', type: 'Paid', gap: '17-18 August, 2025' },
-    { id: 7, subject: 'Whole XI Syllabus', testName: 'Whole XI Test 1', date: '19 Aug, 2025', type: 'Paid', gap: '' },
-    { id: 8, subject: 'Whole XI Syllabus', testName: 'Whole XI Test 2', date: '21 Aug, 2025', type: 'Paid', gap: '' },
-    { id: 9, subject: 'Biology XII', testName: 'Biology XII Test 1', date: '22 Aug, 2025', type: 'Paid', gap: '' },
-    { id: 10, subject: 'Biology XII', testName: 'Biology XII Test 2', date: '23 Aug, 2025', type: 'Paid', gap: '24-25 August, 2025' },
-    { id: 11, subject: 'Chemistry XII', testName: 'Chemistry XII Test 1', date: '26 Aug, 2025', type: 'Paid', gap: '' },
-    { id: 12, subject: 'Chemistry XII', testName: 'Chemistry XII Test 2', date: '27 Aug, 2025', type: 'Paid', gap: '28-29 August, 2025' },
-    { id: 13, subject: 'Physics XII', testName: 'Physics XII Test 1', date: '30 Aug, 2025', type: 'Paid', gap: '' },
-    { id: 14, subject: 'Physics XII', testName: 'Physics XII Test 2', date: '31 Aug, 2025', type: 'Paid', gap: '1-2 September, 2025' },
-    { id: 15, subject: 'Whole XII Syllabus', testName: 'Whole XII Test 1', date: '3 Sep, 2025', type: 'Paid', gap: '' },
-    { id: 16, subject: 'Whole XII Syllabus', testName: 'Whole XII Test 2', date: '5 Sep, 2025', type: 'Paid', gap: '' },
-    { id: 17, subject: 'FLP Mocks', testName: 'FLP Mock 1', date: '7 Sep, 2025', type: 'Free', gap: '' },
-    { id: 18, subject: 'FLP Mocks', testName: 'FLP Mock 2', date: '11 Sep, 2025', type: 'Paid', gap: '' },
-    { id: 19, subject: 'FLP Mocks', testName: 'FLP Mock 3', date: '15 Sep, 2025', type: 'Paid', gap: '' },
-    { id: 20, subject: 'FLP Mocks', testName: 'FLP Mock 4', date: '18 Sep, 2025', type: 'Paid', gap: '' },
-    { id: 21, subject: 'FLP Mocks', testName: 'FLP Mock 5', date: '21 Sep, 2025', type: 'Paid', gap: '' },
-    { id: 22, subject: 'FLP Mocks', testName: 'FLP Mock 6', date: '25 Sep, 2025', type: 'Paid', gap: '' }
+    { id: 1, subject: "Biology XI", testName: "Biology XI Test 1", date: "7 Aug, 2025", type: "Free", gap: "" },
+    { id: 2, subject: "Biology XI", testName: "Biology XI Test 2", date: "8 Aug, 2025", type: "Paid", gap: "9-10 August, 2025" },
+    { id: 3, subject: "Chemistry XI", testName: "Chemistry XI Test 1", date: "11 Aug, 2025", type: "Paid", gap: "" },
+    { id: 4, subject: "Chemistry XI", testName: "Chemistry XI Test 2", date: "12 Aug, 2025", type: "Paid", gap: "13-14 August, 2025" },
+    { id: 5, subject: "Physics XI", testName: "Physics XI Test 1", date: "15 Aug, 2025", type: "Paid", gap: "" },
+    { id: 6, subject: "Physics XI", testName: "Physics XI Test 2", date: "16 Aug, 2025", type: "Paid", gap: "17-18 August, 2025" },
+    { id: 7, subject: "Whole XI Syllabus", testName: "Whole XI Test 1", date: "19 Aug, 2025", type: "Paid", gap: "" },
+    { id: 8, subject: "Whole XI Syllabus", testName: "Whole XI Test 2", date: "21 Aug, 2025", type: "Paid", gap: "" },
+    { id: 9, subject: "Biology XII", testName: "Biology XII Test 1", date: "22 Aug, 2025", type: "Paid", gap: "" },
+    { id: 10, subject: "Biology XII", testName: "Biology XII Test 2", date: "23 Aug, 2025", type: "Paid", gap: "24-25 August, 2025" },
+    { id: 11, subject: "Chemistry XII", testName: "Chemistry XII Test 1", date: "26 Aug, 2025", type: "Paid", gap: "" },
+    { id: 12, subject: "Chemistry XII", testName: "Chemistry XII Test 2", date: "27 Aug, 2025", type: "Paid", gap: "28-29 August, 2025" },
+    { id: 13, subject: "Physics XII", testName: "Physics XII Test 1", date: "30 Aug, 2025", type: "Paid", gap: "" },
+    { id: 14, subject: "Physics XII", testName: "Physics XII Test 2", date: "31 Aug, 2025", type: "Paid", gap: "1-2 September, 2025" },
+    { id: 15, subject: "Whole XII Syllabus", testName: "Whole XII Test 1", date: "3 Sep, 2025", type: "Paid", gap: "" },
+    { id: 16, subject: "Whole XII Syllabus", testName: "Whole XII Test 2", date: "5 Sep, 2025", type: "Paid", gap: "" },
+    { id: 17, subject: "FLP Mocks", testName: "FLP Mock 1", date: "7 Sep, 2025", type: "Free", gap: "" },
+    { id: 18, subject: "FLP Mocks", testName: "FLP Mock 2", date: "11 Sep, 2025", type: "Paid", gap: "" },
+    { id: 19, subject: "FLP Mocks", testName: "FLP Mock 3", date: "15 Sep, 2025", type: "Paid", gap: "" },
+    { id: 20, subject: "FLP Mocks", testName: "FLP Mock 4", date: "18 Sep, 2025", type: "Paid", gap: "" },
+    { id: 21, subject: "FLP Mocks", testName: "FLP Mock 5", date: "21 Sep, 2025", type: "Paid", gap: "" },
+    { id: 22, subject: "FLP Mocks", testName: "FLP Mock 6", date: "25 Sep, 2025", type: "Paid", gap: "" }
   ];
 
-  const subjects = [...new Set(testData.map(test => test.subject))];
+  const subjects = [...new Set(testData.map((test) => test.subject))];
 
   const getSubjectColor = (subject) => {
     const colors = {
-      'Biology XI': 'bg-emerald-50 border-emerald-200 text-emerald-800',
-      'Biology XII': 'bg-emerald-50 border-emerald-200 text-emerald-800',
-      'Chemistry XI': 'bg-orange-50 border-orange-200 text-orange-800',
-      'Chemistry XII': 'bg-orange-50 border-orange-200 text-orange-800',
-      'Physics XI': 'bg-blue-50 border-blue-200 text-blue-800',
-      'Physics XII': 'bg-blue-50 border-blue-200 text-blue-800',
-      'Whole XI Syllabus': 'bg-purple-50 border-purple-200 text-purple-800',
-      'Whole XII Syllabus': 'bg-purple-50 border-purple-200 text-purple-800',
-      'FLP Mocks': 'bg-rose-50 border-rose-200 text-rose-800'
+      "Biology XI": "bg-emerald-50 border-emerald-200 text-emerald-800",
+      "Biology XII": "bg-emerald-50 border-emerald-200 text-emerald-800",
+      "Chemistry XI": "bg-orange-50 border-orange-200 text-orange-800",
+      "Chemistry XII": "bg-orange-50 border-orange-200 text-orange-800",
+      "Physics XI": "bg-blue-50 border-blue-200 text-blue-800",
+      "Physics XII": "bg-blue-50 border-blue-200 text-blue-800",
+      "Whole XI Syllabus": "bg-purple-50 border-purple-200 text-purple-800",
+      "Whole XII Syllabus": "bg-purple-50 border-purple-200 text-purple-800",
+      "FLP Mocks": "bg-rose-50 border-rose-200 text-rose-800",
     };
-    return colors[subject] || 'bg-gray-50 border-gray-200 text-gray-800';
+    return colors[subject] || "bg-gray-50 border-gray-200 text-gray-800";
   };
 
   const getSubjectIcon = (subject) => {
-    if (subject.includes('Biology')) return '🧬';
-    if (subject.includes('Chemistry')) return '⚗️';
-    if (subject.includes('Physics')) return '⚛️';
-    if (subject.includes('Whole')) return '📚';
-    if (subject.includes('FLP')) return '📝';
-    return '📖';
+    if (subject.includes("Biology")) return "🧬";
+    if (subject.includes("Chemistry")) return "⚗️";
+    if (subject.includes("Physics")) return "⚛️";
+    if (subject.includes("Whole")) return "📚";
+    if (subject.includes("FLP")) return "📝";
+    return "📖";
   };
 
   const filteredTests = useMemo(() => {
-    return testData.filter(test => {
-      const matchesSubject = selectedSubject === 'all' || test.subject === selectedSubject;
-      const matchesType = selectedType === 'all' || test.type.toLowerCase() === selectedType;
-      const matchesSearch = test.testName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                           test.subject.toLowerCase().includes(searchQuery.toLowerCase());
+    return testData.filter((test) => {
+      const matchesSubject = selectedSubject === "all" || test.subject === selectedSubject;
+      const matchesType = selectedType === "all" || test.type.toLowerCase() === selectedType;
+      const matchesSearch =
+        test.testName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        test.subject.toLowerCase().includes(searchQuery.toLowerCase());
       return matchesSubject && matchesType && matchesSearch;
     });
   }, [selectedSubject, selectedType, searchQuery]);
 
   const isUpcoming = (dateStr) => {
-    const testDate = new Date(dateStr.replace(',', '') + ' 2025');
+    const testDate = new Date(dateStr.replace(",", "") + " 2025");
     const today = new Date();
     return testDate >= today;
   };
 
   const isToday = (dateStr) => {
-    const testDate = new Date(dateStr.replace(',', '') + ' 2025');
+    const testDate = new Date(dateStr.replace(",", "") + " 2025");
     const today = new Date();
     return testDate.toDateString() === today.toDateString();
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 p-4">
+    <section id="screenshot" className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 p-4">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="text-center mb-8">
@@ -105,7 +105,7 @@ const TayyariHubTimetable = () => {
               <Filter className="w-5 h-5 text-gray-500" />
               <span className="font-medium text-gray-700">Filters:</span>
             </div>
-            
+
             <div className="flex flex-col sm:flex-row gap-4 flex-1">
               <div className="relative">
                 <Search className="w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
@@ -117,18 +117,20 @@ const TayyariHubTimetable = () => {
                   className="pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
                 />
               </div>
-              
+
               <select
                 value={selectedSubject}
                 onChange={(e) => setSelectedSubject(e.target.value)}
                 className="px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
               >
                 <option value="all">All Subjects</option>
-                {subjects.map(subject => (
-                  <option key={subject} value={subject}>{subject}</option>
+                {subjects.map((subject) => (
+                  <option key={subject} value={subject}>
+                    {subject}
+                  </option>
                 ))}
               </select>
-              
+
               <select
                 value={selectedType}
                 onChange={(e) => setSelectedType(e.target.value)}
@@ -139,10 +141,8 @@ const TayyariHubTimetable = () => {
                 <option value="paid">Paid Only</option>
               </select>
             </div>
-            
-            <div className="text-sm text-gray-500">
-              {filteredTests.length} tests found
-            </div>
+
+            <div className="text-sm text-gray-500">{filteredTests.length} tests found</div>
           </div>
         </div>
 
@@ -152,7 +152,7 @@ const TayyariHubTimetable = () => {
             <div
               key={test.id}
               className={`bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden transition-all duration-300 hover:shadow-xl hover:scale-105 ${
-                isToday(test.date) ? 'ring-2 ring-blue-500 shadow-blue-100' : ''
+                isToday(test.date) ? "ring-2 ring-blue-500 shadow-blue-100" : ""
               }`}
             >
               {/* Card Header */}
@@ -169,25 +169,23 @@ const TayyariHubTimetable = () => {
               {/* Card Content */}
               <div className="p-6">
                 <h4 className="font-bold text-xl text-gray-800 mb-4">{test.testName}</h4>
-                
+
                 <div className="space-y-3">
                   <div className="flex items-center gap-3 text-gray-600">
                     <Calendar className="w-5 h-5 text-blue-500" />
                     <span className="font-medium">{test.date}</span>
                     {isToday(test.date) && (
-                      <span className="px-2 py-1 bg-blue-100 text-blue-600 text-xs font-semibold rounded-full">
-                        Today
-                      </span>
+                      <span className="px-2 py-1 bg-blue-100 text-blue-600 text-xs font-semibold rounded-full">Today</span>
                     )}
                   </div>
-                  
+
                   <div className="flex items-center gap-3">
                     <Users className="w-5 h-5 text-blue-500" />
-                    <span className={`px-3 py-1 rounded-full text-sm font-semibold ${
-                      test.type === 'Free' 
-                        ? 'bg-green-100 text-green-600' 
-                        : 'bg-blue-100 text-blue-600'
-                    }`}>
+                    <span
+                      className={`px-3 py-1 rounded-full text-sm font-semibold ${
+                        test.type === "Free" ? "bg-green-100 text-green-600" : "bg-blue-100 text-blue-600"
+                      }`}
+                    >
                       {test.type}
                     </span>
                   </div>
@@ -206,22 +204,20 @@ const TayyariHubTimetable = () => {
                 {/* Availability Info - Only for past tests */}
                 {!isUpcoming(test.date) && (
                   <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
-                    <p className="text-sm text-blue-700 font-medium text-center">
-                      Available on portal upto MDCAT 2025
-                    </p>
+                    <p className="text-sm text-blue-700 font-medium text-center">Available on portal upto MDCAT 2025</p>
                   </div>
                 )}
 
                 {/* Action Button */}
-                <a 
+                <a
                   href="/pricing"
-                  className={`block w-full ${!isUpcoming(test.date) ? 'mt-4' : 'mt-6'} py-3 px-4 rounded-xl font-semibold transition-all duration-200 text-center ${
+                  className={`block w-full ${!isUpcoming(test.date) ? "mt-4" : "mt-6"} py-3 px-4 rounded-xl font-semibold transition-all duration-200 text-center ${
                     isUpcoming(test.date)
-                      ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-lg hover:shadow-blue-200'
-                      : 'bg-green-600 hover:bg-green-700 text-white shadow-lg hover:shadow-green-200'
+                      ? "bg-blue-600 hover:bg-blue-700 text-white shadow-lg hover:shadow-blue-200"
+                      : "bg-green-600 hover:bg-green-700 text-white shadow-lg hover:shadow-green-200"
                   }`}
                 >
-                  {isUpcoming(test.date) ? 'Register Now' : 'Register and Attempt'}
+                  {isUpcoming(test.date) ? "Register Now" : "Register and Attempt"}
                 </a>
               </div>
 
@@ -242,9 +238,8 @@ const TayyariHubTimetable = () => {
             <p className="text-gray-500">Try adjusting your filters or search query</p>
           </div>
         )}
-
-      </div>   
-    </div> 
+      </div>
+    </section>
   );
 };
 
