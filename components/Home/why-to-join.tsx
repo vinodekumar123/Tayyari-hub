@@ -189,10 +189,10 @@ const TayyariHubBenefits = () => {
                 Join 10,000+ students who are already preparing with TayyariHub
               </p>
               <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                <button className="bg-white text-blue-600 px-8 py-4 rounded-xl font-bold hover:bg-blue-50 transform hover:scale-105 transition-all duration-300 shadow-lg">
+                <button href="/pricing" className="bg-white text-blue-600 px-8 py-4 rounded-xl font-bold hover:bg-blue-50 transform hover:scale-105 transition-all duration-300 shadow-lg">
                   Start Free Trial
                 </button>
-                <button className="border-2 border-white text-white px-8 py-4 rounded-xl font-bold hover:bg-white hover:text-blue-600 transform hover:scale-105 transition-all duration-300">
+                <button href="/pricing" className="border-2 border-white text-white px-8 py-4 rounded-xl font-bold hover:bg-white hover:text-blue-600 transform hover:scale-105 transition-all duration-300">
                   View Pricing
                 </button>
               </div>
