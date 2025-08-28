@@ -34,7 +34,15 @@ const PricingSection = () => {
           
           <h2 className="text-5xl sm:text-6xl lg:text-7xl font-black text-white mb-6 leading-tight">
             Choose Your
-            <span className="block bg-gradient-to-r from-yellow-300 via-pink-300 to-cyan-300 bg-clip-text text-transparent animate-gradient font-black text-stroke">
+            <span className="block font-black" style={{
+              background: 'linear-gradient(45deg, #fde047, #f472b6, #22d3ee)',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+              backgroundClip: 'text',
+              WebkitTextStroke: '3px white',
+              textShadow: '0 0 20px rgba(255,255,255,0.8), 0 0 40px rgba(255,255,255,0.5)',
+              filter: 'drop-shadow(2px 2px 4px rgba(0,0,0,0.5))'
+            }}>
               Success Path
             </span>
           </h2>
