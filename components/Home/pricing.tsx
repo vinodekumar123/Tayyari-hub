@@ -215,7 +215,7 @@ const PricingSection = () => {
                   <div className="bg-red-500 text-white px-2 py-1 rounded-md text-xs font-bold">40% OFF</div>
                 </div>
                 <div className="text-4xl font-black text-white mb-2">PKR 1,500</div>
-                <div className="text-blue-200">One-time payment • Lifetime access</div>
+                <div className="text-blue-200">One-time payment • Upto Mdcat 2025 access</div>
               </div>
 
               {/* Enhanced CTA Button */}
