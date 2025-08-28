@@ -243,7 +243,7 @@ const TayyariHubTimetable = () => {
           </div>
         )}
 
-        {/* Footer */}
+        {/* Footer 
         <div className="mt-16 text-center">
           <div className="inline-flex items-center gap-6 bg-white rounded-2xl shadow-lg px-8 py-4">
             <div className="flex items-center gap-2">
@@ -261,7 +261,7 @@ const TayyariHubTimetable = () => {
           </div>
         </div>
       </div>
-    </div>
+    </div>*/}
   );
 };
 
