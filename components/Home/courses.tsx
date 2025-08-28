@@ -53,10 +53,7 @@ const CoursesSection = () => {
   const [activeCard, setActiveCard] = useState(null);
 
   return (
-    <section
-      id="courses"
-      className="relative min-h-screen flex items-center py-20 px-4 overflow-hidden bg-gradient-to-br from-white via-blue-50/30 to-slate-50"
-    >
+    <section id="courses" className="relative min-h-screen flex items-center py-20 px-4 overflow-hidden bg-gradient-to-br from-white via-blue-50/30 to-slate-50">
       {/* Modern Light Background Effects */}
       <div className="absolute inset-0">
         {/* Soft animated blobs */}
@@ -87,17 +84,23 @@ const CoursesSection = () => {
             <Zap className="w-4 h-4 text-blue-500" />
           </div>
 
-          <div className="space-y-6">
-            <h2 className="text-7xl md:text-8xl font-black tracking-tight leading-none">
-              <span className="block bg-gradient-to-r from-slate-900 via-slate-700 to-slate-900 bg-clip-text text-transparent">
+          <div className="space-y-8">
+            <h2 className="text-5xl sm:text-6xl md:text-7xl lg:text-8xl xl:text-9xl font-black tracking-tighter leading-[0.85] relative">
+              <span className="block bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 bg-clip-text text-transparent animate-fade-in-up">
                 DISCOVER
               </span>
-              <span className="block bg-gradient-to-r from-blue-600 via-blue-500 to-indigo-600 bg-clip-text text-transparent -mt-6">
+              <span className="block bg-gradient-to-r from-blue-600 via-blue-500 to-indigo-600 bg-clip-text text-transparent -mt-3 sm:-mt-4 md:-mt-5 lg:-mt-6 xl:-mt-8 animate-fade-in-up animation-delay-200 relative">
                 EXCELLENCE
+                <div className="absolute -right-4 -top-2 w-3 h-3 bg-blue-500 rounded-full animate-pulse opacity-60"></div>
+                <div className="absolute -left-2 bottom-2 w-2 h-2 bg-indigo-400 rounded-full animate-bounce opacity-40"></div>
               </span>
+              {/* Dynamic underline */}
+              <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 w-32 sm:w-40 md:w-48 lg:w-56 h-1 bg-gradient-to-r from-transparent via-blue-500 to-transparent opacity-30 animate-pulse"></div>
             </h2>
-            <p className="text-xl text-slate-600 max-w-3xl mx-auto font-light leading-relaxed">
-              Transform your future with our revolutionary AI-powered learning ecosystem designed for academic success
+            <p className="text-lg sm:text-xl md:text-2xl text-slate-600 max-w-4xl mx-auto font-light leading-relaxed px-4">
+              Transform your future with our revolutionary 
+              <span className="font-semibold text-blue-600"> AI-powered learning ecosystem </span>
+              designed for academic excellence
             </p>
           </div>
         </div>
@@ -120,9 +123,110 @@ const CoursesSection = () => {
                   : 'bg-white/90 backdrop-blur-xl border-slate-200/60 hover:border-blue-200 hover:shadow-xl hover:shadow-blue-100/20 hover:scale-102'
                 }
               `}>
-                {/* Content & effects omitted for brevity (same as your code) */}
-                {/* ... */}
+                
+                {/* Animated background pattern */}
+                <div className="absolute inset-0 overflow-hidden rounded-3xl">
+                  {/* Gradient overlay for inactive state */}
+                  <div className={`absolute inset-0 bg-gradient-to-br ${course.lightGradient} transition-opacity duration-500 ${
+                    activeCard === index ? 'opacity-0' : 'opacity-30'
+                  }`}></div>
+                  
+                  {/* Floating shapes */}
+                  <div className={`absolute -top-16 -right-16 w-32 h-32 rounded-full transition-all duration-1000 ${
+                    activeCard === index ? 'bg-white/30 scale-150' : 'bg-blue-100/50 scale-100'
+                  }`}></div>
+                  <div className={`absolute -bottom-12 -left-12 w-24 h-24 rounded-full transition-all duration-1000 delay-200 ${
+                    activeCard === index ? 'bg-white/20 scale-125' : 'bg-indigo-100/30 scale-100'
+                  }`}></div>
+                  
+                  {/* Geometric pattern */}
+                  <div className={`absolute top-0 right-0 w-20 h-20 opacity-10 transition-all duration-500 ${
+                    activeCard === index ? 'opacity-20 scale-110' : 'opacity-10'
+                  }`}>
+                    <div className="w-full h-full bg-gradient-to-br from-white to-transparent rounded-full"></div>
+                  </div>
+                </div>
+
+                {/* Light beam effect */}
+                <div className={`absolute inset-0 bg-gradient-to-t from-transparent via-white/10 to-transparent h-40 w-full transition-all duration-1000 ${
+                  activeCard === index ? 'translate-y-56 opacity-100' : '-translate-y-40 opacity-0'
+                }`}></div>
+
+                {/* Content */}
+                <div className="relative z-10 h-full flex flex-col">
+                  {/* Header */}
+                  <div className="flex items-start justify-between mb-8">
+                    <div className={`p-4 rounded-2xl transition-all duration-500 ${
+                      activeCard === index 
+                        ? 'bg-white/30 scale-110 -rotate-6 shadow-lg' 
+                        : 'bg-white/70 group-hover:bg-white/90 shadow-sm'
+                    }`}>
+                      <div className={`transition-colors duration-300 ${
+                        activeCard === index ? 'text-white' : course.accentColor
+                      }`}>
+                        {course.icon}
+                      </div>
+                    </div>
+                    
+                    <div className={`text-xs font-bold px-4 py-2 rounded-full transition-all duration-300 border ${
+                      activeCard === index 
+                        ? 'bg-white/30 text-white border-white/40' 
+                        : 'bg-white/80 text-slate-700 border-slate-200'
+                    }`}>
+                      {course.stats}
+                    </div>
+                  </div>
+
+                  {/* Title */}
+                  <div className="mb-6">
+                    <h3 className={`text-3xl font-black mb-3 transition-colors duration-300 ${
+                      activeCard === index ? 'text-white' : 'text-slate-800'
+                    }`}>
+                      {course.title}
+                    </h3>
+                    <p className={`text-sm font-semibold transition-colors duration-300 ${
+                      activeCard === index ? 'text-white/90' : 'text-slate-600'
+                    }`}>
+                      {course.subtitle}
+                    </p>
+                  </div>
+
+                  {/* Description */}
+                  <p className={`text-sm leading-relaxed mb-8 transition-colors duration-300 ${
+                    activeCard === index ? 'text-white/80' : 'text-slate-600'
+                  }`}>
+                    {course.description}
+                  </p>
+
+                  {/* CTA */}
+                  <div className="mt-auto">
+                    <a href="/pricing" className={`w-full py-4 rounded-2xl font-bold transition-all duration-300 flex items-center justify-center gap-3 ${
+                      activeCard === index
+                        ? 'bg-white/25 text-white shadow-xl backdrop-blur-sm border border-white/30 hover:bg-white/30'
+                        : 'bg-blue-600 text-white shadow-lg hover:bg-blue-700 hover:shadow-xl transform hover:scale-105'
+                    }`}>
+                      <span>Start Learning</span>
+                      <ArrowRight className={`w-5 h-5 transition-transform duration-300 ${
+                        activeCard === index ? 'translate-x-2' : 'group-hover:translate-x-1'
+                      }`} />
+                    </a>
+                  </div>
+                </div>
+
+                {/* Shimmer effect */}
+                <div className={`absolute inset-0 rounded-3xl transition-opacity duration-500 ${
+                  activeCard === index ? 'opacity-100' : 'opacity-0'
+                }`}>
+                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent transform -skew-x-12 -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
+                </div>
               </div>
+
+              {/* Enhanced glow effect */}
+              <div className={`absolute inset-0 rounded-3xl blur-2xl transition-all duration-500 -z-10 ${
+                activeCard === index 
+                  ? `bg-gradient-to-br ${course.gradient} opacity-20` 
+                  : 'opacity-0'
+              }`}></div>
             </div>
           ))}
         </div>
@@ -130,10 +234,7 @@ const CoursesSection = () => {
         {/* Modern light CTA section */}
         <div className="text-center">
           <div className="inline-flex flex-col items-center gap-8">
-            <a
-              href="/pricing"
-              className="group relative px-16 py-5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 rounded-2xl font-bold text-xl text-white shadow-2xl shadow-blue-500/25 transition-all duration-300 hover:scale-105 hover:shadow-blue-500/40"
-            >
+            <a href="/pricing" className="group relative px-16 py-5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 rounded-2xl font-bold text-xl text-white shadow-2xl shadow-blue-500/25 transition-all duration-300 hover:scale-105 hover:shadow-blue-500/40">
               <div className="absolute inset-0 bg-gradient-to-r from-blue-400 to-indigo-400 rounded-2xl blur-lg opacity-30 group-hover:opacity-50 transition-opacity duration-300 -z-10"></div>
               <div className="relative flex items-center gap-4">
                 <Sparkles className="w-6 h-6" />
@@ -141,6 +242,8 @@ const CoursesSection = () => {
                 <ArrowRight className="w-6 h-6 group-hover:translate-x-2 transition-transform duration-300" />
               </div>
             </a>
+            
+
           </div>
         </div>
       </div>
@@ -148,4 +251,4 @@ const CoursesSection = () => {
   );
 };
 
-export default CoursesSection;
+export default CoursesSection;            
