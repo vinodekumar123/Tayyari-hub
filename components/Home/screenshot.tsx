@@ -1,4 +1,5 @@
-'use client';
+"use client";
+
 
 import React, { useState, useMemo } from 'react';
 import { Calendar, Clock, BookOpen, Users, Filter, Search } from 'lucide-react';
@@ -212,13 +213,16 @@ const TayyariHubTimetable = () => {
                 )}
 
                 {/* Action Button */}
-                <button className={`w-full ${!isUpcoming(test.date) ? 'mt-4' : 'mt-6'} py-3 px-4 rounded-xl font-semibold transition-all duration-200 ${
-                  isUpcoming(test.date)
-                    ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-lg hover:shadow-blue-200'
-                    : 'bg-green-600 hover:bg-green-700 text-white shadow-lg hover:shadow-green-200'
-                }`}>
+                <a 
+                  href="/pricing"
+                  className={`block w-full ${!isUpcoming(test.date) ? 'mt-4' : 'mt-6'} py-3 px-4 rounded-xl font-semibold transition-all duration-200 text-center ${
+                    isUpcoming(test.date)
+                      ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-lg hover:shadow-blue-200'
+                      : 'bg-green-600 hover:bg-green-700 text-white shadow-lg hover:shadow-green-200'
+                  }`}
+                >
                   {isUpcoming(test.date) ? 'Register Now' : 'Register and Attempt'}
-                </button>
+                </a>
               </div>
 
               {/* Serial Number Badge */}
