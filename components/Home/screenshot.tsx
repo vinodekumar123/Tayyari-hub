@@ -243,25 +243,7 @@ const TayyariHubTimetable = () => {
           </div>
         )}
 
-        {/* Footer 
-        <div className="mt-16 text-center">
-          <div className="inline-flex items-center gap-6 bg-white rounded-2xl shadow-lg px-8 py-4">
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 bg-blue-600 rounded-full"></div>
-              <span className="text-sm font-medium text-gray-700">Tayyarihub.com</span>
-            </div>
-            <div className="w-px h-6 bg-gray-200"></div>
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-medium text-gray-700">📱 +923237507673</span>
-            </div>
-            <div className="w-px h-6 bg-gray-200"></div>
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-medium text-gray-700">📘 Tayyari Hub</span>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>*/}
+      
   );
 };
 
