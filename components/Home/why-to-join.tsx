@@ -190,7 +190,7 @@ const TayyariHubBenefits = () => {
               </p>
               <div className="flex flex-col sm:flex-row gap-4 justify-center">
                 <a
-  href="/pricing"
+  href="/auth/login"
   className="bg-white text-blue-600 px-8 py-4 rounded-xl font-bold hover:bg-blue-50 transform hover:scale-105 transition-all duration-300 shadow-lg inline-block"
 >
   Start Free Trial
