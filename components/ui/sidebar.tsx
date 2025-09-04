@@ -5,7 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
   BookOpen, Users, Trophy, BarChart3, Settings, Plus,
-  Database, Home, ChevronDown, ChevronRight, LogOut,
+  Database, Home, ChevronDown, ChevronRight, ChevronLeft, LogOut,
   ClipboardList, UserCircle, Menu, X, FileBarChart
 } from 'lucide-react';
 import logo from "../../app/assets/logo.png";
