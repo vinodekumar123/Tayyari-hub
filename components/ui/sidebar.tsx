@@ -31,7 +31,7 @@ type Section = {
   items: MenuItem[];
 };
 
-function useFocusTrap(active: boolean, trapRef: React.RefObject<HTMLDivElement>) {
+function useFocusTrap(active: boolean, trapRef: React.RefObject<HTMLDivElement>, onEscape: () => void) {
   useEffect(() => {
     if (!active || !trapRef.current) return;
     const focusable = trapRef.current.querySelectorAll<HTMLElement>(
@@ -39,9 +39,9 @@ function useFocusTrap(active: boolean, trapRef: React.RefObject<HTMLDivElement>)
     );
     const first = focusable[0];
     const last = focusable[focusable.length - 1];
-
     function handleKeyDown(e: KeyboardEvent) {
       if (e.key === 'Tab') {
+        if (focusable.length === 0) return;
         if (e.shiftKey) {
           if (document.activeElement === first) {
             e.preventDefault();
@@ -55,7 +55,7 @@ function useFocusTrap(active: boolean, trapRef: React.RefObject<HTMLDivElement>)
         }
       }
       if (e.key === 'Escape') {
-        (trapRef.current as any).onEscape?.();
+        onEscape();
       }
     }
     trapRef.current.addEventListener('keydown', handleKeyDown);
@@ -63,7 +63,7 @@ function useFocusTrap(active: boolean, trapRef: React.RefObject<HTMLDivElement>)
     return () => {
       trapRef.current?.removeEventListener('keydown', handleKeyDown);
     };
-  }, [active, trapRef]);
+  }, [active, trapRef, onEscape]);
 }
 
 export function Sidebar() {
@@ -157,7 +157,7 @@ export function Sidebar() {
     return () => unsubscribe();
   }, [adminMenu, studentMenu]);
 
-  // Memoized active link checker
+  // Memoized active link checker (exact or subpath)
   const isActive = useCallback(
     (href?: string) => !!href && (pathname === href || pathname.startsWith(href + '/')),
     [pathname]
@@ -181,6 +181,11 @@ export function Sidebar() {
     });
   };
 
+  // Close mobile sidebar automatically on route change
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [pathname]);
+
   const handleSignOut = async () => {
     const auth = getAuth(app);
     await signOut(auth);
@@ -189,27 +194,33 @@ export function Sidebar() {
 
   // Focus trap for signout dialog
   const dialogRef = useRef<HTMLDivElement>(null);
-  useFocusTrap(showSignOutDialog, dialogRef);
-  if (dialogRef.current) {
-    (dialogRef.current as any).onEscape = () => setShowSignOutDialog(false);
-  }
+  useFocusTrap(showSignOutDialog, dialogRef, () => setShowSignOutDialog(false));
+
+  // Focus trap for mobile sidebar
+  const sidebarTrapRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(mobileOpen, sidebarTrapRef, () => setMobileOpen(false));
 
   if (isAdmin === null) return null;
   const menu = isAdmin ? adminMenu : studentMenu;
 
   // Sidebar content
   const sidebarContent = (
-    <motion.div
+    <motion.aside
+      key="sidebar"
       initial={{ x: -280 }}
       animate={{ x: 0 }}
       exit={{ x: -280 }}
       transition={{ type: "spring", stiffness: 220, damping: 22 }}
-      aria-hidden={!(mobileOpen || typeof window === 'undefined' ? false : window.innerWidth >= 768)}
+      aria-hidden={false}
+      aria-label="Sidebar Navigation"
       className={`fixed top-0 left-0 h-full z-50 bg-white border-r border-gray-200 flex flex-col 
         shadow-xl transition-all duration-300
-        ${collapsed ? 'w-16' : 'w-64'}
+        ${collapsed ? 'w-16' : 'w-64'} 
         md:static md:flex`}
-      tabIndex={mobileOpen ? 0 : -1}
+      tabIndex={-1}
+      ref={mobileOpen ? sidebarTrapRef : undefined}
+      role={mobileOpen ? "dialog" : undefined}
+      aria-modal={mobileOpen ? "true" : undefined}
     >
       {/* Header */}
       <div className="p-4 border-b flex items-center justify-between bg-gradient-to-r from-purple-50 to-blue-50">
@@ -222,10 +233,23 @@ export function Sidebar() {
           <BookOpen className="h-7 w-7 text-purple-700" />
         )}
         <div className="flex items-center space-x-2">
-          <Button variant="ghost" size="icon" onClick={handleCollapse} aria-label="Collapse sidebar">
+          {/* Hide collapse button on mobile */}
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={handleCollapse}
+            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            className="hidden md:inline-flex"
+          >
             {collapsed ? <ChevronRight /> : <ChevronLeft />}
           </Button>
-          <Button variant="ghost" size="icon" onClick={() => setMobileOpen(false)} className="md:hidden">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setMobileOpen(false)}
+            className="md:hidden"
+            aria-label="Close sidebar"
+          >
             <X className="h-5 w-5" />
           </Button>
         </div>
@@ -235,8 +259,10 @@ export function Sidebar() {
       <nav className="flex-1 overflow-y-auto p-4 space-y-8">
         {menu.map((section, i) => (
           <div key={section.section} className="mb-2">
+            {/* Section toggle only in expanded mode */}
             {!collapsed && (
               <button
+                type="button"
                 onClick={() => toggleSection(section.section)}
                 aria-expanded={expandedSections.includes(section.section)}
                 className="flex items-center justify-between w-full text-left text-sm font-bold text-gray-900 mb-2 focus:outline-none"
@@ -252,7 +278,7 @@ export function Sidebar() {
 
             <AnimatePresence initial={false}>
               {(collapsed || expandedSections.includes(section.section)) && (
-                <motion.div
+                <motion.ul
                   key={section.section}
                   initial="collapsed"
                   animate="open"
@@ -265,55 +291,56 @@ export function Sidebar() {
                   className="space-y-1"
                 >
                   {section.items.map((item) => (
-                    <Link
-                      key={item.href}
-                      href={item.href!}
-                      tabIndex={0}
-                      className={`relative flex items-center gap-3 px-3 py-2 rounded-md cursor-pointer 
-                        transition-all duration-200 group
-                        ${isActive(item.href)
-                          ? 'bg-gradient-to-r from-purple-100 to-blue-100 text-purple-800 shadow'
-                          : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'}
-                        ${collapsed ? "justify-center" : ""}
-                      `}
-                      aria-current={isActive(item.href) ? 'page' : undefined}
-                    >
-                      <motion.div
-                        whileHover={{ scale: 1.18 }}
-                        whileTap={{ scale: 0.94 }}
-                        className="relative"
+                    <li key={item.href}>
+                      <Link
+                        href={item.href!}
+                        className={`relative flex items-center gap-3 px-3 py-2 rounded-md cursor-pointer 
+                          transition-all duration-200 group
+                          ${isActive(item.href)
+                            ? 'bg-gradient-to-r from-purple-100 to-blue-100 text-purple-800 shadow'
+                            : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'}
+                          ${collapsed ? "justify-center" : ""}
+                        `}
+                        aria-current={isActive(item.href) ? 'page' : undefined}
+                        tabIndex={0}
                       >
-                        <item.icon
-                          className={`h-5 w-5 ${isActive(item.href) ? 'text-purple-800' : 'text-gray-400 group-hover:text-gray-600'}`}
-                        />
-                        {/* Tooltip when collapsed */}
-                        {collapsed && (
-                          <span className="absolute left-full ml-3 top-1/2 -translate-y-1/2 pointer-events-none z-20
-                            bg-white border border-gray-200 shadow-lg px-2 py-1 rounded text-xs text-gray-800 opacity-0 group-hover:opacity-100 transition-opacity"
-                          >
-                            {item.label}
-                          </span>
+                        <motion.span
+                          whileHover={{ scale: 1.18 }}
+                          whileTap={{ scale: 0.94 }}
+                          className="relative"
+                        >
+                          <item.icon
+                            className={`h-5 w-5 ${isActive(item.href) ? 'text-purple-800' : 'text-gray-400 group-hover:text-gray-600'}`}
+                          />
+                          {/* Tooltip when collapsed */}
+                          {collapsed && (
+                            <span className="absolute left-full ml-3 top-1/2 -translate-y-1/2 pointer-events-none z-20
+                              bg-white border border-gray-200 shadow-lg px-2 py-1 rounded text-xs text-gray-800 opacity-0 group-hover:opacity-100 transition-opacity"
+                            >
+                              {item.label}
+                            </span>
+                          )}
+                        </motion.span>
+                        {!collapsed && (
+                          <span className="font-semibold text-base">{item.label}</span>
                         )}
-                      </motion.div>
-                      {!collapsed && (
-                        <span className="font-semibold text-base">{item.label}</span>
-                      )}
-                      {!collapsed && item.badge && (
-                        <Badge variant="secondary" className="text-xs ml-auto">{item.badge}</Badge>
-                      )}
-                      {/* Animated indicator for active link */}
-                      {isActive(item.href) && (
-                        <motion.div
-                          layoutId="activeSidebarIndicator"
-                          className="absolute left-0 top-0 h-full w-1 bg-purple-600 rounded-r"
-                          initial={{ width: 0 }}
-                          animate={{ width: 4 }}
-                          transition={{ type: "spring", stiffness: 240, damping: 20 }}
-                        />
-                      )}
-                    </Link>
+                        {!collapsed && item.badge && (
+                          <Badge variant="secondary" className="text-xs ml-auto">{item.badge}</Badge>
+                        )}
+                        {/* Animated indicator for active link */}
+                        {isActive(item.href) && (
+                          <motion.div
+                            layoutId="activeSidebarIndicator"
+                            className="absolute left-0 top-0 h-full w-1 bg-purple-600 rounded-r"
+                            initial={{ width: 0 }}
+                            animate={{ width: 4 }}
+                            transition={{ type: "spring", stiffness: 240, damping: 20 }}
+                          />
+                        )}
+                      </Link>
+                    </li>
                   ))}
-                </motion.div>
+                </motion.ul>
               )}
             </AnimatePresence>
             {/* Section divider */}
@@ -335,7 +362,7 @@ export function Sidebar() {
           {!collapsed && <span className="font-semibold text-base">Sign Out</span>}
         </button>
       </nav>
-    </motion.div>
+    </motion.aside>
   );
 
   return (
@@ -351,7 +378,8 @@ export function Sidebar() {
 
       {/* Sidebar */}
       <AnimatePresence>
-        {(mobileOpen || typeof window === 'undefined' ? false : window.innerWidth >= 768) && sidebarContent}
+        {/* Mobile: only show when open; Desktop: always show */}
+        {(mobileOpen || typeof window === 'undefined' || (typeof window !== 'undefined' && window.innerWidth >= 768)) && sidebarContent}
       </AnimatePresence>
 
       {/* Backdrop with blur for mobile */}
