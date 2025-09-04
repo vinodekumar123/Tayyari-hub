@@ -28,15 +28,6 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 
-// Utility for date formatting (to show counts by created date)
-function formatDateYMD(dateOrTimestamp) {
-  if (!dateOrTimestamp) return '';
-  let date;
-  if (dateOrTimestamp.seconds) date = new Date(dateOrTimestamp.seconds * 1000);
-  else date = new Date(dateOrTimestamp);
-  return date.toISOString().split('T')[0];
-}
-
 export default function CreateQuiz() {
   const router = useRouter();
   const [currentStep, setCurrentStep] = useState(1);
@@ -47,10 +38,9 @@ export default function CreateQuiz() {
   const quizId = params.get('id');
   const isEditMode = Boolean(quizId);
 
-  // --- Date filter for questions
-  const [dateFilter, setDateFilter] = useState({ from: '', to: '' });
+  // Date filter for question creation
+  const [questionDateFilter, setQuestionDateFilter] = useState('');
 
-  // --- Quiz config
   const [quizConfig, setQuizConfig] = useState({
     title: '',
     description: '',
@@ -64,9 +54,9 @@ export default function CreateQuiz() {
     shuffleQuestions: true,
     shuffleOptions: true,
     showExplanation: true,
-    startDate: '',
+    startDate: '',published: false,
     endDate: '',
-    startTime: '',published: false,
+    startTime: '',
     endTime: '',
     accessType: 'free',
     resultVisibility: 'immediate',
@@ -77,133 +67,27 @@ export default function CreateQuiz() {
       difficulty: '',
       searchTerm: '',
       topic: '',
+      createdAfter: '', // Added for filter
     },
   });
 
-  // --- Optimization: Memoized course/subject/chapter count maps ---
-  const [questionCountByCourse, setQuestionCountByCourse] = useState({});
-  const [questionCountBySubject, setQuestionCountBySubject] = useState({});
-  const [questionCountByChapter, setQuestionCountByChapter] = useState({});
-
-  // --- All available questions (filtered by date if filter is set)
-  const [availableQuestions, setAvailableQuestions] = useState([]);
-
-  // --- Track ALL QUESTIONS for count displays (not filtered by date)
-  const [allQuestions, setAllQuestions] = useState([]);
-
-  // --- Fetch quiz data for editing ---
   useEffect(() => {
-    const fetchQuiz = async () => {
-      if (!quizId) return;
+    // Prefetch all required data in parallel for optimization
+    const fetchAllData = async () => {
       try {
-        const docRef = doc(db, 'quizzes', quizId);
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists()) {
-          const data = docSnap.data();
-          setQuizConfig((prev) => ({
-            ...prev,
-            ...data,
-            course: data.course?.name || '',
-            subjects: Array.isArray(data.subjects) 
-              ? data.subjects.map(s => s.name || s).filter(name => name)
-              : data.subject?.name 
-                ? [data.subject.name] 
-                : [],
-            chapters: Array.isArray(data.chapters) 
-              ? data.chapters.map(c => c.name || c).filter(name => name)
-              : data.chapter?.name 
-                ? [data.chapter.name] 
-                : [],
-            selectedQuestions: Array.isArray(data.selectedQuestions) ? data.selectedQuestions : [],
-          }));
-        } else {
-          alert("Could not load quiz for editing.");
-        }
-      } catch (error) {
-        console.error("Failed to fetch quiz:", error);
-        alert("Could not load quiz for editing.");
-      }
-    };
-
-    fetchQuiz();
-  }, [quizId]);
-
-  // --- Fetch all courses ---
-  useEffect(() => {
-    const fetchCourses = async () => {
-      try {
-        const snapshot = await getDocs(collection(db, "courses"));
-        const courseList = snapshot.docs.map(doc => ({
+        // Courses
+        const coursesSnap = await getDocs(collection(db, "courses"));
+        const courseList = coursesSnap.docs.map(doc => ({
           id: doc.id,
           ...doc.data(),
         }));
         setCourses(courseList);
-      } catch (error) {
-        console.error("Failed to fetch courses:", error);
-      }
-    };
 
-    fetchCourses();
-  }, []);
-
-  // --- Fetch all questions (for counts and for main questions view) ---
-  useEffect(() => {
-    const getQuestions = async () => {
-      // 1. Fetch ALL questions (for count displays)
-      try {
-        const allSnap = await getDocs(query(collection(db, "questions")));
-        const allQs = allSnap.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-          usedInQuizzes: doc.data().usedInQuizzes || 0,
-        }));
-        setAllQuestions(allQs);
-
-        // --- Build count maps for course/subject/chapter ---
-        // Course and subject/chapter can be missing on some questions.
-        const courseMap = {};
-        const subjectMap = {};
-        const chapterMap = {};
-        for (const q of allQs) {
-          // Course
-          if (q.course) {
-            courseMap[q.course] = (courseMap[q.course] || 0) + 1;
-          }
-          // Subject
-          if (q.subject) {
-            subjectMap[q.subject] = (subjectMap[q.subject] || 0) + 1;
-          }
-          // Chapter
-          if (q.chapter) {
-            chapterMap[q.chapter] = (chapterMap[q.chapter] || 0) + 1;
-          }
-        }
-        setQuestionCountByCourse(courseMap);
-        setQuestionCountBySubject(subjectMap);
-        setQuestionCountByChapter(chapterMap);
-
-      } catch (error) {
-        console.error("Failed to fetch all questions for counts:", error);
-      }
-    };
-    getQuestions();
-  }, []);
-
-  // --- Fetch available questions (filtered by date if set) ---
-  useEffect(() => {
-    const fetchQuestions = async () => {
-      try {
-        let qRef = collection(db, "questions");
-        let q;
-        // --- Date filter logic ---
-        if (dateFilter.from || dateFilter.to) {
-          let constraints = [];
-          if (dateFilter.from) constraints.push(where("createdAt", ">=", Timestamp.fromDate(new Date(dateFilter.from))));
-          if (dateFilter.to) constraints.push(where("createdAt", "<=", Timestamp.fromDate(new Date(dateFilter.to + 'T23:59:59.999Z'))));
-          q = query(qRef, ...constraints, orderBy("createdAt", "desc"));
-        } else {
-          q = query(qRef, orderBy("createdAt", "desc"));
-        }
+        // Questions
+        const q = query(
+          collection(db, "questions"),
+          orderBy("createdAt", "desc")
+        );
         const snapshot = await getDocs(q);
         const questions = snapshot.docs.map((doc) => ({
           id: doc.id,
@@ -211,14 +95,45 @@ export default function CreateQuiz() {
           usedInQuizzes: doc.data().usedInQuizzes || 0,
         }));
         setAvailableQuestions(questions);
-      } catch (error) {
-        console.error("Failed to fetch questions:", error);
+
+        // When in edit mode, fetch quiz details
+        if (quizId) {
+          const docRef = doc(db, 'quizzes', quizId);
+          const docSnap = await getDoc(docRef);
+          if (docSnap.exists()) {
+            const data = docSnap.data();
+            setQuizConfig((prev) => ({
+              ...prev,
+              ...data,
+              course: data.course?.name || '',
+              subjects: Array.isArray(data.subjects) 
+                ? data.subjects.map(s => s.name || s).filter(name => name)
+                : data.subject?.name 
+                  ? [data.subject.name] 
+                  : [],
+              chapters: Array.isArray(data.chapters) 
+                ? data.chapters.map(c => c.name || c).filter(name => name)
+                : data.chapter?.name 
+                  ? [data.chapter.name] 
+                  : [],
+              selectedQuestions: Array.isArray(data.selectedQuestions) ? data.selectedQuestions : [],
+            }));
+          } else {
+            alert("Could not load quiz for editing.");
+          }
+        }
+      } catch (err) {
+        console.error("Failed to fetch initial data:", err);
       }
     };
-    fetchQuestions();
-  }, [dateFilter]);
+    fetchAllData();
+    // eslint-disable-next-line
+  }, [quizId]);
 
-  // --- Fetch subjects by course ---
+  // Available question state
+  const [availableQuestions, setAvailableQuestions] = useState([]);
+
+  // Subjects by course
   useEffect(() => {
     const fetchSubjectsByCourse = async () => {
       const selectedCourse = courses.find(c => c.name === quizConfig.course);
@@ -228,59 +143,55 @@ export default function CreateQuiz() {
       }
 
       const subjectList = [];
-      for (const subjectId of selectedCourse.subjectIds) {
+      await Promise.all(selectedCourse.subjectIds.map(async subjectId => {
         const subjectRef = doc(db, 'subjects', subjectId);
         const subjectSnap = await getDoc(subjectRef);
         if (subjectSnap.exists()) {
           subjectList.push({ id: subjectId, name: subjectSnap.data().name });
         }
-      }
+      }));
       setSubjects(subjectList);
     };
 
     if (quizConfig.course) fetchSubjectsByCourse();
-    else if (isEditMode && quizConfig.course) fetchSubjectsByCourse();
+    // eslint-disable-next-line
   }, [quizConfig.course, courses, isEditMode]);
 
-  // --- Fetch chapters by subject ---
+  // Chapters by subjects
   useEffect(() => {
     const fetchChapters = async () => {
       let allChapters = new Set();
       if (quizConfig.subjects.includes('all-subjects') || quizConfig.subjects.length === 0) {
-        for (const s of subjects) {
+        await Promise.all(subjects.map(async (s) => {
           const subjectRef = doc(db, 'subjects', s.id);
           const subjectSnap = await getDoc(subjectRef);
           if (subjectSnap.exists()) {
             const data = subjectSnap.data();
-            const chaptersList = data.chapters
-              ? Object.keys(data.chapters).filter(ch => ch && ch.trim() !== '')
-              : [];
+            const chaptersList = data.chapters ? Object.keys(data.chapters).filter(ch => ch && ch.trim() !== '') : [];
             chaptersList.forEach((ch) => allChapters.add(ch));
           }
-        }
+        }));
       } else {
-        for (const subjectName of quizConfig.subjects) {
+        await Promise.all(quizConfig.subjects.map(async (subjectName) => {
           const subject = subjects.find(s => s.name === subjectName);
           if (subject) {
             const subjectRef = doc(db, 'subjects', subject.id);
             const subjectSnap = await getDoc(subjectRef);
             if (subjectSnap.exists()) {
               const data = subjectSnap.data();
-              const chaptersList = data.chapters
-                ? Object.keys(data.chapters).filter(ch => ch && ch.trim() !== '')
-                : [];
+              const chaptersList = data.chapters ? Object.keys(data.chapters).filter(ch => ch && ch.trim() !== '') : [];
               chaptersList.forEach((ch) => allChapters.add(ch));
             }
           }
-        }
+        }));
       }
       setChapters(Array.from(allChapters));
     };
-
     fetchChapters();
+    // eslint-disable-next-line
   }, [quizConfig.subjects, subjects]);
 
-  // --- Input/Selection handlers ---
+  // Handlers
   const handleInputChange = (field, value) => {
     setQuizConfig(prev => ({
       ...prev,
@@ -307,7 +218,7 @@ export default function CreateQuiz() {
     }));
   };
 
-  // --- Question selection logic (bigger radios for UX) ---
+  // Question selection (with bigger radios)
   const handleQuestionSelection = async (question) => {
     setQuizConfig((prev) => {
       const isSelected = prev.selectedQuestions.some(q => q.id === question.id);
@@ -334,11 +245,9 @@ export default function CreateQuiz() {
     }
   };
 
-  // --- Optimized auto select: select most recent N questions ---
+  // Auto select logic: select the latest added questions (top N recent)
   const handleAutoSelectQuestions = async () => {
-    const alreadySelected = quizConfig.selectedQuestions.length > 0;
-
-    if (alreadySelected) {
+    if (quizConfig.selectedQuestions.length > 0) {
       for (const question of quizConfig.selectedQuestions) {
         try {
           const questionRef = doc(db, 'questions', question.id);
@@ -349,16 +258,32 @@ export default function CreateQuiz() {
           console.error("Error decrementing usage count:", error);
         }
       }
-
       setQuizConfig((prev) => ({
         ...prev,
         selectedQuestions: [],
       }));
       return;
     }
-    // --- Optimized: just take the top N most recent filtered questions ---
-    const selected = availableQuestions.slice(0, Math.min(quizConfig.totalQuestions, availableQuestions.length));
 
+    // Filter by date if applied
+    let filtered = availableQuestions;
+    if (quizConfig.questionFilters.createdAfter) {
+      const afterDate = new Date(quizConfig.questionFilters.createdAfter).getTime();
+      filtered = filtered.filter(q => {
+        if (!q.createdAt) return false;
+        let questionDate;
+        if (q.createdAt.seconds) {
+          questionDate = q.createdAt.seconds * 1000;
+        } else {
+          // In case createdAt is a JS Date
+          questionDate = new Date(q.createdAt).getTime();
+        }
+        return questionDate >= afterDate;
+      });
+    }
+
+    // Select top N recent (already sorted by createdAt desc)
+    const selected = filtered.slice(0, Math.min(quizConfig.totalQuestions, filtered.length));
     setQuizConfig((prev) => ({
       ...prev,
       selectedQuestions: selected,
@@ -376,7 +301,6 @@ export default function CreateQuiz() {
     }
   };
 
-  // --- Create or update quiz handler ---
   const handleCreateOrUpdateQuiz = async () => {
     if (
       !quizConfig.title ||
@@ -407,7 +331,7 @@ export default function CreateQuiz() {
         ? chapters.map(ch => ({ id: ch, name: ch }))
         : quizConfig.chapters.map(ch => ({ id: ch, name: ch })),
       updatedAt: Timestamp.now(),
-      published: quizConfig.published || false, // Ensure published flag is included
+      published: quizConfig.published || false,
     };
 
     if (!isEditMode) {
@@ -435,6 +359,7 @@ export default function CreateQuiz() {
       const selectedQuestionIds = quizConfig.selectedQuestions.map(q => q.id);
       const existingQuestions = await getDocs(collection(db, "mock-questions"));
       const existingIds = new Set(existingQuestions.docs.map(doc => doc.id));
+
       for (const question of quizConfig.selectedQuestions) {
         if (!existingIds.has(question.id)) {
           await addDoc(collection(db, "mock-questions"), {
@@ -459,16 +384,60 @@ export default function CreateQuiz() {
     }
   };
 
-  // --- Filtered Questions (with new date filter logic) ---
+  // Helper to show counts
+  const countQuestionsFor = ({ course, subject, chapter }) => {
+    let filtered = availableQuestions;
+    if (course) {
+      filtered = filtered.filter(q => q.course === course);
+    }
+    if (subject) {
+      filtered = filtered.filter(q => q.subject === subject);
+    }
+    if (chapter) {
+      filtered = filtered.filter(q => q.chapter === chapter);
+    }
+    if (quizConfig.questionFilters.createdAfter) {
+      const afterDate = new Date(quizConfig.questionFilters.createdAfter).getTime();
+      filtered = filtered.filter(q => {
+        if (!q.createdAt) return false;
+        let questionDate;
+        if (q.createdAt.seconds) {
+          questionDate = q.createdAt.seconds * 1000;
+        } else {
+          questionDate = new Date(q.createdAt).getTime();
+        }
+        return questionDate >= afterDate;
+      });
+    }
+    return filtered.length;
+  };
+
+  // Filtered questions with date filter applied
   const filteredQuestions = availableQuestions.filter((q) => {
-    const { subjects, chapters, difficulty, topic, searchTerm } = quizConfig.questionFilters;
+    const { subjects, chapters, difficulty, topic, searchTerm, createdAfter } = quizConfig.questionFilters;
     const cleanQuestionText = q.questionText ? q.questionText.replace(/<[^>]+>/g, '') : '';
     const matchesSubject = subjects.length === 0 || subjects.includes('all-subjects') || subjects.includes(q.subject);
     const matchesChapter = chapters.length === 0 || chapters.includes('all-chapters') || chapters.includes(q.chapter);
     const matchesDifficulty = !difficulty || difficulty === '__all-difficulties__' || q.difficulty === difficulty;
     const matchesTopic = !topic || topic === '__all-topics__' || q.topic === topic;
     const matchesSearch = !searchTerm || cleanQuestionText.toLowerCase().includes(searchTerm.toLowerCase());
-    return matchesSubject && matchesChapter && matchesDifficulty && matchesTopic && matchesSearch;
+
+    // Date filter
+    let matchesDate = true;
+    if (createdAfter) {
+      const afterDate = new Date(createdAfter).getTime();
+      let questionDate;
+      if (q.createdAt && q.createdAt.seconds !== undefined) {
+        questionDate = q.createdAt.seconds * 1000;
+      } else if (q.createdAt) {
+        questionDate = new Date(q.createdAt).getTime();
+      } else {
+        matchesDate = false;
+      }
+      matchesDate = questionDate >= afterDate;
+    }
+
+    return matchesSubject && matchesChapter && matchesDifficulty && matchesTopic && matchesSearch && matchesDate;
   });
 
   const groupedQuestions = filteredQuestions.reduce((acc, question) => {
@@ -480,8 +449,8 @@ export default function CreateQuiz() {
     return acc;
   }, {});
 
-  // --- MultiSelect with counts shown ---
-  const MultiSelect = ({ value, onChange, options, placeholder, disabled, countMap }) => {
+  // MultiSelect component with badge count
+  const MultiSelect = ({ value, onChange, options, placeholder, disabled, type }) => {
     const displayValue = value.includes('all-subjects') || value.includes('all-chapters')
       ? value.includes('all-subjects') ? 'All Subjects' : 'All Chapters'
       : value.length > 0 
@@ -503,31 +472,37 @@ export default function CreateQuiz() {
         <PopoverContent className="w-full max-h-60 overflow-y-auto">
           <div className="space-y-2">
             {options.map((option) => (
-              <div key={option.value} className="flex items-center">
-                <Checkbox
-                  checked={value.includes(option.value)}
-                  onCheckedChange={(checked) => {
-                    if (checked) {
-                      if (option.value === 'all-subjects' || option.value === 'all-chapters') {
-                        onChange([option.value]);
+              <div key={option.value} className="flex items-center justify-between">
+                <div className="flex items-center">
+                  <Checkbox
+                    checked={value.includes(option.value)}
+                    onCheckedChange={(checked) => {
+                      if (checked) {
+                        if (option.value === 'all-subjects' || option.value === 'all-chapters') {
+                          onChange([option.value]);
+                        } else {
+                          onChange([
+                            ...value.filter(v => v !== 'all-subjects' && v !== 'all-chapters'),
+                            option.value
+                          ]);
+                        }
                       } else {
-                        onChange([
-                          ...value.filter(v => v !== 'all-subjects' && v !== 'all-chapters'),
-                          option.value
-                        ]);
+                        onChange(value.filter(v => v !== option.value));
                       }
-                    } else {
-                      onChange(value.filter(v => v !== option.value));
-                    }
-                  }}
-                  className="mr-2"
-                />
-                <span>
-                  {option.label}
-                  {countMap && countMap[option.value] !== undefined && (
-                    <span className="text-xs ml-2 text-gray-500">({countMap[option.value]})</span>
-                  )}
-                </span>
+                    }}
+                    className="mr-2"
+                    style={{ width: 22, height: 22 }} // Slightly larger for better UX
+                  />
+                  <span>{option.label}</span>
+                </div>
+                {/* Show badge with number of questions */}
+                {!!type && (
+                  <Badge variant="secondary" className="ml-2">
+                    {type === 'course' && countQuestionsFor({ course: option.value })}
+                    {type === 'subject' && countQuestionsFor({ subject: option.value })}
+                    {type === 'chapter' && countQuestionsFor({ chapter: option.value })}
+                  </Badge>
+                )}
               </div>
             ))}
           </div>
@@ -536,22 +511,6 @@ export default function CreateQuiz() {
     );
   };
 
-  // --- Date filter logic for questions ---
-  const minCreatedAt = allQuestions.reduce((min, q) => {
-    if (!q.createdAt) return min;
-    const d = q.createdAt.seconds ? new Date(q.createdAt.seconds * 1000) : new Date(q.createdAt);
-    return !min || d < min ? d : min;
-  }, null);
-  const maxCreatedAt = allQuestions.reduce((max, q) => {
-    if (!q.createdAt) return max;
-    const d = q.createdAt.seconds ? new Date(q.createdAt.seconds * 1000) : new Date(q.createdAt);
-    return !max || d > max ? d : max;
-  }, null);
-
-  // --- Optimized: Memoize question count for current date filter
-  const filteredQuestionCount = availableQuestions.length;
-
-  // --- Render ---
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
       <header className="bg-white/90 shadow-lg backdrop-blur-md border-b border-gray-200">
@@ -570,30 +529,10 @@ export default function CreateQuiz() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
         <Tabs defaultValue="basic" className="space-y-8">
           <TabsList className="grid w-full grid-cols-4 bg-white/80 backdrop-blur-md rounded-xl p-1 shadow-md">
-            <TabsTrigger
-              value="basic"
-              className="data-[state=active]:bg-blue-600 data-[state=active]:text-white rounded-lg transition-all duration-200"
-            >
-              Basic Info
-            </TabsTrigger>
-            <TabsTrigger
-              value="settings"
-              className="data-[state=active]:bg-blue-600 data-[state=active]:text-white rounded-lg transition-all duration-200"
-            >
-              Settings
-            </TabsTrigger>
-            <TabsTrigger
-              value="questions"
-              className="data-[state=active]:bg-blue-600 data-[state=active]:text-white rounded-lg transition-all duration-200"
-            >
-              Questions
-            </TabsTrigger>
-            <TabsTrigger
-              value="schedule"
-              className="data-[state=active]:bg-blue-600 data-[state=active]:text-white rounded-lg transition-all duration-200"
-            >
-              Schedule
-            </TabsTrigger>
+            <TabsTrigger value="basic" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white rounded-lg transition-all duration-200">Basic Info</TabsTrigger>
+            <TabsTrigger value="settings" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white rounded-lg transition-all duration-200">Settings</TabsTrigger>
+            <TabsTrigger value="questions" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white rounded-lg transition-all duration-200">Questions</TabsTrigger>
+            <TabsTrigger value="schedule" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white rounded-lg transition-all duration-200">Schedule</TabsTrigger>
           </TabsList>
 
           <TabsContent value="basic" className="space-y-8">
@@ -632,12 +571,7 @@ export default function CreateQuiz() {
                           variant="outline"
                           className="w-full justify-between border-gray-300 focus:border-blue-500 rounded-xl"
                         >
-                          <span>
-                            {quizConfig.course || 'Select course'}
-                            {quizConfig.course && questionCountByCourse[quizConfig.course] !== undefined && (
-                              <span className="ml-2 text-xs text-gray-500">({questionCountByCourse[quizConfig.course]})</span>
-                            )}
-                          </span>
+                          <span>{quizConfig.course || 'Select course'}</span>
                           <span>▼</span>
                         </Button>
                       </PopoverTrigger>
@@ -646,17 +580,15 @@ export default function CreateQuiz() {
                           {courses.map(course => (
                             <div
                               key={course.name}
-                              className="flex items-center cursor-pointer hover:bg-blue-100 p-2 rounded"
+                              className="flex items-center cursor-pointer hover:bg-blue-100 p-2 rounded justify-between"
                               onClick={() => {
                                 handleInputChange('course', course.name);
                                 handleMultiSelectChange('subjects', []);
                                 handleMultiSelectChange('chapters', []);
                               }}
                             >
-                              {course.name}
-                              {questionCountByCourse[course.name] !== undefined && (
-                                <span className="ml-2 text-xs text-gray-500">({questionCountByCourse[course.name]})</span>
-                              )}
+                              <span>{course.name}</span>
+                              <Badge variant="secondary" className="ml-2">{countQuestionsFor({ course: course.name })}</Badge>
                             </div>
                           ))}
                         </div>
@@ -668,15 +600,10 @@ export default function CreateQuiz() {
                     <MultiSelect
                       value={quizConfig.subjects}
                       onChange={(value) => handleMultiSelectChange('subjects', value)}
-                      options={[
-                        { value: 'all-subjects', label: 'All Subjects' },
-                        ...subjects
-                          .filter(s => s && s.name && s.name.trim() !== '')
-                          .map(s => ({ value: s.name, label: s.name }))
-                      ]}
+                      options={[{ value: 'all-subjects', label: 'All Subjects' }, ...subjects.filter(s => s && s.name && s.name.trim() !== '').map(s => ({ value: s.name, label: s.name }))]}
                       placeholder="Select subjects"
                       disabled={!quizConfig.course}
-                      countMap={questionCountBySubject}
+                      type="subject"
                     />
                   </div>
                   <div className="space-y-4">
@@ -684,15 +611,10 @@ export default function CreateQuiz() {
                     <MultiSelect
                       value={quizConfig.chapters}
                       onChange={(value) => handleMultiSelectChange('chapters', value)}
-                      options={[
-                        { value: 'all-chapters', label: 'All Chapters' },
-                        ...chapters
-                          .filter(ch => ch && ch.trim() !== '')
-                          .map(ch => ({ value: ch, label: ch }))
-                      ]}
+                      options={[{ value: 'all-chapters', label: 'All Chapters' }, ...chapters.filter(ch => ch && ch.trim() !== '').map(ch => ({ value: ch, label: ch }))]}
                       placeholder="Select chapters"
                       disabled={!quizConfig.subjects.length}
-                      countMap={questionCountByChapter}
+                      type="chapter"
                     />
                   </div>
                 </div>
@@ -874,43 +796,10 @@ export default function CreateQuiz() {
                     </Button>
                   </div>
                 </div>
-                {/* --- Date Filter UI --- */}
-                <div className="pt-4 flex flex-wrap gap-4 items-center">
-                  <Label className="text-md font-medium text-gray-700 mr-2">Created Date:</Label>
-                  <Input
-                    type="date"
-                    value={dateFilter.from}
-                    min={minCreatedAt ? formatDateYMD(minCreatedAt) : undefined}
-                    max={dateFilter.to || (maxCreatedAt ? formatDateYMD(maxCreatedAt) : undefined)}
-                    onChange={e => setDateFilter(df => ({ ...df, from: e.target.value }))}
-                    className="w-auto"
-                  />
-                  <span>to</span>
-                  <Input
-                    type="date"
-                    value={dateFilter.to}
-                    min={dateFilter.from || (minCreatedAt ? formatDateYMD(minCreatedAt) : undefined)}
-                    max={maxCreatedAt ? formatDateYMD(maxCreatedAt) : undefined}
-                    onChange={e => setDateFilter(df => ({ ...df, to: e.target.value }))}
-                    className="w-auto"
-                  />
-                  <span className="ml-3 text-gray-600 text-sm">
-                    Showing <b>{filteredQuestionCount}</b> question{filteredQuestionCount !== 1 ? 's' : ''} {dateFilter.from || dateFilter.to ? 'for selected date range' : ' (most recent)'}
-                  </span>
-                  {(dateFilter.from || dateFilter.to) && (
-                    <Button
-                      variant="ghost"
-                      className="ml-2 text-xs"
-                      onClick={() => setDateFilter({ from: '', to: '' })}
-                    >
-                      Clear Date Filter
-                    </Button>
-                  )}
-                </div>
               </CardHeader>
               <CardContent className="space-y-6 pt-6">
                 <div className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
                     <div className="space-y-2">
                       <Label className="text-lg font-medium text-gray-700">Search</Label>
                       <div className="relative">
@@ -936,12 +825,9 @@ export default function CreateQuiz() {
                       <MultiSelect
                         value={quizConfig.questionFilters.subjects}
                         onChange={(value) => handleQuestionFilterChange('subjects', value)}
-                        options={[
-                          { value: 'all-subjects', label: 'All Subjects' },
-                          ...subjects.map(s => ({ value: s.name, label: s.name }))
-                        ]}
+                        options={[{ value: 'all-subjects', label: 'All Subjects' }, ...subjects.map(s => ({ value: s.name, label: s.name }))]}
                         placeholder="All subjects"
-                        countMap={questionCountBySubject}
+                        type="subject"
                       />
                     </div>
                     <div className="space-y-2">
@@ -949,12 +835,9 @@ export default function CreateQuiz() {
                       <MultiSelect
                         value={quizConfig.questionFilters.chapters}
                         onChange={(value) => handleQuestionFilterChange('chapters', value)}
-                        options={[
-                          { value: 'all-chapters', label: 'All Chapters' },
-                          ...chapters.map(ch => ({ value: ch, label: ch }))
-                        ]}
+                        options={[{ value: 'all-chapters', label: 'All Chapters' }, ...chapters.map(ch => ({ value: ch, label: ch }))]}
                         placeholder="All chapters"
-                        countMap={questionCountByChapter}
+                        type="chapter"
                       />
                     </div>
                     <div className="space-y-2">
@@ -1023,6 +906,24 @@ export default function CreateQuiz() {
                         </PopoverContent>
                       </Popover>
                     </div>
+                    <div className="space-y-2">
+                      <Label className="text-lg font-medium text-gray-700">Created After</Label>
+                      <Input
+                        type="date"
+                        value={quizConfig.questionFilters.createdAfter}
+                        onChange={(e) => setQuizConfig((prev) => ({
+                          ...prev,
+                          questionFilters: {
+                            ...prev.questionFilters,
+                            createdAfter: e.target.value
+                          }
+                        }))}
+                        className="border-gray-300 focus:border-blue-500 focus:ring-blue-500 rounded-xl"
+                      />
+                      <div className="text-xs text-gray-500">
+                        {filteredQuestions.length} questions found
+                      </div>
+                    </div>
                   </div>
                 </div>
                 <div className="space-y-8">
@@ -1030,9 +931,7 @@ export default function CreateQuiz() {
                     <div key={subject} className="space-y-4">
                       <div className="border-b-2 border-blue-500 pb-2 flex items-center">
                         <h3 className="text-xl font-semibold text-gray-900">{subject}</h3>
-                        {questionCountBySubject[subject] !== undefined && (
-                          <span className="ml-2 text-xs text-gray-500">({questionCountBySubject[subject]})</span>
-                        )}
+                        <Badge variant="secondary" className="ml-3">{questions.length}</Badge>
                       </div>
                       {questions.map((question) => (
                         <Card
@@ -1044,13 +943,11 @@ export default function CreateQuiz() {
                           }`}
                         >
                           <CardContent className="p-5 flex items-start space-x-4">
-                            {/* --- Make radio bigger for better UX --- */}
-                            <input
-                              type="checkbox"
+                            <Checkbox
                               checked={quizConfig.selectedQuestions.some((q) => q.id === question.id)}
-                              onChange={() => handleQuestionSelection(question)}
-                              className="h-7 w-7 border-2 border-blue-400 rounded-md focus:ring-2 focus:ring-blue-500 mr-3 transition-all duration-150"
-                              style={{ minWidth: 28, minHeight: 28 }}
+                              onCheckedChange={() => handleQuestionSelection(question)}
+                              className="h-8 w-8 mt-1 border-gray-400" // bigger for better UX
+                              style={{ minWidth: 32, minHeight: 32 }}
                             />
                             <div className="flex-1 space-y-2">
                               <div className="flex items-start justify-between">
@@ -1069,8 +966,8 @@ export default function CreateQuiz() {
                                   Used in {question.usedInQuizzes || 0} quizzes
                                 </span>
                                 {question.createdAt && (
-                                  <span className="text-xs text-gray-400 ml-3">
-                                    {formatDateYMD(question.createdAt)}
+                                  <span className="text-xs text-gray-400 ml-2">
+                                    Added: {question.createdAt.seconds ? new Date(question.createdAt.seconds * 1000).toLocaleDateString() : new Date(question.createdAt).toLocaleDateString()}
                                   </span>
                                 )}
                               </div>
@@ -1114,4 +1011,88 @@ export default function CreateQuiz() {
                         type="date"
                         value={quizConfig.endDate}
                         onChange={(e) => handleInputChange('endDate', e.target.value)}
-                        className="pl-12 border-gray-300 focus:border-blue-500 focus
+                        className="pl-12 border-gray-300 focus:border-blue-500 focus:ring-blue-500 rounded-xl"
+                      />
+                    </div>
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-4">
+                    <Label htmlFor="startTime" className="text-lg font-medium text-gray-700">Start Time</Label>
+                    <div className="relative">
+                      <Clock className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
+                      <Input
+                        id="startTime"
+                        type="time"
+                        value={quizConfig.startTime}
+                        onChange={(e) => handleInputChange('startTime', e.target.value)}
+                        className="pl-12 border-gray-300 focus:border-blue-500 focus:ring-blue-500 rounded-xl"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-4">
+                    <Label htmlFor="endTime" className="text-lg font-medium text-gray-700">End Time</Label>
+                    <div className="relative">
+                      <Clock className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
+                      <Input
+                        id="endTime"
+                        type="time"
+                        value={quizConfig.endTime}
+                        onChange={(e) => handleInputChange('endTime', e.target.value)}
+                        className="pl-12 border-gray-300 focus:border-blue-500 focus:ring-blue-500 rounded-xl"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex items-center space-x-3">
+                    <Checkbox
+                      id="published"
+                      checked={quizConfig.published}
+                      onCheckedChange={(checked) => handleInputChange('published', checked)}
+                      className="h-5 w-5 border-gray-300"
+                    />
+                    <Label htmlFor="published" className="text-lg font-medium text-gray-700">Publish Quiz</Label>
+                  </div>
+                </div>
+                <div className="bg-gray-50/80 p-6 rounded-xl shadow-inner">
+                  <h4 className="text-xl font-medium text-gray-900 mb-4">Quiz Summary</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-lg">
+                    <div>
+                      <p className="text-gray-700"><strong>Title:</strong> {quizConfig.title || 'Not set'}</p>
+                      <p className="text-gray-700"><strong>Course:</strong> {quizConfig.course || 'Not selected'}</p>
+                      <p className="text-gray-700"><strong>Subjects:</strong> {Array.isArray(quizConfig.subjects) ? (quizConfig.subjects.includes('all-subjects') ? 'All Subjects' : quizConfig.subjects.join(', ') || 'Not selected') : 'Not selected'}</p>
+                      <p className="text-gray-700"><strong>Chapters:</strong> {Array.isArray(quizConfig.chapters) ? (quizConfig.chapters.includes('all-chapters') ? 'All Chapters' : quizConfig.chapters.join(', ') || 'None selected') : 'None selected'}</p>
+                      <p className="text-gray-700"><strong>Questions:</strong> {quizConfig.selectedQuestions.length} / {quizConfig.totalQuestions}</p>
+                      <p className="text-gray-700"><strong>Duration:</strong> {quizConfig.duration} minutes</p>
+                      <p className="text-gray-700"><strong>Published:</strong> {quizConfig.published ? 'Yes' : 'No'}</p>
+                    </div>
+                    <div>
+                      <p className="text-gray-700"><strong>Access:</strong> {quizConfig.accessType}</p>
+                      <p className="text-gray-700"><strong>Result Visibility:</strong> {quizConfig.resultVisibility}</p>
+                      <p className="text-gray-700"><strong>Max Attempts:</strong> {quizConfig.maxAttempts}</p>
+                      <p className="text-gray-700"><strong>Shuffle Questions:</strong> {quizConfig.shuffleQuestions ? 'Yes' : 'No'}</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex justify-end space-x-4">
+                  <Button
+                    variant="outline"
+                    className="border-gray-300 hover:bg-gray-100 transition-all duration-200"
+                    onClick={() => router.back()}
+                  >
+                    <X className="h-5 w-5 mr-2" /> Cancel
+                  </Button>
+                  <Button
+                    onClick={handleCreateOrUpdateQuiz}
+                    className="bg-gradient-to-r from-blue-600 to-indigo-700 hover:from-blue-700 hover:to-indigo-800 text-white transition-all duration-200"
+                  >
+                    {isEditMode ? 'Update Quiz' : 'Create Quiz'}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
+      </div>
+    </div>
+  );
+}
