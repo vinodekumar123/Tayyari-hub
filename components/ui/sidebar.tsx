@@ -227,7 +227,7 @@ export function Sidebar() {
         {!collapsed ? (
           <div className="flex items-center space-x-3">
             <Image src={logo} alt="Tayyari Hub Logo" className="h-10 w-auto" width={40} height={40} priority />
-            <span className="font-extrabold text-lg text-purple-900">Tayyari Hub</span>
+            
           </div>
         ) : (
           <BookOpen className="h-7 w-7 text-purple-700" />
