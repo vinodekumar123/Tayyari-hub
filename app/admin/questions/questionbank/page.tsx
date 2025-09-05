@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import {
   collection,
   getDocs,
@@ -8,6 +8,7 @@ import {
   deleteDoc,
   query,
   where,
+  DocumentData
 } from 'firebase/firestore';
 import { db } from '../../../firebase';
 import { useRouter } from 'next/navigation';
@@ -28,6 +29,16 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Pencil, Trash, Plus, Loader2, Download } from 'lucide-react';
 
+// Debounce hook
+function useDebounce(value: string, delay: number) {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const handler = setTimeout(() => setDebounced(value), delay);
+    return () => clearTimeout(handler);
+  }, [value, delay]);
+  return debounced;
+}
+
 type Question = {
   id: string;
   questionText: string;
@@ -46,11 +57,19 @@ type Question = {
   createdAt?: Date;
 };
 
+// Helper: robust Firestore date handling
+function parseCreatedAt(data: DocumentData): Date {
+  if (data.createdAt instanceof Date) return data.createdAt;
+  if (data.createdAt?.toDate) return data.createdAt.toDate();
+  if (typeof data.createdAt === 'string') return new Date(data.createdAt);
+  return new Date();
+}
+
 const QuestionBankPage = () => {
   const router = useRouter();
   const [questions, setQuestions] = useState<Question[]>([]);
-  const [filtered, setFiltered] = useState<Question[]>([]);
   const [search, setSearch] = useState('');
+  const debouncedSearch = useDebounce(search, 300);
   const [loading, setLoading] = useState(true);
   const [selectedQuestions, setSelectedQuestions] = useState<string[]>([]);
   const [isBulkDeleteDialogOpen, setIsBulkDeleteDialogOpen] = useState(false);
@@ -58,75 +77,73 @@ const QuestionBankPage = () => {
   const [selectedSubject, setSelectedSubject] = useState('');
   const [isDeleting, setIsDeleting] = useState(false);
   const [sortOrder, setSortOrder] = useState<'latest' | 'oldest'>('latest');
+  const [exportMode, setExportMode] = useState<'all' | 'subject'>('all'); // For CSV dialog
 
   useEffect(() => {
     const fetchQuestions = async () => {
+      setLoading(true);
       try {
         const snapshot = await getDocs(collection(db, 'questions'));
         const fetched: Question[] = snapshot.docs.map((doc) => ({
           id: doc.id,
           ...(doc.data() as Omit<Question, 'id'>),
-          createdAt: (doc.data().createdAt?.toDate()) || new Date(),
+          createdAt: parseCreatedAt(doc.data()),
         }));
         setQuestions(fetched);
-        setFiltered(fetched);
       } catch (error) {
         console.error('Error fetching questions:', error);
       } finally {
         setLoading(false);
       }
     };
-
     fetchQuestions();
   }, []);
 
-  useEffect(() => {
+  // Derived filter/sort
+  const filteredQuestions = useMemo(() => {
     let sortedQuestions = [...questions];
-    if (sortOrder === 'latest') {
-      sortedQuestions.sort((a, b) => b.createdAt!.getTime() - a.createdAt!.getTime());
-    } else {
-      sortedQuestions.sort((a, b) => a.createdAt!.getTime() - b.createdAt!.getTime());
-    }
-    setFiltered(
-      sortedQuestions.filter(
-        (q) =>
-          q.course?.toLowerCase().includes(search.toLowerCase()) ||
-          q.subject?.toLowerCase().includes(search.toLowerCase()) ||
-          q.chapter?.toLowerCase().includes(search.toLowerCase()) ||
-          q.questionText?.toLowerCase().includes(search.toLowerCase())
-      )
+    sortedQuestions.sort((a, b) => {
+      const timeA = a.createdAt?.getTime?.() || 0;
+      const timeB = b.createdAt?.getTime?.() || 0;
+      return sortOrder === 'latest' ? timeB - timeA : timeA - timeB;
+    });
+    if (!debouncedSearch) return sortedQuestions;
+    const searchLower = debouncedSearch.toLowerCase();
+    return sortedQuestions.filter(
+      (q) =>
+        q.course?.toLowerCase().includes(searchLower) ||
+        q.subject?.toLowerCase().includes(searchLower) ||
+        q.chapter?.toLowerCase().includes(searchLower) ||
+        q.questionText?.toLowerCase().includes(searchLower)
     );
+  }, [questions, debouncedSearch, sortOrder]);
+
+  // Clear selection when filter changes
+  useEffect(() => {
     setSelectedQuestions([]);
-  }, [questions, search, sortOrder]);
+  }, [debouncedSearch, sortOrder, questions]);
 
-  const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setSearch(e.target.value.toLowerCase());
-  };
+  const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => setSearch(e.target.value);
 
-  const handleSelectQuestion = (id: string) => {
+  const handleSelectQuestion = useCallback((id: string) => {
     setSelectedQuestions((prev) =>
       prev.includes(id) ? prev.filter((qid) => qid !== id) : [...prev, id]
     );
-  };
+  }, []);
 
   const handleSelectAll = () => {
-    if (selectedQuestions.length === filtered.length) {
+    if (selectedQuestions.length === filteredQuestions.length) {
       setSelectedQuestions([]);
     } else {
-      setSelectedQuestions(filtered.map((q) => q.id));
+      setSelectedQuestions(filteredQuestions.map((q) => q.id));
     }
   };
 
   const handleDelete = async (id: string) => {
-    const confirm = window.confirm('Are you sure you want to delete this question?');
-    if (!confirm) return;
-
+    if (!window.confirm('Are you sure you want to delete this question?')) return;
     try {
       await deleteDoc(doc(db, 'questions', id));
-      const updated = questions.filter((q) => q.id !== id);
-      setQuestions(updated);
-      setFiltered(updated);
-      setSelectedQuestions((prev) => prev.filter((qid) => qid !== id));
+      setQuestions((prev) => prev.filter((q) => q.id !== id));
     } catch (error) {
       console.error('Error deleting question:', error);
     }
@@ -137,8 +154,7 @@ const QuestionBankPage = () => {
       alert('Please select at least one question to delete.');
       return;
     }
-
-    const confirm = window.confirm(
+    if (!window.confirm(
       `Are you sure you want to delete ${
         deleteMode === 'selected'
           ? `${selectedQuestions.length} selected question(s)`
@@ -146,36 +162,24 @@ const QuestionBankPage = () => {
           ? `all questions for subject "${selectedSubject}"`
           : 'all questions'
       }? This action cannot be undone.`
-    );
-    if (!confirm) return;
+    )) return;
 
     setIsDeleting(true);
     try {
       if (deleteMode === 'selected') {
-        for (const id of selectedQuestions) {
-          await deleteDoc(doc(db, 'questions', id));
-        }
-        const updated = questions.filter((q) => !selectedQuestions.includes(q.id));
-        setQuestions(updated);
-        setFiltered(updated);
+        await Promise.all(selectedQuestions.map(id => deleteDoc(doc(db, 'questions', id))));
+        setQuestions(prev => prev.filter(q => !selectedQuestions.includes(q.id)));
         setSelectedQuestions([]);
       } else if (deleteMode === 'subject') {
-        const q = query(collection(db, 'questions'), where('subject', '==', selectedSubject));
-        const snapshot = await getDocs(q);
-        for (const doc of snapshot.docs) {
-          await deleteDoc(doc.ref);
-        }
-        const updated = questions.filter((q) => q.subject !== selectedSubject);
-        setQuestions(updated);
-        setFiltered(updated);
+        const qRef = query(collection(db, 'questions'), where('subject', '==', selectedSubject));
+        const snapshot = await getDocs(qRef);
+        await Promise.all(snapshot.docs.map(docSnap => deleteDoc(docSnap.ref)));
+        setQuestions(prev => prev.filter(q => q.subject !== selectedSubject));
         setSelectedQuestions([]);
       } else if (deleteMode === 'all') {
         const snapshot = await getDocs(collection(db, 'questions'));
-        for (const doc of snapshot.docs) {
-          await deleteDoc(doc.ref);
-        }
+        await Promise.all(snapshot.docs.map(docSnap => deleteDoc(docSnap.ref)));
         setQuestions([]);
-        setFiltered([]);
         setSelectedQuestions([]);
       }
       setIsBulkDeleteDialogOpen(false);
@@ -188,6 +192,7 @@ const QuestionBankPage = () => {
     }
   };
 
+  // CSV Export (robust, but for larger sets consider a library)
   const exportToCSV = (exportQuestions: Question[], filename: string) => {
     const headers = [
       'questionText',
@@ -204,24 +209,25 @@ const QuestionBankPage = () => {
       'teacher',
       'enableExplanation',
     ];
+    const escape = (text?: string) =>
+      `"${(text ?? '').replace(/"/g, '""').replace(/\n/g, ' ')}"`;
     const rows = exportQuestions.map((q) =>
       [
-        `"${q.questionText.replace(/"/g, '""')}"`,
-        `"${q.options.map((opt) => opt.replace(/"/g, '""')).join('|')}"`,
-        `"${q.correctAnswer?.replace(/"/g, '""') || ''}"`,
-        `"${q.course?.replace(/"/g, '""') || ''}"`,
-        `"${q.subject?.replace(/"/g, '""') || ''}"`,
-        `"${q.chapter?.replace(/"/g, '""') || ''}"`,
-        `"${q.difficulty?.replace(/"/g, '""') || ''}"`,
-        `"${q.explanation?.replace(/"/g, '""') || ''}"`,
-        `"${q.topic?.replace(/"/g, '""') || ''}"`,
-        `"${q.year?.replace(/"/g, '""') || ''}"`,
-        `"${q.book?.replace(/"/g, '""') || ''}"`,
-        `"${q.teacher?.replace(/"/g, '""') || ''}"`,
+        escape(q.questionText),
+        escape(q.options.join('|')),
+        escape(q.correctAnswer),
+        escape(q.course),
+        escape(q.subject),
+        escape(q.chapter),
+        escape(q.difficulty),
+        escape(q.explanation),
+        escape(q.topic),
+        escape(q.year),
+        escape(q.book),
+        escape(q.teacher),
         q.enableExplanation ? 'true' : 'false',
       ].join(',')
     );
-
     const csvContent = [headers.join(','), ...rows].join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -236,7 +242,8 @@ const QuestionBankPage = () => {
 
   const handleExportCSV = (mode: 'all' | 'subject', subject?: string) => {
     const exportQuestions =
-      mode === 'all' ? questions : questions.filter((q) => q.subject === subject);
+      mode === 'all' ? questions :
+      questions.filter((q) => q.subject === subject);
     const filename =
       mode === 'all'
         ? 'all_questions.csv'
@@ -244,7 +251,8 @@ const QuestionBankPage = () => {
     exportToCSV(exportQuestions, filename);
   };
 
-  const uniqueSubjects = Array.from(new Set(questions.map((q) => q.subject).filter((s): s is string => !!s)));
+  const uniqueSubjects = Array.from(new Set(questions.map(q => q.subject).filter((s): s is string => !!s)));
+  const subjectSelectDisabled = uniqueSubjects.length === 0 || (exportMode !== 'subject' && deleteMode !== 'subject');
 
   return (
     <div className="min-h-screen bg-white rounded-xl p-4 sm:p-6 lg:p-8">
@@ -297,7 +305,11 @@ const QuestionBankPage = () => {
                 {deleteMode === 'subject' && (
                   <div>
                     <Label className="text-sm font-medium text-gray-700">Subject</Label>
-                    <Select value={selectedSubject} onValueChange={setSelectedSubject}>
+                    <Select
+                      value={selectedSubject}
+                      onValueChange={setSelectedSubject}
+                      disabled={uniqueSubjects.length === 0}
+                    >
                       <SelectTrigger className="mt-1">
                         <SelectValue placeholder="Select subject" />
                       </SelectTrigger>
@@ -327,7 +339,10 @@ const QuestionBankPage = () => {
                 <Button
                   variant="destructive"
                   onClick={handleBulkDelete}
-                  disabled={isDeleting || (deleteMode === 'selected' && selectedQuestions.length === 0) || (deleteMode === 'subject' && !selectedSubject)}
+                  disabled={isDeleting || 
+                    (deleteMode === 'selected' && selectedQuestions.length === 0) ||
+                    (deleteMode === 'subject' && !selectedSubject)
+                  }
                 >
                   {isDeleting ? (
                     <>
@@ -356,12 +371,8 @@ const QuestionBankPage = () => {
                 <div>
                   <Label className="text-sm font-medium text-gray-700">Export Mode</Label>
                   <Select
-                    defaultValue="all"
-                    onValueChange={(val) =>
-                      val === 'all'
-                        ? handleExportCSV('all')
-                        : setSelectedSubject('')
-                    }
+                    value={exportMode}
+                    onValueChange={(val) => setExportMode(val as 'all' | 'subject')}
                   >
                     <SelectTrigger className="mt-1">
                       <SelectValue placeholder="Select export mode" />
@@ -378,9 +389,9 @@ const QuestionBankPage = () => {
                     value={selectedSubject}
                     onValueChange={(val) => {
                       setSelectedSubject(val);
-                      if (val) handleExportCSV('subject', val);
+                      if (exportMode === 'subject' && val) handleExportCSV('subject', val);
                     }}
-                    disabled={questions.length === 0}
+                    disabled={subjectSelectDisabled}
                   >
                     <SelectTrigger className="mt-1">
                       <SelectValue placeholder="Select subject" />
@@ -394,6 +405,14 @@ const QuestionBankPage = () => {
                     </SelectContent>
                   </Select>
                 </div>
+                {exportMode === 'all' && (
+                  <Button
+                    className="w-full bg-green-600 mt-4"
+                    onClick={() => handleExportCSV('all')}
+                  >
+                    Download All
+                  </Button>
+                )}
               </div>
               <DialogFooter>
                 <Button
@@ -437,10 +456,10 @@ const QuestionBankPage = () => {
           </SelectContent>
         </Select>
       </div>
-{/* ✅ Show counts here */}
-<div className="mb-4 text-sm font-medium text-gray-700">
-  Showing {filtered.length} of {questions.length} total questions
-</div>
+      <div className="mb-4 text-sm font-medium text-gray-700">
+        Showing {filteredQuestions.length} of {questions.length} total questions
+      </div>
+
       {/* Content */}
       {loading ? (
         <div className="grid grid-cols-1 gap-6">
@@ -458,20 +477,20 @@ const QuestionBankPage = () => {
             </Card>
           ))}
         </div>
-      ) : filtered.length === 0 ? (
+      ) : filteredQuestions.length === 0 ? (
         <p className="text-center text-gray-500 text-lg mt-10">No questions found.</p>
       ) : (
         <div className="grid grid-cols-1 gap-6">
           <div className="flex items-center gap-2 mb-4">
             <Checkbox
-              checked={selectedQuestions.length === filtered.length && filtered.length > 0}
+              checked={filteredQuestions.length > 0 && selectedQuestions.length === filteredQuestions.length}
               onCheckedChange={handleSelectAll}
             />
             <span className="text-sm text-gray-600">
-              Select All ({selectedQuestions.length}/{filtered.length})
+              Select All ({selectedQuestions.length}/{filteredQuestions.length})
             </span>
           </div>
-          {filtered.map((question, idx) => {
+          {filteredQuestions.map((question, idx) => {
             const {
               id,
               questionText,
@@ -482,50 +501,43 @@ const QuestionBankPage = () => {
               chapter,
               difficulty,
             } = question;
-
             return (
               <Card
                 key={id}
                 className="p-4 bg-white shadow-md hover:shadow-lg transition-shadow duration-300 rounded-xl"
               >
-           <div className="flex items-start gap-3 mb-4">
-  <Checkbox
-    checked={selectedQuestions.includes(id)}
-    onCheckedChange={() => handleSelectQuestion(id)}
-    className="mt-1"
-  />
-  <div className="flex-1">
-    <h2 className="text-base sm:text-lg font-semibold text-gray-800 flex items-start gap-1">
-      {idx + 1}.{' '}
-      <span
-        className="prose max-w-prose inline"
-        dangerouslySetInnerHTML={{ __html: questionText }}
-      />
-    </h2>
-
-    <div className="flex flex-wrap gap-2 mt-2">
-      {course && <Badge className="bg-blue-100 text-blue-800">{course}</Badge>}
-      {subject && (
-        <Badge variant="outline" className="border-blue-200 text-gray-700">
-          {subject}
-        </Badge>
-      )}
-      {chapter && (
-        <Badge variant="secondary" className="bg-gray-100 text-gray-700">
-          {chapter}
-        </Badge>
-      )}
-      {difficulty && (
-        <Badge className="bg-green-100 text-green-800">{difficulty}</Badge>
-      )}
-    </div>
-
-    {/* ✅ Add this below badges */}
-
-  </div>
-</div>
-
-
+                <div className="flex items-start gap-3 mb-4">
+                  <Checkbox
+                    checked={selectedQuestions.includes(id)}
+                    onCheckedChange={() => handleSelectQuestion(id)}
+                    className="mt-1"
+                  />
+                  <div className="flex-1">
+                    <h2 className="text-base sm:text-lg font-semibold text-gray-800 flex items-start gap-1">
+                      {idx + 1}.{' '}
+                      <span
+                        className="prose max-w-prose inline"
+                        dangerouslySetInnerHTML={{ __html: questionText }}
+                      />
+                    </h2>
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {course && <Badge className="bg-blue-100 text-blue-800">{course}</Badge>}
+                      {subject && (
+                        <Badge variant="outline" className="border-blue-200 text-gray-700">
+                          {subject}
+                        </Badge>
+                      )}
+                      {chapter && (
+                        <Badge variant="secondary" className="bg-gray-100 text-gray-700">
+                          {chapter}
+                        </Badge>
+                      )}
+                      {difficulty && (
+                        <Badge className="bg-green-100 text-green-800">{difficulty}</Badge>
+                      )}
+                    </div>
+                  </div>
+                </div>
                 <div className="grid grid-cols-1 gap-2 mt-4">
                   {options.map((opt, i) => (
                     <div
@@ -540,7 +552,6 @@ const QuestionBankPage = () => {
                     </div>
                   ))}
                 </div>
-
                 <div className="flex justify-end gap-2">
                   <Button
                     variant="outline"
@@ -559,16 +570,22 @@ const QuestionBankPage = () => {
                     <Trash className="h-4 w-4 mr-1" /> Delete
                   </Button>
                 </div>
-                    {question.createdAt && (
-      <p className="text-sm text-gray-500 mt-1">
-        Created on:{' '}
-        {new Date(question.createdAt).toLocaleDateString(undefined, {
-          year: 'numeric',
-          month: 'short',
-          day: 'numeric',
-        })}
-      </p>
-    )}
+                {question.createdAt && (
+                  <p className="text-sm text-gray-500 mt-1">
+                    Created on:{' '}
+                    {question.createdAt instanceof Date
+                      ? question.createdAt.toLocaleDateString(undefined, {
+                          year: 'numeric',
+                          month: 'short',
+                          day: 'numeric',
+                        })
+                      : new Date(question.createdAt).toLocaleDateString(undefined, {
+                          year: 'numeric',
+                          month: 'short',
+                          day: 'numeric',
+                        })}
+                  </p>
+                )}
               </Card>
             );
           })}
