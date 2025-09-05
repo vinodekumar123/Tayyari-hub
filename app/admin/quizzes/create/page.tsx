@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
-import { collection, getDocs, addDoc, Timestamp,query, updateDoc, getDoc, doc, orderBy } from "firebase/firestore";
+import { collection, getDocs, addDoc, Timestamp, query, updateDoc, getDoc, doc, orderBy, where } from "firebase/firestore";
 import { db } from "../../../firebase";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useSearchParams, useRouter } from 'next/navigation';
@@ -38,6 +38,9 @@ export default function CreateQuiz() {
   const quizId = params.get('id');
   const isEditMode = Boolean(quizId);
 
+  // Date filter for question creation
+  const [questionDateFilter, setQuestionDateFilter] = useState('');
+
   const [quizConfig, setQuizConfig] = useState({
     title: '',
     description: '',
@@ -51,10 +54,9 @@ export default function CreateQuiz() {
     shuffleQuestions: true,
     shuffleOptions: true,
     showExplanation: true,
-    startDate: '',
+    startDate: '',published: false,
     endDate: '',
-    startTime: '',published: false,
-
+    startTime: '',
     endTime: '',
     accessType: 'free',
     resultVisibility: 'immediate',
@@ -65,87 +67,73 @@ export default function CreateQuiz() {
       difficulty: '',
       searchTerm: '',
       topic: '',
+      createdAfter: '', // Added for filter
     },
   });
 
   useEffect(() => {
-    const fetchQuiz = async () => {
-      if (!quizId) return;
+    // Prefetch all required data in parallel for optimization
+    const fetchAllData = async () => {
       try {
-        const docRef = doc(db, 'quizzes', quizId);
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists()) {
-          const data = docSnap.data();
-          setQuizConfig((prev) => ({
-            ...prev,
-            ...data,
-            course: data.course?.name || '',
-            subjects: Array.isArray(data.subjects) 
-              ? data.subjects.map(s => s.name || s).filter(name => name)
-              : data.subject?.name 
-                ? [data.subject.name] 
-                : [],
-            chapters: Array.isArray(data.chapters) 
-              ? data.chapters.map(c => c.name || c).filter(name => name)
-              : data.chapter?.name 
-                ? [data.chapter.name] 
-                : [],
-            selectedQuestions: Array.isArray(data.selectedQuestions) ? data.selectedQuestions : [],
-          }));
-        } else {
-          alert("Could not load quiz for editing.");
-        }
-      } catch (error) {
-        console.error("Failed to fetch quiz:", error);
-        alert("Could not load quiz for editing.");
-      }
-    };
-
-    fetchQuiz();
-  }, [quizId]);
-
-  useEffect(() => {
-    const fetchCourses = async () => {
-      try {
-        const snapshot = await getDocs(collection(db, "courses"));
-        const courseList = snapshot.docs.map(doc => ({
+        // Courses
+        const coursesSnap = await getDocs(collection(db, "courses"));
+        const courseList = coursesSnap.docs.map(doc => ({
           id: doc.id,
           ...doc.data(),
         }));
         setCourses(courseList);
-      } catch (error) {
-        console.error("Failed to fetch courses:", error);
-      }
-    };
 
-    fetchCourses();
-  }, []);
-
-  const [availableQuestions, setAvailableQuestions] = useState([]);
-
-  useEffect(() => {
-    const fetchQuestions = async () => {
-      try {
-
-const q = query(
-  collection(db, "questions"),
-  orderBy("createdAt", "desc") // latest first
-);
-const snapshot = await getDocs(q);
+        // Questions
+        const q = query(
+          collection(db, "questions"),
+          orderBy("createdAt", "desc")
+        );
+        const snapshot = await getDocs(q);
         const questions = snapshot.docs.map((doc) => ({
           id: doc.id,
           ...(doc.data()),
           usedInQuizzes: doc.data().usedInQuizzes || 0,
         }));
         setAvailableQuestions(questions);
-      } catch (error) {
-        console.error("Failed to fetch questions:", error);
+
+        // When in edit mode, fetch quiz details
+        if (quizId) {
+          const docRef = doc(db, 'quizzes', quizId);
+          const docSnap = await getDoc(docRef);
+          if (docSnap.exists()) {
+            const data = docSnap.data();
+            setQuizConfig((prev) => ({
+              ...prev,
+              ...data,
+              course: data.course?.name || '',
+              subjects: Array.isArray(data.subjects) 
+                ? data.subjects.map(s => s.name || s).filter(name => name)
+                : data.subject?.name 
+                  ? [data.subject.name] 
+                  : [],
+              chapters: Array.isArray(data.chapters) 
+                ? data.chapters.map(c => c.name || c).filter(name => name)
+                : data.chapter?.name 
+                  ? [data.chapter.name] 
+                  : [],
+              selectedQuestions: Array.isArray(data.selectedQuestions) ? data.selectedQuestions : [],
+            }));
+          } else {
+            alert("Could not load quiz for editing.");
+          }
+        }
+      } catch (err) {
+        console.error("Failed to fetch initial data:", err);
       }
     };
+    fetchAllData();
+    // eslint-disable-next-line
+  }, [quizId]);
 
-    fetchQuestions();
-  }, []);
+  // Available question state
+  const [availableQuestions, setAvailableQuestions] = useState([]);
 
+  // Subjects by course
   useEffect(() => {
     const fetchSubjectsByCourse = async () => {
       const selectedCourse = courses.find(c => c.name === quizConfig.course);
@@ -155,59 +143,55 @@ const snapshot = await getDocs(q);
       }
 
       const subjectList = [];
-      for (const subjectId of selectedCourse.subjectIds) {
+      await Promise.all(selectedCourse.subjectIds.map(async subjectId => {
         const subjectRef = doc(db, 'subjects', subjectId);
         const subjectSnap = await getDoc(subjectRef);
         if (subjectSnap.exists()) {
           subjectList.push({ id: subjectId, name: subjectSnap.data().name });
         }
-      }
+      }));
       setSubjects(subjectList);
     };
 
     if (quizConfig.course) fetchSubjectsByCourse();
-    else if (isEditMode && quizConfig.course) fetchSubjectsByCourse();
+    // eslint-disable-next-line
   }, [quizConfig.course, courses, isEditMode]);
 
+  // Chapters by subjects
   useEffect(() => {
     const fetchChapters = async () => {
       let allChapters = new Set();
-      
       if (quizConfig.subjects.includes('all-subjects') || quizConfig.subjects.length === 0) {
-        for (const s of subjects) {
+        await Promise.all(subjects.map(async (s) => {
           const subjectRef = doc(db, 'subjects', s.id);
           const subjectSnap = await getDoc(subjectRef);
           if (subjectSnap.exists()) {
             const data = subjectSnap.data();
-            const chaptersList = data.chapters
-              ? Object.keys(data.chapters).filter(ch => ch && ch.trim() !== '')
-              : [];
+            const chaptersList = data.chapters ? Object.keys(data.chapters).filter(ch => ch && ch.trim() !== '') : [];
             chaptersList.forEach((ch) => allChapters.add(ch));
           }
-        }
+        }));
       } else {
-        for (const subjectName of quizConfig.subjects) {
+        await Promise.all(quizConfig.subjects.map(async (subjectName) => {
           const subject = subjects.find(s => s.name === subjectName);
           if (subject) {
             const subjectRef = doc(db, 'subjects', subject.id);
             const subjectSnap = await getDoc(subjectRef);
             if (subjectSnap.exists()) {
               const data = subjectSnap.data();
-              const chaptersList = data.chapters
-                ? Object.keys(data.chapters).filter(ch => ch && ch.trim() !== '')
-                : [];
+              const chaptersList = data.chapters ? Object.keys(data.chapters).filter(ch => ch && ch.trim() !== '') : [];
               chaptersList.forEach((ch) => allChapters.add(ch));
             }
           }
-        }
+        }));
       }
-      
       setChapters(Array.from(allChapters));
     };
-
     fetchChapters();
+    // eslint-disable-next-line
   }, [quizConfig.subjects, subjects]);
 
+  // Handlers
   const handleInputChange = (field, value) => {
     setQuizConfig(prev => ({
       ...prev,
@@ -234,6 +218,7 @@ const snapshot = await getDocs(q);
     }));
   };
 
+  // Question selection (with bigger radios)
   const handleQuestionSelection = async (question) => {
     setQuizConfig((prev) => {
       const isSelected = prev.selectedQuestions.some(q => q.id === question.id);
@@ -260,10 +245,9 @@ const snapshot = await getDocs(q);
     }
   };
 
+  // Auto select logic: select the latest added questions (top N recent)
   const handleAutoSelectQuestions = async () => {
-    const alreadySelected = quizConfig.selectedQuestions.length > 0;
-
-    if (alreadySelected) {
+    if (quizConfig.selectedQuestions.length > 0) {
       for (const question of quizConfig.selectedQuestions) {
         try {
           const questionRef = doc(db, 'questions', question.id);
@@ -274,7 +258,6 @@ const snapshot = await getDocs(q);
           console.error("Error decrementing usage count:", error);
         }
       }
-
       setQuizConfig((prev) => ({
         ...prev,
         selectedQuestions: [],
@@ -282,17 +265,25 @@ const snapshot = await getDocs(q);
       return;
     }
 
-    const { subjects, chapters } = quizConfig.questionFilters;
-    const filtered = availableQuestions.filter((q) => {
-      return (
-        (subjects.length === 0 || subjects.includes('all-subjects') || subjects.includes(q.subject)) &&
-        (chapters.length === 0 || chapters.includes('all-chapters') || chapters.includes(q.chapter))
-      );
-    });
+    // Filter by date if applied
+    let filtered = availableQuestions;
+    if (quizConfig.questionFilters.createdAfter) {
+      const afterDate = new Date(quizConfig.questionFilters.createdAfter).getTime();
+      filtered = filtered.filter(q => {
+        if (!q.createdAt) return false;
+        let questionDate;
+        if (q.createdAt.seconds) {
+          questionDate = q.createdAt.seconds * 1000;
+        } else {
+          // In case createdAt is a JS Date
+          questionDate = new Date(q.createdAt).getTime();
+        }
+        return questionDate >= afterDate;
+      });
+    }
 
-    const shuffled = [...filtered].sort(() => 0.5 - Math.random());
-    const selected = shuffled.slice(0, Math.min(quizConfig.totalQuestions, filtered.length));
-
+    // Select top N recent (already sorted by createdAt desc)
+    const selected = filtered.slice(0, Math.min(quizConfig.totalQuestions, filtered.length));
     setQuizConfig((prev) => ({
       ...prev,
       selectedQuestions: selected,
@@ -310,59 +301,58 @@ const snapshot = await getDocs(q);
     }
   };
 
-const handleCreateOrUpdateQuiz = async () => {
-  if (
-    !quizConfig.title ||
-    !quizConfig.course ||
-    (quizConfig.subjects.length === 0 && !quizConfig.subjects.includes('all-subjects')) ||
-    quizConfig.selectedQuestions.length === 0
-  ) {
-    alert("Please fill in all required fields, select at least one subject, and select questions");
-    return;
-  }
-
-  const selectedCourse = courses.find(c => c.name === quizConfig.course);
-  const selectedSubjects = quizConfig.subjects.includes('all-subjects') 
-    ? subjects 
-    : subjects.filter(s => quizConfig.subjects.includes(s.name));
-
-  const quizPayload = {
-    ...quizConfig,
-    course: {
-      id: selectedCourse?.id || '',
-      name: selectedCourse?.name || '',
-    },
-    subjects: selectedSubjects.map(s => ({
-      id: s.id,
-      name: s.name,
-    })),
-    chapters: quizConfig.chapters.includes('all-chapters') 
-      ? chapters.map(ch => ({ id: ch, name: ch }))
-      : quizConfig.chapters.map(ch => ({ id: ch, name: ch })),
-    updatedAt: Timestamp.now(),
-    published: quizConfig.published || false, // Ensure published flag is included
-  };
-
-  if (!isEditMode) {
-    quizPayload.createdAt = Timestamp.now();
-  }
-
-  try {
-    if (isEditMode) {
-      const quizRef = doc(db, 'quizzes', quizId);
-      await updateDoc(quizRef, quizPayload);
-      alert("Quiz updated successfully!");
-    } else {
-      await addDoc(collection(db, "quizzes"), quizPayload);
-      alert("Quiz created successfully!");
+  const handleCreateOrUpdateQuiz = async () => {
+    if (
+      !quizConfig.title ||
+      !quizConfig.course ||
+      (quizConfig.subjects.length === 0 && !quizConfig.subjects.includes('all-subjects')) ||
+      quizConfig.selectedQuestions.length === 0
+    ) {
+      alert("Please fill in all required fields, select at least one subject, and select questions");
+      return;
     }
 
-    router.push("/dashboard/admin");
-  } catch (error) {
-    console.error("Error saving quiz:", error);
-    alert("Failed to save quiz.");
-  }
-};
+    const selectedCourse = courses.find(c => c.name === quizConfig.course);
+    const selectedSubjects = quizConfig.subjects.includes('all-subjects') 
+      ? subjects 
+      : subjects.filter(s => quizConfig.subjects.includes(s.name));
+
+    const quizPayload = {
+      ...quizConfig,
+      course: {
+        id: selectedCourse?.id || '',
+        name: selectedCourse?.name || '',
+      },
+      subjects: selectedSubjects.map(s => ({
+        id: s.id,
+        name: s.name,
+      })),
+      chapters: quizConfig.chapters.includes('all-chapters') 
+        ? chapters.map(ch => ({ id: ch, name: ch }))
+        : quizConfig.chapters.map(ch => ({ id: ch, name: ch })),
+      updatedAt: Timestamp.now(),
+      published: quizConfig.published || false,
+    };
+
+    if (!isEditMode) {
+      quizPayload.createdAt = Timestamp.now();
+    }
+
+    try {
+      if (isEditMode) {
+        const quizRef = doc(db, 'quizzes', quizId);
+        await updateDoc(quizRef, quizPayload);
+        alert("Quiz updated successfully!");
+      } else {
+        await addDoc(collection(db, "quizzes"), quizPayload);
+        alert("Quiz created successfully!");
+      }
+      router.push("/dashboard/admin");
+    } catch (error) {
+      console.error("Error saving quiz:", error);
+      alert("Failed to save quiz.");
+    }
+  };
 
   const handleSaveToMockQuestions = async () => {
     try {
@@ -394,15 +384,60 @@ const handleCreateOrUpdateQuiz = async () => {
     }
   };
 
+  // Helper to show counts
+  const countQuestionsFor = ({ course, subject, chapter }) => {
+    let filtered = availableQuestions;
+    if (course) {
+      filtered = filtered.filter(q => q.course === course);
+    }
+    if (subject) {
+      filtered = filtered.filter(q => q.subject === subject);
+    }
+    if (chapter) {
+      filtered = filtered.filter(q => q.chapter === chapter);
+    }
+    if (quizConfig.questionFilters.createdAfter) {
+      const afterDate = new Date(quizConfig.questionFilters.createdAfter).getTime();
+      filtered = filtered.filter(q => {
+        if (!q.createdAt) return false;
+        let questionDate;
+        if (q.createdAt.seconds) {
+          questionDate = q.createdAt.seconds * 1000;
+        } else {
+          questionDate = new Date(q.createdAt).getTime();
+        }
+        return questionDate >= afterDate;
+      });
+    }
+    return filtered.length;
+  };
+
+  // Filtered questions with date filter applied
   const filteredQuestions = availableQuestions.filter((q) => {
-    const { subjects, chapters, difficulty, topic, searchTerm } = quizConfig.questionFilters;
+    const { subjects, chapters, difficulty, topic, searchTerm, createdAfter } = quizConfig.questionFilters;
     const cleanQuestionText = q.questionText ? q.questionText.replace(/<[^>]+>/g, '') : '';
     const matchesSubject = subjects.length === 0 || subjects.includes('all-subjects') || subjects.includes(q.subject);
     const matchesChapter = chapters.length === 0 || chapters.includes('all-chapters') || chapters.includes(q.chapter);
     const matchesDifficulty = !difficulty || difficulty === '__all-difficulties__' || q.difficulty === difficulty;
     const matchesTopic = !topic || topic === '__all-topics__' || q.topic === topic;
     const matchesSearch = !searchTerm || cleanQuestionText.toLowerCase().includes(searchTerm.toLowerCase());
-    return matchesSubject && matchesChapter && matchesDifficulty && matchesTopic && matchesSearch;
+
+    // Date filter
+    let matchesDate = true;
+    if (createdAfter) {
+      const afterDate = new Date(createdAfter).getTime();
+      let questionDate;
+      if (q.createdAt && q.createdAt.seconds !== undefined) {
+        questionDate = q.createdAt.seconds * 1000;
+      } else if (q.createdAt) {
+        questionDate = new Date(q.createdAt).getTime();
+      } else {
+        matchesDate = false;
+      }
+      matchesDate = questionDate >= afterDate;
+    }
+
+    return matchesSubject && matchesChapter && matchesDifficulty && matchesTopic && matchesSearch && matchesDate;
   });
 
   const groupedQuestions = filteredQuestions.reduce((acc, question) => {
@@ -414,7 +449,8 @@ const handleCreateOrUpdateQuiz = async () => {
     return acc;
   }, {});
 
-  const MultiSelect = ({ value, onChange, options, placeholder, disabled }) => {
+  // MultiSelect component with badge count
+  const MultiSelect = ({ value, onChange, options, placeholder, disabled, type }) => {
     const displayValue = value.includes('all-subjects') || value.includes('all-chapters')
       ? value.includes('all-subjects') ? 'All Subjects' : 'All Chapters'
       : value.length > 0 
@@ -436,26 +472,37 @@ const handleCreateOrUpdateQuiz = async () => {
         <PopoverContent className="w-full max-h-60 overflow-y-auto">
           <div className="space-y-2">
             {options.map((option) => (
-              <div key={option.value} className="flex items-center">
-                <Checkbox
-                  checked={value.includes(option.value)}
-                  onCheckedChange={(checked) => {
-                    if (checked) {
-                      if (option.value === 'all-subjects' || option.value === 'all-chapters') {
-                        onChange([option.value]);
+              <div key={option.value} className="flex items-center justify-between">
+                <div className="flex items-center">
+                  <Checkbox
+                    checked={value.includes(option.value)}
+                    onCheckedChange={(checked) => {
+                      if (checked) {
+                        if (option.value === 'all-subjects' || option.value === 'all-chapters') {
+                          onChange([option.value]);
+                        } else {
+                          onChange([
+                            ...value.filter(v => v !== 'all-subjects' && v !== 'all-chapters'),
+                            option.value
+                          ]);
+                        }
                       } else {
-                        onChange([
-                          ...value.filter(v => v !== 'all-subjects' && v !== 'all-chapters'),
-                          option.value
-                        ]);
+                        onChange(value.filter(v => v !== option.value));
                       }
-                    } else {
-                      onChange(value.filter(v => v !== option.value));
-                    }
-                  }}
-                  className="mr-2"
-                />
-                <span>{option.label}</span>
+                    }}
+                    className="mr-2"
+                    style={{ width: 22, height: 22 }} // Slightly larger for better UX
+                  />
+                  <span>{option.label}</span>
+                </div>
+                {/* Show badge with number of questions */}
+                {!!type && (
+                  <Badge variant="secondary" className="ml-2">
+                    {type === 'course' && countQuestionsFor({ course: option.value })}
+                    {type === 'subject' && countQuestionsFor({ subject: option.value })}
+                    {type === 'chapter' && countQuestionsFor({ chapter: option.value })}
+                  </Badge>
+                )}
               </div>
             ))}
           </div>
@@ -482,30 +529,10 @@ const handleCreateOrUpdateQuiz = async () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
         <Tabs defaultValue="basic" className="space-y-8">
           <TabsList className="grid w-full grid-cols-4 bg-white/80 backdrop-blur-md rounded-xl p-1 shadow-md">
-            <TabsTrigger
-              value="basic"
-              className="data-[state=active]:bg-blue-600 data-[state=active]:text-white rounded-lg transition-all duration-200"
-            >
-              Basic Info
-            </TabsTrigger>
-            <TabsTrigger
-              value="settings"
-              className="data-[state=active]:bg-blue-600 data-[state=active]:text-white rounded-lg transition-all duration-200"
-            >
-              Settings
-            </TabsTrigger>
-            <TabsTrigger
-              value="questions"
-              className="data-[state=active]:bg-blue-600 data-[state=active]:text-white rounded-lg transition-all duration-200"
-            >
-              Questions
-            </TabsTrigger>
-            <TabsTrigger
-              value="schedule"
-              className="data-[state=active]:bg-blue-600 data-[state=active]:text-white rounded-lg transition-all duration-200"
-            >
-              Schedule
-            </TabsTrigger>
+            <TabsTrigger value="basic" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white rounded-lg transition-all duration-200">Basic Info</TabsTrigger>
+            <TabsTrigger value="settings" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white rounded-lg transition-all duration-200">Settings</TabsTrigger>
+            <TabsTrigger value="questions" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white rounded-lg transition-all duration-200">Questions</TabsTrigger>
+            <TabsTrigger value="schedule" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white rounded-lg transition-all duration-200">Schedule</TabsTrigger>
           </TabsList>
 
           <TabsContent value="basic" className="space-y-8">
@@ -553,14 +580,15 @@ const handleCreateOrUpdateQuiz = async () => {
                           {courses.map(course => (
                             <div
                               key={course.name}
-                              className="flex items-center cursor-pointer hover:bg-blue-100 p-2 rounded"
+                              className="flex items-center cursor-pointer hover:bg-blue-100 p-2 rounded justify-between"
                               onClick={() => {
                                 handleInputChange('course', course.name);
                                 handleMultiSelectChange('subjects', []);
                                 handleMultiSelectChange('chapters', []);
                               }}
                             >
-                              {course.name}
+                              <span>{course.name}</span>
+                              <Badge variant="secondary" className="ml-2">{countQuestionsFor({ course: course.name })}</Badge>
                             </div>
                           ))}
                         </div>
@@ -572,14 +600,10 @@ const handleCreateOrUpdateQuiz = async () => {
                     <MultiSelect
                       value={quizConfig.subjects}
                       onChange={(value) => handleMultiSelectChange('subjects', value)}
-                      options={[
-                        { value: 'all-subjects', label: 'All Subjects' },
-                        ...subjects
-                          .filter(s => s && s.name && s.name.trim() !== '')
-                          .map(s => ({ value: s.name, label: s.name }))
-                      ]}
+                      options={[{ value: 'all-subjects', label: 'All Subjects' }, ...subjects.filter(s => s && s.name && s.name.trim() !== '').map(s => ({ value: s.name, label: s.name }))]}
                       placeholder="Select subjects"
                       disabled={!quizConfig.course}
+                      type="subject"
                     />
                   </div>
                   <div className="space-y-4">
@@ -587,14 +611,10 @@ const handleCreateOrUpdateQuiz = async () => {
                     <MultiSelect
                       value={quizConfig.chapters}
                       onChange={(value) => handleMultiSelectChange('chapters', value)}
-                      options={[
-                        { value: 'all-chapters', label: 'All Chapters' },
-                        ...chapters
-                          .filter(ch => ch && ch.trim() !== '')
-                          .map(ch => ({ value: ch, label: ch }))
-                      ]}
+                      options={[{ value: 'all-chapters', label: 'All Chapters' }, ...chapters.filter(ch => ch && ch.trim() !== '').map(ch => ({ value: ch, label: ch }))]}
                       placeholder="Select chapters"
                       disabled={!quizConfig.subjects.length}
+                      type="chapter"
                     />
                   </div>
                 </div>
@@ -779,7 +799,7 @@ const handleCreateOrUpdateQuiz = async () => {
               </CardHeader>
               <CardContent className="space-y-6 pt-6">
                 <div className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
                     <div className="space-y-2">
                       <Label className="text-lg font-medium text-gray-700">Search</Label>
                       <div className="relative">
@@ -805,11 +825,9 @@ const handleCreateOrUpdateQuiz = async () => {
                       <MultiSelect
                         value={quizConfig.questionFilters.subjects}
                         onChange={(value) => handleQuestionFilterChange('subjects', value)}
-                        options={[
-                          { value: 'all-subjects', label: 'All Subjects' },
-                          ...subjects.map(s => ({ value: s.name, label: s.name }))
-                        ]}
+                        options={[{ value: 'all-subjects', label: 'All Subjects' }, ...subjects.map(s => ({ value: s.name, label: s.name }))]}
                         placeholder="All subjects"
+                        type="subject"
                       />
                     </div>
                     <div className="space-y-2">
@@ -817,11 +835,9 @@ const handleCreateOrUpdateQuiz = async () => {
                       <MultiSelect
                         value={quizConfig.questionFilters.chapters}
                         onChange={(value) => handleQuestionFilterChange('chapters', value)}
-                        options={[
-                          { value: 'all-chapters', label: 'All Chapters' },
-                          ...chapters.map(ch => ({ value: ch, label: ch }))
-                        ]}
+                        options={[{ value: 'all-chapters', label: 'All Chapters' }, ...chapters.map(ch => ({ value: ch, label: ch }))]}
                         placeholder="All chapters"
+                        type="chapter"
                       />
                     </div>
                     <div className="space-y-2">
@@ -890,13 +906,32 @@ const handleCreateOrUpdateQuiz = async () => {
                         </PopoverContent>
                       </Popover>
                     </div>
+                    <div className="space-y-2">
+                      <Label className="text-lg font-medium text-gray-700">Created After</Label>
+                      <Input
+                        type="date"
+                        value={quizConfig.questionFilters.createdAfter}
+                        onChange={(e) => setQuizConfig((prev) => ({
+                          ...prev,
+                          questionFilters: {
+                            ...prev.questionFilters,
+                            createdAfter: e.target.value
+                          }
+                        }))}
+                        className="border-gray-300 focus:border-blue-500 focus:ring-blue-500 rounded-xl"
+                      />
+                      <div className="text-xs text-gray-500">
+                        {filteredQuestions.length} questions found
+                      </div>
+                    </div>
                   </div>
                 </div>
                 <div className="space-y-8">
                   {Object.entries(groupedQuestions).map(([subject, questions]) => (
                     <div key={subject} className="space-y-4">
-                      <div className="border-b-2 border-blue-500 pb-2">
+                      <div className="border-b-2 border-blue-500 pb-2 flex items-center">
                         <h3 className="text-xl font-semibold text-gray-900">{subject}</h3>
+                        <Badge variant="secondary" className="ml-3">{questions.length}</Badge>
                       </div>
                       {questions.map((question) => (
                         <Card
@@ -911,24 +946,14 @@ const handleCreateOrUpdateQuiz = async () => {
                             <Checkbox
                               checked={quizConfig.selectedQuestions.some((q) => q.id === question.id)}
                               onCheckedChange={() => handleQuestionSelection(question)}
-                              className="h-5 w-5 mt-1 border-gray-300"
+                              className="h-8 w-8 mt-1 border-gray-400" // bigger for better UX
+                              style={{ minWidth: 32, minHeight: 32 }}
                             />
                             <div className="flex-1 space-y-2">
                               <div className="flex items-start justify-between">
                                 <p className="font-medium text-gray-900 text-lg">
                                   {question.questionText ? question.questionText.replace(/<[^>]+>/g, '') : 'Untitled Question'}
                                 </p>
-                                {/* <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="hover:text-blue-600 transition-colors"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    // Add preview toggle logic here
-                                  }}
-                                >
-                                  <Eye className="h-5 w-5" />
-                                </Button> */}
                               </div>
                               <div className="flex items-center flex-wrap gap-2">
                                 <Badge variant="outline" className="border-gray-300 text-gray-700">
@@ -940,6 +965,11 @@ const handleCreateOrUpdateQuiz = async () => {
                                 <span className="text-sm text-gray-500">
                                   Used in {question.usedInQuizzes || 0} quizzes
                                 </span>
+                                {question.createdAt && (
+                                  <span className="text-xs text-gray-400 ml-2">
+                                    Added: {question.createdAt.seconds ? new Date(question.createdAt.seconds * 1000).toLocaleDateString() : new Date(question.createdAt).toLocaleDateString()}
+                                  </span>
+                                )}
                               </div>
                             </div>
                           </CardContent>
@@ -1013,19 +1043,15 @@ const handleCreateOrUpdateQuiz = async () => {
                       />
                     </div>
                   </div>
-
                   <div className="flex items-center space-x-3">
-  <Checkbox
-    id="published"
-    checked={quizConfig.published}
-    onCheckedChange={(checked) => handleInputChange('published', checked)}
-    className="h-5 w-5 border-gray-300"
-  />
-  <Label htmlFor="published" className="text-lg font-medium text-gray-700">
-    Publish Quiz
-  </Label>
-</div>
-
+                    <Checkbox
+                      id="published"
+                      checked={quizConfig.published}
+                      onCheckedChange={(checked) => handleInputChange('published', checked)}
+                      className="h-5 w-5 border-gray-300"
+                    />
+                    <Label htmlFor="published" className="text-lg font-medium text-gray-700">Publish Quiz</Label>
+                  </div>
                 </div>
                 <div className="bg-gray-50/80 p-6 rounded-xl shadow-inner">
                   <h4 className="text-xl font-medium text-gray-900 mb-4">Quiz Summary</h4>
@@ -1037,10 +1063,7 @@ const handleCreateOrUpdateQuiz = async () => {
                       <p className="text-gray-700"><strong>Chapters:</strong> {Array.isArray(quizConfig.chapters) ? (quizConfig.chapters.includes('all-chapters') ? 'All Chapters' : quizConfig.chapters.join(', ') || 'None selected') : 'None selected'}</p>
                       <p className="text-gray-700"><strong>Questions:</strong> {quizConfig.selectedQuestions.length} / {quizConfig.totalQuestions}</p>
                       <p className="text-gray-700"><strong>Duration:</strong> {quizConfig.duration} minutes</p>
-                      <p className="text-gray-700">
-  <strong>Published:</strong> {quizConfig.published ? 'Yes' : 'No'}
-</p>
-
+                      <p className="text-gray-700"><strong>Published:</strong> {quizConfig.published ? 'Yes' : 'No'}</p>
                     </div>
                     <div>
                       <p className="text-gray-700"><strong>Access:</strong> {quizConfig.accessType}</p>
