@@ -92,9 +92,9 @@ export function Sidebar() {
       items: [
         { icon: Home, label: 'Dashboard', href: '/dashboard/student' },
         { icon: Trophy, label: 'Quizzes', href: '/admin/quizzes/quizebank' },
-        { icon: Trophy, label: 'Your Quizzes', href: '/admin/mockquize/quizebank' },
-        { icon: Plus, label: 'Create Your Own Quiz (Coming Soon)', href: '/dashboard/student' },
-        { icon: ClipboardList, label: 'Results', href: '/admin/students/results' },
+     // { icon: Trophy, label: 'Your Quizzes', href: '/admin/mockquize/quizebank' },
+// { icon: Plus, label: 'Create Your Own Quiz (Coming Soon)', href: '/dashboard/student' },
+{ icon: ClipboardList, label: 'Results', href: '/admin/students/results' },
         { icon: UserCircle, label: 'Profile Settings', href: '/admin/student-profile' },
       ],
     },
