@@ -238,7 +238,7 @@ const TayyariHubHero = () => {
                 <span className="text-sm font-semibold text-gray-500 uppercase tracking-wide">Happy Students</span>
               </div>
               
-              <div className="w-px h-12 bg-gradient-to-b from-transparent via-gray-300 to-transparent"></div>
+              
               
               <div className="flex flex-col items-center group cursor-pointer">
                 <div className="flex items-center gap-2 mb-2">
@@ -248,7 +248,7 @@ const TayyariHubHero = () => {
                 <span className="text-sm font-semibold text-gray-500 uppercase tracking-wide">Success Rate</span>
               </div>
               
-              <div className="w-px h-12 bg-gradient-to-b from-transparent via-gray-300 to-transparent"></div>
+              
               
               <div className="flex flex-col items-center group cursor-pointer">
                 <div className="flex items-center gap-2 mb-2">
