@@ -202,7 +202,9 @@ const TayyariHubHero = () => {
           {/* Call-to-Action Buttons */}
           <div className={`transform transition-all duration-1200 delay-700 ${isVisible ? 'translate-y-0 opacity-100' : 'translate-y-12 opacity-0'}`}>
             <div className="flex flex-col sm:flex-row gap-6 justify-center items-center mb-16">
-           <Link href="/auth/login">
+
+              {/* Primary CTA */}
+              <Link href="/auth/login">
   <button className="group relative px-12 py-6 bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 text-white font-bold rounded-2xl overflow-hidden transform hover:scale-105 hover:-translate-y-1 transition-all duration-300 text-xl min-w-[320px] shadow-2xl hover:shadow-indigo-500/25">
     <div className="absolute inset-0 bg-gradient-to-r from-indigo-700 via-purple-700 to-pink-700 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
     <div className="absolute inset-0 bg-white/10 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700 skew-x-12"></div>
