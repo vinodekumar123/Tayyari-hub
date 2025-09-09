@@ -1,3 +1,5 @@
+"use client";
+
 import React, { useState, useEffect } from 'react';
 import { Trophy, Users, BarChart3, Globe, ArrowRight, Sparkles, Zap, Star } from 'lucide-react';
 
