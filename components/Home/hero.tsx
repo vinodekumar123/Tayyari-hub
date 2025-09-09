@@ -53,7 +53,7 @@ const TayyariHubHero = () => {
     { 
       icon: Zap, 
       text: "22 MOCKS + FLPs", 
-      subtext: "Just ₹1500",
+      subtext: "Just Rs.1500",
       color: "from-amber-400 via-orange-400 to-red-400",
       bgColor: "from-amber-50 to-orange-50"
     },
