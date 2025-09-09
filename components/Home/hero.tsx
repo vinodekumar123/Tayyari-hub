@@ -121,7 +121,7 @@ const TayyariHubHero = () => {
         <div className={`max-w-7xl mx-auto text-center transform transition-all duration-1200 ease-out ${isVisible ? 'translate-y-0 opacity-100' : 'translate-y-12 opacity-0'}`}>
           
           {/* Floating Status Badge */}
-          <div className={`inline-flex items-center gap-3 px-6 py-3 rounded-full bg-white/80 backdrop-blur-xl border border-gray-200/50 shadow-lg mb-8 transform transition-all duration-1000 delay-200 hover:scale-105 hover:shadow-xl ${isVisible ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0'}`}>
+          <div className={`inline-flex mt-6 items-center gap-3 px-6 py-3 rounded-full bg-white/80 backdrop-blur-xl border border-gray-200/50 shadow-lg mb-8 transform transition-all duration-1000 delay-200 hover:scale-105 hover:shadow-xl ${isVisible ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0'}`}>
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
               <Sparkles className="w-4 h-4 text-amber-500" />
