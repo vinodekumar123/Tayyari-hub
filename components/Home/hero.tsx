@@ -217,13 +217,13 @@ const TayyariHubHero = () => {
 </a>
 
               {/* Secondary CTA */}
-              <button className="group relative px-12 py-6 bg-white/80 backdrop-blur-xl text-gray-800 font-bold rounded-2xl border-2 border-gray-200/50 hover:border-indigo-300 transform hover:scale-105 hover:-translate-y-1 transition-all duration-300 text-xl min-w-[320px] shadow-lg hover:shadow-2xl hover:bg-white/90">
+              <a href="#pricing" className="group relative px-12 py-6 bg-white/80 backdrop-blur-xl text-gray-800 font-bold rounded-2xl border-2 border-gray-200/50 hover:border-indigo-300 transform hover:scale-105 hover:-translate-y-1 transition-all duration-300 text-xl min-w-[320px] shadow-lg hover:shadow-2xl hover:bg-white/90">
                 <div className="absolute inset-0 bg-gradient-to-r from-indigo-50 to-purple-50 opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-xl"></div>
                 <div className="relative flex items-center justify-center gap-3">
                   <Trophy className="w-6 h-6 group-hover:rotate-12 group-hover:scale-110 transition-transform duration-300 text-indigo-600" />
                   <span>Explore Plans</span>
                 </div>
-              </button>
+              </a>
             </div>
           </div>
 
