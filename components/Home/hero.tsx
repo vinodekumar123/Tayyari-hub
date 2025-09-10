@@ -1,4 +1,4 @@
-'use Client'
+"use client";
 
 import React, { useState, useEffect } from 'react';
 import { Star, Clock, BookOpen, Users, Award, Phone, Facebook } from 'lucide-react';
@@ -282,9 +282,9 @@ const TayyariHubAnnouncement = () => {
 
         {/* CTA Section */}
         <div className="text-center mb-8">
-          <button className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white font-bold py-4 px-8 rounded-2xl text-xl transform hover:scale-105 transition-all duration-300 shadow-2xl mb-6 animate-pulse">
+          <a href="/auth/login" className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white font-bold py-4 px-8 rounded-2xl text-xl transform hover:scale-105 transition-all duration-300 shadow-2xl mb-6 animate-pulse">
             👉 Register now at: TayyariHub.com
-          </button>
+          </a>
           
           <div className="flex justify-center gap-6 flex-wrap">
             <div className="flex items-center gap-2 bg-gray-800/50 px-4 py-2 rounded-lg">
