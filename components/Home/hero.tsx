@@ -129,7 +129,7 @@ const TayyariHubAnnouncement = () => {
 
       <div className="relative z-10 container mx-auto px-4 py-8">
         {/* Header Section */}
-        <div className="text-center mb-12">
+        <div className="mt-20 text-center mb-12">
           <div className="inline-flex items-center gap-2 bg-gradient-to-r from-yellow-400 to-orange-500 text-black px-6 py-2 rounded-full font-bold text-lg mb-6 animate-bounce">
             📢 ANNOUNCEMENT: 50% OFF TAYYARI HUB TEST SERIES 2025 📢
           </div>
