@@ -282,11 +282,11 @@ const TayyariHubAnnouncement = () => {
 
         {/* CTA Section */}
         <div className="text-center mb-8">
-          <Link href="/auth/login">
-      <a className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white font-bold py-4 px-8 rounded-2xl text-xl transform hover:scale-105 transition-all duration-300 shadow-2xl mb-6 animate-pulse inline-block">
+          
+      <a href="/auth/login" mb-10 className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white font-bold py-4 px-8 rounded-2xl text-xl transform hover:scale-105 transition-all duration-300 shadow-2xl mb-6 animate-pulse inline-block">
         👉 Register now at: TayyariHub.com
       </a>
-    </Link>
+    
           <div className="flex justify-center gap-6 flex-wrap">
             <div className="flex items-center gap-2 bg-gray-800/50 px-4 py-2 rounded-lg">
               <Phone className="w-5 h-5 text-green-400" />
