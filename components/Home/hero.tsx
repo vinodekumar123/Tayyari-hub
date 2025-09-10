@@ -285,7 +285,7 @@ const TayyariHubAnnouncement = () => {
           
       <a
   href="/auth/login"
-  className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white font-bold py-4 px-8 rounded-2xl text-xl transform hover:scale-105 transition-all duration-300 shadow-2xl mb-10 animate-pulse inline-block bg-opacity-100"
+  className="bg-green-600 hover:bg-green-700 text-white font-bold py-4 px-8 rounded-2xl text-xl shadow-md inline-block mb-10"
 >
   👉 Register now at: TayyariHub.com
 </a>
