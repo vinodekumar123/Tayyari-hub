@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { CheckCircle, ChevronLeft, Shield, Star, Zap, Crown, Phone, MessageCircle, Copy, Check, Clock } from 'lucide-react';
+import { CheckCircle, ChevronLeft, Shield, Star, Zap, Crown, Phone, MessageCircle, Copy, Check } from 'lucide-react';
 import { auth, db } from "@/app/firebase";
 import { doc, updateDoc } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
@@ -12,10 +12,8 @@ import Link from 'next/link';
 
 export default function PricingPage() {
   const [originalPrice] = useState(1500);
-  const [discountedPrice] = useState(750);
   const [user, setUser] = useState<any>(null);
   const [copiedNumber, setCopiedNumber] = useState<string | null>(null);
-  const [timeLeft, setTimeLeft] = useState<string>('');
   const router = useRouter();
 
   useEffect(() => {
@@ -25,28 +23,6 @@ export default function PricingPage() {
       }
     });
     return () => unsubscribe();
-  }, []);
-
-  // Countdown timer effect
-  useEffect(() => {
-    const targetDate = new Date('2025-09-14T23:59:59').getTime();
-    
-    const timer = setInterval(() => {
-      const now = new Date().getTime();
-      const difference = targetDate - now;
-      
-      if (difference > 0) {
-        const days = Math.floor(difference / (1000 * 60 * 60 * 24));
-        const hours = Math.floor((difference % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-        const minutes = Math.floor((difference % (1000 * 60 * 60)) / (1000 * 60));
-        
-        setTimeLeft(`${days}d ${hours}h ${minutes}m`);
-      } else {
-        setTimeLeft('Expired');
-      }
-    }, 1000);
-
-    return () => clearInterval(timer);
   }, []);
 
   const copyToClipboard = async (text: string, type: string) => {
@@ -81,19 +57,6 @@ export default function PricingPage() {
           </button>
         </div>
 
-        {/* Limited Time Offer Banner */}
-        <div className="mb-8">
-          <div className="bg-gradient-to-r from-red-500 via-pink-500 to-red-600 text-white p-4 rounded-2xl shadow-lg border-2 border-red-300 animate-pulse">
-            <div className="flex items-center justify-center gap-3 text-center">
-              <Clock className="w-6 h-6" />
-              <div>
-                <h3 className="text-lg font-bold">🔥 LIMITED TIME OFFER - 50% OFF!</h3>
-                <p className="text-sm opacity-90">Ends September 14th • Time remaining: <span className="font-mono font-bold">{timeLeft}</span></p>
-              </div>
-            </div>
-          </div>
-        </div>
-
         <div className="grid lg:grid-cols-2 gap-8 items-stretch">
           {/* Left Column - Pricing Card */}
           <Card className="relative overflow-hidden shadow-2xl border-0 bg-white/80 backdrop-blur-sm h-full">
@@ -101,11 +64,6 @@ export default function PricingPage() {
             <div className="absolute top-4 right-4 bg-gradient-to-r from-yellow-400 to-orange-500 text-white px-3 py-1 rounded-full text-sm font-bold flex items-center gap-1">
               <Crown size={14} />
               PREMIUM
-            </div>
-
-            {/* Discount Badge */}
-            <div className="absolute top-4 left-4 bg-gradient-to-r from-red-500 to-pink-600 text-white px-3 py-1 rounded-full text-sm font-bold">
-              50% OFF
             </div>
 
             <CardContent className="p-8">
@@ -120,29 +78,14 @@ export default function PricingPage() {
               {/* Price Display */}
               <div className="text-center mb-8">
                 <div className="bg-gradient-to-r from-blue-500 to-purple-600 rounded-2xl p-6 text-white relative">
-                  <p className="text-lg opacity-90 mb-2">Special Discount Price</p>
+                  <p className="text-lg opacity-90 mb-2">Premium Access Price</p>
                   
-                  {/* Original Price (Crossed Out) */}
-                  <div className="flex items-center justify-center gap-3 mb-2">
-                    <div className="text-2xl font-bold opacity-60 line-through">
-                      PKR {originalPrice}
-                    </div>
-                    <div className="bg-red-500 text-white px-2 py-1 rounded-md text-sm font-bold">
-                      -50%
-                    </div>
-                  </div>
-                  
-                  {/* Discounted Price */}
+                  {/* Original Price */}
                   <div className="text-5xl font-bold mb-2 text-yellow-300">
-                    PKR {discountedPrice}
+                    PKR {originalPrice}
                   </div>
                   
                   <p className="opacity-90">Upto Mdcat-2025 Access • No Recurring Fees</p>
-                  
-                  {/* Savings highlight */}
-                  <div className="mt-3 bg-white/20 rounded-lg p-2">
-                    <p className="text-sm font-semibold">💰 You Save PKR {originalPrice - discountedPrice}!</p>
-                  </div>
                 </div>
               </div>
 
@@ -155,20 +98,6 @@ export default function PricingPage() {
                     <span className="font-medium text-slate-700">{feature.text}</span>
                   </div>
                 ))}
-              </div>
-
-              {/* Urgency Message */}
-              <div className="bg-gradient-to-r from-red-50 to-pink-50 border border-red-200 rounded-lg p-4 mb-6">
-                <div className="flex items-start gap-3">
-                  <Clock className="w-5 h-5 text-red-500 mt-0.5 flex-shrink-0" />
-                  <div className="text-sm">
-                    <p className="text-red-800 font-bold mb-1">⚡ Limited Time Only!</p>
-                    <p className="text-red-700">
-                      This 50% discount expires on <strong>September 14th</strong>. 
-                      Don't miss this opportunity to get premium access at half price!
-                    </p>
-                  </div>
-                </div>
               </div>
 
               {/* Privacy Policy Notice */}
@@ -226,13 +155,9 @@ export default function PricingPage() {
                       <p className="text-sm text-slate-600">Account Holder</p>
                       <p className="font-bold text-slate-800">Naveed</p>
                     </div>
-                    <div className="bg-white rounded-lg p-3 shadow-sm border-2 border-red-200 bg-red-50">
-                      <p className="text-sm text-slate-600">Discounted Amount to Send</p>
-                      <div className="flex items-center gap-2">
-                        <p className="font-bold text-slate-800 text-lg text-green-600">PKR {discountedPrice}</p>
-                        <span className="text-xs bg-red-500 text-white px-2 py-1 rounded-full font-bold">50% OFF</span>
-                      </div>
-                      <p className="text-xs text-red-600 font-medium mt-1">Original: PKR {originalPrice}</p>
+                    <div className="bg-white rounded-lg p-3 shadow-sm border-2 border-blue-200 bg-blue-50">
+                      <p className="text-sm text-slate-600">Amount to Send</p>
+                      <p className="font-bold text-slate-800 text-lg text-blue-600">PKR {originalPrice}</p>
                     </div>
                   </div>
                 </div>
