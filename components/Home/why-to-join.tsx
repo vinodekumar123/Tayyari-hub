@@ -27,7 +27,7 @@ const TayyariHubBenefits = () => {
   const benefits = [
     {
       icon: Target,
-      title: "22+ Full-Length Mocks",
+      title: "26+ Full-Length Mocks",
       description: "Simulate the real MDCAT experience with comprehensive mock tests",
       gradient: "from-blue-500 to-cyan-500"
     },
