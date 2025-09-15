@@ -172,7 +172,7 @@ const PricingSection = () => {
                     <FaCheckCircle className="text-green-400 text-sm" />
                   </div>
                   <div>
-                    <span className="text-white font-medium">22+ Complete Mock Tests</span>
+                    <span className="text-white font-medium">26 Complete Mock Tests</span>
                     <p className="text-blue-200 text-sm">Full-length practice exams with detailed analysis</p>
                   </div>
                 </li>
