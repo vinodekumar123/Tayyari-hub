@@ -211,14 +211,12 @@ const PricingSection = () => {
               {/* Pricing with Discount */}
               <div className="text-center mb-8">
                 <div className="flex items-center justify-center gap-3 mb-2">
-                  <span className="text-2xl text-blue-300 line-through">PKR 1,500</span>
-                  <div className="bg-red-500 text-white px-2 py-1 rounded-md text-xs font-bold">50% OFF</div>
+              
+                  
                 </div>
-                <div className="text-4xl font-black text-white mb-2">PKR 750</div>
+                <div className="text-4xl font-black text-white mb-2">PKR 1500</div>
                 <div className="text-blue-200">One-time payment • Upto Mdcat 2025 access</div>
-                <div className="text-sm text-yellow-300 font-medium mt-2">
-                  ⏰ Offer valid until 14 Sept 2025
-                </div>
+                
               </div>
 
               {/* Enhanced CTA Button */}
