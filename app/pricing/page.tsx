@@ -36,7 +36,7 @@ export default function PricingPage() {
   };
 
   const premiumFeatures = [
-    { icon: Zap, text: "22 Mock  tests Access", color: "text-yellow-500" },
+    { icon: Zap, text: "26 Mock  tests Access", color: "text-yellow-500" },
     { icon: Crown, text: "Premium Content Library", color: "text-purple-500" },
     { icon: Star, text: "Advanced Analytics", color: "text-blue-500" },
     { icon: Shield, text: "Priority Support", color: "text-green-500" }
