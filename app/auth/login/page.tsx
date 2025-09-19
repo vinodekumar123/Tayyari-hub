@@ -1,26 +1,28 @@
 "use client";
 
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import logo from "../../assets/logo.png";
 import Image from "next/image";
 
-import { auth, provider, db } from '../../firebase';
+import { auth, provider, db } from "../../firebase";
 import {
   signInWithEmailAndPassword,
   signInWithPopup,
   sendPasswordResetEmail,
-  onAuthStateChanged
-} from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import {
-  Card,
-  CardContent
-} from '@/components/ui/card';
-import { Separator } from '@/components/ui/separator';
+  onAuthStateChanged,
+  fetchSignInMethodsForEmail,
+  linkWithPopup,
+  setPersistence,
+  browserLocalPersistence,
+  browserSessionPersistence
+} from "firebase/auth";
+import { doc, getDoc } from "firebase/firestore";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Card, CardContent } from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
 import {
   Eye,
   EyeOff,
@@ -28,47 +30,55 @@ import {
   Lock,
   ArrowRight,
   ChevronLeft
-} from 'lucide-react';
-import Link from 'next/link';
+} from "lucide-react";
+import Link from "next/link";
 
 export default function LoginPage() {
   const router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [globalLoading, setGlobalLoading] = useState(true);
   const [navigated, setNavigated] = useState(false);
-  // Optional: Uncomment if you want to use the remember me checkbox for logic
-  // const [rememberMe, setRememberMe] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
+  const [rememberMe, setRememberMe] = useState(false);
 
+  // 🔹 Central redirect handler
+  const redirectUser = async (user: any) => {
+    try {
+      const userRef = doc(db, "users", user.uid);
+      const userSnap = await getDoc(userRef);
+
+      if (userSnap.exists()) {
+        const userData = userSnap.data();
+        if (userData.admin === true) {
+          router.push("/dashboard/admin");
+        } else {
+          router.push("/dashboard/student");
+        }
+      } else {
+        router.push("/auth/onboarding");
+      }
+    } catch (err: any) {
+      if (err.code === "unavailable" || err.message.includes("network")) {
+        setErrorMessage("Internet connection error. Please check your network.");
+      } else {
+        console.error("Redirect error:", err);
+      }
+    }
+  };
+
+  // 🔹 Handle auto-redirect if already logged in
   useEffect(() => {
-    let isMounted = true; // to avoid setting state if unmounted
+    let isMounted = true;
 
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user && !navigated && isMounted) {
         setNavigated(true);
-        document.body.style.cursor = 'wait';
-        try {
-          const userRef = doc(db, 'users', user.uid);
-          const userSnap = await getDoc(userRef);
-
-          if (userSnap.exists()) {
-            const userData = userSnap.data();
-
-            if (userData.admin === true) {
-              router.push('/dashboard/admin');
-            } else {
-              router.push('/dashboard/student');
-            }
-          } else {
-            router.push('/auth/onboarding'); // redirect to onboarding if doc does not exist
-          }
-        } catch (err) {
-          console.error('Auth redirect error:', err);
-        } finally {
-          document.body.style.cursor = 'default';
-        }
+        await redirectUser(user);
       }
+      setGlobalLoading(false);
     });
 
     return () => {
@@ -80,67 +90,92 @@ export default function LoginPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    document.body.style.cursor = 'wait';
+    setErrorMessage("");
+
     try {
+      await setPersistence(auth, rememberMe ? browserLocalPersistence : browserSessionPersistence);
       await signInWithEmailAndPassword(auth, email, password);
-    } catch (error) {
-      console.error('Login error:', error);
-      alert('Login failed. Check credentials.');
+    } catch (error: any) {
+      if (error.code === "auth/network-request-failed") {
+        setErrorMessage("Internet connection error. Please check your network.");
+      } else if (error.code === "auth/wrong-password") {
+        setErrorMessage("Invalid password. Please try again.");
+      } else if (error.code === "auth/user-not-found") {
+        setErrorMessage("No account found with this email.");
+      } else {
+        setErrorMessage("Login failed. Please try again.");
+      }
     } finally {
       setIsLoading(false);
-      document.body.style.cursor = 'default';
     }
   };
 
   const handleGoogleLogin = async () => {
     setIsLoading(true);
-    document.body.style.cursor = 'wait';
+    setErrorMessage("");
+
     try {
       const result = await signInWithPopup(auth, provider);
       const user = result.user;
-      const userRef = doc(db, 'users', user.uid);
-      const userSnap = await getDoc(userRef);
 
-      if (userSnap.exists()) {
-        const userData = userSnap.data();
-
-        if (userData.admin === true) {
-          router.push('/dashboard/admin');
-        } else {
-          router.push('/dashboard/student');
+      // 🔹 Link Google with existing email-password account
+      const methods = await fetchSignInMethodsForEmail(auth, user.email!);
+      if (methods.includes("password")) {
+        try {
+          await linkWithPopup(auth.currentUser!, provider);
+        } catch (err) {
+          console.error("Linking error:", err);
         }
-      } else {
-        router.push('/auth/onboarding');
       }
-    } catch (error) {
-      console.error('Google Sign-In Error:', error);
-      alert('Google login failed.');
+
+      await redirectUser(user);
+    } catch (error: any) {
+      if (error.code === "auth/network-request-failed") {
+        setErrorMessage("Internet connection error. Please check your network.");
+      } else {
+        setErrorMessage("Google login failed.");
+      }
     } finally {
       setIsLoading(false);
-      document.body.style.cursor = 'default';
     }
   };
 
   const handleForgotPassword = async () => {
     if (!email) {
-      alert('Please enter your email first.');
+      setErrorMessage("Please enter your email first.");
       return;
     }
-    document.body.style.cursor = 'wait';
+    setErrorMessage("");
     try {
       await sendPasswordResetEmail(auth, email);
-      alert('Password reset link sent. Check your inbox.');
-    } catch (error) {
-      console.error('Forgot password error:', error);
-    } finally {
-      document.body.style.cursor = 'default';
+      setErrorMessage("✅ Password reset link sent. Check your inbox.");
+    } catch (error: any) {
+      if (error.code === "auth/network-request-failed") {
+        setErrorMessage("Internet connection error. Please check your network.");
+      } else {
+        setErrorMessage("Failed to send reset email.");
+      }
     }
   };
 
+  // 🔹 Global loading overlay
+  if (globalLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-white">
+        <div className="flex flex-col items-center">
+          <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+          <p className="mt-4 text-gray-600 font-medium">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-white flex items-center justify-center p-4 relative overflow-hidden">
+      {/* Background blobs */}
       <div className="absolute top-20 left-20 w-72 h-72 bg-blue-300 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-pulse" />
       <div className="absolute bottom-20 right-20 w-72 h-72 bg-blue-200 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-pulse delay-1000" />
+
       <div className="w-full max-w-md relative z-10">
         <div className="mt-6">
           <Link href="/" className="text-primary hover:underline font-medium inline-flex items-center gap-1">
@@ -148,14 +183,10 @@ export default function LoginPage() {
             Back
           </Link>
         </div>
+
         <div className="text-center mb-8">
           <Link href="/" className="inline-flex items-center space-x-3 mb-6 group">
-            <Image
-              src={logo}
-              alt="Tayyari Hub Logo"
-              className="h-10 w-auto"
-              priority
-            />
+            <Image src={logo} alt="Logo" className="h-10 w-auto" priority />
           </Link>
           <h1 className="text-4xl font-bold text-gray-900 mb-3">Sign In</h1>
           <p className="text-gray-600 text-lg">Continue your preparation journey</p>
@@ -164,8 +195,11 @@ export default function LoginPage() {
         <Card className="glass-card border shadow-2xl">
           <CardContent className="space-y-6">
             <form onSubmit={handleSubmit} className="space-y-6">
+              {/* Email */}
               <div className="space-y-2">
-                <Label htmlFor="email" className="text-gray-700 font-medium">Email Address</Label>
+                <Label htmlFor="email" className="text-gray-700 font-medium">
+                  Email Address
+                </Label>
                 <div className="relative">
                   <Mail className="absolute left-4 top-4 h-5 w-5 text-gray-400" />
                   <Input
@@ -176,22 +210,27 @@ export default function LoginPage() {
                     onChange={(e) => setEmail(e.target.value)}
                     className="pl-12 h-12 border-gray-200 focus:border-primary focus:ring-primary/20 rounded-xl"
                     required
+                    autoFocus
                   />
                 </div>
               </div>
 
+              {/* Password */}
               <div className="space-y-2">
-                <Label htmlFor="password" className="text-gray-700 font-medium">Password</Label>
+                <Label htmlFor="password" className="text-gray-700 font-medium">
+                  Password
+                </Label>
                 <div className="relative">
                   <Lock className="absolute left-4 top-4 h-5 w-5 text-gray-400" />
                   <Input
                     id="password"
-                    type={showPassword ? 'text' : 'password'}
+                    type={showPassword ? "text" : "password"}
                     placeholder="Enter your password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     className="pl-12 pr-12 h-12 border-gray-200 focus:border-primary focus:ring-primary/20 rounded-xl"
                     required
+                    onKeyDown={(e) => e.key === "Enter" && handleSubmit(e)}
                   />
                   <button
                     type="button"
@@ -204,16 +243,19 @@ export default function LoginPage() {
                 </div>
               </div>
 
+              {/* Remember + Forgot */}
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-2">
-                  <input 
-                    type="checkbox" 
-                    id="remember" 
-                    className="rounded border-gray-300 text-primary focus:ring-primary/20" 
-                    // checked={rememberMe}
-                    // onChange={e => setRememberMe(e.target.checked)}
+                  <input
+                    type="checkbox"
+                    id="remember"
+                    checked={rememberMe}
+                    onChange={(e) => setRememberMe(e.target.checked)}
+                    className="rounded border-gray-300 text-primary focus:ring-primary/20"
                   />
-                  <Label htmlFor="remember" className="text-sm text-gray-600">Remember me</Label>
+                  <Label htmlFor="remember" className="text-sm text-gray-600">
+                    Remember me
+                  </Label>
                 </div>
                 <button
                   type="button"
@@ -224,9 +266,15 @@ export default function LoginPage() {
                 </button>
               </div>
 
-              <Button 
-                type="submit" 
-                className="w-full h-12 bg-primary text-white rounded-xl shadow-md hover:bg-blue-700 transition-all duration-300 font-semibold text-lg" 
+              {/* Error Message */}
+              {errorMessage && (
+                <p className="text-sm text-center text-red-500 font-medium">{errorMessage}</p>
+              )}
+
+              {/* Submit */}
+              <Button
+                type="submit"
+                className="w-full h-12 bg-primary text-white rounded-xl shadow-md hover:bg-blue-700 transition-all duration-300 font-semibold text-lg"
                 disabled={isLoading}
               >
                 {isLoading ? (
@@ -243,6 +291,7 @@ export default function LoginPage() {
               </Button>
             </form>
 
+            {/* Divider */}
             <div className="relative">
               <div className="absolute inset-0 flex items-center">
                 <Separator className="w-full" />
@@ -252,6 +301,7 @@ export default function LoginPage() {
               </div>
             </div>
 
+            {/* Google */}
             <Button
               variant="outline"
               onClick={handleGoogleLogin}
@@ -264,10 +314,10 @@ export default function LoginPage() {
                 <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
                 <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
               </svg>
-              <span className="sr-only">Continue with Google</span>
               Continue with Google
             </Button>
 
+            {/* Footer */}
             <div className="text-center text-sm">
               <span className="text-gray-600">Don't have an account? </span>
               <Link href="/auth/register" className="text-primary hover:underline font-medium">
@@ -275,13 +325,12 @@ export default function LoginPage() {
               </Link>
             </div>
 
- {/* ✅ Terms and Conditions notice */}
-  <div className="text-center text-xs text-gray-500 mt-4">
-    By signing in, you agree to our{" "}
-    <Link href="/privacy-policy" className="text-primary hover:underline font-medium">
-      Terms and Conditions
-    </Link>
-  </div>
+            <div className="text-center text-xs text-gray-500 mt-4">
+              By signing in, you agree to our{" "}
+              <Link href="/privacy-policy" className="text-primary hover:underline font-medium">
+                Terms and Conditions
+              </Link>
+            </div>
           </CardContent>
         </Card>
       </div>
