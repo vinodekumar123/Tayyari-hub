@@ -207,8 +207,8 @@ export default function UltraFastStudentDashboard() {
       // 2. Priority data fetch - core user info first (fastest queries)
       const [userSnap, quizSnap, mockSnap] = await Promise.all([
         getDoc(doc(db, 'users', uid)),
-        getDocs(query(collection(db, 'users', uid, 'quizAttempts'), limit(50))), // Limit for speed
-        getDocs(query(collection(db, 'users', uid, 'mock-quizAttempts'), limit(50))),
+     getDocs(query(collection(db, 'users', uid, 'quizAttempts')))
+        getDocs(query(collection(db, 'users', uid, 'mock-quizAttempts'))),
       ]);
 
       // Immediate UI updates
@@ -341,7 +341,7 @@ export default function UltraFastStudentDashboard() {
       const fetchLeaderboard = async () => {
         try {
           // Get all users with limit and ordering if possible
-          const allUsersSnap = await getDocs(query(collection(db, 'users'), limit(100))); // Limit to reduce load
+          const allUsersSnap = await getDocs(query(collection(db, 'users'))); // Limit to reduce load
           
           const processUserRank = async (userDoc) => {
             const attempts = await getDocs(query(
