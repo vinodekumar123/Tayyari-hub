@@ -715,7 +715,7 @@ const StartQuizPage: React.FC = () => {
     <div className="min-h-screen bg-gray-50 px-4">
       {/* Network banner */}
       {netBanner && (
-        <div className={`fixed max-w-7xl mx-auto mt-4 rounded-md border px-4 py-2 flex items-center gap-3 ${netBanner.bg}`}>
+        <div className={`sticky max-w-7xl mx-auto mt-4 rounded-md border px-4 py-2 flex items-center gap-3 ${netBanner.bg}`}>
           {netBanner.icon}
           <div className="text-sm">{netBanner.text}</div>
           <div className="ml-auto text-xs text-gray-500">Status: {isOnline ? netLabel : 'offline'}</div>
