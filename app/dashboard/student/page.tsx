@@ -207,7 +207,7 @@ export default function UltraFastStudentDashboard() {
       // 2. Priority data fetch - core user info first (fastest queries)
       const [userSnap, quizSnap, mockSnap] = await Promise.all([
         getDoc(doc(db, 'users', uid)),
-     getDocs(query(collection(db, 'users', uid, 'quizAttempts'))),
+        getDocs(query(collection(db, 'users', uid, 'quizAttempts'))),
         getDocs(query(collection(db, 'users', uid, 'mock-quizAttempts'))),
       ]);
 
@@ -340,8 +340,8 @@ export default function UltraFastStudentDashboard() {
       // 5. Optimized leaderboard - only fetch top 10 efficiently
       const fetchLeaderboard = async () => {
         try {
-          // Get all users with limit and ordering if possible
-          const allUsersSnap = await getDocs(query(collection(db, 'users'))); // Limit to reduce load
+          // Get all users (could be optimized further if necessary)
+          const allUsersSnap = await getDocs(query(collection(db, 'users')));
           
           const processUserRank = async (userDoc) => {
             const attempts = await getDocs(query(
@@ -397,32 +397,37 @@ export default function UltraFastStudentDashboard() {
           const allRanks = await processBatch(allUsersSnap.docs, processUserRank, 5, 3); // Smaller batches for leaderboard
           
           const sorted = allRanks.sort((a, b) => b.accuracy - a.accuracy);
-          const currentRank = sorted.findIndex((u) => u.id === uid) + 1;
+          const idx = sorted.findIndex((u) => u && String(u.id) === String(uid));
+          const currentRank = idx >= 0 ? idx + 1 : null;
           const top10 = sorted.slice(0, 10).map(u => ({
             name: u.name,
             accuracy: Math.round(u.accuracy),
           }));
 
-          setRank(currentRank || null);
+          // Set state reliably
+          setRank(currentRank);
           setTopStudents(top10);
 
           return { rank: currentRank, topStudents: top10 };
         } catch (error) {
           console.warn('Leaderboard fetch failed:', error);
+          // Ensure state cleared on failure
+          setRank(null);
+          setTopStudents([]);
           return { rank: null, topStudents: [] };
         }
       };
 
-      // Fetch leaderboard in background without blocking UI
-      fetchLeaderboard().then(leaderboardData => {
-        // Cache everything including leaderboard
-        saveToCache({
-          studentData,
-          completedQuizzes,
-          completedMocks,
-          ...stats,
-          ...leaderboardData,
-        });
+      // Await leaderboard so rank is available before we clear the filler state
+      const leaderboardData = await fetchLeaderboard();
+
+      // Cache everything including leaderboard
+      saveToCache({
+        studentData,
+        completedQuizzes,
+        completedMocks,
+        ...stats,
+        ...leaderboardData,
       });
 
       setFilling(false);
