@@ -517,7 +517,7 @@ const StartQuizPage: React.FC = () => {
 
       {showSummaryModal && (
         <Dialog open={showSummaryModal} onOpenChange={setShowSummaryModal}>
-          <DialogContent className="w-[90vw] max-w-md sm:max-w-lg">
+        <DialogContent className="w-[90vw] max-w-md sm:max-w-lg max-h-[80vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Summary before Submission</DialogTitle>
               <DialogDescription>Review skipped and flagged questions before final submission.</DialogDescription>
