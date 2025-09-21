@@ -4,7 +4,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { doc, getDoc, setDoc, serverTimestamp, getDocs, collection } from 'firebase/firestore';
 import { onAuthStateChanged, User } from 'firebase/auth';
-import { db, auth } from 'app/firebase';
+import { db, auth } from '../../firebase';
 import {
   Card,
   CardHeader,
@@ -312,7 +312,7 @@ const StartQuizPage: React.FC = () => {
   const formatTime = (sec: number) => {
     const m = Math.floor(sec / 60).toString().padStart(2, '0');
     const s = (sec % 60).toString().padStart(2, '0');
-    return `${m}:${s}`;
+    return ${m}:${s};
   };
 
   const generatePDF = (includeAnswers: boolean) => {
@@ -332,7 +332,7 @@ const StartQuizPage: React.FC = () => {
 
     doc.setFontSize(12);
     doc.setTextColor(100);
-    doc.text(`Date: August 04, 2025`, pageWidth / 2, y, { align: 'center' });
+    doc.text(Date: August 04, 2025, pageWidth / 2, y, { align: 'center' });
     y += 20;
 
     const groupedQuestions = quiz.selectedQuestions.reduce((acc, question) => {
@@ -365,13 +365,13 @@ const StartQuizPage: React.FC = () => {
         doc.setFont('helvetica', 'normal');
         doc.setFontSize(12);
         doc.setTextColor(0);
-        const questionText = `Q${subjectIndex * questions.length + qIndex + 1}. ${stripHtml(q.questionText)}`;
+        const questionText = Q${subjectIndex * questions.length + qIndex + 1}. ${stripHtml(q.questionText)};
         const questionLines = doc.splitTextToSize(questionText, maxWidth);
         doc.text(questionLines, margin, y);
         y += questionLines.length * 7 + 5;
 
         q.options.forEach((opt, i) => {
-          const optionText = `${String.fromCharCode(65 + i)}. ${stripHtml(opt)}`;
+          const optionText = ${String.fromCharCode(65 + i)}. ${stripHtml(opt)};
           const optionLines = doc.splitTextToSize(optionText, maxWidth - 10);
           doc.text(optionLines, margin + 10, y);
           y += optionLines.length * 7 + 3;
@@ -380,7 +380,7 @@ const StartQuizPage: React.FC = () => {
         if (includeAnswers && q.correctAnswer) {
           doc.setFont('helvetica', 'bold');
           doc.setTextColor(0, 128, 0);
-          const answerText = `Correct Answer: ${stripHtml(q.correctAnswer)}`;
+          const answerText = Correct Answer: ${stripHtml(q.correctAnswer)};
           const answerLines = doc.splitTextToSize(answerText, maxWidth);
           doc.text(answerLines, margin, y);
           y += answerLines.length * 7 + 5;
@@ -392,7 +392,7 @@ const StartQuizPage: React.FC = () => {
       y += 10;
     });
 
-    const fileName = `${quiz.title}${includeAnswers ? '_with_answers' : ''}.pdf`;
+    const fileName = ${quiz.title}${includeAnswers ? '_with_answers' : ''}.pdf;
     doc.save(fileName);
   };
 
@@ -630,13 +630,12 @@ const StartQuizPage: React.FC = () => {
             </div>
           </div>
           {!isAdmin && (
-            // Responsive: stack into column on small screens so progress moves to a new line
-            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4">
+            <div className="flex items-center gap-4">
               <div className="flex items-center gap-2">
                 <Clock className="h-5 w-5 text-red-600" />
                 <span className="font-mono font-semibold text-red-600">{formatTime(timeLeft)}</span>
               </div>
-              <div className="w-full sm:w-48">
+              <div className="w-48">
                 <div className="text-xs text-gray-600">Progress: {attemptedCount}/{flattenedQuestions.length}</div>
                 <Progress value={attemptedPercent} className="mt-1" />
               </div>
@@ -690,43 +689,39 @@ const StartQuizPage: React.FC = () => {
                   {subject}
                 </h2>
                 {questions.map((q, idx) => (
-                  <div key={q.id} className="space-y-4">
-                    {/* Responsive header: on small screens the button moves below the question text (flex-col),
-                        on sm+ screens it's shown to the right of the question (flex-row) */}
-                    <div className="flex flex-col sm:flex-row justify-between items-start gap-2">
-                      <div className="text-lg font-medium prose max-w-none">
-                        <span className="font-semibold">Q{startIdx + idx + 1}. </span>
-                        <span
-                          dangerouslySetInnerHTML={{ __html: q.questionText }}
-                        />
-                      </div>
+                  <div key={q.id} className="space-y-4 relative">
+                    <div className="absolute right-0 top-0 flex items-center gap-2">
+                      <button
+                        onClick={() => toggleFlag(q.id)}
+                        className={`flex items-center gap-2 px-3 py-1 rounded text-sm transition ${
+                          flags[q.id] ? 'bg-yellow-100 text-yellow-800 border border-yellow-300' : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'
+                        }`}
+                        title={flags[q.id] ? 'Unflag question' : 'Flag question'}
+                      >
+                        <Flag className={h-4 w-4 ${flags[q.id] ? 'text-yellow-600' : 'text-gray-400'}} />
+                        {flags[q.id] ? 'Flagged' : 'Flag'}
+                      </button>
+                    </div>
 
-                      <div className="flex items-center">
-                        <button
-                          onClick={() => toggleFlag(q.id)}
-                          className={`flex items-center gap-2 px-3 py-1 rounded text-sm transition ${
-                            flags[q.id] ? 'bg-yellow-100 text-yellow-800 border border-yellow-300' : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'
-                          }`}
-                          title={flags[q.id] ? 'Unflag question' : 'Flag question'}
-                        >
-                          <Flag className={`h-4 w-4 ${flags[q.id] ? 'text-yellow-600' : 'text-gray-400'}`} />
-                          {flags[q.id] ? 'Flagged' : 'Flag'}
-                        </button>
-                      </div>
+                    <div className="text-lg font-medium prose max-w-none">
+                      <span className="font-semibold">Q{startIdx + idx + 1}. </span>
+                      <span
+                        dangerouslySetInnerHTML={{ __html: q.questionText }}
+                      />
                     </div>
 
                     <div className="grid gap-3">
                       {q.options.map((opt, i) => (
                         <label
                           key={i}
-                          htmlFor={`opt-${q.id}-${i}`}
+                          htmlFor={opt-${q.id}-${i}}
                           className={`flex items-center p-3 border rounded-lg cursor-pointer transition hover:bg-gray-100 ${
                             answers[q.id] === opt ? 'border-blue-500 bg-blue-50' : ''
                           }`}
                         >
                           <input
                             type="radio"
-                            id={`opt-${q.id}-${i}`}
+                            id={opt-${q.id}-${i}}
                             name={q.id}
                             value={opt}
                             checked={answers[q.id] === opt}
