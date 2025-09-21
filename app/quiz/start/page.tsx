@@ -20,7 +20,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { ArrowLeft, ArrowRight, Info, BookOpen, Clock, Send, Download, CheckCircle, Flag, ArrowUp, ArrowDown } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Info, BookOpen, Clock, Send, Download, CheckCircle, Flag, ArrowUp, ArrowDown, WifiOff, Wifi } from 'lucide-react';
 import jsPDF from 'jspdf';
 
 interface Question {
@@ -52,10 +52,13 @@ const stripHtml = (html: string): string => {
   return div.textContent || div.innerText || '';
 };
 
+const LOCAL_KEY_PREFIX = 'quiz_attempt_local_v1_';
+
 const StartQuizPage: React.FC = () => {
   const searchParams = useSearchParams();
   const router = useRouter();
   const quizId = searchParams.get('id')!;
+
   const [user, setUser] = useState<User | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [quiz, setQuiz] = useState<QuizData | null>(null);
@@ -73,9 +76,17 @@ const StartQuizPage: React.FC = () => {
   const hasSubmittedRef = useRef(false);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Network detection & status
+  const [isOnline, setIsOnline] = useState<boolean>(() => (typeof navigator !== 'undefined' ? navigator.onLine : true));
+  const [netLabel, setNetLabel] = useState<'good' | 'moderate' | 'slow' | 'offline'>('good');
+  const speedCheckRef = useRef<number | null>(null);
+
   // scroll button visibility states
   const [showScrollTop, setShowScrollTop] = useState(false);
   const [showScrollBottom, setShowScrollBottom] = useState(false);
+
+  // Helper local storage key
+  const localKey = `${LOCAL_KEY_PREFIX}${quizId}_${user?.uid ?? 'anon'}`;
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (u) => {
@@ -90,6 +101,133 @@ const StartQuizPage: React.FC = () => {
     });
     return () => unsub();
   }, []);
+
+  // Persist to localStorage (quick, reliable when network flaky)
+  const persistLocally = (payload?: {
+    answers?: Record<string, string>,
+    flags?: Record<string, boolean>,
+    currentIndex?: number,
+    remainingTime?: number,
+  }) => {
+    try {
+      const data = {
+        answers: payload?.answers ?? answers,
+        flags: payload?.flags ?? flags,
+        currentIndex: payload?.currentIndex ?? currentPage * (quiz?.questionsPerPage || 1),
+        remainingTime: payload?.remainingTime ?? timeLeft,
+        updatedAt: Date.now(),
+      };
+      if (typeof window !== 'undefined' && user && quizId) {
+        localStorage.setItem(`${LOCAL_KEY_PREFIX}${quizId}_${user.uid}`, JSON.stringify(data));
+      }
+    } catch (e) {
+      // ignore localStorage failures
+      // console.warn('Failed to save locally', e);
+    }
+  };
+
+  const trySyncLocalAttempt = async () => {
+    if (!user || !quiz || !isOnline || isAdmin) return;
+    try {
+      const raw = localStorage.getItem(`${LOCAL_KEY_PREFIX}${quizId}_${user.uid}`);
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      // Basic heuristic: if parsed exists and is more recent than remote resume doc, push it
+      await setDoc(doc(db, 'users', user.uid, 'quizAttempts', quizId), {
+        answers: parsed.answers || {},
+        flags: parsed.flags || {},
+        currentIndex: parsed.currentIndex || 0,
+        remainingTime: parsed.remainingTime ?? quiz.duration * 60,
+      }, { merge: true });
+      // Optionally remove local copy after successful sync:
+      localStorage.removeItem(`${LOCAL_KEY_PREFIX}${quizId}_${user.uid}`);
+    } catch (e) {
+      // keep local copy for later retry
+      // console.warn('sync failed', e);
+    }
+  };
+
+  // Network testing logic: combine navigator.connection (if available) with a lightweight latency test.
+  const evaluateNetwork = async () => {
+    if (typeof navigator === 'undefined') return;
+
+    // offline detection
+    if (!navigator.onLine) {
+      setIsOnline(false);
+      setNetLabel('offline');
+      return;
+    }
+
+    setIsOnline(true);
+
+    // Prefer Network Information API when available
+    const navConn: any = (navigator as any).connection || (navigator as any).mozConnection || (navigator as any).webkitConnection;
+    if (navConn && navConn.effectiveType) {
+      const et: string = navConn.effectiveType; // '4g','3g','2g','slow-2g'
+      if (et === '4g') {
+        setNetLabel('good');
+        return;
+      } else if (et === '3g') {
+        setNetLabel('moderate');
+        return;
+      } else {
+        setNetLabel('slow');
+        return;
+      }
+    }
+
+    // Fallback: latency based test using a lightweight fetch to a stable endpoint.
+    // We use a small, well-known endpoint and measure round-trip — this is not perfect but works reasonably well.
+    const testUrl = 'https://www.google.com/generate_204'; // very lightweight
+    try {
+      const start = performance.now();
+      // fetch with no-cors so that the request can succeed even if CORS restricted; fetch will still resolve.
+      await fetch(`${testUrl}?_=${Date.now()}`, { cache: 'no-store', mode: 'no-cors' });
+      const rtt = performance.now() - start;
+
+      // classify by RTT thresholds (tunable)
+      if (rtt < 250) {
+        setNetLabel('good');
+      } else if (rtt < 800) {
+        setNetLabel('moderate');
+      } else {
+        setNetLabel('slow');
+      }
+    } catch (e) {
+      setIsOnline(false);
+      setNetLabel('offline');
+    }
+  };
+
+  useEffect(() => {
+    // Periodically check network state and on changes
+    evaluateNetwork(); // initial
+    const onOnline = () => { setIsOnline(true); evaluateNetwork(); trySyncLocalAttempt(); };
+    const onOffline = () => { setIsOnline(false); setNetLabel('offline'); };
+
+    window.addEventListener('online', onOnline);
+    window.addEventListener('offline', onOffline);
+
+    const navConn: any = (navigator as any).connection || (navigator as any).mozConnection || (navigator as any).webkitConnection;
+    const onConnChange = () => evaluateNetwork();
+
+    if (navConn && navConn.addEventListener) {
+      navConn.addEventListener('change', onConnChange);
+    }
+
+    // periodic speed check every 10s (tunable)
+    speedCheckRef.current = window.setInterval(() => evaluateNetwork(), 10000);
+
+    return () => {
+      window.removeEventListener('online', onOnline);
+      window.removeEventListener('offline', onOffline);
+      if (navConn && navConn.removeEventListener) {
+        navConn.removeEventListener('change', onConnChange);
+      }
+      if (speedCheckRef.current) clearInterval(speedCheckRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, quizId]);
 
   useEffect(() => {
     if (!quizId || !user) return;
@@ -136,10 +274,25 @@ const StartQuizPage: React.FC = () => {
 
       setAttemptCount(currentAttemptCount);
 
-      // Check for an incomplete attempt
+      // Check for an incomplete attempt in Firestore AND localStorage
       const resumeSnap = await getDoc(doc(db, 'users', user.uid, 'quizAttempts', quizId));
-      if (resumeSnap.exists() && !resumeSnap.data().completed && resumeSnap.data().attemptNumber === undefined) {
-        // Resume incomplete attempt
+      const localRaw = localStorage.getItem(`${LOCAL_KEY_PREFIX}${quizId}_${user.uid}`);
+      let localData: any = null;
+      try { localData = localRaw ? JSON.parse(localRaw) : null; } catch (e) { localData = null; }
+
+      // If there's local unsynced data, prefer it (it might be more recent)
+      if (localData) {
+        setAnswers(localData.answers || {});
+        setFlags(localData.flags || {});
+        const questionIndex = localData.currentIndex || 0;
+        setCurrentPage(Math.floor(questionIndex / quizData.questionsPerPage));
+        if (!isAdmin && localData.remainingTime !== undefined) {
+          setTimeLeft(localData.remainingTime);
+        } else {
+          setTimeLeft(quizData.duration * 60);
+        }
+      } else if (resumeSnap.exists() && !resumeSnap.data().completed && resumeSnap.data().attemptNumber === undefined) {
+        // Resume incomplete attempt from Firestore
         const rt = resumeSnap.data();
         setAnswers(rt.answers || {});
         setFlags(rt.flags || {});
@@ -156,14 +309,24 @@ const StartQuizPage: React.FC = () => {
         setAnswers({});
         setFlags({});
         setCurrentPage(0);
-        await setDoc(doc(db, 'users', user.uid, 'quizAttempts', quizId), {
-          startedAt: serverTimestamp(),
-          answers: {},
-          flags: {},
-          currentIndex: 0,
-          completed: false,
-          remainingTime: quizData.duration * 60,
-        }, { merge: true });
+        try {
+          await setDoc(doc(db, 'users', user.uid, 'quizAttempts', quizId), {
+            startedAt: serverTimestamp(),
+            answers: {},
+            flags: {},
+            currentIndex: 0,
+            completed: false,
+            remainingTime: quizData.duration * 60,
+          }, { merge: true });
+        } catch (e) {
+          // Firestore write may fail when offline; persist locally instead and retry later
+          persistLocally({
+            answers: {},
+            flags: {},
+            currentIndex: 0,
+            remainingTime: quizData.duration * 60,
+          });
+        }
       }
 
       setHasLoadedTime(true);
@@ -171,6 +334,7 @@ const StartQuizPage: React.FC = () => {
     };
 
     load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [quizId, user, isAdmin]);
 
   useEffect(() => {
@@ -199,29 +363,42 @@ const StartQuizPage: React.FC = () => {
   useEffect(() => {
     const handleUnload = () => {
       if (user && quiz && !isAdmin && !hasSubmittedRef.current) {
-        setDoc(doc(db, 'users', user.uid, 'quizAttempts', quizId), {
-          answers,
-          flags,
-          currentIndex: currentPage * (quiz.questionsPerPage || 1),
-          remainingTime: timeLeft,
-        }, { merge: true });
+        // Try writing to Firestore, but always persist locally as fallback
+        try {
+          setDoc(doc(db, 'users', user.uid, 'quizAttempts', quizId), {
+            answers,
+            flags,
+            currentIndex: currentPage * (quiz.questionsPerPage || 1),
+            remainingTime: timeLeft,
+          }, { merge: true });
+        } catch (e) {
+          // ignore; Firestore SDK may queue writes.
+        }
+        persistLocally();
       }
     };
     window.addEventListener('beforeunload', handleUnload);
     return () => window.removeEventListener('beforeunload', handleUnload);
-  }, [answers, flags, currentPage, timeLeft, quiz, user, isAdmin]);
+  }, [answers, flags, currentPage, timeLeft, quiz, user, isAdmin, quizId]);
 
   const handleAnswer = (qid: string, val: string) => {
     const updatedAnswers = { ...answers, [qid]: val };
     setAnswers(updatedAnswers);
 
-    if (user && quiz && !isAdmin) {
+    // persist locally immediately
+    persistLocally({ answers: updatedAnswers, flags, currentIndex: currentPage * (quiz?.questionsPerPage || 1), remainingTime: timeLeft });
+
+    // try writing to Firestore if online and not admin
+    if (user && quiz && !isAdmin && isOnline) {
       setDoc(doc(db, 'users', user.uid, 'quizAttempts', quizId), {
         answers: updatedAnswers,
         flags,
         currentIndex: currentPage * (quiz.questionsPerPage || 1),
         remainingTime: timeLeft,
-      }, { merge: true });
+      }, { merge: true }).catch(() => {
+        // on failure, keep local copy
+        persistLocally({ answers: updatedAnswers, flags, currentIndex: currentPage * (quiz.questionsPerPage || 1), remainingTime: timeLeft });
+      });
     }
   };
 
@@ -233,13 +410,18 @@ const StartQuizPage: React.FC = () => {
     }
     setFlags(updatedFlags);
 
-    if (user && quiz && !isAdmin) {
+    // persist locally immediately
+    persistLocally({ answers, flags: updatedFlags, currentIndex: currentPage * (quiz?.questionsPerPage || 1), remainingTime: timeLeft });
+
+    if (user && quiz && !isAdmin && isOnline) {
       setDoc(doc(db, 'users', user.uid, 'quizAttempts', quizId), {
         answers,
         flags: updatedFlags,
         currentIndex: currentPage * (quiz.questionsPerPage || 1),
         remainingTime: timeLeft,
-      }, { merge: true });
+      }, { merge: true }).catch(() => {
+        persistLocally({ answers, flags: updatedFlags, currentIndex: currentPage * (quiz.questionsPerPage || 1), remainingTime: timeLeft });
+      });
     }
   };
 
@@ -286,16 +468,25 @@ const StartQuizPage: React.FC = () => {
       attemptNumber: newAttemptCount,
     };
 
-    await setDoc(doc(db, 'users', user.uid, 'quizAttempts', quizId), {
-      submittedAt: serverTimestamp(),
-      answers,
-      flags,
-      completed: true,
-      remainingTime: 0,
-      attemptNumber: newAttemptCount,
-    }, { merge: true });
+    try {
+      await setDoc(doc(db, 'users', user.uid, 'quizAttempts', quizId), {
+        submittedAt: serverTimestamp(),
+        answers,
+        flags,
+        completed: true,
+        remainingTime: 0,
+        attemptNumber: newAttemptCount,
+      }, { merge: true });
 
-    await setDoc(doc(db, 'users', user.uid, 'quizAttempts', quizId, 'results', quizId), resultData);
+      await setDoc(doc(db, 'users', user.uid, 'quizAttempts', quizId, 'results', quizId), resultData);
+
+      // remove local copy if any
+      localStorage.removeItem(`${LOCAL_KEY_PREFIX}${quizId}_${user.uid}`);
+    } catch (e) {
+      // network failure while submitting: persist locally and inform user
+      persistLocally({ answers, flags, currentIndex: currentPage * (quiz?.questionsPerPage || 1), remainingTime: 0 });
+      // We still show submission UI but explain eventual sync
+    }
 
     setShowSubmissionModal(true);
     setShowSummaryModal(false);
@@ -494,8 +685,43 @@ const StartQuizPage: React.FC = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  // Network banner content & color
+  const getNetworkBanner = () => {
+    if (netLabel === 'offline') {
+      return {
+        bg: 'bg-red-50 border-red-200 text-red-800',
+        icon: <WifiOff className="h-5 w-5 text-red-600" />,
+        text: "You're offline. Answers are being saved locally and will sync when connection returns.",
+      };
+    } else if (netLabel === 'slow') {
+      return {
+        bg: 'bg-yellow-50 border-yellow-200 text-yellow-800',
+        icon: <WifiOff className="h-5 w-5 text-yellow-600" />,
+        text: 'Slow internet detected. Saving locally and retrying sync in background.',
+      };
+    } else if (netLabel === 'moderate') {
+      return {
+        bg: 'bg-amber-50 border-amber-200 text-amber-800',
+        icon: <Wifi className="h-5 w-5 text-amber-600" />,
+        text: 'Weak connection. Progress is saved locally and will be synced when stable.',
+      };
+    }
+    return null;
+  };
+
+  const netBanner = getNetworkBanner();
+
   return (
     <div className="min-h-screen bg-gray-50 px-4">
+      {/* Network banner */}
+      {netBanner && (
+        <div className={`max-w-7xl mx-auto mt-4 rounded-md border px-4 py-2 flex items-center gap-3 ${netBanner.bg}`}>
+          {netBanner.icon}
+          <div className="text-sm">{netBanner.text}</div>
+          <div className="ml-auto text-xs text-gray-500">Status: {isOnline ? netLabel : 'offline'}</div>
+        </div>
+      )}
+
       {showTimeoutModal && (
         <Dialog open={showTimeoutModal} onOpenChange={setShowTimeoutModal}>
           <DialogContent className="w-[90vw] max-w-md sm:max-w-lg">
