@@ -630,12 +630,13 @@ const StartQuizPage: React.FC = () => {
             </div>
           </div>
           {!isAdmin && (
-            <div className="flex items-center gap-4">
+            // Responsive: stack into column on small screens so progress moves to a new line
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4">
               <div className="flex items-center gap-2">
                 <Clock className="h-5 w-5 text-red-600" />
                 <span className="font-mono font-semibold text-red-600">{formatTime(timeLeft)}</span>
               </div>
-              <div className="w-48">
+              <div className="w-full sm:w-48">
                 <div className="text-xs text-gray-600">Progress: {attemptedCount}/{flattenedQuestions.length}</div>
                 <Progress value={attemptedPercent} className="mt-1" />
               </div>
@@ -689,25 +690,29 @@ const StartQuizPage: React.FC = () => {
                   {subject}
                 </h2>
                 {questions.map((q, idx) => (
-                  <div key={q.id} className="space-y-4 relative">
-                    <div className="absolute right-0 top-0 flex items-center gap-2">
-                      <button
-                        onClick={() => toggleFlag(q.id)}
-                        className={`flex items-center gap-2 px-3 py-1 rounded text-sm transition ${
-                          flags[q.id] ? 'bg-yellow-100 text-yellow-800 border border-yellow-300' : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'
-                        }`}
-                        title={flags[q.id] ? 'Unflag question' : 'Flag question'}
-                      >
-                        <Flag className={`h-4 w-4 ${flags[q.id] ? 'text-yellow-600' : 'text-gray-400'}`} />
-                        {flags[q.id] ? 'Flagged' : 'Flag'}
-                      </button>
-                    </div>
+                  <div key={q.id} className="space-y-4">
+                    {/* Responsive header: on small screens the button moves below the question text (flex-col),
+                        on sm+ screens it's shown to the right of the question (flex-row) */}
+                    <div className="flex flex-col sm:flex-row justify-between items-start gap-2">
+                      <div className="text-lg font-medium prose max-w-none">
+                        <span className="font-semibold">Q{startIdx + idx + 1}. </span>
+                        <span
+                          dangerouslySetInnerHTML={{ __html: q.questionText }}
+                        />
+                      </div>
 
-                    <div className="text-lg font-medium prose max-w-none">
-                      <span className="font-semibold">Q{startIdx + idx + 1}. </span>
-                      <span
-                        dangerouslySetInnerHTML={{ __html: q.questionText }}
-                      />
+                      <div className="flex items-center">
+                        <button
+                          onClick={() => toggleFlag(q.id)}
+                          className={`flex items-center gap-2 px-3 py-1 rounded text-sm transition ${
+                            flags[q.id] ? 'bg-yellow-100 text-yellow-800 border border-yellow-300' : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'
+                          }`}
+                          title={flags[q.id] ? 'Unflag question' : 'Flag question'}
+                        >
+                          <Flag className={`h-4 w-4 ${flags[q.id] ? 'text-yellow-600' : 'text-gray-400'}`} />
+                          {flags[q.id] ? 'Flagged' : 'Flag'}
+                        </button>
+                      </div>
                     </div>
 
                     <div className="grid gap-3">
