@@ -81,6 +81,12 @@ const StartQuizPage: React.FC = () => {
   const [netLabel, setNetLabel] = useState<'good' | 'moderate' | 'slow' | 'offline'>('good');
   const speedCheckRef = useRef<number | null>(null);
 
+  // For sticky banner measurement
+  const headerRef = useRef<HTMLDivElement | null>(null);
+  const bannerRef = useRef<HTMLDivElement | null>(null);
+  const [headerHeight, setHeaderHeight] = useState(0);
+  const [bannerHeight, setBannerHeight] = useState(0);
+
   // scroll button visibility states
   const [showScrollTop, setShowScrollTop] = useState(false);
   const [showScrollBottom, setShowScrollBottom] = useState(false);
@@ -629,6 +635,18 @@ const StartQuizPage: React.FC = () => {
     };
   }, [loading, quiz]);
 
+  // Measure header and banner heights so banner can be positioned exactly below header and content won't be overlapped.
+  useEffect(() => {
+    const measure = () => {
+      setHeaderHeight(headerRef.current?.offsetHeight ?? 0);
+      setBannerHeight(bannerRef.current?.offsetHeight ?? 0);
+    };
+    // measure initially and on resize
+    measure();
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  }, [netLabel, loading, quiz]);
+
   if (loading || !quiz) return <p className="text-center py-10">Loading...</p>;
 
   const questionsPerPage = quiz.questionsPerPage || 1;
@@ -709,7 +727,66 @@ const StartQuizPage: React.FC = () => {
     return null;
   };
 
+  const netBanner = getNetworkBanner();
 
+  return (
+    <div className="min-h-screen bg-gray-50 px-4">
+      {/* Header (sticky) */}
+      <header ref={headerRef} className="bg-white border-b sticky top-0 z-40 shadow-sm">
+        <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
+          <div className="flex items-center gap-3">
+            <BookOpen className="h-6 w-6 text-blue-600" />
+            <div>
+              <h1 className="text-lg font-semibold">{quiz.title}</h1>
+              {quiz.course && (
+                <p className="text-sm text-gray-600">
+                  {typeof quiz.course === 'object' ? quiz.course.name : quiz.course}
+                </p>
+              )}
+            </div>
+          </div>
+          {!isAdmin && (
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <Clock className="h-5 w-5 text-red-600" />
+                <span className="font-mono font-semibold text-red-600">{formatTime(timeLeft)}</span>
+              </div>
+              <div className="w-48">
+                <div className="text-xs text-gray-600">Progress: {attemptedCount}/{flattenedQuestions.length}</div>
+                <Progress value={attemptedPercent} className="mt-1" />
+              </div>
+            </div>
+          )}
+        </div>
+      </header>
+
+      {/* Sticky / Fixed Network banner positioned directly below the sticky header.
+          It is removed from flow (fixed), so we add a spacer below header equal to banner height
+          to avoid overlapping main content. */}
+      {netBanner && (
+        <div
+          ref={bannerRef}
+          style={{
+            position: 'fixed',
+            top: headerHeight,
+            left: 0,
+            right: 0,
+            zIndex: 45,
+            display: 'flex',
+            justifyContent: 'center',
+            pointerEvents: 'auto',
+          }}
+        >
+          <div className={`max-w-7xl mx-auto rounded-md border px-4 py-2 flex items-center gap-3 ${netBanner.bg}`} >
+            {netBanner.icon}
+            <div className="text-sm">{netBanner.text}</div>
+            <div className="ml-auto text-xs text-gray-500">Status: {isOnline ? netLabel : 'offline'}</div>
+          </div>
+        </div>
+      )}
+
+      {/* spacer so main content isn't hidden by fixed banner */}
+      {netBanner && <div style={{ height: bannerHeight }} />}
 
       {showTimeoutModal && (
         <Dialog open={showTimeoutModal} onOpenChange={setShowTimeoutModal}>
@@ -830,50 +907,6 @@ const StartQuizPage: React.FC = () => {
           </DialogContent>
         </Dialog>
       )}
-
-      <header className="bg-white border-b sticky top-0 z-40 shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
-          <div className="flex items-center gap-3">
-            <BookOpen className="h-6 w-6 text-blue-600" />
-            <div>
-              <h1 className="text-lg font-semibold">{quiz.title}</h1>
-              {quiz.course && (
-                <p className="text-sm text-gray-600">
-                  {typeof quiz.course === 'object' ? quiz.course.name : quiz.course}
-                </p>
-              )}
-            </div>
-          </div>
-          {!isAdmin && (
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2">
-                <Clock className="h-5 w-5 text-red-600" />
-                <span className="font-mono font-semibold text-red-600">{formatTime(timeLeft)}</span>
-              </div>
-              <div className="w-48">
-                <div className="text-xs text-gray-600">Progress: {attemptedCount}/{flattenedQuestions.length}</div>
-                <Progress value={attemptedPercent} className="mt-1" />
-              </div>
-            </div>
-          )}
-        </div>
-  const netBanner = getNetworkBanner();
-
-  return (
-  <div className="min-h-screen bg-gray-50 px-4">
-    {/* Network banner */}
-    {netBanner && (
-      <div
-        className={`sticky top-0 z-50 max-w-7xl mx-auto mt-0 rounded-md border px-4 py-2 flex items-center gap-3 ${netBanner.bg}`}
-      >
-        {netBanner.icon}
-        <div className="text-sm">{netBanner.text}</div>
-        <div className="ml-auto text-xs text-gray-500">
-          Status: {isOnline ? netLabel : "offline"}
-        </div>
-        </div>
-      )}
-      </header>
 
       <main className="max-w-6xl w-full mx-auto p-4">
         {isAdmin && (
