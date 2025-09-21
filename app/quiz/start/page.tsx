@@ -85,6 +85,9 @@ const StartQuizPage: React.FC = () => {
   const [showScrollTop, setShowScrollTop] = useState(false);
   const [showScrollBottom, setShowScrollBottom] = useState(false);
 
+  // Helper local storage key
+  const localKey = `${LOCAL_KEY_PREFIX}${quizId}_${user?.uid ?? 'anon'}`;
+
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (u) => {
       setUser(u);
@@ -119,6 +122,7 @@ const StartQuizPage: React.FC = () => {
       }
     } catch (e) {
       // ignore localStorage failures
+      // console.warn('Failed to save locally', e);
     }
   };
 
@@ -128,15 +132,18 @@ const StartQuizPage: React.FC = () => {
       const raw = localStorage.getItem(`${LOCAL_KEY_PREFIX}${quizId}_${user.uid}`);
       if (!raw) return;
       const parsed = JSON.parse(raw);
+      // Basic heuristic: if parsed exists and is more recent than remote resume doc, push it
       await setDoc(doc(db, 'users', user.uid, 'quizAttempts', quizId), {
         answers: parsed.answers || {},
         flags: parsed.flags || {},
         currentIndex: parsed.currentIndex || 0,
         remainingTime: parsed.remainingTime ?? quiz.duration * 60,
       }, { merge: true });
+      // Optionally remove local copy after successful sync:
       localStorage.removeItem(`${LOCAL_KEY_PREFIX}${quizId}_${user.uid}`);
     } catch (e) {
       // keep local copy for later retry
+      // console.warn('sync failed', e);
     }
   };
 
@@ -144,6 +151,7 @@ const StartQuizPage: React.FC = () => {
   const evaluateNetwork = async () => {
     if (typeof navigator === 'undefined') return;
 
+    // offline detection
     if (!navigator.onLine) {
       setIsOnline(false);
       setNetLabel('offline');
@@ -152,6 +160,7 @@ const StartQuizPage: React.FC = () => {
 
     setIsOnline(true);
 
+    // Prefer Network Information API when available
     const navConn: any = (navigator as any).connection || (navigator as any).mozConnection || (navigator as any).webkitConnection;
     if (navConn && navConn.effectiveType) {
       const et: string = navConn.effectiveType; // '4g','3g','2g','slow-2g'
@@ -167,12 +176,16 @@ const StartQuizPage: React.FC = () => {
       }
     }
 
-    const testUrl = 'https://www.google.com/generate_204';
+    // Fallback: latency based test using a lightweight fetch to a stable endpoint.
+    // We use a small, well-known endpoint and measure round-trip — this is not perfect but works reasonably well.
+    const testUrl = 'https://www.google.com/generate_204'; // very lightweight
     try {
       const start = performance.now();
+      // fetch with no-cors so that the request can succeed even if CORS restricted; fetch will still resolve.
       await fetch(`${testUrl}?_=${Date.now()}`, { cache: 'no-store', mode: 'no-cors' });
       const rtt = performance.now() - start;
 
+      // classify by RTT thresholds (tunable)
       if (rtt < 250) {
         setNetLabel('good');
       } else if (rtt < 800) {
@@ -187,6 +200,7 @@ const StartQuizPage: React.FC = () => {
   };
 
   useEffect(() => {
+    // Periodically check network state and on changes
     evaluateNetwork(); // initial
     const onOnline = () => { setIsOnline(true); evaluateNetwork(); trySyncLocalAttempt(); };
     const onOffline = () => { setIsOnline(false); setNetLabel('offline'); };
@@ -201,6 +215,7 @@ const StartQuizPage: React.FC = () => {
       navConn.addEventListener('change', onConnChange);
     }
 
+    // periodic speed check every 10s (tunable)
     speedCheckRef.current = window.setInterval(() => evaluateNetwork(), 10000);
 
     return () => {
@@ -242,6 +257,7 @@ const StartQuizPage: React.FC = () => {
 
       setQuiz(quizData);
 
+      // Fetch completed attempts to check eligibility
       const attemptsSnapshot = await getDocs(collection(db, 'users', user.uid, 'quizAttempts'));
       let currentAttemptCount = 0;
       attemptsSnapshot.docs.forEach((docSnap) => {
@@ -258,11 +274,13 @@ const StartQuizPage: React.FC = () => {
 
       setAttemptCount(currentAttemptCount);
 
+      // Check for an incomplete attempt in Firestore AND localStorage
       const resumeSnap = await getDoc(doc(db, 'users', user.uid, 'quizAttempts', quizId));
       const localRaw = localStorage.getItem(`${LOCAL_KEY_PREFIX}${quizId}_${user.uid}`);
       let localData: any = null;
       try { localData = localRaw ? JSON.parse(localRaw) : null; } catch (e) { localData = null; }
 
+      // If there's local unsynced data, prefer it (it might be more recent)
       if (localData) {
         setAnswers(localData.answers || {});
         setFlags(localData.flags || {});
@@ -274,6 +292,7 @@ const StartQuizPage: React.FC = () => {
           setTimeLeft(quizData.duration * 60);
         }
       } else if (resumeSnap.exists() && !resumeSnap.data().completed && resumeSnap.data().attemptNumber === undefined) {
+        // Resume incomplete attempt from Firestore
         const rt = resumeSnap.data();
         setAnswers(rt.answers || {});
         setFlags(rt.flags || {});
@@ -285,6 +304,7 @@ const StartQuizPage: React.FC = () => {
           setTimeLeft(quizData.duration * 60);
         }
       } else {
+        // New attempt: reset timer and initialize quizAttempts
         setTimeLeft(quizData.duration * 60);
         setAnswers({});
         setFlags({});
@@ -299,6 +319,7 @@ const StartQuizPage: React.FC = () => {
             remainingTime: quizData.duration * 60,
           }, { merge: true });
         } catch (e) {
+          // Firestore write may fail when offline; persist locally instead and retry later
           persistLocally({
             answers: {},
             flags: {},
@@ -342,6 +363,7 @@ const StartQuizPage: React.FC = () => {
   useEffect(() => {
     const handleUnload = () => {
       if (user && quiz && !isAdmin && !hasSubmittedRef.current) {
+        // Try writing to Firestore, but always persist locally as fallback
         try {
           setDoc(doc(db, 'users', user.uid, 'quizAttempts', quizId), {
             answers,
@@ -350,7 +372,7 @@ const StartQuizPage: React.FC = () => {
             remainingTime: timeLeft,
           }, { merge: true });
         } catch (e) {
-          // ignore
+          // ignore; Firestore SDK may queue writes.
         }
         persistLocally();
       }
@@ -363,8 +385,10 @@ const StartQuizPage: React.FC = () => {
     const updatedAnswers = { ...answers, [qid]: val };
     setAnswers(updatedAnswers);
 
+    // persist locally immediately
     persistLocally({ answers: updatedAnswers, flags, currentIndex: currentPage * (quiz?.questionsPerPage || 1), remainingTime: timeLeft });
 
+    // try writing to Firestore if online and not admin
     if (user && quiz && !isAdmin && isOnline) {
       setDoc(doc(db, 'users', user.uid, 'quizAttempts', quizId), {
         answers: updatedAnswers,
@@ -372,6 +396,7 @@ const StartQuizPage: React.FC = () => {
         currentIndex: currentPage * (quiz.questionsPerPage || 1),
         remainingTime: timeLeft,
       }, { merge: true }).catch(() => {
+        // on failure, keep local copy
         persistLocally({ answers: updatedAnswers, flags, currentIndex: currentPage * (quiz.questionsPerPage || 1), remainingTime: timeLeft });
       });
     }
@@ -379,11 +404,13 @@ const StartQuizPage: React.FC = () => {
 
   const toggleFlag = (qid: string) => {
     const updatedFlags = { ...flags, [qid]: !flags[qid] };
+    // Remove false keys to keep data tidy
     if (!updatedFlags[qid]) {
       delete updatedFlags[qid];
     }
     setFlags(updatedFlags);
 
+    // persist locally immediately
     persistLocally({ answers, flags: updatedFlags, currentIndex: currentPage * (quiz?.questionsPerPage || 1), remainingTime: timeLeft });
 
     if (user && quiz && !isAdmin && isOnline) {
@@ -399,7 +426,10 @@ const StartQuizPage: React.FC = () => {
   };
 
   const handleSubmit = async () => {
+    // If this is triggered by user clicking final Submit, we show summary first.
     if (!hasSubmittedRef.current && !showSummaryModal) {
+      // But if the call is due to timeout, we must bypass the summary.
+      // We'll detect timeout by checking timeLeft === 0.
       if (timeLeft > 0) {
         setShowSummaryModal(true);
         return;
@@ -449,9 +479,13 @@ const StartQuizPage: React.FC = () => {
       }, { merge: true });
 
       await setDoc(doc(db, 'users', user.uid, 'quizAttempts', quizId, 'results', quizId), resultData);
+
+      // remove local copy if any
       localStorage.removeItem(`${LOCAL_KEY_PREFIX}${quizId}_${user.uid}`);
     } catch (e) {
+      // network failure while submitting: persist locally and inform user
       persistLocally({ answers, flags, currentIndex: currentPage * (quiz?.questionsPerPage || 1), remainingTime: 0 });
+      // We still show submission UI but explain eventual sync
     }
 
     setShowSubmissionModal(true);
@@ -564,6 +598,7 @@ const StartQuizPage: React.FC = () => {
     window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'smooth' });
   };
 
+  // Manage visibility of the floating scroll buttons based on scroll position
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
@@ -572,8 +607,10 @@ const StartQuizPage: React.FC = () => {
       const innerH = window.innerHeight;
       const docHeight = document.documentElement.scrollHeight;
 
+      // show top button if scrolled down > 300px
       setShowScrollTop(scrollY > 300);
 
+      // show bottom button if not near bottom (100px threshold) and page is scrollable
       if (docHeight > innerH + 50) {
         setShowScrollBottom((innerH + scrollY) < (docHeight - 100));
       } else {
@@ -581,6 +618,7 @@ const StartQuizPage: React.FC = () => {
       }
     };
 
+    // initialize
     updateScrollButtons();
     window.addEventListener('scroll', updateScrollButtons, { passive: true });
     window.addEventListener('resize', updateScrollButtons);
@@ -631,7 +669,7 @@ const StartQuizPage: React.FC = () => {
   const skippedQuestionIndexes = flattenedQuestions
     .map((q, idx) => ({ q, idx }))
     .filter(({ q }) => !answers[q.id] || answers[q.id] === '')
-    .map(({ idx }) => idx + 1);
+    .map(({ idx }) => idx + 1); // human 1-based
 
   const flaggedQuestionIndexes = flattenedQuestions
     .map((q, idx) => ({ q, idx }))
@@ -643,50 +681,47 @@ const StartQuizPage: React.FC = () => {
     const newPage = Math.floor(zeroIndex / questionsPerPage);
     setCurrentPage(newPage);
     setShowSummaryModal(false);
+    // Optionally scroll to top
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // Map netLabel to display text and styles for the sticky header pill
-  const networkPill = () => {
+  // Network banner content & color
+  const getNetworkBanner = () => {
     if (netLabel === 'offline') {
       return {
-        text: 'Offline',
-        bg: 'bg-red-50',
-        border: 'border-red-200',
-        textColor: 'text-red-700',
-        icon: <WifiOff className="h-4 w-4 text-red-600" />,
+        bg: 'bg-red-50 border-red-200 text-red-800',
+        icon: <WifiOff className="h-5 w-5 text-red-600" />,
+        text: "You're offline. Answers are being saved locally and will sync when connection returns.",
       };
     } else if (netLabel === 'slow') {
       return {
-        text: 'Weak',
-        bg: 'bg-yellow-50',
-        border: 'border-yellow-200',
-        textColor: 'text-yellow-700',
-        icon: <WifiOff className="h-4 w-4 text-yellow-600" />,
+        bg: 'bg-yellow-50 border-yellow-200 text-yellow-800',
+        icon: <WifiOff className="h-5 w-5 text-yellow-600" />,
+        text: 'Slow internet detected. Saving locally and retrying sync in background.',
       };
     } else if (netLabel === 'moderate') {
       return {
-        text: 'Moderate',
-        bg: 'bg-amber-50',
-        border: 'border-amber-200',
-        textColor: 'text-amber-700',
-        icon: <Wifi className="h-4 w-4 text-amber-600" />,
+        bg: 'bg-amber-50 border-amber-200 text-amber-800',
+        icon: <Wifi className="h-5 w-5 text-amber-600" />,
+        text: 'Weak connection. Progress is saved locally and will be synced when stable.',
       };
     }
-    // good
-    return {
-      text: 'Stable',
-      bg: 'bg-green-50',
-      border: 'border-green-200',
-      textColor: 'text-green-700',
-      icon: <Wifi className="h-4 w-4 text-green-600" />,
-    };
+    return null;
   };
 
-  const pill = networkPill();
+  const netBanner = getNetworkBanner();
 
   return (
     <div className="min-h-screen bg-gray-50 px-4">
+      {/* Network banner */}
+      {netBanner && (
+        <div className={`fixed max-w-7xl mx-auto mt-4 rounded-md border px-4 py-2 flex items-center gap-3 ${netBanner.bg}`}>
+          {netBanner.icon}
+          <div className="text-sm">{netBanner.text}</div>
+          <div className="ml-auto text-xs text-gray-500">Status: {isOnline ? netLabel : 'offline'}</div>
+        </div>
+      )}
+
       {showTimeoutModal && (
         <Dialog open={showTimeoutModal} onOpenChange={setShowTimeoutModal}>
           <DialogContent className="w-[90vw] max-w-md sm:max-w-lg">
@@ -807,48 +842,34 @@ const StartQuizPage: React.FC = () => {
         </Dialog>
       )}
 
-
-<header className="bg-white border-b sticky top-0 z-40 shadow-sm">
-  <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
-    <div className="flex items-center gap-3">
-      <BookOpen className="h-6 w-6 text-blue-600" />
-      <div>
-        <h1 className="text-lg font-semibold">{quiz.title}</h1>
-        {quiz.course && (
-          <p className="text-sm text-gray-600">
-            {typeof quiz.course === 'object' ? quiz.course.name : quiz.course}
-          </p>
-        )}
-      </div>
-    </div>
-
-    <div className=" fixed flex items-center gap-4">
-      {/* Network pill: non-shrinking and with a small min width so it never disappears */}
-      <div
-        className={`flex-shrink-0 min-w-[72px] flex items-center gap-2 px-3 py-1 rounded-full border ${pill.border} ${pill.bg}`}
-        role="status"
-        aria-live="polite"
-        title={`Connection: ${pill.text}`}
-      >
-        {pill.icon}
-        <span className={`text-sm font-medium ${pill.textColor} truncate`}>{pill.text}</span>
-      </div>
-
-      {!isAdmin && (
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2">
-            <Clock className="h-5 w-5 text-red-600" />
-            <span className="font-mono font-semibold text-red-600">{formatTime(timeLeft)}</span>
+      <header className="bg-white border-b sticky top-0 z-40 shadow-sm">
+        <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
+          <div className="flex items-center gap-3">
+            <BookOpen className="h-6 w-6 text-blue-600" />
+            <div>
+              <h1 className="text-lg font-semibold">{quiz.title}</h1>
+              {quiz.course && (
+                <p className="text-sm text-gray-600">
+                  {typeof quiz.course === 'object' ? quiz.course.name : quiz.course}
+                </p>
+              )}
+            </div>
           </div>
-          <div className="w-48">
-            <div className="text-xs text-gray-600">Progress: {attemptedCount}/{flattenedQuestions.length}</div>
-            <Progress value={attemptedPercent} className="mt-1" />
-          </div>
+          {!isAdmin && (
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <Clock className="h-5 w-5 text-red-600" />
+                <span className="font-mono font-semibold text-red-600">{formatTime(timeLeft)}</span>
+              </div>
+              <div className="w-48">
+                <div className="text-xs text-gray-600">Progress: {attemptedCount}/{flattenedQuestions.length}</div>
+                <Progress value={attemptedPercent} className="mt-1" />
+              </div>
+            </div>
+          )}
         </div>
-      )}
-    </div>
-  </div>
-</header>
+      </header>
+
       <main className="max-w-6xl w-full mx-auto p-4">
         {isAdmin && (
           <div className="bg-yellow-100 text-yellow-800 px-4 py-2 rounded-md text-sm mb-4">
@@ -962,6 +983,7 @@ const StartQuizPage: React.FC = () => {
               </Button>
               <Button
                 onClick={isLastPage ? () => {
+                  // Show summary first when user submits manually (unless admin or forced submit)
                   if (isAdmin || timeLeft === 0) {
                     handleSubmit();
                   } else {
