@@ -312,7 +312,7 @@ const StartQuizPage: React.FC = () => {
   const formatTime = (sec: number) => {
     const m = Math.floor(sec / 60).toString().padStart(2, '0');
     const s = (sec % 60).toString().padStart(2, '0');
-    return ${m}:${s};
+    return `${m}:${s}`;
   };
 
   const generatePDF = (includeAnswers: boolean) => {
@@ -332,7 +332,7 @@ const StartQuizPage: React.FC = () => {
 
     doc.setFontSize(12);
     doc.setTextColor(100);
-    doc.text(Date: August 04, 2025, pageWidth / 2, y, { align: 'center' });
+    doc.text(`Date: August 04, 2025`, pageWidth / 2, y, { align: 'center' });
     y += 20;
 
     const groupedQuestions = quiz.selectedQuestions.reduce((acc, question) => {
@@ -365,13 +365,13 @@ const StartQuizPage: React.FC = () => {
         doc.setFont('helvetica', 'normal');
         doc.setFontSize(12);
         doc.setTextColor(0);
-        const questionText = Q${subjectIndex * questions.length + qIndex + 1}. ${stripHtml(q.questionText)};
+        const questionText = `Q${subjectIndex * questions.length + qIndex + 1}. ${stripHtml(q.questionText)}`;
         const questionLines = doc.splitTextToSize(questionText, maxWidth);
         doc.text(questionLines, margin, y);
         y += questionLines.length * 7 + 5;
 
         q.options.forEach((opt, i) => {
-          const optionText = ${String.fromCharCode(65 + i)}. ${stripHtml(opt)};
+          const optionText = `${String.fromCharCode(65 + i)}. ${stripHtml(opt)}`;
           const optionLines = doc.splitTextToSize(optionText, maxWidth - 10);
           doc.text(optionLines, margin + 10, y);
           y += optionLines.length * 7 + 3;
@@ -380,7 +380,7 @@ const StartQuizPage: React.FC = () => {
         if (includeAnswers && q.correctAnswer) {
           doc.setFont('helvetica', 'bold');
           doc.setTextColor(0, 128, 0);
-          const answerText = Correct Answer: ${stripHtml(q.correctAnswer)};
+          const answerText = `Correct Answer: ${stripHtml(q.correctAnswer)}`;
           const answerLines = doc.splitTextToSize(answerText, maxWidth);
           doc.text(answerLines, margin, y);
           y += answerLines.length * 7 + 5;
@@ -392,7 +392,7 @@ const StartQuizPage: React.FC = () => {
       y += 10;
     });
 
-    const fileName = ${quiz.title}${includeAnswers ? '_with_answers' : ''}.pdf;
+    const fileName = `${quiz.title}${includeAnswers ? '_with_answers' : ''}.pdf`;
     doc.save(fileName);
   };
 
@@ -698,7 +698,7 @@ const StartQuizPage: React.FC = () => {
                         }`}
                         title={flags[q.id] ? 'Unflag question' : 'Flag question'}
                       >
-                        <Flag className={h-4 w-4 ${flags[q.id] ? 'text-yellow-600' : 'text-gray-400'}} />
+                        <Flag className={`h-4 w-4 ${flags[q.id] ? 'text-yellow-600' : 'text-gray-400'}`} />
                         {flags[q.id] ? 'Flagged' : 'Flag'}
                       </button>
                     </div>
@@ -714,14 +714,14 @@ const StartQuizPage: React.FC = () => {
                       {q.options.map((opt, i) => (
                         <label
                           key={i}
-                          htmlFor={opt-${q.id}-${i}}
+                          htmlFor={`opt-${q.id}-${i}`}
                           className={`flex items-center p-3 border rounded-lg cursor-pointer transition hover:bg-gray-100 ${
                             answers[q.id] === opt ? 'border-blue-500 bg-blue-50' : ''
                           }`}
                         >
                           <input
                             type="radio"
-                            id={opt-${q.id}-${i}}
+                            id={`opt-${q.id}-${i}`}
                             name={q.id}
                             value={opt}
                             checked={answers[q.id] === opt}
