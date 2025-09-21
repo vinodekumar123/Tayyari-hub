@@ -807,7 +807,7 @@ const StartQuizPage: React.FC = () => {
         </Dialog>
       )}
 
-     // Replace the <header> ... </header> block in your file with this updated header JSX
+
 <header className="bg-white border-b sticky top-0 z-40 shadow-sm">
   <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
     <div className="flex items-center gap-3">
@@ -822,7 +822,7 @@ const StartQuizPage: React.FC = () => {
       </div>
     </div>
 
-    <div className="flex items-center gap-4">
+    <div className=" fixed flex items-center gap-4">
       {/* Network pill: non-shrinking and with a small min width so it never disappears */}
       <div
         className={`flex-shrink-0 min-w-[72px] flex items-center gap-2 px-3 py-1 rounded-full border ${pill.border} ${pill.bg}`}
