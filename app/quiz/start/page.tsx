@@ -20,7 +20,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { ArrowLeft, ArrowRight, Info, BookOpen, Clock, Send, Download, CheckCircle } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Info, BookOpen, Clock, Send, Download, CheckCircle, Flag } from 'lucide-react';
 import jsPDF from 'jspdf';
 
 interface Question {
@@ -60,11 +60,13 @@ const StartQuizPage: React.FC = () => {
   const [isAdmin, setIsAdmin] = useState(false);
   const [quiz, setQuiz] = useState<QuizData | null>(null);
   const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [flags, setFlags] = useState<Record<string, boolean>>({});
   const [currentPage, setCurrentPage] = useState(0);
   const [loading, setLoading] = useState(true);
   const [showTimeoutModal, setShowTimeoutModal] = useState(false);
   const [showDownloadModal, setShowDownloadModal] = useState(false);
   const [showSubmissionModal, setShowSubmissionModal] = useState(false);
+  const [showSummaryModal, setShowSummaryModal] = useState(false);
   const [timeLeft, setTimeLeft] = useState(0);
   const [hasLoadedTime, setHasLoadedTime] = useState(false);
   const [attemptCount, setAttemptCount] = useState(0);
@@ -116,9 +118,9 @@ const StartQuizPage: React.FC = () => {
       // Fetch completed attempts to check eligibility
       const attemptsSnapshot = await getDocs(collection(db, 'users', user.uid, 'quizAttempts'));
       let currentAttemptCount = 0;
-      attemptsSnapshot.docs.forEach((doc) => {
-        if (doc.id === quizId && doc.data()?.completed) {
-          currentAttemptCount = doc.data().attemptNumber || 1;
+      attemptsSnapshot.docs.forEach((docSnap) => {
+        if (docSnap.id === quizId && docSnap.data()?.completed) {
+          currentAttemptCount = docSnap.data().attemptNumber || 1;
         }
       });
 
@@ -136,6 +138,7 @@ const StartQuizPage: React.FC = () => {
         // Resume incomplete attempt
         const rt = resumeSnap.data();
         setAnswers(rt.answers || {});
+        setFlags(rt.flags || {});
         const questionIndex = rt.currentIndex || 0;
         setCurrentPage(Math.floor(questionIndex / quizData.questionsPerPage));
         if (!isAdmin && rt.remainingTime !== undefined) {
@@ -147,10 +150,12 @@ const StartQuizPage: React.FC = () => {
         // New attempt: reset timer and initialize quizAttempts
         setTimeLeft(quizData.duration * 60);
         setAnswers({});
+        setFlags({});
         setCurrentPage(0);
         await setDoc(doc(db, 'users', user.uid, 'quizAttempts', quizId), {
           startedAt: serverTimestamp(),
           answers: {},
+          flags: {},
           currentIndex: 0,
           completed: false,
           remainingTime: quizData.duration * 60,
@@ -192,6 +197,7 @@ const StartQuizPage: React.FC = () => {
       if (user && quiz && !isAdmin && !hasSubmittedRef.current) {
         setDoc(doc(db, 'users', user.uid, 'quizAttempts', quizId), {
           answers,
+          flags,
           currentIndex: currentPage * (quiz.questionsPerPage || 1),
           remainingTime: timeLeft,
         }, { merge: true });
@@ -199,7 +205,7 @@ const StartQuizPage: React.FC = () => {
     };
     window.addEventListener('beforeunload', handleUnload);
     return () => window.removeEventListener('beforeunload', handleUnload);
-  }, [answers, currentPage, timeLeft, quiz, user, isAdmin]);
+  }, [answers, flags, currentPage, timeLeft, quiz, user, isAdmin]);
 
   const handleAnswer = (qid: string, val: string) => {
     const updatedAnswers = { ...answers, [qid]: val };
@@ -208,6 +214,25 @@ const StartQuizPage: React.FC = () => {
     if (user && quiz && !isAdmin) {
       setDoc(doc(db, 'users', user.uid, 'quizAttempts', quizId), {
         answers: updatedAnswers,
+        flags,
+        currentIndex: currentPage * (quiz.questionsPerPage || 1),
+        remainingTime: timeLeft,
+      }, { merge: true });
+    }
+  };
+
+  const toggleFlag = (qid: string) => {
+    const updatedFlags = { ...flags, [qid]: !flags[qid] };
+    // Remove false keys to keep data tidy
+    if (!updatedFlags[qid]) {
+      delete updatedFlags[qid];
+    }
+    setFlags(updatedFlags);
+
+    if (user && quiz && !isAdmin) {
+      setDoc(doc(db, 'users', user.uid, 'quizAttempts', quizId), {
+        answers,
+        flags: updatedFlags,
         currentIndex: currentPage * (quiz.questionsPerPage || 1),
         remainingTime: timeLeft,
       }, { merge: true });
@@ -215,6 +240,16 @@ const StartQuizPage: React.FC = () => {
   };
 
   const handleSubmit = async () => {
+    // If this is triggered by user clicking final Submit, we show summary first.
+    if (!hasSubmittedRef.current && !showSummaryModal) {
+      // But if the call is due to timeout, we must bypass the summary.
+      // We'll detect timeout by checking timeLeft === 0.
+      if (timeLeft > 0) {
+        setShowSummaryModal(true);
+        return;
+      }
+    }
+
     if (hasSubmittedRef.current) return;
     hasSubmittedRef.current = true;
 
@@ -243,12 +278,14 @@ const StartQuizPage: React.FC = () => {
       total,
       timestamp: serverTimestamp(),
       answers,
+      flags,
       attemptNumber: newAttemptCount,
     };
 
     await setDoc(doc(db, 'users', user.uid, 'quizAttempts', quizId), {
       submittedAt: serverTimestamp(),
       answers,
+      flags,
       completed: true,
       remainingTime: 0,
       attemptNumber: newAttemptCount,
@@ -257,6 +294,7 @@ const StartQuizPage: React.FC = () => {
     await setDoc(doc(db, 'users', user.uid, 'quizAttempts', quizId, 'results', quizId), resultData);
 
     setShowSubmissionModal(true);
+    setShowSummaryModal(false);
     setTimeout(() => {
       setShowSubmissionModal(false);
       if (isAdmin || quiz.resultVisibility === 'immediate') {
@@ -387,6 +425,29 @@ const StartQuizPage: React.FC = () => {
   const totalPages = Math.ceil(flattenedQuestions.length / questionsPerPage);
   const isLastPage = currentPage >= totalPages - 1;
 
+  const attemptedCount = Object.keys(answers).filter((k) => answers[k] !== undefined && answers[k] !== '').length;
+  const flaggedCount = Object.keys(flags).filter((k) => flags[k]).length;
+  const attemptedPercent = Math.round((attemptedCount / flattenedQuestions.length) * 100);
+
+  const skippedQuestionIndexes = flattenedQuestions
+    .map((q, idx) => ({ q, idx }))
+    .filter(({ q }) => !answers[q.id] || answers[q.id] === '')
+    .map(({ idx }) => idx + 1); // human 1-based
+
+  const flaggedQuestionIndexes = flattenedQuestions
+    .map((q, idx) => ({ q, idx }))
+    .filter(({ q }) => flags[q.id])
+    .map(({ idx }) => idx + 1);
+
+  const jumpToQuestion = (oneBasedIndex: number) => {
+    const zeroIndex = oneBasedIndex - 1;
+    const newPage = Math.floor(zeroIndex / questionsPerPage);
+    setCurrentPage(newPage);
+    setShowSummaryModal(false);
+    // Optionally scroll to top
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 px-4">
       {showTimeoutModal && (
@@ -454,6 +515,61 @@ const StartQuizPage: React.FC = () => {
         </Dialog>
       )}
 
+      {showSummaryModal && (
+        <Dialog open={showSummaryModal} onOpenChange={setShowSummaryModal}>
+          <DialogContent className="w-[90vw] max-w-md sm:max-w-lg">
+            <DialogHeader>
+              <DialogTitle>Summary before Submission</DialogTitle>
+              <DialogDescription>Review skipped and flagged questions before final submission.</DialogDescription>
+            </DialogHeader>
+
+            <div className="mt-4 space-y-4">
+              <div className="bg-gray-50 p-3 rounded">
+                <p className="font-semibold">Answered: {attemptedCount} / {flattenedQuestions.length}</p>
+                <p className="font-semibold">Flagged: {flaggedCount}</p>
+              </div>
+
+              <div>
+                <h3 className="font-semibold">Skipped Questions ({skippedQuestionIndexes.length})</h3>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {skippedQuestionIndexes.length === 0 ? (
+                    <span className="text-sm text-gray-600">None</span>
+                  ) : (
+                    skippedQuestionIndexes.map((n) => (
+                      <Button key={n} variant="outline" onClick={() => jumpToQuestion(n)} className="text-sm">
+                        {n}
+                      </Button>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <h3 className="font-semibold">Flagged Questions ({flaggedQuestionIndexes.length})</h3>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {flaggedQuestionIndexes.length === 0 ? (
+                    <span className="text-sm text-gray-600">None</span>
+                  ) : (
+                    flaggedQuestionIndexes.map((n) => (
+                      <Button key={n} variant="ghost" onClick={() => jumpToQuestion(n)} className="text-sm">
+                        <Flag className="mr-2 h-4 w-4 text-yellow-600" /> {n}
+                      </Button>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-4">
+                <Button variant="outline" onClick={() => setShowSummaryModal(false)}>Review</Button>
+                <Button onClick={() => handleSubmit()} className="bg-red-600 text-white hover:bg-red-700">
+                  Confirm Submit
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+
       <header className="bg-white border-b sticky top-0 z-40 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
           <div className="flex items-center gap-3">
@@ -468,9 +584,15 @@ const StartQuizPage: React.FC = () => {
             </div>
           </div>
           {!isAdmin && (
-            <div className="flex items-center gap-2">
-              <Clock className="h-5 w-5 text-red-600" />
-              <span className="font-mono font-semibold text-red-600">{formatTime(timeLeft)}</span>
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <Clock className="h-5 w-5 text-red-600" />
+                <span className="font-mono font-semibold text-red-600">{formatTime(timeLeft)}</span>
+              </div>
+              <div className="w-48">
+                <div className="text-xs text-gray-600">Progress: {attemptedCount}/{flattenedQuestions.length}</div>
+                <Progress value={attemptedPercent} className="mt-1" />
+              </div>
             </div>
           )}
         </div>
@@ -495,13 +617,23 @@ const StartQuizPage: React.FC = () => {
 
         <Card className="shadow-md w-full">
           <CardHeader>
-            <CardTitle className="text-lg font-semibold">
-              Questions {startIdx + 1}–{Math.min(endIdx, flattenedQuestions.length)} / {flattenedQuestions.length}
-            </CardTitle>
-            <Progress
-              value={((startIdx + questionsPerPage) / flattenedQuestions.length) * 100}
-              className="mt-2"
-            />
+            <div className="flex flex-col w-full">
+              <CardTitle className="text-lg font-semibold">
+                Questions {startIdx + 1}–{Math.min(endIdx, flattenedQuestions.length)} / {flattenedQuestions.length}
+              </CardTitle>
+              <div className="mt-2 flex items-center justify-between gap-4">
+                <div className="flex items-center gap-4">
+                  <div className="text-sm text-gray-600">Attempted: {attemptedCount}/{flattenedQuestions.length}</div>
+                  <div className="text-sm text-gray-600">Flagged: {flaggedCount}</div>
+                </div>
+                <div className="w-1/3">
+                  <Progress
+                    value={attemptedPercent}
+                    className="mt-2"
+                  />
+                </div>
+              </div>
+            </div>
           </CardHeader>
 
           <CardContent className="space-y-10">
@@ -511,13 +643,26 @@ const StartQuizPage: React.FC = () => {
                   {subject}
                 </h2>
                 {questions.map((q, idx) => (
-                  <div key={q.id} className="space-y-4">
-                  <div className="text-lg font-medium prose max-w-none">
-  <span className="font-semibold">Q{startIdx + idx + 1}. </span>
-  <span
-    dangerouslySetInnerHTML={{ __html: q.questionText }}
-  />
-</div>
+                  <div key={q.id} className="space-y-4 relative">
+                    <div className="absolute right-0 top-0 flex items-center gap-2">
+                      <button
+                        onClick={() => toggleFlag(q.id)}
+                        className={`flex items-center gap-2 px-3 py-1 rounded text-sm transition ${
+                          flags[q.id] ? 'bg-yellow-100 text-yellow-800 border border-yellow-300' : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'
+                        }`}
+                        title={flags[q.id] ? 'Unflag question' : 'Flag question'}
+                      >
+                        <Flag className={`h-4 w-4 ${flags[q.id] ? 'text-yellow-600' : 'text-gray-400'}`} />
+                        {flags[q.id] ? 'Flagged' : 'Flag'}
+                      </button>
+                    </div>
+
+                    <div className="text-lg font-medium prose max-w-none">
+                      <span className="font-semibold">Q{startIdx + idx + 1}. </span>
+                      <span
+                        dangerouslySetInnerHTML={{ __html: q.questionText }}
+                      />
+                    </div>
 
                     <div className="grid gap-3">
                       {q.options.map((opt, i) => (
@@ -538,10 +683,10 @@ const StartQuizPage: React.FC = () => {
                             className="h-5 w-5 text-blue-600 mr-3"
                           />
                           <span className="font-semibold mr-2">{String.fromCharCode(65 + i)}.</span>
-<span
-  className="prose max-w-none"
-  dangerouslySetInnerHTML={{ __html: opt }}
-/>
+                          <span
+                            className="prose max-w-none"
+                            dangerouslySetInnerHTML={{ __html: opt }}
+                          />
                         </label>
                       ))}
                     </div>
@@ -565,7 +710,14 @@ const StartQuizPage: React.FC = () => {
                 <ArrowLeft className="mr-2" /> Previous
               </Button>
               <Button
-                onClick={isLastPage ? handleSubmit : () => setCurrentPage((i) => i + 1)}
+                onClick={isLastPage ? () => {
+                  // Show summary first when user submits manually (unless admin or forced submit)
+                  if (isAdmin || timeLeft === 0) {
+                    handleSubmit();
+                  } else {
+                    setShowSummaryModal(true);
+                  }
+                } : () => setCurrentPage((i) => i + 1)}
                 disabled={showTimeoutModal || showSubmissionModal}
                 className={isLastPage ? 'bg-red-600 text-white hover:bg-red-700' : ''}
               >
