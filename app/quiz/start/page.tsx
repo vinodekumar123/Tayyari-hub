@@ -4,7 +4,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { doc, getDoc, setDoc, serverTimestamp, getDocs, collection } from 'firebase/firestore';
 import { onAuthStateChanged, User } from 'firebase/auth';
-import { db, auth } from '../../firebase';
+import { db, auth } from 'app/firebase';
 import {
   Card,
   CardHeader,
@@ -20,7 +20,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { ArrowLeft, ArrowRight, Info, BookOpen, Clock, Send, Download, CheckCircle, Flag, ArrowUp, ArrowDown, WifiOff, Wifi } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Info, BookOpen, Clock, Send, Download, CheckCircle, Flag, ArrowUp, ArrowDown } from 'lucide-react';
 import jsPDF from 'jspdf';
 
 interface Question {
@@ -52,13 +52,10 @@ const stripHtml = (html: string): string => {
   return div.textContent || div.innerText || '';
 };
 
-const LOCAL_KEY_PREFIX = 'quiz_attempt_local_v1_';
-
 const StartQuizPage: React.FC = () => {
   const searchParams = useSearchParams();
   const router = useRouter();
   const quizId = searchParams.get('id')!;
-
   const [user, setUser] = useState<User | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [quiz, setQuiz] = useState<QuizData | null>(null);
@@ -76,23 +73,9 @@ const StartQuizPage: React.FC = () => {
   const hasSubmittedRef = useRef(false);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Network detection & status
-  const [isOnline, setIsOnline] = useState<boolean>(() => (typeof navigator !== 'undefined' ? navigator.onLine : true));
-  const [netLabel, setNetLabel] = useState<'good' | 'moderate' | 'slow' | 'offline'>('good');
-  const speedCheckRef = useRef<number | null>(null);
-
-  // For sticky banner measurement
-  const headerRef = useRef<HTMLDivElement | null>(null);
-  const bannerRef = useRef<HTMLDivElement | null>(null);
-  const [headerHeight, setHeaderHeight] = useState(0);
-  const [bannerHeight, setBannerHeight] = useState(0);
-
   // scroll button visibility states
   const [showScrollTop, setShowScrollTop] = useState(false);
   const [showScrollBottom, setShowScrollBottom] = useState(false);
-
-  // Helper local storage key
-  const localKey = `${LOCAL_KEY_PREFIX}${quizId}_${user?.uid ?? 'anon'}`;
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (u) => {
@@ -107,133 +90,6 @@ const StartQuizPage: React.FC = () => {
     });
     return () => unsub();
   }, []);
-
-  // Persist to localStorage (quick, reliable when network flaky)
-  const persistLocally = (payload?: {
-    answers?: Record<string, string>,
-    flags?: Record<string, boolean>,
-    currentIndex?: number,
-    remainingTime?: number,
-  }) => {
-    try {
-      const data = {
-        answers: payload?.answers ?? answers,
-        flags: payload?.flags ?? flags,
-        currentIndex: payload?.currentIndex ?? currentPage * (quiz?.questionsPerPage || 1),
-        remainingTime: payload?.remainingTime ?? timeLeft,
-        updatedAt: Date.now(),
-      };
-      if (typeof window !== 'undefined' && user && quizId) {
-        localStorage.setItem(`${LOCAL_KEY_PREFIX}${quizId}_${user.uid}`, JSON.stringify(data));
-      }
-    } catch (e) {
-      // ignore localStorage failures
-      // console.warn('Failed to save locally', e);
-    }
-  };
-
-  const trySyncLocalAttempt = async () => {
-    if (!user || !quiz || !isOnline || isAdmin) return;
-    try {
-      const raw = localStorage.getItem(`${LOCAL_KEY_PREFIX}${quizId}_${user.uid}`);
-      if (!raw) return;
-      const parsed = JSON.parse(raw);
-      // Basic heuristic: if parsed exists and is more recent than remote resume doc, push it
-      await setDoc(doc(db, 'users', user.uid, 'quizAttempts', quizId), {
-        answers: parsed.answers || {},
-        flags: parsed.flags || {},
-        currentIndex: parsed.currentIndex || 0,
-        remainingTime: parsed.remainingTime ?? quiz.duration * 60,
-      }, { merge: true });
-      // Optionally remove local copy after successful sync:
-      localStorage.removeItem(`${LOCAL_KEY_PREFIX}${quizId}_${user.uid}`);
-    } catch (e) {
-      // keep local copy for later retry
-      // console.warn('sync failed', e);
-    }
-  };
-
-  // Network testing logic: combine navigator.connection (if available) with a lightweight latency test.
-  const evaluateNetwork = async () => {
-    if (typeof navigator === 'undefined') return;
-
-    // offline detection
-    if (!navigator.onLine) {
-      setIsOnline(false);
-      setNetLabel('offline');
-      return;
-    }
-
-    setIsOnline(true);
-
-    // Prefer Network Information API when available
-    const navConn: any = (navigator as any).connection || (navigator as any).mozConnection || (navigator as any).webkitConnection;
-    if (navConn && navConn.effectiveType) {
-      const et: string = navConn.effectiveType; // '4g','3g','2g','slow-2g'
-      if (et === '4g') {
-        setNetLabel('good');
-        return;
-      } else if (et === '3g') {
-        setNetLabel('moderate');
-        return;
-      } else {
-        setNetLabel('slow');
-        return;
-      }
-    }
-
-    // Fallback: latency based test using a lightweight fetch to a stable endpoint.
-    // We use a small, well-known endpoint and measure round-trip — this is not perfect but works reasonably well.
-    const testUrl = 'https://www.google.com/generate_204'; // very lightweight
-    try {
-      const start = performance.now();
-      // fetch with no-cors so that the request can succeed even if CORS restricted; fetch will still resolve.
-      await fetch(`${testUrl}?_=${Date.now()}`, { cache: 'no-store', mode: 'no-cors' });
-      const rtt = performance.now() - start;
-
-      // classify by RTT thresholds (tunable)
-      if (rtt < 250) {
-        setNetLabel('good');
-      } else if (rtt < 800) {
-        setNetLabel('moderate');
-      } else {
-        setNetLabel('slow');
-      }
-    } catch (e) {
-      setIsOnline(false);
-      setNetLabel('offline');
-    }
-  };
-
-  useEffect(() => {
-    // Periodically check network state and on changes
-    evaluateNetwork(); // initial
-    const onOnline = () => { setIsOnline(true); evaluateNetwork(); trySyncLocalAttempt(); };
-    const onOffline = () => { setIsOnline(false); setNetLabel('offline'); };
-
-    window.addEventListener('online', onOnline);
-    window.addEventListener('offline', onOffline);
-
-    const navConn: any = (navigator as any).connection || (navigator as any).mozConnection || (navigator as any).webkitConnection;
-    const onConnChange = () => evaluateNetwork();
-
-    if (navConn && navConn.addEventListener) {
-      navConn.addEventListener('change', onConnChange);
-    }
-
-    // periodic speed check every 10s (tunable)
-    speedCheckRef.current = window.setInterval(() => evaluateNetwork(), 10000);
-
-    return () => {
-      window.removeEventListener('online', onOnline);
-      window.removeEventListener('offline', onOffline);
-      if (navConn && navConn.removeEventListener) {
-        navConn.removeEventListener('change', onConnChange);
-      }
-      if (speedCheckRef.current) clearInterval(speedCheckRef.current);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, quizId]);
 
   useEffect(() => {
     if (!quizId || !user) return;
@@ -280,25 +136,10 @@ const StartQuizPage: React.FC = () => {
 
       setAttemptCount(currentAttemptCount);
 
-      // Check for an incomplete attempt in Firestore AND localStorage
+      // Check for an incomplete attempt
       const resumeSnap = await getDoc(doc(db, 'users', user.uid, 'quizAttempts', quizId));
-      const localRaw = localStorage.getItem(`${LOCAL_KEY_PREFIX}${quizId}_${user.uid}`);
-      let localData: any = null;
-      try { localData = localRaw ? JSON.parse(localRaw) : null; } catch (e) { localData = null; }
-
-      // If there's local unsynced data, prefer it (it might be more recent)
-      if (localData) {
-        setAnswers(localData.answers || {});
-        setFlags(localData.flags || {});
-        const questionIndex = localData.currentIndex || 0;
-        setCurrentPage(Math.floor(questionIndex / quizData.questionsPerPage));
-        if (!isAdmin && localData.remainingTime !== undefined) {
-          setTimeLeft(localData.remainingTime);
-        } else {
-          setTimeLeft(quizData.duration * 60);
-        }
-      } else if (resumeSnap.exists() && !resumeSnap.data().completed && resumeSnap.data().attemptNumber === undefined) {
-        // Resume incomplete attempt from Firestore
+      if (resumeSnap.exists() && !resumeSnap.data().completed && resumeSnap.data().attemptNumber === undefined) {
+        // Resume incomplete attempt
         const rt = resumeSnap.data();
         setAnswers(rt.answers || {});
         setFlags(rt.flags || {});
@@ -315,24 +156,14 @@ const StartQuizPage: React.FC = () => {
         setAnswers({});
         setFlags({});
         setCurrentPage(0);
-        try {
-          await setDoc(doc(db, 'users', user.uid, 'quizAttempts', quizId), {
-            startedAt: serverTimestamp(),
-            answers: {},
-            flags: {},
-            currentIndex: 0,
-            completed: false,
-            remainingTime: quizData.duration * 60,
-          }, { merge: true });
-        } catch (e) {
-          // Firestore write may fail when offline; persist locally instead and retry later
-          persistLocally({
-            answers: {},
-            flags: {},
-            currentIndex: 0,
-            remainingTime: quizData.duration * 60,
-          });
-        }
+        await setDoc(doc(db, 'users', user.uid, 'quizAttempts', quizId), {
+          startedAt: serverTimestamp(),
+          answers: {},
+          flags: {},
+          currentIndex: 0,
+          completed: false,
+          remainingTime: quizData.duration * 60,
+        }, { merge: true });
       }
 
       setHasLoadedTime(true);
@@ -340,7 +171,6 @@ const StartQuizPage: React.FC = () => {
     };
 
     load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [quizId, user, isAdmin]);
 
   useEffect(() => {
@@ -369,42 +199,29 @@ const StartQuizPage: React.FC = () => {
   useEffect(() => {
     const handleUnload = () => {
       if (user && quiz && !isAdmin && !hasSubmittedRef.current) {
-        // Try writing to Firestore, but always persist locally as fallback
-        try {
-          setDoc(doc(db, 'users', user.uid, 'quizAttempts', quizId), {
-            answers,
-            flags,
-            currentIndex: currentPage * (quiz.questionsPerPage || 1),
-            remainingTime: timeLeft,
-          }, { merge: true });
-        } catch (e) {
-          // ignore; Firestore SDK may queue writes.
-        }
-        persistLocally();
+        setDoc(doc(db, 'users', user.uid, 'quizAttempts', quizId), {
+          answers,
+          flags,
+          currentIndex: currentPage * (quiz.questionsPerPage || 1),
+          remainingTime: timeLeft,
+        }, { merge: true });
       }
     };
     window.addEventListener('beforeunload', handleUnload);
     return () => window.removeEventListener('beforeunload', handleUnload);
-  }, [answers, flags, currentPage, timeLeft, quiz, user, isAdmin, quizId]);
+  }, [answers, flags, currentPage, timeLeft, quiz, user, isAdmin]);
 
   const handleAnswer = (qid: string, val: string) => {
     const updatedAnswers = { ...answers, [qid]: val };
     setAnswers(updatedAnswers);
 
-    // persist locally immediately
-    persistLocally({ answers: updatedAnswers, flags, currentIndex: currentPage * (quiz?.questionsPerPage || 1), remainingTime: timeLeft });
-
-    // try writing to Firestore if online and not admin
-    if (user && quiz && !isAdmin && isOnline) {
+    if (user && quiz && !isAdmin) {
       setDoc(doc(db, 'users', user.uid, 'quizAttempts', quizId), {
         answers: updatedAnswers,
         flags,
         currentIndex: currentPage * (quiz.questionsPerPage || 1),
         remainingTime: timeLeft,
-      }, { merge: true }).catch(() => {
-        // on failure, keep local copy
-        persistLocally({ answers: updatedAnswers, flags, currentIndex: currentPage * (quiz.questionsPerPage || 1), remainingTime: timeLeft });
-      });
+      }, { merge: true });
     }
   };
 
@@ -416,18 +233,13 @@ const StartQuizPage: React.FC = () => {
     }
     setFlags(updatedFlags);
 
-    // persist locally immediately
-    persistLocally({ answers, flags: updatedFlags, currentIndex: currentPage * (quiz?.questionsPerPage || 1), remainingTime: timeLeft });
-
-    if (user && quiz && !isAdmin && isOnline) {
+    if (user && quiz && !isAdmin) {
       setDoc(doc(db, 'users', user.uid, 'quizAttempts', quizId), {
         answers,
         flags: updatedFlags,
         currentIndex: currentPage * (quiz.questionsPerPage || 1),
         remainingTime: timeLeft,
-      }, { merge: true }).catch(() => {
-        persistLocally({ answers, flags: updatedFlags, currentIndex: currentPage * (quiz.questionsPerPage || 1), remainingTime: timeLeft });
-      });
+      }, { merge: true });
     }
   };
 
@@ -474,25 +286,16 @@ const StartQuizPage: React.FC = () => {
       attemptNumber: newAttemptCount,
     };
 
-    try {
-      await setDoc(doc(db, 'users', user.uid, 'quizAttempts', quizId), {
-        submittedAt: serverTimestamp(),
-        answers,
-        flags,
-        completed: true,
-        remainingTime: 0,
-        attemptNumber: newAttemptCount,
-      }, { merge: true });
+    await setDoc(doc(db, 'users', user.uid, 'quizAttempts', quizId), {
+      submittedAt: serverTimestamp(),
+      answers,
+      flags,
+      completed: true,
+      remainingTime: 0,
+      attemptNumber: newAttemptCount,
+    }, { merge: true });
 
-      await setDoc(doc(db, 'users', user.uid, 'quizAttempts', quizId, 'results', quizId), resultData);
-
-      // remove local copy if any
-      localStorage.removeItem(`${LOCAL_KEY_PREFIX}${quizId}_${user.uid}`);
-    } catch (e) {
-      // network failure while submitting: persist locally and inform user
-      persistLocally({ answers, flags, currentIndex: currentPage * (quiz?.questionsPerPage || 1), remainingTime: 0 });
-      // We still show submission UI but explain eventual sync
-    }
+    await setDoc(doc(db, 'users', user.uid, 'quizAttempts', quizId, 'results', quizId), resultData);
 
     setShowSubmissionModal(true);
     setShowSummaryModal(false);
@@ -635,18 +438,6 @@ const StartQuizPage: React.FC = () => {
     };
   }, [loading, quiz]);
 
-  // Measure header and banner heights so banner can be positioned exactly below header and content won't be overlapped.
-  useEffect(() => {
-    const measure = () => {
-      setHeaderHeight(headerRef.current?.offsetHeight ?? 0);
-      setBannerHeight(bannerRef.current?.offsetHeight ?? 0);
-    };
-    // measure initially and on resize
-    measure();
-    window.addEventListener('resize', measure);
-    return () => window.removeEventListener('resize', measure);
-  }, [netLabel, loading, quiz]);
-
   if (loading || !quiz) return <p className="text-center py-10">Loading...</p>;
 
   const questionsPerPage = quiz.questionsPerPage || 1;
@@ -703,91 +494,8 @@ const StartQuizPage: React.FC = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // Network banner content & color
-  const getNetworkBanner = () => {
-    if (netLabel === 'offline') {
-      return {
-        bg: 'bg-red-50 border-red-200 text-red-800',
-        icon: <WifiOff className="h-5 w-5 text-red-600" />,
-        text: "You're offline. Answers are being saved locally and will sync when connection returns.",
-      };
-    } else if (netLabel === 'slow') {
-      return {
-        bg: 'bg-yellow-50 border-yellow-200 text-yellow-800',
-        icon: <WifiOff className="h-5 w-5 text-yellow-600" />,
-        text: 'Slow internet detected. Saving locally and retrying sync in background.',
-      };
-    } else if (netLabel === 'moderate') {
-      return {
-        bg: 'bg-amber-50 border-amber-200 text-amber-800',
-        icon: <Wifi className="h-5 w-5 text-amber-600" />,
-        text: 'Weak connection. Progress is saved locally and will be synced when stable.',
-      };
-    }
-    return null;
-  };
-
-  const netBanner = getNetworkBanner();
-
   return (
     <div className="min-h-screen bg-gray-50 px-4">
-      {/* Header (sticky) */}
-      <header ref={headerRef} className="bg-white border-b sticky top-0 z-40 shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
-          <div className="flex items-center gap-3">
-            <BookOpen className="h-6 w-6 text-blue-600" />
-            <div>
-              <h1 className="text-lg font-semibold">{quiz.title}</h1>
-              {quiz.course && (
-                <p className="text-sm text-gray-600">
-                  {typeof quiz.course === 'object' ? quiz.course.name : quiz.course}
-                </p>
-              )}
-            </div>
-          </div>
-          {!isAdmin && (
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2">
-                <Clock className="h-5 w-5 text-red-600" />
-                <span className="font-mono font-semibold text-red-600">{formatTime(timeLeft)}</span>
-              </div>
-              <div className="w-48">
-                <div className="text-xs text-gray-600">Progress: {attemptedCount}/{flattenedQuestions.length}</div>
-                <Progress value={attemptedPercent} className="mt-1" />
-              </div>
-            </div>
-          )}
-        </div>
-      </header>
-
-      {/* Sticky / Fixed Network banner positioned directly below the sticky header.
-          It is removed from flow (fixed), so we add a spacer below header equal to banner height
-          to avoid overlapping main content. */}
-      {netBanner && (
-        <div
-          ref={bannerRef}
-          style={{
-            position: 'fixed',
-            top: headerHeight,
-            left: 0,
-            right: 0,
-            zIndex: 45,
-            display: 'flex',
-            justifyContent: 'center',
-            pointerEvents: 'auto',
-          }}
-        >
-          <div className={`max-w-7xl mx-auto rounded-md border px-4 py-2 flex items-center gap-3 ${netBanner.bg}`} >
-            {netBanner.icon}
-            <div className="text-sm">{netBanner.text}</div>
-            <div className="ml-auto text-xs text-gray-500">Status: {isOnline ? netLabel : 'offline'}</div>
-          </div>
-        </div>
-      )}
-
-      {/* spacer so main content isn't hidden by fixed banner */}
-      {netBanner && <div style={{ height: bannerHeight }} />}
-
       {showTimeoutModal && (
         <Dialog open={showTimeoutModal} onOpenChange={setShowTimeoutModal}>
           <DialogContent className="w-[90vw] max-w-md sm:max-w-lg">
@@ -908,6 +616,35 @@ const StartQuizPage: React.FC = () => {
         </Dialog>
       )}
 
+      <header className="bg-white border-b sticky top-0 z-40 shadow-sm">
+        <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
+          <div className="flex items-center gap-3">
+            <BookOpen className="h-6 w-6 text-blue-600" />
+            <div>
+              <h1 className="text-lg font-semibold">{quiz.title}</h1>
+              {quiz.course && (
+                <p className="text-sm text-gray-600">
+                  {typeof quiz.course === 'object' ? quiz.course.name : quiz.course}
+                </p>
+              )}
+            </div>
+          </div>
+          {!isAdmin && (
+            // Responsive: stack into column on small screens so progress moves to a new line
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4">
+              <div className="flex items-center gap-2">
+                <Clock className="h-5 w-5 text-red-600" />
+                <span className="font-mono font-semibold text-red-600">{formatTime(timeLeft)}</span>
+              </div>
+              <div className="w-full sm:w-48">
+                <div className="text-xs text-gray-600">Progress: {attemptedCount}/{flattenedQuestions.length}</div>
+                <Progress value={attemptedPercent} className="mt-1" />
+              </div>
+            </div>
+          )}
+        </div>
+      </header>
+
       <main className="max-w-6xl w-full mx-auto p-4">
         {isAdmin && (
           <div className="bg-yellow-100 text-yellow-800 px-4 py-2 rounded-md text-sm mb-4">
@@ -953,25 +690,29 @@ const StartQuizPage: React.FC = () => {
                   {subject}
                 </h2>
                 {questions.map((q, idx) => (
-                  <div key={q.id} className="space-y-4 relative">
-                    <div className="absolute right-0 top-0 flex items-center gap-2">
-                      <button
-                        onClick={() => toggleFlag(q.id)}
-                        className={`flex items-center gap-2 px-3 py-1 rounded text-sm transition ${
-                          flags[q.id] ? 'bg-yellow-100 text-yellow-800 border border-yellow-300' : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'
-                        }`}
-                        title={flags[q.id] ? 'Unflag question' : 'Flag question'}
-                      >
-                        <Flag className={`h-4 w-4 ${flags[q.id] ? 'text-yellow-600' : 'text-gray-400'}`} />
-                        {flags[q.id] ? 'Flagged' : 'Flag'}
-                      </button>
-                    </div>
+                  <div key={q.id} className="space-y-4">
+                    {/* Responsive header: on small screens the button moves below the question text (flex-col),
+                        on sm+ screens it's shown to the right of the question (flex-row) */}
+                    <div className="flex flex-col sm:flex-row justify-between items-start gap-2">
+                      <div className="text-lg font-medium prose max-w-none">
+                        <span className="font-semibold">Q{startIdx + idx + 1}. </span>
+                        <span
+                          dangerouslySetInnerHTML={{ __html: q.questionText }}
+                        />
+                      </div>
 
-                    <div className="text-lg font-medium prose max-w-none">
-                      <span className="font-semibold">Q{startIdx + idx + 1}. </span>
-                      <span
-                        dangerouslySetInnerHTML={{ __html: q.questionText }}
-                      />
+                      <div className="flex items-center">
+                        <button
+                          onClick={() => toggleFlag(q.id)}
+                          className={`flex items-center gap-2 px-3 py-1 rounded text-sm transition ${
+                            flags[q.id] ? 'bg-yellow-100 text-yellow-800 border border-yellow-300' : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'
+                          }`}
+                          title={flags[q.id] ? 'Unflag question' : 'Flag question'}
+                        >
+                          <Flag className={`h-4 w-4 ${flags[q.id] ? 'text-yellow-600' : 'text-gray-400'}`} />
+                          {flags[q.id] ? 'Flagged' : 'Flag'}
+                        </button>
+                      </div>
                     </div>
 
                     <div className="grid gap-3">
