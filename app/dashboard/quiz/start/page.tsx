@@ -4,7 +4,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { doc, getDoc, setDoc, serverTimestamp, getDocs, collection } from 'firebase/firestore';
 import { onAuthStateChanged, User } from 'firebase/auth';
-import { db, auth } from '../../firebase';
+import { db, auth } from 'app/firebase';
 import {
   Card,
   CardHeader,
