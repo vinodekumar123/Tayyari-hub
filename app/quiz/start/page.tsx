@@ -20,7 +20,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { ArrowLeft, ArrowRight, Info, BookOpen, Clock, Send, Download, CheckCircle, Flag } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Info, BookOpen, Clock, Send, Download, CheckCircle, Flag, ArrowUp, ArrowDown } from 'lucide-react';
 import jsPDF from 'jspdf';
 
 interface Question {
@@ -72,6 +72,10 @@ const StartQuizPage: React.FC = () => {
   const [attemptCount, setAttemptCount] = useState(0);
   const hasSubmittedRef = useRef(false);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // scroll button visibility states
+  const [showScrollTop, setShowScrollTop] = useState(false);
+  const [showScrollBottom, setShowScrollBottom] = useState(false);
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (u) => {
@@ -391,6 +395,48 @@ const StartQuizPage: React.FC = () => {
     const fileName = `${quiz.title}${includeAnswers ? '_with_answers' : ''}.pdf`;
     doc.save(fileName);
   };
+
+  // Scroll helpers
+  const scrollToTop = () => {
+    if (typeof window === 'undefined') return;
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const scrollToBottom = () => {
+    if (typeof window === 'undefined') return;
+    window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'smooth' });
+  };
+
+  // Manage visibility of the floating scroll buttons based on scroll position
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const updateScrollButtons = () => {
+      const scrollY = window.scrollY || window.pageYOffset;
+      const innerH = window.innerHeight;
+      const docHeight = document.documentElement.scrollHeight;
+
+      // show top button if scrolled down > 300px
+      setShowScrollTop(scrollY > 300);
+
+      // show bottom button if not near bottom (100px threshold) and page is scrollable
+      if (docHeight > innerH + 50) {
+        setShowScrollBottom((innerH + scrollY) < (docHeight - 100));
+      } else {
+        setShowScrollBottom(false);
+      }
+    };
+
+    // initialize
+    updateScrollButtons();
+    window.addEventListener('scroll', updateScrollButtons, { passive: true });
+    window.addEventListener('resize', updateScrollButtons);
+
+    return () => {
+      window.removeEventListener('scroll', updateScrollButtons);
+      window.removeEventListener('resize', updateScrollButtons);
+    };
+  }, [loading, quiz]);
 
   if (loading || !quiz) return <p className="text-center py-10">Loading...</p>;
 
@@ -735,6 +781,30 @@ const StartQuizPage: React.FC = () => {
           </CardContent>
         </Card>
       </main>
+
+      {/* Floating scroll buttons */}
+      <div className="fixed right-4 bottom-6 z-50 flex flex-col items-center gap-3">
+        {showScrollTop && (
+          <button
+            onClick={scrollToTop}
+            title="Scroll to top"
+            aria-label="Scroll to top"
+            className="bg-white shadow-lg rounded-full p-2 hover:bg-gray-100 transition flex items-center justify-center"
+          >
+            <ArrowUp className="h-5 w-5 text-gray-700" />
+          </button>
+        )}
+        {showScrollBottom && (
+          <button
+            onClick={scrollToBottom}
+            title="Scroll to bottom"
+            aria-label="Scroll to bottom"
+            className="bg-white shadow-lg rounded-full p-2 hover:bg-gray-100 transition flex items-center justify-center"
+          >
+            <ArrowDown className="h-5 w-5 text-gray-700" />
+          </button>
+        )}
+      </div>
     </div>
   );
 };
