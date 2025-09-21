@@ -807,43 +807,48 @@ const StartQuizPage: React.FC = () => {
         </Dialog>
       )}
 
-      <header className="bg-white border-b sticky top-0 z-40 shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
-          <div className="flex items-center gap-3">
-            <BookOpen className="h-6 w-6 text-blue-600" />
-            <div>
-              <h1 className="text-lg font-semibold">{quiz.title}</h1>
-              {quiz.course && (
-                <p className="text-sm text-gray-600">
-                  {typeof quiz.course === 'object' ? quiz.course.name : quiz.course}
-                </p>
-              )}
-            </div>
+     // Replace the <header> ... </header> block in your file with this updated header JSX
+<header className="bg-white border-b sticky top-0 z-40 shadow-sm">
+  <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
+    <div className="flex items-center gap-3">
+      <BookOpen className="h-6 w-6 text-blue-600" />
+      <div>
+        <h1 className="text-lg font-semibold">{quiz.title}</h1>
+        {quiz.course && (
+          <p className="text-sm text-gray-600">
+            {typeof quiz.course === 'object' ? quiz.course.name : quiz.course}
+          </p>
+        )}
+      </div>
+    </div>
+
+    <div className="flex items-center gap-4">
+      {/* Network pill: non-shrinking and with a small min width so it never disappears */}
+      <div
+        className={`flex-shrink-0 min-w-[72px] flex items-center gap-2 px-3 py-1 rounded-full border ${pill.border} ${pill.bg}`}
+        role="status"
+        aria-live="polite"
+        title={`Connection: ${pill.text}`}
+      >
+        {pill.icon}
+        <span className={`text-sm font-medium ${pill.textColor} truncate`}>{pill.text}</span>
+      </div>
+
+      {!isAdmin && (
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <Clock className="h-5 w-5 text-red-600" />
+            <span className="font-mono font-semibold text-red-600">{formatTime(timeLeft)}</span>
           </div>
-
-          <div className="flex items-center gap-4">
-            {/* Internet status pill (always visible on all screens) */}
-            <div className={`flex items-center gap-2 px-3 py-1 rounded-full border ${pill.border} ${pill.bg}`}>
-              {pill.icon}
-              <span className={`text-sm font-medium ${pill.textColor}`}>{pill.text}</span>
-            </div>
-
-            {!isAdmin && (
-              <div className="flex items-center gap-4">
-                <div className="flex items-center gap-2">
-                  <Clock className="h-5 w-5 text-red-600" />
-                  <span className="font-mono font-semibold text-red-600">{formatTime(timeLeft)}</span>
-                </div>
-                <div className="w-48">
-                  <div className="text-xs text-gray-600">Progress: {attemptedCount}/{flattenedQuestions.length}</div>
-                  <Progress value={attemptedPercent} className="mt-1" />
-                </div>
-              </div>
-            )}
+          <div className="w-48">
+            <div className="text-xs text-gray-600">Progress: {attemptedCount}/{flattenedQuestions.length}</div>
+            <Progress value={attemptedPercent} className="mt-1" />
           </div>
         </div>
-      </header>
-
+      )}
+    </div>
+  </div>
+</header>
       <main className="max-w-6xl w-full mx-auto p-4">
         {isAdmin && (
           <div className="bg-yellow-100 text-yellow-800 px-4 py-2 rounded-md text-sm mb-4">
