@@ -1,4 +1,4 @@
-'use client'
+'use client';
 
 import { useEffect, useState, useCallback } from 'react';
 import { db } from '@/app/firebase';
@@ -8,22 +8,32 @@ import {
   addDoc,
   doc,
   updateDoc,
-  arrayUnion,
   arrayRemove,
   getDoc,
-  deleteDoc
+  deleteDoc,
+  query,
+  where
 } from 'firebase/firestore';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Edit, Trash, Plus } from 'lucide-react';
 
+// Utility for updating references in "questions" collection
+const updateReferenceNameInQuestions = async (type, oldName, newName) => {
+  const q = query(collection(db, 'questions'), where(type, '==', oldName));
+  const snap = await getDocs(q);
+  await Promise.all(snap.docs.map(d =>
+    updateDoc(doc(db, 'questions', d.id), { [type]: newName })
+  ));
+};
+
 export default function Page() {
-  const [courses, setCourses] = useState<any[]>([]);
-  const [subjects, setSubjects] = useState<any[]>([]);
-  const [newCourse, setNewCourse] = useState({ name: '', description: '', selectedSubjectIds: [] as string[] });
-  const [newSubject, setNewSubject] = useState({ name: '', chapters: [] as string[] });
-  const [editCourse, setEditCourse] = useState<any | null>(null);
-  const [editSubject, setEditSubject] = useState<any | null>(null);
-  const [chapterInput, setChapterInput] = useState<{ [subjectId: string]: string }>({});
+  const [courses, setCourses] = useState([]);
+  const [subjects, setSubjects] = useState([]);
+  const [newCourse, setNewCourse] = useState({ name: '', description: '', selectedSubjectIds: [] });
+  const [newSubject, setNewSubject] = useState({ name: '', chapters: [] });
+  const [editCourse, setEditCourse] = useState(null);
+  const [editSubject, setEditSubject] = useState(null);
+  const [chapterInput, setChapterInput] = useState({});
   const [loading, setLoading] = useState(false);
   const [showCourseModal, setShowCourseModal] = useState(false);
   const [showSubjectModal, setShowSubjectModal] = useState(false);
@@ -47,21 +57,20 @@ export default function Page() {
     setLoading(true);
     try {
       const coursesSnap = await getDocs(collection(db, 'courses'));
-      const courseList: any[] = await Promise.all(
-        coursesSnap.docs.map(async (docSnap) => {
+      const courseList = await Promise.all(
+        coursesSnap.docs.map(async docSnap => {
           const courseData = docSnap.data();
           courseData.id = docSnap.id;
           courseData.subjects = [];
-          
+
           if (courseData.subjectIds?.length) {
-            const subjectPromises = courseData.subjectIds.map(async (subId: string) => {
+            const subjectPromises = courseData.subjectIds.map(async subId => {
               const subRef = doc(db, 'subjects', subId);
               const subSnap = await getDoc(subRef);
               return subSnap.exists() ? { id: subSnap.id, ...subSnap.data() } : null;
             });
             courseData.subjects = (await Promise.all(subjectPromises)).filter(Boolean);
           }
-          
           return courseData;
         })
       );
@@ -92,16 +101,23 @@ export default function Page() {
     }
   };
 
-  // Update a subject
+  // Update a subject (with questions update)
   const updateSubject = async () => {
     if (!editSubject?.name.trim()) return;
     setLoading(true);
     try {
       const subRef = doc(db, 'subjects', editSubject.id);
+      const prev = subjects.find(s => s.id === editSubject.id);
       await updateDoc(subRef, {
         name: editSubject.name,
-        chapters: editSubject.chapters.reduce((acc: any, ch: string) => ({ ...acc, [ch]: true }), {})
+        chapters: editSubject.chapters.reduce((acc, ch) => ({ ...acc, [ch]: true }), {})
       });
+
+      // Propagate subject name change in questions
+      if (prev && prev.name !== editSubject.name) {
+        await updateReferenceNameInQuestions('subject', prev.name, editSubject.name);
+      }
+
       setEditSubject(null);
       setShowSubjectModal(false);
       await fetchSubjects();
@@ -114,13 +130,13 @@ export default function Page() {
   };
 
   // Delete a subject
-  const deleteSubject = async (subjectId: string) => {
+  const deleteSubject = async subjectId => {
     setLoading(true);
     try {
       // Remove subject from all courses
       const coursesSnap = await getDocs(collection(db, 'courses'));
       await Promise.all(
-        coursesSnap.docs.map(async (courseDoc) => {
+        coursesSnap.docs.map(async courseDoc => {
           if (courseDoc.data().subjectIds?.includes(subjectId)) {
             await updateDoc(doc(db, 'courses', courseDoc.id), {
               subjectIds: arrayRemove(subjectId)
@@ -158,17 +174,22 @@ export default function Page() {
     }
   };
 
-  // Update a course
+  // Update a course (with questions update)
   const updateCourse = async () => {
     if (!editCourse?.name.trim()) return;
     setLoading(true);
     try {
       const courseRef = doc(db, 'courses', editCourse.id);
+      const prev = courses.find(c => c.id === editCourse.id);
       await updateDoc(courseRef, {
         name: editCourse.name,
         description: editCourse.description,
         subjectIds: editCourse.selectedSubjectIds
       });
+      // Propagate course name change in questions
+      if (prev && prev.name !== editCourse.name) {
+        await updateReferenceNameInQuestions('course', prev.name, editCourse.name);
+      }
       setEditCourse(null);
       setShowCourseModal(false);
       await fetchCourses();
@@ -180,7 +201,7 @@ export default function Page() {
   };
 
   // Delete a course
-  const deleteCourse = async (courseId: string) => {
+  const deleteCourse = async courseId => {
     setLoading(true);
     try {
       await deleteDoc(doc(db, 'courses', courseId));
@@ -192,23 +213,23 @@ export default function Page() {
     }
   };
 
-  // Add a chapter to a subject
-  const addChapter = async (subjectId: string, chapterName: string) => {
+  // Add a chapter to a subject (with questions update)
+  const addChapter = async (subjectId, chapterName) => {
     if (!chapterName.trim()) return;
     setLoading(true);
     try {
       const subRef = doc(db, 'subjects', subjectId);
       const subSnap = await getDoc(subRef);
       if (!subSnap.exists()) return;
-
       const subject = subSnap.data();
+
       await updateDoc(subRef, {
         chapters: {
           ...subject.chapters,
           [chapterName]: true
         }
       });
-      setChapterInput((prev) => ({ ...prev, [subjectId]: '' }));
+      setChapterInput(prev => ({ ...prev, [subjectId]: '' }));
       await fetchCourses();
     } catch (error) {
       console.error('Error adding chapter:', error);
@@ -217,14 +238,38 @@ export default function Page() {
     }
   };
 
-  // Delete a chapter
-  const deleteChapter = async (subjectId: string, chapterName: string) => {
+  // Rename a chapter (with questions update)
+  const renameChapter = async (subjectId, oldChapterName, newChapterName) => {
+    if (!newChapterName.trim() || oldChapterName === newChapterName) return;
     setLoading(true);
     try {
       const subRef = doc(db, 'subjects', subjectId);
       const subSnap = await getDoc(subRef);
       if (!subSnap.exists()) return;
+      const subject = subSnap.data();
+      const updatedChapters = { ...subject.chapters };
+      delete updatedChapters[oldChapterName];
+      updatedChapters[newChapterName] = true;
+      await updateDoc(subRef, { chapters: updatedChapters });
 
+      // Propagate chapter name change in questions
+      await updateReferenceNameInQuestions('chapter', oldChapterName, newChapterName);
+
+      await fetchCourses();
+    } catch (error) {
+      console.error('Error renaming chapter:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Delete a chapter
+  const deleteChapter = async (subjectId, chapterName) => {
+    setLoading(true);
+    try {
+      const subRef = doc(db, 'subjects', subjectId);
+      const subSnap = await getDoc(subRef);
+      if (!subSnap.exists()) return;
       const subject = subSnap.data();
       const updatedChapters = { ...subject.chapters };
       delete updatedChapters[chapterName];
@@ -242,69 +287,82 @@ export default function Page() {
     fetchSubjects();
   }, [fetchCourses, fetchSubjects]);
 
+  // Responsive UI with modern interactions
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-200 p-4 sm:p-6 md:p-8">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-200 p-2 sm:p-4 md:p-8 font-inter">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-center mb-6 md:mb-8">
+      <header className="flex flex-col sm:flex-row justify-between items-center mb-6 md:mb-8">
         <motion.h1 
-          className="text-3xl sm:text-4xl font-extrabold text-gray-800 mb-4 sm:mb-0"
+          className="text-3xl sm:text-4xl font-black text-gray-900 mb-4 sm:mb-0"
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
         >
           Course Management
         </motion.h1>
-        <div className="flex space-x-2 sm:space-x-4">
+        <div className="flex gap-2 sm:gap-4">
           <button
-            className="bg-green-500 text-white px-3 py-2 sm:px-4 sm:py-2 rounded-lg hover:bg-green-600 transition-all flex items-center"
+            className="bg-green-600 text-white px-4 py-2 rounded-lg shadow hover:bg-green-700 transition-all flex items-center gap-2"
             onClick={() => {
               setNewSubject({ name: '', chapters: [] });
               setEditSubject(null);
               setShowSubjectModal(true);
             }}
           >
-            <Plus className="w-4 h-4 mr-2" /> Add Subject
+            <Plus className="w-4 h-4" /> Add Subject
           </button>
           <button
-            className="bg-blue-500 text-white px-3 py-2 sm:px-4 sm:py-2 rounded-lg hover:bg-blue-600 transition-all flex items-center"
+            className="bg-blue-600 text-white px-4 py-2 rounded-lg shadow hover:bg-blue-700 transition-all flex items-center gap-2"
             onClick={() => {
               setNewCourse({ name: '', description: '', selectedSubjectIds: [] });
               setEditCourse(null);
               setShowCourseModal(true);
             }}
           >
-            <Plus className="w-4 h-4 mr-2" /> Add Course
+            <Plus className="w-4 h-4" /> Add Course
           </button>
         </div>
-      </div>
+      </header>
 
       {/* Subjects List */}
-      <motion.div
+      <motion.section
         className="mb-8"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ duration: 0.5 }}
       >
-        <h2 className="text-2xl font-semibold text-gray-700 mb-4">Subjects</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <h2 className="text-2xl font-semibold text-gray-800 mb-4">Subjects</h2>
+        <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           <AnimatePresence>
-            {subjects.map((sub) => (
+            {subjects.map(sub => (
               <motion.div
                 key={sub.id}
-                className="bg-white rounded-xl shadow-lg p-4 flex justify-between items-start"
+                className="bg-white rounded-xl shadow-lg p-4 flex flex-col justify-between items-start group hover:ring-2 hover:ring-green-300 transition-all"
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -20 }}
                 transition={{ duration: 0.3 }}
               >
-                <div>
-                  <strong className="text-gray-800">{sub.name}</strong>
+                <div className="w-full">
+                  <strong className="text-gray-800 text-lg">{sub.name}</strong>
                   <ul className="ml-4 mt-2 space-y-1">
                     {Object.keys(sub.chapters || {}).map((ch, idx) => (
-                      <li key={idx} className="text-gray-600 text-sm flex items-center">
+                      <li key={idx} className="text-gray-600 text-sm flex items-center gap-2">
                         <span>• {ch}</span>
                         <button
-                          className="ml-2 text-red-500 hover:text-red-600"
+                          className="ml-1 text-blue-500 hover:text-blue-600"
+                          onClick={() => {
+                            // Prompt for new chapter name and call renameChapter
+                            const newName = prompt(`Rename chapter "${ch}" to:`, ch);
+                            if (newName && newName.trim() && newName !== ch) {
+                              renameChapter(sub.id, ch, newName.trim());
+                            }
+                          }}
+                        >
+                          <Edit className="w-4 h-4" />
+                        </button>
+                        <button
+                          className="ml-1 text-red-500 hover:text-red-600"
                           onClick={() => deleteChapter(sub.id, ch)}
                         >
                           <Trash className="w-4 h-4" />
@@ -313,9 +371,9 @@ export default function Page() {
                     ))}
                   </ul>
                 </div>
-                <div className="flex space-x-2">
+                <div className="flex gap-2 mt-2 w-full">
                   <button
-                    className="text-blue-500 hover:text-blue-600"
+                    className="text-blue-600 hover:text-blue-700"
                     onClick={() => {
                       setEditSubject({ id: sub.id, name: sub.name, chapters: Object.keys(sub.chapters || {}) });
                       setShowSubjectModal(true);
@@ -324,7 +382,7 @@ export default function Page() {
                     <Edit className="w-5 h-5" />
                   </button>
                   <button
-                    className="text-red-500 hover:text-red-600"
+                    className="text-red-600 hover:text-red-700"
                     onClick={() => deleteSubject(sub.id)}
                   >
                     <Trash className="w-5 h-5" />
@@ -334,19 +392,19 @@ export default function Page() {
             ))}
           </AnimatePresence>
         </div>
-      </motion.div>
+      </motion.section>
 
       {/* Add/Edit Subject Modal */}
       <AnimatePresence>
         {showSubjectModal && (
           <motion.div
-            className="fixed inset-0 bg-black/50 flex items-center justify-center p-4"
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
           >
             <motion.div
-              className="bg-white rounded-xl p-6 w-full max-w-md"
+              className="bg-white rounded-xl p-6 w-full max-w-md shadow-lg"
               initial={{ scale: 0.8 }}
               animate={{ scale: 1 }}
               exit={{ scale: 0.8 }}
@@ -355,10 +413,10 @@ export default function Page() {
                 {editSubject ? 'Edit Subject' : 'Add New Subject'}
               </h2>
               <input
-                className="w-full p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent mb-4"
+                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent mb-4"
                 placeholder="Subject Name"
                 value={editSubject ? editSubject.name : newSubject.name}
-                onChange={(e) => {
+                onChange={e => {
                   const value = e.target.value;
                   if (editSubject) {
                     setEditSubject({ ...editSubject, name: value });
@@ -370,13 +428,33 @@ export default function Page() {
               <div className="mb-4">
                 <h3 className="text-lg font-semibold text-gray-700">Chapters</h3>
                 <div className="space-y-2 max-h-40 overflow-y-auto">
-                  {(editSubject ? editSubject.chapters : newSubject.chapters).map((ch: string, idx: number) => (
+                  {(editSubject ? editSubject.chapters : newSubject.chapters).map((ch, idx) => (
                     <div key={idx} className="flex items-center gap-2">
                       <span className="flex-1">{ch}</span>
                       <button
+                        className="text-blue-500 hover:text-blue-600"
+                        onClick={() => {
+                          const newName = prompt(`Rename chapter "${ch}" to:`, ch);
+                          if (newName && newName.trim() && newName !== ch) {
+                            if (editSubject) {
+                              // Rename in editSubject local state
+                              const chapters = [...editSubject.chapters];
+                              chapters[idx] = newName.trim();
+                              setEditSubject({ ...editSubject, chapters });
+                            } else {
+                              const chapters = [...newSubject.chapters];
+                              chapters[idx] = newName.trim();
+                              setNewSubject({ ...newSubject, chapters });
+                            }
+                          }
+                        }}
+                      >
+                        <Edit className="w-4 h-4" />
+                      </button>
+                      <button
                         className="text-red-500 hover:text-red-600"
                         onClick={() => {
-                          const chapters = (editSubject ? editSubject.chapters : newSubject.chapters).filter((_: any, i: number) => i !== idx);
+                          const chapters = (editSubject ? editSubject.chapters : newSubject.chapters).filter((_, i) => i !== idx);
                           if (editSubject) {
                             setEditSubject({ ...editSubject, chapters });
                           } else {
@@ -391,13 +469,13 @@ export default function Page() {
                 </div>
                 <div className="flex gap-2 mt-2">
                   <input
-                    className="flex-1 p-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-green-500"
+                    className="flex-1 p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
                     placeholder="Add Chapter"
                     value={chapterInput['new'] || ''}
-                    onChange={(e) => setChapterInput({ ...chapterInput, new: e.target.value })}
+                    onChange={e => setChapterInput({ ...chapterInput, new: e.target.value })}
                   />
                   <button
-                    className="bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600 transition-all disabled:bg-green-300"
+                    className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-all disabled:bg-green-300"
                     onClick={() => {
                       const chapterName = chapterInput['new']?.trim();
                       if (chapterName) {
@@ -430,7 +508,7 @@ export default function Page() {
                   Cancel
                 </button>
                 <button
-                  className="bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600 transition-all disabled:bg-green-300"
+                  className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-all disabled:bg-green-300"
                   onClick={editSubject ? updateSubject : createSubject}
                   disabled={loading || !(editSubject ? editSubject.name : newSubject.name).trim()}
                 >
@@ -446,13 +524,13 @@ export default function Page() {
       <AnimatePresence>
         {showCourseModal && (
           <motion.div
-            className="fixed inset-0 bg-black/50 flex items-center justify-center p-4"
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
           >
             <motion.div
-              className="bg-white rounded-xl p-6 w-full max-w-md"
+              className="bg-white rounded-xl p-6 w-full max-w-md shadow-lg"
               initial={{ scale: 0.8 }}
               animate={{ scale: 1 }}
               exit={{ scale: 0.8 }}
@@ -461,10 +539,10 @@ export default function Page() {
                 {editCourse ? 'Edit Course' : 'Create New Course'}
               </h2>
               <input
-                className="w-full p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent mb-4"
+                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent mb-4"
                 placeholder="Course Name"
                 value={editCourse ? editCourse.name : newCourse.name}
-                onChange={(e) => {
+                onChange={e => {
                   const value = e.target.value;
                   if (editCourse) {
                     setEditCourse({ ...editCourse, name: value });
@@ -474,11 +552,11 @@ export default function Page() {
                 }}
               />
               <textarea
-                className="w-full p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent mb-4"
+                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent mb-4"
                 placeholder="Course Description"
                 rows={4}
                 value={editCourse ? editCourse.description : newCourse.description}
-                onChange={(e) => {
+                onChange={e => {
                   const value = e.target.value;
                   if (editCourse) {
                     setEditCourse({ ...editCourse, description: value });
@@ -490,15 +568,15 @@ export default function Page() {
               <div className="mb-4">
                 <h3 className="text-lg font-semibold text-gray-700">Select Subjects</h3>
                 <div className="space-y-2 max-h-40 overflow-y-auto">
-                  {subjects.map((sub) => (
+                  {subjects.map(sub => (
                     <label key={sub.id} className="flex items-center gap-2">
                       <input
                         type="checkbox"
                         checked={(editCourse ? editCourse.selectedSubjectIds : newCourse.selectedSubjectIds).includes(sub.id)}
-                        onChange={(e) => {
+                        onChange={e => {
                           const selected = e.target.checked
                             ? [...(editCourse ? editCourse.selectedSubjectIds : newCourse.selectedSubjectIds), sub.id]
-                            : (editCourse ? editCourse.selectedSubjectIds : newCourse.selectedSubjectIds).filter((id: string) => id !== sub.id);
+                            : (editCourse ? editCourse.selectedSubjectIds : newCourse.selectedSubjectIds).filter(id => id !== sub.id);
                           if (editCourse) {
                             setEditCourse({ ...editCourse, selectedSubjectIds: selected });
                           } else {
@@ -523,7 +601,7 @@ export default function Page() {
                   Cancel
                 </button>
                 <button
-                  className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition-all disabled:bg-blue-300"
+                  className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-all disabled:bg-blue-300"
                   onClick={editCourse ? updateCourse : createCourse}
                   disabled={loading || !(editCourse ? editCourse.name : newCourse.name).trim()}
                 >
@@ -537,21 +615,21 @@ export default function Page() {
 
       {/* Courses List */}
       <div className="max-w-7xl mx-auto">
-        <h2 className="text-2xl font-semibold text-gray-700 mb-4">Courses</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <h2 className="text-2xl font-semibold text-gray-800 mb-4">Courses</h2>
+        <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           <AnimatePresence>
-            {courses.map((course) => (
+            {courses.map(course => (
               <motion.div
                 key={course.id}
-                className="bg-white rounded-xl shadow-lg p-6 relative"
+                className="bg-white rounded-xl shadow-lg p-6 relative hover:ring-2 hover:ring-blue-300 transition-all"
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -20 }}
                 transition={{ duration: 0.3 }}
               >
-                <div className="absolute top-4 right-4 flex space-x-2">
+                <div className="absolute top-4 right-4 flex gap-2">
                   <button
-                    className="text-blue-500 hover:text-blue-600"
+                    className="text-blue-600 hover:text-blue-700"
                     onClick={() => {
                       setEditCourse({ id: course.id, name: course.name, description: course.description, selectedSubjectIds: course.subjectIds });
                       setShowCourseModal(true);
@@ -560,26 +638,36 @@ export default function Page() {
                     <Edit className="w-5 h-5" />
                   </button>
                   <button
-                    className="text-red-500 hover:text-red-600"
+                    className="text-red-600 hover:text-red-700"
                     onClick={() => deleteCourse(course.id)}
                   >
                     <Trash className="w-5 h-5" />
                   </button>
                 </div>
-                <h2 className="text-xl font-bold text-gray-800 pr-16">{course.name}</h2>
+                <h2 className="text-xl font-bold text-gray-900 pr-16">{course.name}</h2>
                 <p className="text-gray-600 mt-2">{course.description || 'No description'}</p>
-                
-                <h3 className="text-lg font-semibold text-gray-700 mt-4">Subjects</h3>
+                <h3 className="text-lg font-semibold text-gray-800 mt-4">Subjects</h3>
                 <ul className="space-y-4 mt-2">
-                  {course.subjects.map((sub: any) => (
+                  {course.subjects.map(sub => (
                     <li key={sub.id} className="border-l-4 border-blue-500 pl-4">
                       <strong className="text-gray-800">{sub.name}</strong>
                       <ul className="ml-4 mt-2 space-y-1">
                         {Object.keys(sub.chapters || {}).map((ch, idx) => (
-                          <li key={idx} className="text-gray-600 text-sm flex items-center">
+                          <li key={idx} className="text-gray-600 text-sm flex items-center gap-2">
                             <span>• {ch}</span>
                             <button
-                              className="ml-2 text-red-500 hover:text-red-600"
+                              className="ml-1 text-blue-500 hover:text-blue-600"
+                              onClick={() => {
+                                const newName = prompt(`Rename chapter "${ch}" to:`, ch);
+                                if (newName && newName.trim() && newName !== ch) {
+                                  renameChapter(sub.id, ch, newName.trim());
+                                }
+                              }}
+                            >
+                              <Edit className="w-4 h-4" />
+                            </button>
+                            <button
+                              className="ml-1 text-red-500 hover:text-red-600"
                               onClick={() => deleteChapter(sub.id, ch)}
                             >
                               <Trash className="w-4 h-4" />
@@ -589,13 +677,13 @@ export default function Page() {
                       </ul>
                       <div className="flex gap-2 mt-2">
                         <input
-                          className="flex-1 p-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500"
+                          className="flex-1 p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                           placeholder="Add Chapter"
                           value={chapterInput[sub.id] || ''}
-                          onChange={(e) => setChapterInput({ ...chapterInput, [sub.id]: e.target.value })}
+                          onChange={e => setChapterInput({ ...chapterInput, [sub.id]: e.target.value })}
                         />
                         <button
-                          className="bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600 transition-all disabled:bg-green-300"
+                          className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-all disabled:bg-green-300"
                           onClick={() => addChapter(sub.id, chapterInput[sub.id] || '')}
                           disabled={loading || !chapterInput[sub.id]?.trim()}
                         >
@@ -612,7 +700,7 @@ export default function Page() {
       </div>
 
       {loading && (
-        <div className="fixed inset-0 flex items-center justify-center bg-black/20">
+        <div className="fixed inset-0 flex items-center justify-center bg-black/30 z-50">
           <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-500 border-t-transparent"></div>
         </div>
       )}
