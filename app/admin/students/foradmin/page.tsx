@@ -1,6 +1,8 @@
+// npm install react-chartjs-2 chart.js
+
 'use client';
 
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useRef } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import {
   collection,
@@ -19,7 +21,6 @@ import {
 import { Button } from '@/components/ui/button';
 import { format } from 'date-fns';
 import { Skeleton } from '@/components/ui/skeleton';
-
 // Chart imports
 import {
   Line,
@@ -37,6 +38,16 @@ import {
 } from 'chart.js';
 Chart.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, Tooltip, Legend);
 
+// Section keys for printing
+const PRINT_SECTIONS = [
+  { key: 'summary', label: 'Summary Cards (Best/Worst Test, Consistency)' },
+  { key: 'subjectCharts', label: 'Subject Charts' },
+  { key: 'subjectRemarks', label: 'Subject-wise Remarks' },
+  { key: 'testCharts', label: 'Test Charts' },
+  { key: 'testRemarks', label: 'Test-wise Remarks' },
+  { key: 'allTests', label: 'All Tests Table' },
+];
+
 export default function ForAdminStudentResults() {
   const [results, setResults] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -50,6 +61,12 @@ export default function ForAdminStudentResults() {
     { subject: string; attempted: number; skipped: number; correct: number; wrong: number; accuracy: number }[]
   >([]);
   const [progressPoints, setProgressPoints] = useState<number[]>([]);
+  const [printSelection, setPrintSelection] = useState<string[]>(PRINT_SECTIONS.map(s => s.key));
+
+  // Chart refs for exporting images
+  const subjectBarRef = useRef<any>();
+  const subjectLineRef = useRef<any>();
+  const testBarRef = useRef<any>();
 
   const router = useRouter();
   const db = getFirestore(app);
@@ -79,13 +96,10 @@ export default function ForAdminStudentResults() {
       let totalCorrectAcrossAll = 0;
       let totalQuestionsAcrossAll = 0;
 
-      // subject aggregation map keyed by subject name
       const subjectMap: Record<
         string,
         { attempted: number; skipped: number; correct: number; wrong: number; totalQuestionsSum: number }
       > = {};
-
-      // For progress chart
       const progressArray: { ts: number; accuracy: number }[] = [];
 
       const paths = [
@@ -93,7 +107,6 @@ export default function ForAdminStudentResults() {
         { attemptPath: 'mock-quizAttempts', quizSource: 'mock-quizzes', isMock: true },
       ];
 
-      // helpers
       const getQId = (q: any, idx = 0) => q?.id ?? q?._id ?? q?.questionId ?? q?.qid ?? (typeof q === 'string' ? q : `idx_${idx}`);
       const getQSubject = (q: any, quizMeta: any) => {
         if (!q) return 'Unspecified';
@@ -343,14 +356,11 @@ export default function ForAdminStudentResults() {
     fetchStudentResults();
   }, [studentId]);
 
-  // --- Premium Analytics ---
-
+  // Premium Analytics
   const bestTest = useMemo(() => results.length ? results.reduce((a, b) => a.accuracy > b.accuracy ? a : b) : null, [results]);
   const weakestTest = useMemo(() => results.length ? results.reduce((a, b) => a.accuracy < b.accuracy ? a : b) : null, [results]);
   const bestSubject = useMemo(() => subjectAnalytics.length ? subjectAnalytics.reduce((a, b) => a.accuracy > b.accuracy ? a : b) : null, [subjectAnalytics]);
   const weakestSubject = useMemo(() => subjectAnalytics.length ? subjectAnalytics.reduce((a, b) => a.accuracy < b.accuracy ? a : b) : null, [subjectAnalytics]);
-
-  // Subject over time for line chart
   const subjectOverTimeData = useMemo(() => {
     const map = {};
     results.forEach(r => {
@@ -363,22 +373,16 @@ export default function ForAdminStudentResults() {
     });
     return map;
   }, [results]);
-
-  // Consistency metric (standard deviation)
   const consistency = useMemo(() => {
     if (!results.length) return 0;
     const mean = results.reduce((a, b) => a + b.accuracy, 0) / results.length;
     const variance = results.reduce((a, b) => a + Math.pow(b.accuracy - mean, 2), 0) / results.length;
     return Math.round(Math.sqrt(variance) * 100) / 100;
   }, [results]);
-
-  // Improvement metric (trend)
   const improvement = useMemo(() => {
     if (progressPoints.length < 2) return 0;
     return Math.round(progressPoints[progressPoints.length - 1] - progressPoints[0]);
   }, [progressPoints]);
-
-  // Remarks
   function getTestRemark(test) {
     if (test.accuracy >= 90) return "🌟 Outstanding!";
     if (test.accuracy >= 75) return "👏 Good job!";
@@ -393,8 +397,6 @@ export default function ForAdminStudentResults() {
     if (subj.accuracy >= 40) return "⚠️ Weak spot.";
     return "🚨 Needs urgent focus.";
   }
-
-  // Chart Data
   const subjectChartData = useMemo(() => ({
     labels: subjectAnalytics.map(s => s.subject),
     datasets: [{
@@ -404,7 +406,6 @@ export default function ForAdminStudentResults() {
       borderWidth: 1,
     }]
   }), [subjectAnalytics]);
-
   const testBarData = useMemo(() => ({
     labels: results.map(r => r.title),
     datasets: [{
@@ -413,7 +414,6 @@ export default function ForAdminStudentResults() {
       backgroundColor: results.map((r,i)=>`rgba(59,130,246,${0.6+0.1*i})`)
     }]
   }), [results]);
-
   const subjectTrendLineData = useMemo(() => {
     const subjects = Object.keys(subjectOverTimeData);
     return {
@@ -428,7 +428,6 @@ export default function ForAdminStudentResults() {
       }))
     };
   }, [subjectOverTimeData, results]);
-
   const tableRows = useMemo(() => {
     return results.map((r) => ({
       id: r.id,
@@ -442,7 +441,7 @@ export default function ForAdminStudentResults() {
     }));
   }, [results]);
 
-  // Print function (same as before)
+  // Print function with charts
   function escapeHtml(text: any) {
     if (typeof text !== 'string') return text;
     return text
@@ -452,40 +451,39 @@ export default function ForAdminStudentResults() {
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&#039;');
   }
+  async function printSelectedSectionsWithCharts(sections: string[]) {
+    // Get chart images as Data URLs
+    let subjectBarImg = '';
+    let subjectLineImg = '';
+    let testBarImg = '';
+    // Wait for chart refs to be loaded
+    if (sections.includes('subjectCharts') && subjectBarRef.current) {
+      subjectBarImg = subjectBarRef.current.toBase64Image();
+    }
+    if (sections.includes('subjectCharts') && subjectLineRef.current) {
+      subjectLineImg = subjectLineRef.current.toBase64Image();
+    }
+    if (sections.includes('testCharts') && testBarRef.current) {
+      testBarImg = testBarRef.current.toBase64Image();
+    }
 
-  const printResults = (selectedResults = results) => {
-    const printableTitle = `${studentName || 'Student'} - Results`;
+    const printableTitle = `${studentName || 'Student'} - Analytics`;
     const style = `
       body { font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; padding: 24px; color:#0f172a }
+      h2 { font-size: 22px; margin-top: 30px }
       .card { border-radius: 12px; border: 1px solid #e6edf3; padding: 18px; margin-bottom: 18px; box-shadow: 0 6px 18px rgba(2,6,23,0.06) }
-      .header { display:flex; justify-content:space-between; align-items:center; margin-bottom: 12px }
-      .title { font-size:18px; font-weight:700; }
-      .meta { color:#475569; font-size:13px; }
       table { width:100%; border-collapse: collapse; margin-top:12px; }
       th, td { padding:10px 8px; border-bottom:1px solid #f1f5f9; text-align:left; font-size:13px }
       th { background: #f8fafc; color:#0f172a; font-weight:600 }
       .big-score { font-size:28px; font-weight:800; color:#1e40af }
+      .remark { font-size:16px; margin-top:6px }
+      img.chart { max-width: 100%; margin: 18px 0; border-radius: 12px; box-shadow: 0 4px 14px rgba(2,6,23,0.11); }
       @media print {
         button { display:none; }
         body { -webkit-print-color-adjust: exact; }
       }
     `;
-
-    const rowsHtml = (selectedResults || []).map((r) => {
-      const dateStr = r.timestamp ? format(new Date(r.timestamp), 'dd MMM yyyy, hh:mm a') : 'N/A';
-      const totalQ = r.countedQuestions && r.countedQuestions > 0 ? r.countedQuestions : r.currentTotal ?? r.total ?? 'N/A';
-      const correct = r.correct ?? r.originalScore ?? 0;
-      const accuracy = typeof r.accuracy === 'number' ? `${r.accuracy}%` : 'N/A';
-      return `<tr>
-        <td>${escapeHtml(r.title)}</td>
-        <td>${dateStr}</td>
-        <td style="text-align:right">${totalQ}</td>
-        <td style="text-align:right">${correct}</td>
-        <td style="text-align:right">${accuracy}</td>
-      </tr>`;
-    }).join('');
-
-    const html = `
+    let html = `
       <!doctype html>
       <html>
         <head>
@@ -494,73 +492,139 @@ export default function ForAdminStudentResults() {
           <style>${style}</style>
         </head>
         <body>
-          <div class="header">
+          <div style="display:flex;justify-content:space-between;align-items:center;">
             <div>
-              <div class="title">${escapeHtml(printableTitle)}</div>
-              <div class="meta">Overall: ${analytics.scored} / ${analytics.total} (${analytics.average}%)</div>
+              <div style="font-size:24px;font-weight:700;">${escapeHtml(printableTitle)}</div>
+              <div style="color:#475569;font-size:15px;">
+                Overall: ${analytics.scored} / ${analytics.total} (${analytics.average}%)
+              </div>
+              <div style="margin-top:8px;font-size:12px;color:#64748b">Generated: ${format(new Date(), 'dd MMM yyyy, hh:mm a')}</div>
             </div>
             <div style="text-align:right">
-              <div style="font-size:12px;color:#64748b">Generated: ${format(new Date(), 'dd MMM yyyy, hh:mm a')}</div>
-              <div style="margin-top:8px"><button onclick="window.print()" style="padding:8px 12px;border-radius:8px;background:#2563eb;border:none;color:white;cursor:pointer">Print / Save as PDF</button></div>
+              <div class="big-score">${analytics.average}%</div>
+              <div style="font-size:12px;color:#64748b">Average Accuracy</div>
             </div>
           </div>
-
-          <div class="card">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-              <div>
-                <div style="font-size:16px;font-weight:700">${escapeHtml(studentName)}</div>
-                <div style="color:#475569;font-size:13px">Student results list below</div>
-              </div>
-              <div style="text-align:right">
-                <div class="big-score">${analytics.average}%</div>
-                <div style="font-size:12px;color:#64748b">Average Accuracy</div>
-              </div>
-            </div>
-
-            <table>
-              <thead>
-                <tr>
-                  <th>Title</th>
-                  <th>Submitted</th>
-                  <th style="text-align:right">Total Q</th>
-                  <th style="text-align:right">Correct</th>
-                  <th style="text-align:right">Accuracy</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${rowsHtml}
-              </tbody>
-            </table>
-          </div>
-        </body>
-      </html>
     `;
 
-    try {
-      const blob = new Blob([html], { type: 'text/html' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.target = '_blank';
-      a.rel = 'noopener noreferrer';
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 20000);
-    } catch (err) {
-      console.error('Failed to open print page via blob URL. Falling back to window.open.', err);
-      const w = window.open();
-      if (w) {
-        w.document.open();
-        w.document.write(html);
-        w.document.close();
-      } else {
-        alert('Unable to open print page. Your browser may be blocking popups. Try allowing popups or using the print button in the UI.');
-      }
+    // Print summary cards
+    if (sections.includes('summary')) {
+      html += `<h2>Summary Cards</h2>
+        <div class="card">
+          <div><strong>Best Test:</strong> ${bestTest ? escapeHtml(bestTest.title) : 'N/A'} (${bestTest ? bestTest.accuracy+'%' : ''}) <span class="remark">${bestTest ? getTestRemark(bestTest) : ''}</span></div>
+          <div><strong>Weakest Test:</strong> ${weakestTest ? escapeHtml(weakestTest.title) : 'N/A'} (${weakestTest ? weakestTest.accuracy+'%' : ''}) <span class="remark">${weakestTest ? getTestRemark(weakestTest) : ''}</span></div>
+          <div><strong>Consistency:</strong> ${consistency}</div>
+          <div><strong>Improvement:</strong> ${improvement >= 0 ? '↑' : '↓'} ${Math.abs(improvement)}%</div>
+        </div>
+      `;
+    }
+    // Print subject charts
+    if (sections.includes('subjectCharts')) {
+      html += `<h2>Subject-wise Accuracy Chart</h2>
+        <div class="card">
+          ${subjectBarImg ? `<img src="${subjectBarImg}" class="chart" alt="Subject Accuracy Bar Chart"/>` : '<div>[Chart not available]</div>'}
+        </div>
+        <h2>Subject Trend Over Time</h2>
+        <div class="card">
+          ${subjectLineImg ? `<img src="${subjectLineImg}" class="chart" alt="Subject Trend Line Chart"/>` : '<div>[Chart not available]</div>'}
+        </div>`;
+    }
+    // Print subject remarks
+    if (sections.includes('subjectRemarks')) {
+      html += `<h2>Subject-wise Remarks</h2><div class="card"><table>
+        <thead>
+          <tr>
+            <th>Subject</th>
+            <th style="text-align:right">Accuracy</th>
+            <th>Remarks</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${subjectAnalytics.map(subj => `
+            <tr>
+              <td>${escapeHtml(subj.subject)}</td>
+              <td style="text-align:right">${subj.accuracy}%</td>
+              <td class="remark">${getSubjectRemark(subj)}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table></div>`;
+    }
+    // Print test charts
+    if (sections.includes('testCharts')) {
+      html += `<h2>Test Accuracy Comparison Chart</h2>
+        <div class="card">
+          ${testBarImg ? `<img src="${testBarImg}" class="chart" alt="Test Accuracy Bar Chart"/>` : '<div>[Chart not available]</div>'}
+        </div>`;
+    }
+    // Print test remarks
+    if (sections.includes('testRemarks')) {
+      html += `<h2>Test-wise Remarks & Analytics</h2><div class="card"><table>
+        <thead>
+          <tr>
+            <th>Test</th>
+            <th style="text-align:right">Accuracy</th>
+            <th>Remarks</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${results.map(test => `
+            <tr>
+              <td>${escapeHtml(test.title)}</td>
+              <td style="text-align:right">${test.accuracy}%</td>
+              <td class="remark">${getTestRemark(test)}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table></div>`;
+    }
+    // Print all tests table
+    if (sections.includes('allTests')) {
+      html += `<h2>All Tests Table</h2><div class="card"><table>
+        <thead>
+          <tr>
+            <th>Title</th>
+            <th>Submitted</th>
+            <th style="text-align:right">Total Q</th>
+            <th style="text-align:right">Correct</th>
+            <th style="text-align:right">Accuracy</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${results.map(r => {
+            const dateStr = r.timestamp ? format(new Date(r.timestamp), 'dd MMM yyyy, hh:mm a') : 'N/A';
+            const totalQ = r.countedQuestions && r.countedQuestions > 0 ? r.countedQuestions : r.currentTotal ?? r.total ?? 'N/A';
+            const correct = r.correct ?? r.originalScore ?? 0;
+            const accuracy = typeof r.accuracy === 'number' ? `${r.accuracy}%` : 'N/A';
+            return `
+              <tr>
+                <td>${escapeHtml(r.title)}</td>
+                <td>${dateStr}</td>
+                <td style="text-align:right">${totalQ}</td>
+                <td style="text-align:right">${correct}</td>
+                <td style="text-align:right">${accuracy}</td>
+              </tr>
+            `;
+          }).join('')}
+        </tbody>
+      </table></div>`;
+    }
+
+    // Final
+    html += `</body></html>`;
+
+    // Open in new tab (not popup)
+    const printWindow = window.open();
+    if (printWindow) {
+      printWindow.document.open();
+      printWindow.document.write(html);
+      printWindow.document.close();
+    } else {
+      alert('Unable to open print page. Your browser may be blocking popups.');
     }
   }
 
-  // --- UI ---
+  // UI
   return (
     <div className="mx-auto py-12 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-white to-blue-50 min-h-screen">
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-6 gap-4">
@@ -575,21 +639,38 @@ export default function ForAdminStudentResults() {
             Premium features: Subject graphs, test ranking, remarks, consistency, improvement trend, and more!
           </div>
         </div>
-        <div className="flex items-center gap-3">
-          <Button variant="ghost" onClick={() => router.push('/admin/students')}>
-            ← Back
-          </Button>
+        <div className="flex flex-col gap-2 items-end">
+          <div className="flex flex-wrap gap-2">
+            {PRINT_SECTIONS.map(section => (
+              <label key={section.key} className="inline-flex items-center text-xs font-medium text-gray-600 bg-gray-100 px-2 py-1 rounded">
+                <input
+                  type="checkbox"
+                  checked={printSelection.includes(section.key)}
+                  onChange={e => {
+                    setPrintSelection(sel =>
+                      e.target.checked
+                        ? [...sel, section.key]
+                        : sel.filter(k => k !== section.key)
+                    );
+                  }}
+                  className="mr-2"
+                />
+                {section.label}
+              </label>
+            ))}
+          </div>
           <Button
             variant="outline"
-            onClick={() => printResults()}
+            onClick={() => printSelectedSectionsWithCharts(printSelection)}
+            disabled={printSelection.length === 0}
           >
-            🖨️ Download / Print Results
+            🖨️ Print Selected Analytics
           </Button>
         </div>
       </div>
 
       {/* Advanced analytics cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8" id="summary-print">
         <Card className="p-4 bg-gradient-to-r from-indigo-50 to-blue-100 shadow">
           <CardHeader>
             <CardTitle>Best Test</CardTitle>
@@ -631,13 +712,13 @@ export default function ForAdminStudentResults() {
       </div>
 
       {/* Subject-wise analytics with chart */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8" id="subjectCharts-print">
         <Card className="p-4">
           <CardHeader>
             <CardTitle>Subject-wise Accuracy</CardTitle>
           </CardHeader>
           <CardContent>
-            <Bar data={subjectChartData} options={{
+            <Bar ref={subjectBarRef} data={subjectChartData} options={{
               responsive: true,
               plugins: { legend: { display: false } },
               scales: { y: { min: 0, max: 100 } }
@@ -649,7 +730,7 @@ export default function ForAdminStudentResults() {
             <CardTitle>Subject Trend Over Time</CardTitle>
           </CardHeader>
           <CardContent>
-            <Line data={subjectTrendLineData} options={{
+            <Line ref={subjectLineRef} data={subjectTrendLineData} options={{
               responsive: true,
               plugins: { legend: { position: 'bottom' } },
               scales: { y: { min: 0, max: 100 } }
@@ -659,7 +740,7 @@ export default function ForAdminStudentResults() {
       </div>
 
       {/* Subject ranking and remarks */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8" id="subjectRemarks-print">
         <Card className="p-4 bg-gradient-to-r from-cyan-50 to-teal-100">
           <CardHeader>
             <CardTitle>Best Subject</CardTitle>
@@ -691,12 +772,12 @@ export default function ForAdminStudentResults() {
       </div>
 
       {/* Test-wise bar chart */}
-      <Card className="p-4 mb-8">
+      <Card className="p-4 mb-8" id="testCharts-print">
         <CardHeader>
           <CardTitle>Test Accuracy Comparison</CardTitle>
         </CardHeader>
         <CardContent>
-          <Bar data={testBarData} options={{
+          <Bar ref={testBarRef} data={testBarData} options={{
             responsive: true,
             plugins: { legend: { display: false } },
             scales: { y: { min: 0, max: 100 } }
@@ -705,7 +786,7 @@ export default function ForAdminStudentResults() {
       </Card>
 
       {/* Test-wise remarks table */}
-      <Card className="p-4 mb-8">
+      <Card className="p-4 mb-8" id="testRemarks-print">
         <CardHeader>
           <CardTitle>Test-wise Remarks & Analytics</CardTitle>
         </CardHeader>
@@ -732,7 +813,7 @@ export default function ForAdminStudentResults() {
       </Card>
 
       {/* Subject-wise remarks */}
-      <Card className="p-4 mb-8">
+      <Card className="p-4 mb-8" id="subjectRemarks-table-print">
         <CardHeader>
           <CardTitle>Subject-wise Remarks</CardTitle>
         </CardHeader>
@@ -759,7 +840,7 @@ export default function ForAdminStudentResults() {
       </Card>
 
       {/* All Tests Table */}
-      <Card className="p-4 mb-8">
+      <Card className="p-4 mb-8" id="allTests-print">
         <CardHeader>
           <CardTitle>All Tests</CardTitle>
         </CardHeader>
@@ -804,7 +885,7 @@ export default function ForAdminStudentResults() {
                           variant="outline"
                           onClick={() => {
                             const single = results.find((r) => r.id === row.id);
-                            if (single) printResults([single]);
+                            if (single) printSelectedSectionsWithCharts(['allTests']);
                           }}
                         >
                           🖨️ Print
