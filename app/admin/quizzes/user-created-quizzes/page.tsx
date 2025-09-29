@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { collection, getDocs, query, where, orderBy } from 'firebase/firestore';
 import { onAuthStateChanged, User } from 'firebase/auth';
-import { db, auth } from 'app/firebase';
+import { db, auth } from '../../firebase';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -31,32 +31,37 @@ const UserCreatedQuizzesPage = () => {
     const unsub = onAuthStateChanged(auth, async (u) => {
       setUser(u);
       if (!u) {
+        setLoading(false); // Fix: ensure loading is stopped even on redirect
         router.push('/login');
         return;
       }
-      // Fetch quizzes created by user
-      const q = query(
-        collection(db, 'user-created-tests'),
-        where('createdBy', '==', u.uid),
-        orderBy('createdAt', 'desc')
-      );
-      const snap = await getDocs(q);
-      const list: UserCreatedQuiz[] = [];
-      snap.forEach(docSnap => {
-        const d = docSnap.data();
-        list.push({
-          id: docSnap.id,
-          name: d.name,
-          subject: d.subject,
-          chapters: d.chapters || [],
-          createdBy: d.createdBy,
-          duration: d.duration,
-          questionCount: d.questionCount,
-          createdAt: d.createdAt,
+      try {
+        const q = query(
+          collection(db, 'user-created-tests'),
+          where('createdBy', '==', u.uid),
+          orderBy('createdAt', 'desc')
+        );
+        const snap = await getDocs(q);
+        const list: UserCreatedQuiz[] = [];
+        snap.forEach(docSnap => {
+          const d = docSnap.data();
+          list.push({
+            id: docSnap.id,
+            name: d.name,
+            subject: d.subject,
+            chapters: d.chapters || [],
+            createdBy: d.createdBy,
+            duration: d.duration,
+            questionCount: d.questionCount,
+            createdAt: d.createdAt,
+          });
         });
-      });
-      setQuizzes(list);
-      setLoading(false);
+        setQuizzes(list);
+      } catch (e) {
+        // Optionally set an error message
+      } finally {
+        setLoading(false); // Fix: ensure loading is stopped after fetch or error
+      }
     });
     return () => unsub();
   }, [router]);
