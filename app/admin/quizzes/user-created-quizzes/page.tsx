@@ -58,7 +58,7 @@ const UserCreatedQuizzesPage = () => {
         });
         setQuizzes(list);
       } catch (e) {
-        // Optionally set an error message
+       console.log("Loaded quizzes:", list);
       } finally {
         setLoading(false); // Fix: ensure loading is stopped after fetch or error
       }
