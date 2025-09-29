@@ -28,17 +28,23 @@ const UserCreatedQuizzesPage = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Listen for auth state changes
     const unsub = onAuthStateChanged(auth, async (u) => {
       setUser(u);
       if (!u) {
-        setLoading(false); // Fix: ensure loading is stopped even on redirect
+        setLoading(false);
         router.push('/login');
         return;
       }
-    
+      try {
+        // query quizzes created by this user
+        const q = query(
+          collection(db, 'quizzes'),
+          where('createdBy', '==', u.uid)
+        );
         const snap = await getDocs(q);
         const list: UserCreatedQuiz[] = [];
-        snap.forEach(docSnap => {
+        snap.forEach((docSnap) => {
           const d = docSnap.data();
           list.push({
             id: docSnap.id,
@@ -52,11 +58,11 @@ const UserCreatedQuizzesPage = () => {
           });
         });
         setQuizzes(list);
-        console.log("Loaded quizzes:", list);
+        console.log('Loaded quizzes:', list);
       } catch (e) {
-     
+        console.error('Error loading user quizzes:', e);
       } finally {
-        setLoading(false); // Fix: ensure loading is stopped after fetch or error
+        setLoading(false);
       }
     });
     return () => unsub();
@@ -123,7 +129,8 @@ const UserCreatedQuizzesPage = () => {
                   </div>
                 </div>
                 <div className="text-xs text-gray-400">
-                  Created {q.createdAt?.toDate
+                  Created{' '}
+                  {q.createdAt?.toDate
                     ? q.createdAt.toDate().toLocaleString()
                     : new Date(q.createdAt).toLocaleString()}
                 </div>
