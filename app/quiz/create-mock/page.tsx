@@ -209,7 +209,7 @@ export default function CreateUserQuizPage() {
       await batch.commit();
 
       // 7) Redirect to start page for user quizzes (create StartUserQuizPage to expect user-quizzes)
-      router.push(`/start-user-quiz?id=${newDocRef.id}`);
+      router.push(`/quiz/start-user-quiz?id=${newDocRef.id}`);
     } catch (err) {
       console.error('Error creating user quiz', err);
       setError('Failed to create test. Try again later.');
