@@ -57,8 +57,9 @@ const UserCreatedQuizzesPage = () => {
           });
         });
         setQuizzes(list);
+        console.log("Loaded quizzes:", list);
       } catch (e) {
-       console.log("Loaded quizzes:", list);
+     
       } finally {
         setLoading(false); // Fix: ensure loading is stopped after fetch or error
       }
