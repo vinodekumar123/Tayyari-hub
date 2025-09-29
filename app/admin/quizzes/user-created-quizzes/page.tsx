@@ -103,7 +103,7 @@ const UserCreatedQuizzesPage = () => {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => router.push(`/user-quizzes/${q.id}/start?id=${q.id}`)}
+                    onClick={() => router.push(`/quiz/start-user-quiz?id=${q.id}`)}
                   >
                     <Eye className="h-4 w-4 mr-1" /> Start
                   </Button>
