@@ -39,7 +39,7 @@ const UserCreatedQuizzesPage = () => {
       try {
         // query quizzes created by this user
         const q = query(
-          collection(db, 'quizzes'),
+          collection(db, 'user-quizzes'),
           where('createdBy', '==', u.uid)
         );
         const snap = await getDocs(q);
