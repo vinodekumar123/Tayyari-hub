@@ -37,7 +37,7 @@ const UserCreatedQuizzesPage = () => {
       }
       try {
         const q = query(
-          collection(db, 'user-created-tests'),
+          collection(db, 'user-quizzes'),
           where('createdBy', '==', u.uid),
           orderBy('createdAt', 'desc')
         );
@@ -101,7 +101,7 @@ const UserCreatedQuizzesPage = () => {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => router.push(`/user-created-tests/${q.id}/start?id=${q.id}`)}
+                    onClick={() => router.push(`/user-quizzes/${q.id}/start?id=${q.id}`)}
                   >
                     <Eye className="h-4 w-4 mr-1" /> Start
                   </Button>
