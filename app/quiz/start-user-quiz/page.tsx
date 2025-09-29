@@ -24,13 +24,15 @@ interface Question {
   chapter?: string;
   subject?: string;
   difficulty?: string;
+  // Add any other fields you expect
 }
 
 interface UserQuizDoc {
   name: string;
   subject: string;
   chapters: string[];
-  questionIds: string[];
+  // questionIds: string[]; // Not used anymore
+  selectedQuestions: any[]; // Array of objects, each should contain at least id, questionText, options, etc.
   createdBy: string;
   duration: number;
   questionCount: number;
@@ -46,7 +48,6 @@ const stripHtml = (html: string): string => {
 
 const StartUserQuizPage: React.FC = () => {
   const router = useRouter();
-  // On Next.js App Router, get dynamic id param from URL
   const searchParams = useSearchParams();
   const quizId = searchParams.get('id') as string;
   const [user, setUser] = useState<User | null>(null);
@@ -65,6 +66,7 @@ const StartUserQuizPage: React.FC = () => {
 
   // For attempt eligibility
   const [attemptCount, setAttemptCount] = useState(0);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     // Auth setup
@@ -80,73 +82,99 @@ const StartUserQuizPage: React.FC = () => {
   useEffect(() => {
     if (!quizId || !user) return;
     const load = async () => {
-      // 1. Load quiz doc
-      const quizSnap = await getDoc(doc(db, 'user-quizzes', quizId));
-      if (!quizSnap.exists()) {
-        router.push('/admin/quizzes/user-created-quizzes');
-        return;
-      }
-      const quizData = quizSnap.data() as UserQuizDoc;
-      setQuiz(quizData);
+      try {
+        // 1. Load quiz doc
+        const quizSnap = await getDoc(doc(db, 'user-quizzes', quizId));
+        if (!quizSnap.exists()) {
+          setError('Quiz not found.');
+          router.push('/admin/quizzes/user-created-quizzes');
+          return;
+        }
+        const quizData = quizSnap.data() as UserQuizDoc;
+        setQuiz(quizData);
 
-      // 2. Load questions
-      const qIds = quizData.questionIds || [];
-      // Firestore "in" can only do 10 at a time (batch if needed)
-      let loadedQuestions: Question[] = [];
-      for (let i = 0; i < qIds.length; i += 10) {
-        const chunk = qIds.slice(i, i + 10);
-        const qSnap = await getDocs(query(
-          collection(db, 'mock-questions'),
-          where('__name__', 'in', chunk)
-        ));
-        loadedQuestions = [
-          ...loadedQuestions,
-          ...qSnap.docs.map(d => ({ id: d.id, ...d.data() } as Question)),
-        ];
-      }
-      // Sort by quizData.questionIds order
-      loadedQuestions.sort((a, b) => qIds.indexOf(a.id) - qIds.indexOf(b.id));
-      setQuestions(loadedQuestions);
+        // 2. Load questions
+        // Extract IDs from selectedQuestions for fetching from mock-questions
+        const selectedQuestions = quizData.selectedQuestions || [];
+        let loadedQuestions: Question[] = [];
 
-      // 3. Check attempts and timer
-      // Store attempt in users/{uid}/quizAttempts/{quizId}
-      const attemptDocRef = doc(db, 'users', user.uid, 'quizAttempts', quizId);
-      const attemptSnap = await getDoc(attemptDocRef);
-      let currentAttempt = 0;
-      if (attemptSnap.exists() && attemptSnap.data().completed) {
-        currentAttempt = attemptSnap.data().attemptNumber || 1;
-      }
-      setAttemptCount(currentAttempt);
+        // If selectedQuestions contain all question data (questionText, options, etc.), use them directly:
+        // If you want to fetch from "mock-questions" collection by id, do as below, else use selectedQuestions directly
 
-      // Check for incomplete/resume
-      if (attemptSnap.exists() && !attemptSnap.data().completed) {
-        const at = attemptSnap.data();
-        setAnswers(at.answers || {});
-        setFlags(at.flags || {});
-        setCurrentPage(at.currentIndex ? Math.floor(at.currentIndex / 1) : 0);
-        setTimeLeft(at.remainingTime ?? quizData.duration * 60);
-      } else {
-        setTimeLeft(quizData.duration * 60);
-        setAnswers({});
-        setFlags({});
-        setCurrentPage(0);
-        await setDoc(attemptDocRef, {
-          startedAt: serverTimestamp(),
-          answers: {},
-          flags: {},
-          currentIndex: 0,
-          completed: false,
-          remainingTime: quizData.duration * 60,
-          quizType: 'user',
-        }, { merge: true });
+        // Use data from selectedQuestions directly:
+        loadedQuestions = selectedQuestions.map((q: any) => ({
+          id: q.id,
+          questionText: q.questionText,
+          options: q.options,
+          correctAnswer: q.correctAnswer,
+          explanation: q.explanation,
+          chapter: q.chapter,
+          subject: q.subject,
+          difficulty: q.difficulty,
+        }));
+
+        // If you want to fetch from mock-questions collection by ID, uncomment below and comment out above
+        /*
+        const qIds = selectedQuestions.map((q: any) => q.id);
+        for (let i = 0; i < qIds.length; i += 10) {
+          const chunk = qIds.slice(i, i + 10);
+          const qSnap = await getDocs(query(
+            collection(db, 'mock-questions'),
+            where('__name__', 'in', chunk)
+          ));
+          loadedQuestions = [
+            ...loadedQuestions,
+            ...qSnap.docs.map(d => ({ id: d.id, ...d.data() } as Question)),
+          ];
+        }
+        // Sort to match order in selectedQuestions
+        loadedQuestions.sort((a, b) => qIds.indexOf(a.id) - qIds.indexOf(b.id));
+        */
+
+        setQuestions(loadedQuestions);
+
+        // 3. Check attempts and timer
+        const attemptDocRef = doc(db, 'users', user.uid, 'quizAttempts', quizId);
+        const attemptSnap = await getDoc(attemptDocRef);
+        let currentAttempt = 0;
+        if (attemptSnap.exists() && attemptSnap.data().completed) {
+          currentAttempt = attemptSnap.data().attemptNumber || 1;
+        }
+        setAttemptCount(currentAttempt);
+
+        // Check for incomplete/resume
+        if (attemptSnap.exists() && !attemptSnap.data().completed) {
+          const at = attemptSnap.data();
+          setAnswers(at.answers || {});
+          setFlags(at.flags || {});
+          setCurrentPage(at.currentIndex ? Math.floor(at.currentIndex / 1) : 0);
+          setTimeLeft(at.remainingTime ?? quizData.duration * 60);
+        } else {
+          setTimeLeft(quizData.duration * 60);
+          setAnswers({});
+          setFlags({});
+          setCurrentPage(0);
+          await setDoc(attemptDocRef, {
+            startedAt: serverTimestamp(),
+            answers: {},
+            flags: {},
+            currentIndex: 0,
+            completed: false,
+            remainingTime: quizData.duration * 60,
+            quizType: 'user',
+          }, { merge: true });
+        }
+        setHasLoadedTime(true);
+        setLoading(false);
+      } catch (err: any) {
+        setError('Error loading quiz: ' + (err?.message || String(err)));
+        setLoading(false);
       }
-      setHasLoadedTime(true);
-      setLoading(false);
     };
     load();
   }, [quizId, user, router]);
 
-  // Timer logic
+  // Timer logic (fixed: only one interval, always cleared)
   useEffect(() => {
     if (loading || !quiz || showSubmissionModal || !hasLoadedTime) return;
     if (timeLeft <= 0) {
@@ -164,10 +192,29 @@ const StartUserQuizPage: React.FC = () => {
         return prev - 1;
       });
     }, 1000);
-    return () => clearInterval(timerRef.current!);
-  }, [loading, quiz, showSubmissionModal, hasLoadedTime, timeLeft]);
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+      timerRef.current = null;
+    };
+    // Do NOT include timeLeft in dependencies, or it will recreate the interval every tick!
+    // Only rerun if loading, quiz, showSubmissionModal, or hasLoadedTime changes.
+  }, [loading, quiz, showSubmissionModal, hasLoadedTime]);
 
-  // Save progress on unload
+  // Save progress on unload and on every answer change
+  useEffect(() => {
+    if (!user || !quiz) return;
+    const timeout = setTimeout(() => {
+      setDoc(doc(db, 'users', user.uid, 'quizAttempts', quizId), {
+        answers,
+        flags,
+        currentIndex: currentPage,
+        remainingTime: timeLeft,
+      }, { merge: true });
+    }, 800);
+    return () => clearTimeout(timeout);
+  }, [answers, flags, currentPage, timeLeft, quiz, user, quizId]);
+
+  // Save progress on unload (for extra safety)
   useEffect(() => {
     const handleUnload = () => {
       if (user && quiz && !hasSubmittedRef.current) {
@@ -181,7 +228,7 @@ const StartUserQuizPage: React.FC = () => {
     };
     window.addEventListener('beforeunload', handleUnload);
     return () => window.removeEventListener('beforeunload', handleUnload);
-  }, [answers, flags, currentPage, timeLeft, quiz, user]);
+  }, [answers, flags, currentPage, timeLeft, quiz, user, quizId]);
 
   // Answer/flag handlers
   const handleAnswer = (qid: string, val: string) => {
@@ -304,6 +351,7 @@ const StartUserQuizPage: React.FC = () => {
     return `${m}:${s}`;
   };
 
+  if (error) return <div className="text-red-600 text-center py-10">{error}</div>;
   if (loading || !quiz || questions.length === 0) return <p className="text-center py-10">Loading...</p>;
 
   const questionsPerPage = 1;
