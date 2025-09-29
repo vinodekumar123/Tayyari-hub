@@ -83,7 +83,7 @@ const StartUserQuizPage: React.FC = () => {
       // 1. Load quiz doc
       const quizSnap = await getDoc(doc(db, 'user-created-tests', quizId));
       if (!quizSnap.exists()) {
-        router.push('/user-created-tests');
+        router.push('/admin/quizzes/user-created-quizzes');
         return;
       }
       const quizData = quizSnap.data() as UserQuizDoc;
