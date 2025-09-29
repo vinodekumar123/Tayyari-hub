@@ -81,7 +81,7 @@ const StartUserQuizPage: React.FC = () => {
     if (!quizId || !user) return;
     const load = async () => {
       // 1. Load quiz doc
-      const quizSnap = await getDoc(doc(db, 'user-created-tests', quizId));
+      const quizSnap = await getDoc(doc(db, 'user-quizzes', quizId));
       if (!quizSnap.exists()) {
         router.push('/admin/quizzes/user-created-quizzes');
         return;
@@ -293,7 +293,7 @@ const StartUserQuizPage: React.FC = () => {
     setShowSummaryModal(false);
     setTimeout(() => {
       setShowSubmissionModal(false);
-      router.push(`/user-created-tests/${quizId}/result`);
+      router.push(`/user-quizzes/${quizId}/result`);
     }, 2500);
   };
 
