@@ -84,7 +84,7 @@ const UserCreatedQuizzesPage = () => {
           <CardContent>
             <p className="text-lg">You have not created any quizzes yet.</p>
             <Button
-              onClick={() => router.push('https://tayyarihub.com/app/quiz/create-mock')}
+              onClick={() => router.push('/quiz/create-mock')}
               className="mt-4 bg-blue-600 text-white hover:bg-blue-700"
             >
               <Plus className="mr-2 h-5 w-5" /> Create First Test
