@@ -35,12 +35,7 @@ const UserCreatedQuizzesPage = () => {
         router.push('/login');
         return;
       }
-      try {
-        const q = query(
-          collection(db, 'user-quizzes'),
-          where('createdBy', '==', u.uid),
-          orderBy('createdAt', 'desc')
-        );
+    
         const snap = await getDocs(q);
         const list: UserCreatedQuiz[] = [];
         snap.forEach(docSnap => {
