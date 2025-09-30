@@ -123,7 +123,7 @@ const StartUserQuizPage: React.FC = () => {
 
         setQuestions(loadedQuestions);
 
-        const attemptDocRef = doc(db, 'users', user.uid, 'quizAttempts', quizId);
+        const attemptDocRef = doc(db, 'users', user.uid, 'user-quizattempts', quizId);
         const attemptSnap = await getDoc(attemptDocRef);
         let currentAttempt = 0;
         if (attemptSnap.exists() && attemptSnap.data().completed) {
@@ -188,7 +188,7 @@ const StartUserQuizPage: React.FC = () => {
   useEffect(() => {
     if (!user || !quiz) return;
     const timeout = setTimeout(() => {
-      setDoc(doc(db, 'users', user.uid, 'quizAttempts', quizId), {
+      setDoc(doc(db, 'users', user.uid, 'user-quizattempts', quizId), {
         answers,
         flags,
         currentIndex: currentPage,
@@ -201,7 +201,7 @@ const StartUserQuizPage: React.FC = () => {
   useEffect(() => {
     const handleUnload = () => {
       if (user && quiz && !hasSubmittedRef.current) {
-        setDoc(doc(db, 'users', user.uid, 'quizAttempts', quizId), {
+        setDoc(doc(db, 'users', user.uid, 'user-quizattempts', quizId), {
           answers,
           flags,
           currentIndex: currentPage,
@@ -217,7 +217,7 @@ const StartUserQuizPage: React.FC = () => {
     const updatedAnswers = { ...answers, [qid]: val };
     setAnswers(updatedAnswers);
     if (user && quiz) {
-      setDoc(doc(db, 'users', user.uid, 'quizAttempts', quizId), {
+      setDoc(doc(db, 'users', user.uid, 'user-quizattempts', quizId), {
         answers: updatedAnswers,
         flags,
         currentIndex: currentPage,
@@ -230,7 +230,7 @@ const StartUserQuizPage: React.FC = () => {
     if (!updatedFlags[qid]) delete updatedFlags[qid];
     setFlags(updatedFlags);
     if (user && quiz) {
-      setDoc(doc(db, 'users', user.uid, 'quizAttempts', quizId), {
+      setDoc(doc(db, 'users', user.uid, 'user-quizattempts', quizId), {
         answers,
         flags: updatedFlags,
         currentIndex: currentPage,
@@ -283,7 +283,7 @@ const StartUserQuizPage: React.FC = () => {
 
       const cleanedDetailed = cleanObject(detailed);
 
-      const attemptPath = doc(db, 'users', user.uid, 'quizAttempts', quizId);
+      const attemptPath = doc(db, 'users', user.uid, 'user-quizattempts', quizId);
       await setDoc(attemptPath, {
         submittedAt: serverTimestamp(),
         answers: cleanObject(answers),
