@@ -13,7 +13,7 @@ import { Progress } from '@/components/ui/progress';
 import {
   Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
-import { ArrowLeft, ArrowRight, Info, BookOpen, Clock, Send, CheckCircle, Flag } from 'lucide-react';
+import { ArrowLeft, ArrowRight, BookOpen, Clock, Send, CheckCircle, Flag } from 'lucide-react';
 
 interface Question {
   id: string;
@@ -44,6 +44,25 @@ const stripHtml = (html: string): string => {
   return div.textContent || div.innerText || '';
 };
 
+// Utility to replace all undefined with null recursively
+function cleanObject(obj: any): any {
+  if (Array.isArray(obj)) {
+    return obj.map(cleanObject);
+  } else if (obj && typeof obj === 'object') {
+    return Object.entries(obj).reduce((acc, [key, value]) => {
+      if (value === undefined) {
+        acc[key] = null;
+      } else if (Array.isArray(value) || (value && typeof value === 'object')) {
+        acc[key] = cleanObject(value);
+      } else {
+        acc[key] = value;
+      }
+      return acc;
+    }, {} as any);
+  }
+  return obj;
+}
+
 const StartUserQuizPage: React.FC = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -62,12 +81,10 @@ const StartUserQuizPage: React.FC = () => {
   const hasSubmittedRef = useRef(false);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // For attempt eligibility
   const [attemptCount, setAttemptCount] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Auth setup
     const unsub = onAuthStateChanged(auth, async (u) => {
       setUser(u);
       if (!u) {
@@ -81,7 +98,6 @@ const StartUserQuizPage: React.FC = () => {
     if (!quizId || !user) return;
     const load = async () => {
       try {
-        // 1. Load quiz doc
         const quizSnap = await getDoc(doc(db, 'user-quizzes', quizId));
         if (!quizSnap.exists()) {
           setError('Quiz not found.');
@@ -91,7 +107,6 @@ const StartUserQuizPage: React.FC = () => {
         const quizData = quizSnap.data() as UserQuizDoc;
         setQuiz(quizData);
 
-        // 2. Load questions
         const selectedQuestions = quizData.selectedQuestions || [];
         let loadedQuestions: Question[] = [];
 
@@ -108,7 +123,6 @@ const StartUserQuizPage: React.FC = () => {
 
         setQuestions(loadedQuestions);
 
-        // 3. Check attempts and timer
         const attemptDocRef = doc(db, 'users', user.uid, 'quizAttempts', quizId);
         const attemptSnap = await getDoc(attemptDocRef);
         let currentAttempt = 0;
@@ -117,7 +131,6 @@ const StartUserQuizPage: React.FC = () => {
         }
         setAttemptCount(currentAttempt);
 
-        // Check for incomplete/resume
         if (attemptSnap.exists() && !attemptSnap.data().completed) {
           const at = attemptSnap.data();
           setAnswers(at.answers || {});
@@ -149,7 +162,6 @@ const StartUserQuizPage: React.FC = () => {
     load();
   }, [quizId, user, router]);
 
-  // Timer logic (fixed: only one interval, always cleared)
   useEffect(() => {
     if (loading || !quiz || showSubmissionModal || !hasLoadedTime) return;
     if (timeLeft <= 0) {
@@ -173,7 +185,6 @@ const StartUserQuizPage: React.FC = () => {
     };
   }, [loading, quiz, showSubmissionModal, hasLoadedTime]);
 
-  // Save progress on unload and on every answer change
   useEffect(() => {
     if (!user || !quiz) return;
     const timeout = setTimeout(() => {
@@ -187,7 +198,6 @@ const StartUserQuizPage: React.FC = () => {
     return () => clearTimeout(timeout);
   }, [answers, flags, currentPage, timeLeft, quiz, user, quizId]);
 
-  // Save progress on unload (for extra safety)
   useEffect(() => {
     const handleUnload = () => {
       if (user && quiz && !hasSubmittedRef.current) {
@@ -203,7 +213,6 @@ const StartUserQuizPage: React.FC = () => {
     return () => window.removeEventListener('beforeunload', handleUnload);
   }, [answers, flags, currentPage, timeLeft, quiz, user, quizId]);
 
-  // Answer/flag handlers
   const handleAnswer = (qid: string, val: string) => {
     const updatedAnswers = { ...answers, [qid]: val };
     setAnswers(updatedAnswers);
@@ -230,7 +239,6 @@ const StartUserQuizPage: React.FC = () => {
     }
   };
 
-  // Submit logic with detailed report and error handling
   const handleSubmit = async () => {
     if (hasSubmittedRef.current) return;
     hasSubmittedRef.current = true;
@@ -245,70 +253,50 @@ const StartUserQuizPage: React.FC = () => {
       const detailed: Array<{
         questionId: string;
         questionText: string;
-        selected: string | undefined;
-        correct: string | undefined;
+        selected: string | null;
+        correct: string | null;
         isCorrect: boolean;
-        explanation?: string;
+        explanation?: string | null;
         options: string[];
-        chapter?: string;
-        subject?: string;
-        difficulty?: string;
+        chapter?: string | null;
+        subject?: string | null;
+        difficulty?: string | null;
       }> = [];
       for (const q of questions) {
-        const selected = answers[q.id];
-        const isCorrect = (selected && q.correctAnswer && selected === q.correctAnswer) ?? false;
-        if (isCorrect) score += 1;
+        const selected = answers[q.id] === undefined ? null : answers[q.id];
+        const correct = q.correctAnswer === undefined ? null : q.correctAnswer;
+        const isCorrect = (selected && correct && selected === correct) ?? false;
         detailed.push({
           questionId: q.id,
           questionText: stripHtml(q.questionText),
           selected,
-          correct: q.correctAnswer,
+          correct,
           isCorrect,
-          explanation: q.explanation,
+          explanation: q.explanation === undefined ? null : q.explanation,
           options: q.options,
-          chapter: q.chapter,
-          subject: q.subject,
-          difficulty: q.difficulty,
+          chapter: q.chapter === undefined ? null : q.chapter,
+          subject: q.subject === undefined ? null : q.subject,
+          difficulty: q.difficulty === undefined ? null : q.difficulty,
         });
+        if (isCorrect) score += 1;
       }
 
-      const total = questions.length;
-      const report = {
-        quizId,
-        name: quiz.name,
-        subject: quiz.subject,
-        chapters: quiz.chapters,
-        score,
-        total,
-        timestamp: serverTimestamp(),
-        answers,
-        flags,
-        attemptNumber: attemptCount + 1,
-        detailed,
-        quizType: 'user',
-        duration: quiz.duration,
-        createdBy: quiz.createdBy,
-      };
+      const cleanedDetailed = cleanObject(detailed);
 
-      // Save attempt
       const attemptPath = doc(db, 'users', user.uid, 'quizAttempts', quizId);
       await setDoc(attemptPath, {
         submittedAt: serverTimestamp(),
-        answers,
-        flags,
+        answers: cleanObject(answers),
+        flags: cleanObject(flags),
         completed: true,
         remainingTime: 0,
         attemptNumber: attemptCount + 1,
         quizType: 'user',
-        detailed,
+        detailed: cleanedDetailed,
         score,
-        total,
+        total: questions.length,
       }, { merge: true });
 
-      // (Optionally) Save to a global collection as well:
-      // await addDoc(collection(db, 'quiz-attempts'), { ...report, userId: user.uid });
-
-      // Update user's usedMockQuestionIds
       await updateDoc(doc(db, "users", user.uid), {
         usedMockQuestionIds: arrayUnion(...questions.map(q => q.id)),
       });
@@ -322,12 +310,11 @@ const StartUserQuizPage: React.FC = () => {
     } catch (err: any) {
       setError('Submission failed: ' + (err?.message || String(err)));
       setShowSubmissionModal(false);
-      hasSubmittedRef.current = false; // Allow retry
+      hasSubmittedRef.current = false;
       console.error('Quiz submission error:', err);
     }
   };
 
-  // Timer UI
   const formatTime = (sec: number) => {
     const m = Math.floor(sec / 60).toString().padStart(2, '0');
     const s = (sec % 60).toString().padStart(2, '0');
