@@ -24,15 +24,13 @@ interface Question {
   chapter?: string;
   subject?: string;
   difficulty?: string;
-  // Add any other fields you expect
 }
 
 interface UserQuizDoc {
   name: string;
   subject: string;
   chapters: string[];
-  // questionIds: string[]; // Not used anymore
-  selectedQuestions: any[]; // Array of objects, each should contain at least id, questionText, options, etc.
+  selectedQuestions: any[];
   createdBy: string;
   duration: number;
   questionCount: number;
@@ -94,14 +92,9 @@ const StartUserQuizPage: React.FC = () => {
         setQuiz(quizData);
 
         // 2. Load questions
-        // Extract IDs from selectedQuestions for fetching from mock-questions
         const selectedQuestions = quizData.selectedQuestions || [];
         let loadedQuestions: Question[] = [];
 
-        // If selectedQuestions contain all question data (questionText, options, etc.), use them directly:
-        // If you want to fetch from "mock-questions" collection by id, do as below, else use selectedQuestions directly
-
-        // Use data from selectedQuestions directly:
         loadedQuestions = selectedQuestions.map((q: any) => ({
           id: q.id,
           questionText: q.questionText,
@@ -112,24 +105,6 @@ const StartUserQuizPage: React.FC = () => {
           subject: q.subject,
           difficulty: q.difficulty,
         }));
-
-        // If you want to fetch from mock-questions collection by ID, uncomment below and comment out above
-        /*
-        const qIds = selectedQuestions.map((q: any) => q.id);
-        for (let i = 0; i < qIds.length; i += 10) {
-          const chunk = qIds.slice(i, i + 10);
-          const qSnap = await getDocs(query(
-            collection(db, 'mock-questions'),
-            where('__name__', 'in', chunk)
-          ));
-          loadedQuestions = [
-            ...loadedQuestions,
-            ...qSnap.docs.map(d => ({ id: d.id, ...d.data() } as Question)),
-          ];
-        }
-        // Sort to match order in selectedQuestions
-        loadedQuestions.sort((a, b) => qIds.indexOf(a.id) - qIds.indexOf(b.id));
-        */
 
         setQuestions(loadedQuestions);
 
@@ -196,8 +171,6 @@ const StartUserQuizPage: React.FC = () => {
       if (timerRef.current) clearInterval(timerRef.current);
       timerRef.current = null;
     };
-    // Do NOT include timeLeft in dependencies, or it will recreate the interval every tick!
-    // Only rerun if loading, quiz, showSubmissionModal, or hasLoadedTime changes.
   }, [loading, quiz, showSubmissionModal, hasLoadedTime]);
 
   // Save progress on unload and on every answer change
@@ -257,91 +230,101 @@ const StartUserQuizPage: React.FC = () => {
     }
   };
 
-  // Submit logic with detailed report
+  // Submit logic with detailed report and error handling
   const handleSubmit = async () => {
     if (hasSubmittedRef.current) return;
     hasSubmittedRef.current = true;
-    if (!user || !quiz) return;
-
-    // Calculate score and report
-    let score = 0;
-    const detailed: Array<{
-      questionId: string;
-      questionText: string;
-      selected: string | undefined;
-      correct: string | undefined;
-      isCorrect: boolean;
-      explanation?: string;
-      options: string[];
-      chapter?: string;
-      subject?: string;
-      difficulty?: string;
-    }> = [];
-    for (const q of questions) {
-      const selected = answers[q.id];
-      const isCorrect = (selected && q.correctAnswer && selected === q.correctAnswer) ?? false;
-      if (isCorrect) score += 1;
-      detailed.push({
-        questionId: q.id,
-        questionText: stripHtml(q.questionText),
-        selected,
-        correct: q.correctAnswer,
-        isCorrect,
-        explanation: q.explanation,
-        options: q.options,
-        chapter: q.chapter,
-        subject: q.subject,
-        difficulty: q.difficulty,
-      });
+    if (!user || !quiz) {
+      setError('User or quiz not loaded. Please wait and try again.');
+      hasSubmittedRef.current = false;
+      return;
     }
 
-    const total = questions.length;
-    const report = {
-      quizId,
-      name: quiz.name,
-      subject: quiz.subject,
-      chapters: quiz.chapters,
-      score,
-      total,
-      timestamp: serverTimestamp(),
-      answers,
-      flags,
-      attemptNumber: attemptCount + 1,
-      detailed,
-      quizType: 'user',
-      duration: quiz.duration,
-      createdBy: quiz.createdBy,
-    };
+    try {
+      let score = 0;
+      const detailed: Array<{
+        questionId: string;
+        questionText: string;
+        selected: string | undefined;
+        correct: string | undefined;
+        isCorrect: boolean;
+        explanation?: string;
+        options: string[];
+        chapter?: string;
+        subject?: string;
+        difficulty?: string;
+      }> = [];
+      for (const q of questions) {
+        const selected = answers[q.id];
+        const isCorrect = (selected && q.correctAnswer && selected === q.correctAnswer) ?? false;
+        if (isCorrect) score += 1;
+        detailed.push({
+          questionId: q.id,
+          questionText: stripHtml(q.questionText),
+          selected,
+          correct: q.correctAnswer,
+          isCorrect,
+          explanation: q.explanation,
+          options: q.options,
+          chapter: q.chapter,
+          subject: q.subject,
+          difficulty: q.difficulty,
+        });
+      }
 
-    // Save attempt
-    const attemptPath = doc(db, 'users', user.uid, 'quizAttempts', quizId);
-    await setDoc(attemptPath, {
-      submittedAt: serverTimestamp(),
-      answers,
-      flags,
-      completed: true,
-      remainingTime: 0,
-      attemptNumber: attemptCount + 1,
-      quizType: 'user',
-      detailed,
-      score,
-      total,
-    }, { merge: true });
+      const total = questions.length;
+      const report = {
+        quizId,
+        name: quiz.name,
+        subject: quiz.subject,
+        chapters: quiz.chapters,
+        score,
+        total,
+        timestamp: serverTimestamp(),
+        answers,
+        flags,
+        attemptNumber: attemptCount + 1,
+        detailed,
+        quizType: 'user',
+        duration: quiz.duration,
+        createdBy: quiz.createdBy,
+      };
 
-    // (Optionally) Save to a global collection as well:
-    // await addDoc(collection(db, 'quiz-attempts'), { ...report, userId: user.uid });
+      // Save attempt
+      const attemptPath = doc(db, 'users', user.uid, 'quizAttempts', quizId);
+      await setDoc(attemptPath, {
+        submittedAt: serverTimestamp(),
+        answers,
+        flags,
+        completed: true,
+        remainingTime: 0,
+        attemptNumber: attemptCount + 1,
+        quizType: 'user',
+        detailed,
+        score,
+        total,
+      }, { merge: true });
 
-    // Update user's usedMockQuestionIds
-    await updateDoc(doc(db, "users", user.uid), {
-      usedMockQuestionIds: arrayUnion(...questions.map(q => q.id)),
-    });
+      // (Optionally) Save to a global collection as well:
+      // await addDoc(collection(db, 'quiz-attempts'), { ...report, userId: user.uid });
 
-    setShowSubmissionModal(true);
-    setShowSummaryModal(false);
-    setTimeout(() => {
+      // Update user's usedMockQuestionIds
+      await updateDoc(doc(db, "users", user.uid), {
+        usedMockQuestionIds: arrayUnion(...questions.map(q => q.id)),
+      });
+
+      setShowSubmissionModal(true);
+      setShowSummaryModal(false);
+      setTimeout(() => {
+        setShowSubmissionModal(false);
+        router.push(`/user-quizzes/${quizId}/result`);
+      }, 2500);
+    } catch (err: any) {
+      setError('Submission failed: ' + (err?.message || String(err)));
       setShowSubmissionModal(false);
-      router.push(`/user-quizzes/${quizId}/result`);
-    }, 2500);
+      hasSubmittedRef.current = false; // Allow retry
+      console.error('Quiz submission error:', err);
+    }
   };
 
   // Timer UI
@@ -443,10 +426,17 @@ const StartUserQuizPage: React.FC = () => {
               </div>
               <div className="flex justify-end gap-2 pt-4">
                 <Button variant="outline" onClick={() => setShowSummaryModal(false)}>Review</Button>
-                <Button onClick={() => handleSubmit()} className="bg-red-600 text-white hover:bg-red-700">
+                <Button
+                  onClick={() => handleSubmit()}
+                  className="bg-red-600 text-white hover:bg-red-700"
+                  disabled={loading || !user || !quiz || showSubmissionModal}
+                >
                   Confirm Submit
                 </Button>
               </div>
+              {error &&
+                <div className="text-red-600 text-center mt-2">{error}</div>
+              }
             </div>
           </DialogContent>
         </Dialog>
