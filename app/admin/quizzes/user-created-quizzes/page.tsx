@@ -347,7 +347,7 @@ const UserCreatedQuizzesPage = () => {
                     ) : q.inProgress ? (
                       <Button
                         className="w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white hover:from-purple-700 hover:to-pink-700 rounded-xl py-6 font-semibold shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105"
-                        onClick={() => router.push(`/quiz/resume-user-quiz?id=${q.id}`)}
+                        onClick={() => router.push(`/quiz/start-user-quiz?id=${q.id}`)}
                       >
                         <RotateCw className="h-5 w-5 mr-2" /> Resume Quiz
                       </Button>
