@@ -12,7 +12,6 @@ import {
   serverTimestamp,
   writeBatch,
   increment,
-  getDoc,
 } from 'firebase/firestore';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { db, auth } from 'app/firebase';
@@ -33,20 +32,15 @@ interface MockQuestion {
   usedInQuizzes?: number;
 }
 
-interface NamedItem {
-  id?: string;
-  name: string;
-}
-
 export default function CreateUserQuizPage() {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
 
   const [loading, setLoading] = useState(true);
-  const [subjects, setSubjects] = useState<NamedItem[]>([]);
-  const [chaptersBySubject, setChaptersBySubject] = useState<Record<string, NamedItem[]>>({});
-  const [selectedSubjects, setSelectedSubjects] = useState<NamedItem[]>([]);
-  const [selectedChapters, setSelectedChapters] = useState<NamedItem[]>([]);
+  const [subjects, setSubjects] = useState<string[]>([]);
+  const [chaptersBySubject, setChaptersBySubject] = useState<Record<string, string[]>>({});
+  const [selectedSubjects, setSelectedSubjects] = useState<string[]>([]);
+  const [selectedChapters, setSelectedChapters] = useState<string[]>([]);
   const [numQuestions, setNumQuestions] = useState<number>(20);
   const [questionsPerPage, setQuestionsPerPage] = useState<number>(10);
   const [duration, setDuration] = useState<number>(60);
@@ -68,39 +62,37 @@ export default function CreateUserQuizPage() {
     const loadMeta = async () => {
       setLoading(true);
       try {
-        const q = query(collection(db, 'mock-questions'));
+        const q = query(collection(db, 'mock-questions')); // load all to derive metadata
         const snap = await getDocs(q);
 
-        // Use Maps to prevent duplicates
-        const sMap = new Map<string, NamedItem>();
-        const chaptersMap: Record<string, Map<string, NamedItem>> = {};
+        const sSet = new Set<string>();
+        const chaptersMap: Record<string, Set<string>> = {};
 
         snap.docs.forEach((d) => {
           const data = d.data();
-          let subject = (data.subject || 'Uncategorized').toString();
-          let chapter = (data.chapter || 'Uncategorized').toString();
-          let subjectId = data.subjectId || undefined;
-          let chapterId = data.chapterId || undefined;
+          const subject = (data.subject || 'Uncategorized').toString();
+          const chapter = (data.chapter || 'Uncategorized').toString();
 
-          sMap.set(subject, { id: subjectId, name: subject });
-          if (!chaptersMap[subject]) chaptersMap[subject] = new Map();
-          chaptersMap[subject].set(chapter, { id: chapterId, name: chapter });
+          sSet.add(subject);
+          if (!chaptersMap[subject]) chaptersMap[subject] = new Set();
+          chaptersMap[subject].add(chapter);
         });
 
         if (!mounted) return;
 
-        const sArr = Array.from(sMap.values()).sort((a, b) => a.name.localeCompare(b.name));
-        const chaptersObj: Record<string, NamedItem[]> = {};
+        const sArr = Array.from(sSet).sort();
+        const chaptersObj: Record<string, string[]> = {};
         Object.entries(chaptersMap).forEach(([k, v]) => {
-          chaptersObj[k] = Array.from(v.values()).sort((a, b) => a.name.localeCompare(b.name));
+          chaptersObj[k] = Array.from(v).sort();
         });
 
         setSubjects(sArr);
         setChaptersBySubject(chaptersObj);
 
+        // auto-select first subject if exists
         if (sArr.length > 0 && selectedSubjects.length === 0) {
           setSelectedSubjects([sArr[0]]);
-          setSelectedChapters(chaptersObj[sArr[0].name]?.slice(0, 1) || []);
+          setSelectedChapters(chaptersObj[sArr[0]]?.slice(0, 1) || []);
         }
       } catch (err) {
         console.error('Failed to load mock-questions meta', err);
@@ -110,71 +102,38 @@ export default function CreateUserQuizPage() {
       }
     };
     loadMeta();
-    return () => {
-      mounted = false;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    return () => { mounted = false; };
   }, []);
 
   // Handle subject selection (multiple, with checkboxes)
-  const handleSubjectChange = (subject: NamedItem) => {
+  const handleSubjectChange = (subject: string) => {
     setSelectedSubjects((prev) => {
-      const already = prev.find((s) => s.name === subject.name);
-      if (already) {
-        const filtered = prev.filter((s) => s.name !== subject.name);
+      if (prev.includes(subject)) {
+        // Remove subject
+        const filtered = prev.filter((s) => s !== subject);
+        // Remove corresponding chapters
         setSelectedChapters((prevChapters) =>
           prevChapters.filter(
-            (chapter) => !(chaptersBySubject[subject.name]?.some(ch => ch.name === chapter.name))
+            (chapter) => !chaptersBySubject[subject]?.includes(chapter)
           )
         );
         return filtered;
       } else {
+        // Add subject
         return [...prev, subject];
       }
     });
   };
 
   // Handle chapter selection (multiple, with checkboxes)
-  const handleChapterChange = (chapter: NamedItem) => {
+  const handleChapterChange = (chapter: string) => {
     setSelectedChapters((prev) => {
-      const already = prev.find((c) => c.name === chapter.name);
-      if (already) {
-        return prev.filter((c) => c.name !== chapter.name);
+      if (prev.includes(chapter)) {
+        return prev.filter((c) => c !== chapter);
       } else {
         return [...prev, chapter];
       }
     });
-  };
-
-  // Save selected subjects to "subjects" collection if not exist
-  const saveSubjectsToDb = async (subjectsToSave: NamedItem[]) => {
-    const subjectsCollection = collection(db, 'subjects');
-    for (const subject of subjectsToSave) {
-      const subjectDocRef = doc(subjectsCollection, subject.name);
-      const docSnap = await getDoc(subjectDocRef);
-      if (!docSnap.exists()) {
-        await setDoc(subjectDocRef, {
-          name: subject.name,
-          createdAt: serverTimestamp(),
-          createdBy: user?.uid || null,
-        });
-      }
-    }
-  };
-
-  // Save quiz title to "quiz-titles" collection if not exist
-  const saveTitleToDb = async (quizTitle: string) => {
-    if (!quizTitle.trim()) return;
-    const titlesCollection = collection(db, 'quiz-titles');
-    const titleDocRef = doc(titlesCollection, quizTitle.trim());
-    const docSnap = await getDoc(titleDocRef);
-    if (!docSnap.exists()) {
-      await setDoc(titleDocRef, {
-        title: quizTitle.trim(),
-        createdAt: serverTimestamp(),
-        createdBy: user?.uid || null,
-      });
-    }
   };
 
   const handleCreate = async (e?: React.FormEvent) => {
@@ -213,24 +172,16 @@ export default function CreateUserQuizPage() {
     setCreating(true);
 
     try {
-      // Save selected subjects to "subjects" collection
-      await saveSubjectsToDb(selectedSubjects);
-
-      // Save quiz title to "quiz-titles" collection
-      const quizTitle =
-        title?.trim() ||
-        `${selectedSubjects.map(subj => subj.name).join(', ')} Test - ${new Date().toLocaleDateString()}`;
-      await saveTitleToDb(quizTitle);
-
       // 1) Fetch pool matching subjects & chapters
       const mqRef = collection(db, 'mock-questions');
       let allQuestions: MockQuestion[] = [];
 
       for (const subject of selectedSubjects) {
-        const q = query(mqRef, where('subject', '==', subject.name));
+        const q = query(mqRef, where('subject', '==', subject));
         const snap = await getDocs(q);
         const pool: MockQuestion[] = snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) }));
-        const filtered = pool.filter((p) => selectedChapters.find(c => c.name === (p.chapter || '')));
+        // filter by selected chapters
+        const filtered = pool.filter((p) => selectedChapters.includes(p.chapter || ''));
         allQuestions = [...allQuestions, ...filtered];
       }
 
@@ -262,19 +213,17 @@ export default function CreateUserQuizPage() {
         chapter: q.chapter || '',
       }));
 
-      // 5) Create user-quizzes doc (subjects/chapters as array of objects with only defined properties)
-      const cleanNamedArray = (arr: NamedItem[]) =>
-        arr.map(obj => {
-          // Only include id if it is defined
-          return obj.id ? { id: obj.id, name: obj.name } : { name: obj.name };
-        });
+      // 5) Create user-quizzes doc
+      const newDocRef = doc(collection(db, 'user-quizzes')); // auto id
+      const quizTitle =
+        title?.trim() ||
+        `${selectedSubjects.join(', ')} Test - ${new Date().toLocaleDateString()}`;
 
-      const newDocRef = doc(collection(db, 'user-quizzes'));
       await setDoc(newDocRef, {
         title: quizTitle,
         createdBy: user.uid,
-        subjects: cleanNamedArray(selectedSubjects),
-        chapters: cleanNamedArray(selectedChapters),
+        subjects: selectedSubjects,
+        chapters: selectedChapters,
         duration: duration,
         questionCount: selectedSnapshot.length,
         selectedQuestions: selectedSnapshot,
@@ -293,9 +242,9 @@ export default function CreateUserQuizPage() {
       await batch.commit();
 
       router.push(`/quiz/start-user-quiz?id=${newDocRef.id}`);
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error creating user quiz', err);
-      setError(`Failed to create test. Try again later. ${err?.message ? err.message : ''}`);
+      setError('Failed to create test. Try again later.');
       setCreating(false);
       return;
     }
@@ -328,14 +277,14 @@ export default function CreateUserQuizPage() {
           <label className="block text-sm font-semibold text-indigo-800 mb-1">Subjects</label>
           <div className="flex flex-wrap gap-3 mt-2">
             {subjects.map((s) => (
-              <label key={s.name} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white shadow hover:bg-indigo-50 cursor-pointer border border-indigo-100 font-medium">
+              <label key={s} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white shadow hover:bg-indigo-50 cursor-pointer border border-indigo-100 font-medium">
                 <input
                   type="checkbox"
-                  checked={!!selectedSubjects.find(sub => sub.name === s.name)}
+                  checked={selectedSubjects.includes(s)}
                   onChange={() => handleSubjectChange(s)}
                   className="form-checkbox h-4 w-4 text-indigo-600 border-indigo-300"
                 />
-                <span className="text-indigo-700">{s.name}</span>
+                <span className="text-indigo-700">{s}</span>
               </label>
             ))}
           </div>
@@ -348,15 +297,15 @@ export default function CreateUserQuizPage() {
               <span className="text-gray-400 italic">Select subjects to see chapters</span>
             ) : (
               selectedSubjects.flatMap((subject) =>
-                (chaptersBySubject[subject.name] || []).map((c) => (
-                  <label key={`${subject.name}-${c.name}`} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white shadow hover:bg-blue-50 cursor-pointer border border-blue-100 font-medium">
+                (chaptersBySubject[subject] || []).map((c) => (
+                  <label key={`${subject}-${c}`} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white shadow hover:bg-blue-50 cursor-pointer border border-blue-100 font-medium">
                     <input
                       type="checkbox"
-                      checked={!!selectedChapters.find(chap => chap.name === c.name)}
+                      checked={selectedChapters.includes(c)}
                       onChange={() => handleChapterChange(c)}
                       className="form-checkbox h-4 w-4 text-blue-600 border-blue-300"
                     />
-                    <span className="text-blue-700">{c.name}</span>
+                    <span className="text-blue-700">{c}</span>
                   </label>
                 ))
               )
