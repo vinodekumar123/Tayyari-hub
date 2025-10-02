@@ -41,6 +41,7 @@ export default function StudentResultsPage() {
   const [search, setSearch] = useState('');
   const [selectedSubject, setSelectedSubject] = useState('all');
   const [selectedChapter, setSelectedChapter] = useState('all');
+  const [quizType, setQuizType] = useState<'all' | 'admin' | 'user'>('all');
 
   const router = useRouter();
   const auth = getAuth(app);
@@ -168,7 +169,7 @@ export default function StudentResultsPage() {
               // Course
               const courseName = quizMeta.course?.name || quizMeta.course || 'Unknown';
 
-              // ========== LIVE SCORE CALCULATION ==========
+              // ========== LIVE SCORE CALCULATION ========== 
               // Use selectedQuestions and answers to calculate score live
               const questions: any[] = quizMeta.selectedQuestions || [];
               const answers: Record<string, string> = resultData.answers || {};
@@ -177,7 +178,6 @@ export default function StudentResultsPage() {
 
               allResults.push({
                 id: quizId,
-                // ...resultData, // Don't spread score/total from db, use live ones!
                 answers, // for debugging, not needed for display
                 title: quizMeta.title || 'Untitled Quiz',
                 subject: subjectNames,
@@ -208,6 +208,12 @@ export default function StudentResultsPage() {
 
       let filteredList = results;
 
+      if (quizType === 'admin') {
+        filteredList = filteredList.filter(r => !r.isMock);
+      } else if (quizType === 'user') {
+        filteredList = filteredList.filter(r => r.isMock);
+      }
+
       if (selectedSubject !== 'all') {
         filteredList = filteredList.filter((r) =>
           r.subject?.toLowerCase().includes(selectedSubject.toLowerCase())
@@ -231,12 +237,37 @@ export default function StudentResultsPage() {
     }, 300);
 
     return () => clearTimeout(timeout);
-  }, [search, selectedSubject, selectedChapter, results]);
+  }, [search, selectedSubject, selectedChapter, results, quizType]);
 
   return (
     <div className="mx-auto py-12 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-white to-blue-50 min-h-screen">
-      <h1 className="text-4xl font-extrabold text-gray-800 mb-10 text-left">📋 Quiz Results</h1>
+      <h1 className="text-4xl font-extrabold text-gray-800 mb-10 text-left">
+        📋 Quiz Results
+      </h1>
 
+      {/* Quiz Type Toggle */}
+      <div className="mb-4 flex gap-2">
+        <Button
+          variant={quizType === 'all' ? 'default' : 'outline'}
+          onClick={() => setQuizType('all')}
+        >
+          All
+        </Button>
+        <Button
+          variant={quizType === 'admin' ? 'default' : 'outline'}
+          onClick={() => setQuizType('admin')}
+        >
+          Admin Created
+        </Button>
+        <Button
+          variant={quizType === 'user' ? 'default' : 'outline'}
+          onClick={() => setQuizType('user')}
+        >
+          User Created
+        </Button>
+      </div>
+
+      {/* Filters */}
       <div className="mb-6 grid md:grid-cols-3 gap-4">
         <Input
           placeholder="🔍 Search by title, subject or course..."
@@ -252,11 +283,15 @@ export default function StudentResultsPage() {
             setSelectedChapter('all');
           }}
         >
-          <SelectTrigger><SelectValue placeholder="Filter by Subject" /></SelectTrigger>
+          <SelectTrigger>
+            <SelectValue placeholder="Filter by Subject" />
+          </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Subjects</SelectItem>
             {subjects.map((subj, idx) => (
-              <SelectItem key={idx} value={subj}>{subj}</SelectItem>
+              <SelectItem key={idx} value={subj}>
+                {subj}
+              </SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -266,11 +301,15 @@ export default function StudentResultsPage() {
           onValueChange={setSelectedChapter}
           disabled={chapters.length === 0}
         >
-          <SelectTrigger><SelectValue placeholder="Filter by Chapter" /></SelectTrigger>
+          <SelectTrigger>
+            <SelectValue placeholder="Filter by Chapter" />
+          </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Chapters</SelectItem>
             {chapters.map((ch, idx) => (
-              <SelectItem key={idx} value={ch}>{ch}</SelectItem>
+              <SelectItem key={idx} value={ch}>
+                {ch}
+              </SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -280,7 +319,9 @@ export default function StudentResultsPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {Array.from({ length: 6 }).map((_, i) => (
             <Card key={i} className="p-6 w-full rounded-xl shadow-md">
-              <CardHeader><Skeleton className="h-6 w-3/4 mb-2" /></CardHeader>
+              <CardHeader>
+                <Skeleton className="h-6 w-3/4 mb-2" />
+              </CardHeader>
               <CardContent className="space-y-4">
                 <Skeleton className="h-4 w-full" />
                 <Skeleton className="h-4 w-1/2" />
@@ -303,17 +344,35 @@ export default function StudentResultsPage() {
                 <CardTitle className="text-xl font-bold">{result.title}</CardTitle>
               </CardHeader>
               <CardContent className="text-sm text-gray-700 space-y-3 px-6 py-5">
-                <p><strong>📘 Course:</strong> {result.course}</p>
-                <p><strong>📚 Subject:</strong> {result.subject}</p>
-                <p><strong>📖 Chapter:</strong> {result.chapter}</p>
-                <p><strong>📊 Score:</strong> {result.score} / {result.total}</p>
-                <p><strong>🧾 Type:</strong> {result.isMock ? 'By Own' : 'By Admin'}</p>
-                <p><strong>📅 Date:</strong> {result.timestamp?.toDate ? format(result.timestamp.toDate(), 'dd MMM yyyy, hh:mm a') : 'N/A'}</p>
+                <p>
+                  <strong>📘 Course:</strong> {result.course}
+                </p>
+                <p>
+                  <strong>📚 Subject:</strong> {result.subject}
+                </p>
+                <p>
+                  <strong>📖 Chapter:</strong> {result.chapter}
+                </p>
+                <p>
+                  <strong>📊 Score:</strong> {result.score} / {result.total}
+                </p>
+                <p>
+                  <strong>🧾 Type:</strong>{' '}
+                  {result.isMock ? 'User Created' : 'Admin Created'}
+                </p>
+                <p>
+                  <strong>📅 Date:</strong>{' '}
+                  {result.timestamp?.toDate
+                    ? format(result.timestamp.toDate(), 'dd MMM yyyy, hh:mm a')
+                    : 'N/A'}
+                </p>
                 <Button
                   variant="outline"
                   className="w-full text-sm font-semibold border-blue-500 text-blue-700 hover:bg-blue-50 mt-4"
                   onClick={() =>
-                    router.push(`/admin/students/responses?id=${result.id}&mock=${result.isMock}&studentId=${userId}`)
+                    router.push(
+                      `/admin/students/responses?id=${result.id}&mock=${result.isMock}&studentId=${userId}`
+                    )
                   }
                 >
                   🔎 View Responses
