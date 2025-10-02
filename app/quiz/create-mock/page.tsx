@@ -33,15 +33,20 @@ interface MockQuestion {
   usedInQuizzes?: number;
 }
 
+interface NamedItem {
+  id?: string;
+  name: string;
+}
+
 export default function CreateUserQuizPage() {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
 
   const [loading, setLoading] = useState(true);
-  const [subjects, setSubjects] = useState<{id?: string, name: string}[]>([]);
-  const [chaptersBySubject, setChaptersBySubject] = useState<Record<string, {id?: string, name: string}[]>>({});
-  const [selectedSubjects, setSelectedSubjects] = useState<{id?: string, name: string}[]>([]);
-  const [selectedChapters, setSelectedChapters] = useState<{id?: string, name: string}[]>([]);
+  const [subjects, setSubjects] = useState<NamedItem[]>([]);
+  const [chaptersBySubject, setChaptersBySubject] = useState<Record<string, NamedItem[]>>({});
+  const [selectedSubjects, setSelectedSubjects] = useState<NamedItem[]>([]);
+  const [selectedChapters, setSelectedChapters] = useState<NamedItem[]>([]);
   const [numQuestions, setNumQuestions] = useState<number>(20);
   const [questionsPerPage, setQuestionsPerPage] = useState<number>(10);
   const [duration, setDuration] = useState<number>(60);
@@ -66,8 +71,9 @@ export default function CreateUserQuizPage() {
         const q = query(collection(db, 'mock-questions'));
         const snap = await getDocs(q);
 
-        const sMap = new Map<string, {id?: string, name: string}>();
-        const chaptersMap: Record<string, Map<string, {id?: string, name: string}>> = {};
+        // Use Maps to prevent duplicates
+        const sMap = new Map<string, NamedItem>();
+        const chaptersMap: Record<string, Map<string, NamedItem>> = {};
 
         snap.docs.forEach((d) => {
           const data = d.data();
@@ -84,7 +90,7 @@ export default function CreateUserQuizPage() {
         if (!mounted) return;
 
         const sArr = Array.from(sMap.values()).sort((a, b) => a.name.localeCompare(b.name));
-        const chaptersObj: Record<string, {id?: string, name: string}[]> = {};
+        const chaptersObj: Record<string, NamedItem[]> = {};
         Object.entries(chaptersMap).forEach(([k, v]) => {
           chaptersObj[k] = Array.from(v.values()).sort((a, b) => a.name.localeCompare(b.name));
         });
@@ -111,7 +117,7 @@ export default function CreateUserQuizPage() {
   }, []);
 
   // Handle subject selection (multiple, with checkboxes)
-  const handleSubjectChange = (subject: {id?: string, name: string}) => {
+  const handleSubjectChange = (subject: NamedItem) => {
     setSelectedSubjects((prev) => {
       const already = prev.find((s) => s.name === subject.name);
       if (already) {
@@ -129,7 +135,7 @@ export default function CreateUserQuizPage() {
   };
 
   // Handle chapter selection (multiple, with checkboxes)
-  const handleChapterChange = (chapter: {id?: string, name: string}) => {
+  const handleChapterChange = (chapter: NamedItem) => {
     setSelectedChapters((prev) => {
       const already = prev.find((c) => c.name === chapter.name);
       if (already) {
@@ -141,7 +147,7 @@ export default function CreateUserQuizPage() {
   };
 
   // Save selected subjects to "subjects" collection if not exist
-  const saveSubjectsToDb = async (subjectsToSave: {id?: string, name: string}[]) => {
+  const saveSubjectsToDb = async (subjectsToSave: NamedItem[]) => {
     const subjectsCollection = collection(db, 'subjects');
     for (const subject of subjectsToSave) {
       const subjectDocRef = doc(subjectsCollection, subject.name);
@@ -256,13 +262,19 @@ export default function CreateUserQuizPage() {
         chapter: q.chapter || '',
       }));
 
-      // 5) Create user-quizzes doc (subjects/chapters as array of objects with name/id)
+      // 5) Create user-quizzes doc (subjects/chapters as array of objects with only defined properties)
+      const cleanNamedArray = (arr: NamedItem[]) =>
+        arr.map(obj => {
+          // Only include id if it is defined
+          return obj.id ? { id: obj.id, name: obj.name } : { name: obj.name };
+        });
+
       const newDocRef = doc(collection(db, 'user-quizzes'));
       await setDoc(newDocRef, {
         title: quizTitle,
         createdBy: user.uid,
-        subjects: selectedSubjects.map(subj => ({ id: subj.id, name: subj.name })),
-        chapters: selectedChapters.map(chap => ({ id: chap.id, name: chap.name })),
+        subjects: cleanNamedArray(selectedSubjects),
+        chapters: cleanNamedArray(selectedChapters),
         duration: duration,
         questionCount: selectedSnapshot.length,
         selectedQuestions: selectedSnapshot,
@@ -281,9 +293,9 @@ export default function CreateUserQuizPage() {
       await batch.commit();
 
       router.push(`/quiz/start-user-quiz?id=${newDocRef.id}`);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error creating user quiz', err);
-      setError('Failed to create test. Try again later.');
+      setError(`Failed to create test. Try again later. ${err?.message ? err.message : ''}`);
       setCreating(false);
       return;
     }
