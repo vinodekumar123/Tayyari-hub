@@ -45,6 +45,7 @@
     "@vercel/speed-insights": "^1.2.0",
        "react-chartjs-2": "^5.3.0",  
   "chart.js": "^4.5.0",
+       "recharts": "^3.1.2",
     "autoprefixer": "10.4.15",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.1",
