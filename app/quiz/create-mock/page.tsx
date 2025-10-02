@@ -17,8 +17,8 @@ import { onAuthStateChanged, User } from 'firebase/auth';
 import { db, auth } from 'app/firebase';
 import { Button } from '@/components/ui/button';
 
-const MAX_QUESTIONS = 180;
-const MAX_QUESTIONS_PER_PAGE = 180;
+const MAX_QUESTIONS = 100;
+const MAX_QUESTIONS_PER_PAGE = 50;
 
 interface MockQuestion {
   id: string;
@@ -324,7 +324,6 @@ export default function CreateUserQuizPage() {
               onChange={(e) => setNumQuestions(Number(e.target.value))}
               className="mt-1 block w-full border border-indigo-200 rounded-lg p-2 bg-indigo-50 focus:outline-none focus:ring-2 focus:ring-indigo-300"
             />
-            <span className="text-xs text-gray-400">Max {MAX_QUESTIONS}</span>
           </div>
           <div>
             <label className="block text-sm font-semibold text-indigo-800 mb-1">Questions Per Page</label>
@@ -336,7 +335,6 @@ export default function CreateUserQuizPage() {
               onChange={(e) => setQuestionsPerPage(Number(e.target.value))}
               className="mt-1 block w-full border border-indigo-200 rounded-lg p-2 bg-indigo-50 focus:outline-none focus:ring-2 focus:ring-indigo-300"
             />
-            <span className="text-xs text-gray-400">Max {MAX_QUESTIONS_PER_PAGE}</span>
           </div>
           <div>
             <label className="block text-sm font-semibold text-indigo-800 mb-1">Duration (minutes)</label>
