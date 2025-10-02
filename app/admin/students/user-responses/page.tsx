@@ -122,23 +122,23 @@ const UserResponsesPage: React.FC = () => {
   }, [quizId, user]);
 
   if (error) return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center">
-      <div className="text-red-400 text-center py-10 bg-slate-800/50 backdrop-blur-lg rounded-2xl px-8 border border-red-500/20">{error}</div>
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center">
+      <div className="text-red-600 text-center py-10 bg-white/90 backdrop-blur-lg rounded-2xl px-8 border border-red-200 shadow-xl">{error}</div>
     </div>
   );
   
   if (loading) return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center">
       <div className="text-center">
-        <Sparkles className="h-12 w-12 text-purple-400 animate-pulse mx-auto mb-4" />
-        <p className="text-white text-lg">Loading your results...</p>
+        <Sparkles className="h-12 w-12 text-purple-600 animate-pulse mx-auto mb-4" />
+        <p className="text-gray-700 text-lg font-medium">Loading your results...</p>
       </div>
     </div>
   );
   
   if (!attempt || !quiz) return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center">
-      <div className="text-center py-10 text-slate-300">No result found.</div>
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center">
+      <div className="text-center py-10 text-gray-600">No result found.</div>
     </div>
   );
 
@@ -210,26 +210,26 @@ const UserResponsesPage: React.FC = () => {
   }
 
   const getPerformanceLevel = (percent: number) => {
-    if (percent >= 90) return { text: 'Outstanding', color: 'text-emerald-400', bg: 'bg-emerald-500/20' };
-    if (percent >= 75) return { text: 'Excellent', color: 'text-green-400', bg: 'bg-green-500/20' };
-    if (percent >= 60) return { text: 'Good', color: 'text-blue-400', bg: 'bg-blue-500/20' };
-    if (percent >= 50) return { text: 'Average', color: 'text-yellow-400', bg: 'bg-yellow-500/20' };
-    return { text: 'Needs Improvement', color: 'text-orange-400', bg: 'bg-orange-500/20' };
+    if (percent >= 90) return { text: 'Outstanding', color: 'text-emerald-600', bg: 'bg-emerald-100' };
+    if (percent >= 75) return { text: 'Excellent', color: 'text-green-600', bg: 'bg-green-100' };
+    if (percent >= 60) return { text: 'Good', color: 'text-blue-600', bg: 'bg-blue-100' };
+    if (percent >= 50) return { text: 'Average', color: 'text-yellow-600', bg: 'bg-yellow-100' };
+    return { text: 'Needs Improvement', color: 'text-orange-600', bg: 'bg-orange-100' };
   };
 
   const performance = getPerformanceLevel(percent);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
       {/* Hero Header */}
-      <div className="relative overflow-hidden bg-gradient-to-r from-purple-600/20 via-pink-600/20 to-blue-600/20 backdrop-blur-xl border-b border-white/10">
-        <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGRlZnM+PHBhdHRlcm4gaWQ9ImdyaWQiIHdpZHRoPSI2MCIgaGVpZ2h0PSI2MCIgcGF0dGVyblVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHBhdGggZD0iTSAxMCAwIEwgMCAwIDAgMTAiIGZpbGw9Im5vbmUiIHN0cm9rZT0id2hpdGUiIHN0cm9rZS1vcGFjaXR5PSIwLjAzIiBzdHJva2Utd2lkdGg9IjEiLz48L3BhdHRlcm4+PC9kZWZzPjxyZWN0IHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiIGZpbGw9InVybCgjZ3JpZCkiLz48L3N2Zz4=')] opacity-30"></div>
+      <div className="relative overflow-hidden bg-gradient-to-r from-purple-100 via-pink-100 to-blue-100 border-b border-purple-200">
+        <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGRlZnM+PHBhdHRlcm4gaWQ9ImdyaWQiIHdpZHRoPSI2MCIgaGVpZ2h0PSI2MCIgcGF0dGVyblVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHBhdGggZD0iTSAxMCAwIEwgMCAwIDAgMTAiIGZpbGw9Im5vbmUiIHN0cm9rZT0iYmxhY2siIHN0cm9rZS1vcGFjaXR5PSIwLjAzIiBzdHJva2Utd2lkdGg9IjEiLz48L3BhdHRlcm4+PC9kZWZzPjxyZWN0IHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiIGZpbGw9InVybCgjZ3JpZCkiLz48L3N2Zz4=')] opacity-30"></div>
         
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 relative">
           <Button 
-            variant="ghost" 
+            variant="outline" 
             onClick={() => router.push('/students/user-quizzes')}
-            className="text-white hover:bg-white/10 mb-6 backdrop-blur-sm"
+            className="bg-white hover:bg-gray-50 mb-6 shadow-sm border-purple-200"
           >
             <ArrowLeft className="h-4 w-4 mr-2" />
             Back to Quizzes
@@ -238,25 +238,25 @@ const UserResponsesPage: React.FC = () => {
           <div className="grid md:grid-cols-2 gap-8 items-center">
             <div>
               <div className="flex items-center gap-3 mb-4">
-                <div className="p-3 bg-gradient-to-br from-purple-500 to-pink-500 rounded-2xl shadow-lg shadow-purple-500/50">
+                <div className="p-3 bg-gradient-to-br from-purple-500 to-pink-500 rounded-2xl shadow-lg shadow-purple-500/30">
                   <BookOpen className="h-8 w-8 text-white" />
                 </div>
                 <div>
-                  <h1 className="text-3xl font-bold text-white tracking-tight">{quiz.name}</h1>
+                  <h1 className="text-3xl font-bold text-gray-800 tracking-tight">{quiz.name}</h1>
                   {quiz.subject && (
-                    <p className="text-purple-200 mt-1 text-lg">{quiz.subject}</p>
+                    <p className="text-purple-700 mt-1 text-lg font-medium">{quiz.subject}</p>
                   )}
                 </div>
               </div>
               
               <div className="flex items-center gap-4 mt-6">
-                <div className={`px-4 py-2 rounded-full ${performance.bg} backdrop-blur-sm border border-white/10`}>
+                <div className={`px-4 py-2 rounded-full ${performance.bg} border border-purple-200 shadow-sm`}>
                   <span className={`${performance.color} font-bold text-lg flex items-center gap-2`}>
                     <Award className="h-5 w-5" />
                     {performance.text}
                   </span>
                 </div>
-                <div className="text-slate-300 text-sm">
+                <div className="text-gray-600 text-sm font-medium">
                   Attempt #{attempt.attemptNumber}
                 </div>
               </div>
@@ -264,21 +264,21 @@ const UserResponsesPage: React.FC = () => {
 
             {/* Score Card */}
             <div className="relative">
-              <div className="absolute inset-0 bg-gradient-to-br from-purple-500 to-pink-500 rounded-3xl blur-xl opacity-30"></div>
-              <div className="relative bg-slate-800/50 backdrop-blur-xl rounded-3xl p-8 border border-white/10 shadow-2xl">
+              <div className="absolute inset-0 bg-gradient-to-br from-purple-200 to-pink-200 rounded-3xl blur-xl opacity-50"></div>
+              <div className="relative bg-white rounded-3xl p-8 border border-purple-200 shadow-2xl">
                 <div className="flex justify-between items-start mb-6">
                   <div>
-                    <p className="text-slate-400 text-sm font-medium mb-2">Your Score</p>
-                    <p className="text-5xl font-bold text-white">{percent}<span className="text-3xl text-slate-400">%</span></p>
+                    <p className="text-gray-600 text-sm font-medium mb-2">Your Score</p>
+                    <p className="text-5xl font-bold text-gray-800">{percent}<span className="text-3xl text-gray-500">%</span></p>
                   </div>
                   <div className="text-right">
-                    <p className="text-slate-400 text-sm mb-1">Questions</p>
-                    <p className="text-2xl font-bold text-white">{attempt.score}<span className="text-slate-400">/{attempt.total}</span></p>
+                    <p className="text-gray-600 text-sm mb-1">Questions</p>
+                    <p className="text-2xl font-bold text-gray-800">{attempt.score}<span className="text-gray-500">/{attempt.total}</span></p>
                   </div>
                 </div>
                 
                 <div className="space-y-3">
-                  <div className="h-3 bg-slate-700/50 rounded-full overflow-hidden">
+                  <div className="h-3 bg-gray-200 rounded-full overflow-hidden">
                     <div 
                       className="h-full bg-gradient-to-r from-emerald-500 via-blue-500 to-purple-500 rounded-full transition-all duration-1000 ease-out"
                       style={{ width: `${percent}%` }}
@@ -287,19 +287,19 @@ const UserResponsesPage: React.FC = () => {
                   
                   <div className="flex justify-between items-center text-sm">
                     <div className="flex items-center gap-2">
-                      <Clock className="h-4 w-4 text-slate-400" />
-                      <span className="text-slate-300">
+                      <Clock className="h-4 w-4 text-gray-500" />
+                      <span className="text-gray-700 font-medium">
                         {attempt.timeTaken ? `${Math.floor(attempt.timeTaken / 60)}m ${attempt.timeTaken % 60}s` : 'N/A'}
                       </span>
                     </div>
                     <div className="flex items-center gap-3">
-                      <span className="flex items-center gap-1 text-emerald-400">
+                      <span className="flex items-center gap-1 text-emerald-600 font-semibold">
                         <CheckCircle className="h-4 w-4" /> {correctCount}
                       </span>
-                      <span className="flex items-center gap-1 text-red-400">
+                      <span className="flex items-center gap-1 text-red-600 font-semibold">
                         <XCircle className="h-4 w-4" /> {wrongCount}
                       </span>
-                      <span className="flex items-center gap-1 text-amber-400">
+                      <span className="flex items-center gap-1 text-amber-600 font-semibold">
                         <Info className="h-4 w-4" /> {skippedCount}
                       </span>
                     </div>
@@ -316,13 +316,13 @@ const UserResponsesPage: React.FC = () => {
         <div className="grid lg:grid-cols-2 gap-8 mb-12">
           {/* Distribution Chart */}
           <div className="relative group">
-            <div className="absolute inset-0 bg-gradient-to-br from-blue-500/20 to-purple-500/20 rounded-3xl blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-            <div className="relative bg-slate-800/50 backdrop-blur-xl rounded-3xl p-6 border border-white/10 shadow-xl">
+            <div className="absolute inset-0 bg-gradient-to-br from-blue-200/40 to-purple-200/40 rounded-3xl blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+            <div className="relative bg-white rounded-3xl p-6 border border-purple-200 shadow-xl">
               <div className="flex items-center gap-3 mb-6">
-                <div className="p-2 bg-gradient-to-br from-blue-500 to-purple-500 rounded-xl">
+                <div className="p-2 bg-gradient-to-br from-blue-500 to-purple-500 rounded-xl shadow-lg">
                   <BarChart2 className="h-5 w-5 text-white" />
                 </div>
-                <h2 className="text-xl font-bold text-white">Answer Distribution</h2>
+                <h2 className="text-xl font-bold text-gray-800">Answer Distribution</h2>
               </div>
               
               <ResponsiveContainer width="100%" height={280}>
@@ -344,12 +344,11 @@ const UserResponsesPage: React.FC = () => {
                   </Pie>
                   <Tooltip 
                     contentStyle={{ 
-                      backgroundColor: 'rgba(15, 23, 42, 0.9)', 
-                      border: '1px solid rgba(255, 255, 255, 0.1)',
+                      backgroundColor: 'rgba(255, 255, 255, 0.95)', 
+                      border: '1px solid rgba(147, 51, 234, 0.2)',
                       borderRadius: '12px',
-                      backdropFilter: 'blur(12px)'
+                      boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)'
                     }}
-                    labelStyle={{ color: '#fff' }}
                   />
                 </PieChart>
               </ResponsiveContainer>
@@ -358,23 +357,23 @@ const UserResponsesPage: React.FC = () => {
 
           {/* Subject Performance Radar */}
           <div className="relative group">
-            <div className="absolute inset-0 bg-gradient-to-br from-purple-500/20 to-pink-500/20 rounded-3xl blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-            <div className="relative bg-slate-800/50 backdrop-blur-xl rounded-3xl p-6 border border-white/10 shadow-xl">
+            <div className="absolute inset-0 bg-gradient-to-br from-purple-200/40 to-pink-200/40 rounded-3xl blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+            <div className="relative bg-white rounded-3xl p-6 border border-purple-200 shadow-xl">
               <div className="flex items-center gap-3 mb-6">
-                <div className="p-2 bg-gradient-to-br from-purple-500 to-pink-500 rounded-xl">
+                <div className="p-2 bg-gradient-to-br from-purple-500 to-pink-500 rounded-xl shadow-lg">
                   <TrendingUp className="h-5 w-5 text-white" />
                 </div>
-                <h2 className="text-xl font-bold text-white">Subject Performance</h2>
+                <h2 className="text-xl font-bold text-gray-800">Subject Performance</h2>
               </div>
               
               <ResponsiveContainer width="100%" height={280}>
                 <RadarChart data={subjectData}>
-                  <PolarGrid stroke="rgba(255, 255, 255, 0.1)" />
+                  <PolarGrid stroke="rgba(147, 51, 234, 0.2)" />
                   <PolarAngleAxis 
                     dataKey="subject" 
-                    tick={{ fill: '#94a3b8', fontSize: 12 }}
+                    tick={{ fill: '#6b7280', fontSize: 12 }}
                   />
-                  <PolarRadiusAxis angle={90} domain={[0, 100]} tick={{ fill: '#94a3b8' }} />
+                  <PolarRadiusAxis angle={90} domain={[0, 100]} tick={{ fill: '#6b7280' }} />
                   <Radar 
                     name="Accuracy %" 
                     dataKey="accuracy" 
@@ -384,12 +383,11 @@ const UserResponsesPage: React.FC = () => {
                   />
                   <Tooltip 
                     contentStyle={{ 
-                      backgroundColor: 'rgba(15, 23, 42, 0.9)', 
-                      border: '1px solid rgba(255, 255, 255, 0.1)',
+                      backgroundColor: 'rgba(255, 255, 255, 0.95)', 
+                      border: '1px solid rgba(147, 51, 234, 0.2)',
                       borderRadius: '12px',
-                      backdropFilter: 'blur(12px)'
+                      boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)'
                     }}
-                    labelStyle={{ color: '#fff' }}
                   />
                 </RadarChart>
               </ResponsiveContainer>
@@ -412,8 +410,8 @@ const UserResponsesPage: React.FC = () => {
                 onClick={() => setActiveTab(tab.key as typeof activeTab)}
                 className={`group flex items-center gap-2 px-6 py-3 rounded-2xl font-semibold transition-all duration-300 whitespace-nowrap ${
                   activeTab === tab.key
-                    ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-lg shadow-purple-500/50 scale-105'
-                    : 'bg-slate-800/50 text-slate-300 hover:bg-slate-700/50 border border-white/10'
+                    ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-lg shadow-purple-500/30 scale-105'
+                    : 'bg-white text-gray-700 hover:bg-gray-50 border border-purple-200 shadow-sm'
                 }`}
               >
                 <Icon className="h-5 w-5" />
@@ -421,7 +419,7 @@ const UserResponsesPage: React.FC = () => {
                 <span className={`px-2.5 py-0.5 rounded-full text-sm font-bold ${
                   activeTab === tab.key 
                     ? 'bg-white/20 text-white' 
-                    : 'bg-slate-700 text-slate-300'
+                    : 'bg-purple-100 text-purple-700'
                 }`}>
                   {count}
                 </span>
@@ -433,9 +431,9 @@ const UserResponsesPage: React.FC = () => {
         {/* Questions */}
         <div className="space-y-6">
           {filteredQuestions.length === 0 && (
-            <div className="text-center py-16">
-              <Info className="h-16 w-16 text-slate-600 mx-auto mb-4" />
-              <p className="text-slate-400 text-lg">No questions to show in this category</p>
+            <div className="text-center py-16 bg-white rounded-3xl border border-purple-200 shadow-lg">
+              <Info className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+              <p className="text-gray-600 text-lg">No questions to show in this category</p>
             </div>
           )}
           
@@ -444,11 +442,11 @@ const UserResponsesPage: React.FC = () => {
               key={q.questionId} 
               className="relative group"
             >
-              <div className="absolute inset-0 bg-gradient-to-r from-purple-500/10 to-pink-500/10 rounded-3xl blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-              <div className="relative bg-slate-800/50 backdrop-blur-xl rounded-3xl p-6 border border-white/10 shadow-xl">
+              <div className="absolute inset-0 bg-gradient-to-r from-purple-100/50 to-pink-100/50 rounded-3xl blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+              <div className="relative bg-white rounded-3xl p-6 border border-purple-200 shadow-xl">
                 {/* Question Header */}
                 <div className="flex items-start gap-4 mb-6">
-                  <div className={`flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center font-bold text-lg ${
+                  <div className={`flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center font-bold text-lg shadow-md ${
                     q.isCorrect 
                       ? 'bg-gradient-to-br from-emerald-500 to-green-500 text-white'
                       : !q.selected || q.selected === ''
@@ -459,20 +457,20 @@ const UserResponsesPage: React.FC = () => {
                   </div>
                   
                   <div className="flex-1">
-                    <p className="text-white text-lg font-medium mb-3 leading-relaxed">{q.questionText}</p>
+                    <p className="text-gray-800 text-lg font-medium mb-3 leading-relaxed">{q.questionText}</p>
                     <div className="flex flex-wrap gap-2">
                       {q.subject && (
-                        <span className="px-3 py-1 bg-blue-500/20 border border-blue-500/30 text-blue-300 rounded-full text-xs font-semibold">
+                        <span className="px-3 py-1 bg-blue-100 border border-blue-300 text-blue-700 rounded-full text-xs font-semibold shadow-sm">
                           {q.subject}
                         </span>
                       )}
                       {q.chapter && (
-                        <span className="px-3 py-1 bg-purple-500/20 border border-purple-500/30 text-purple-300 rounded-full text-xs font-semibold">
+                        <span className="px-3 py-1 bg-purple-100 border border-purple-300 text-purple-700 rounded-full text-xs font-semibold shadow-sm">
                           {q.chapter}
                         </span>
                       )}
                       {q.difficulty && (
-                        <span className="px-3 py-1 bg-pink-500/20 border border-pink-500/30 text-pink-300 rounded-full text-xs font-semibold">
+                        <span className="px-3 py-1 bg-pink-100 border border-pink-300 text-pink-700 rounded-full text-xs font-semibold shadow-sm">
                           {q.difficulty}
                         </span>
                       )}
@@ -481,19 +479,19 @@ const UserResponsesPage: React.FC = () => {
                   
                   <div>
                     {q.selected === null || q.selected === '' ? (
-                      <div className="flex items-center gap-2 px-4 py-2 bg-amber-500/20 border border-amber-500/30 rounded-xl">
-                        <Info className="h-4 w-4 text-amber-400" />
-                        <span className="text-amber-300 font-medium text-sm">Skipped</span>
+                      <div className="flex items-center gap-2 px-4 py-2 bg-amber-100 border border-amber-300 rounded-xl shadow-sm">
+                        <Info className="h-4 w-4 text-amber-600" />
+                        <span className="text-amber-700 font-medium text-sm">Skipped</span>
                       </div>
                     ) : q.isCorrect ? (
-                      <div className="flex items-center gap-2 px-4 py-2 bg-emerald-500/20 border border-emerald-500/30 rounded-xl">
-                        <CheckCircle className="h-4 w-4 text-emerald-400" />
-                        <span className="text-emerald-300 font-medium text-sm">Correct</span>
+                      <div className="flex items-center gap-2 px-4 py-2 bg-emerald-100 border border-emerald-300 rounded-xl shadow-sm">
+                        <CheckCircle className="h-4 w-4 text-emerald-600" />
+                        <span className="text-emerald-700 font-medium text-sm">Correct</span>
                       </div>
                     ) : (
-                      <div className="flex items-center gap-2 px-4 py-2 bg-red-500/20 border border-red-500/30 rounded-xl">
-                        <XCircle className="h-4 w-4 text-red-400" />
-                        <span className="text-red-300 font-medium text-sm">Wrong</span>
+                      <div className="flex items-center gap-2 px-4 py-2 bg-red-100 border border-red-300 rounded-xl shadow-sm">
+                        <XCircle className="h-4 w-4 text-red-600" />
+                        <span className="text-red-700 font-medium text-sm">Wrong</span>
                       </div>
                     )}
                   </div>
@@ -509,31 +507,31 @@ const UserResponsesPage: React.FC = () => {
                         key={i}
                         className={`flex items-center gap-3 p-4 rounded-2xl transition-all duration-300 ${
                           isCorrect
-                            ? 'bg-emerald-500/10 border-2 border-emerald-500/50'
+                            ? 'bg-emerald-50 border-2 border-emerald-400 shadow-md'
                             : isSelected
-                            ? 'bg-red-500/10 border-2 border-red-500/50'
-                            : 'bg-slate-700/30 border border-white/5 hover:bg-slate-700/50'
+                            ? 'bg-red-50 border-2 border-red-400 shadow-md'
+                            : 'bg-gray-50 border border-gray-200 hover:bg-gray-100 hover:shadow-sm'
                         }`}
                       >
-                        <div className={`flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center font-bold ${
+                        <div className={`flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center font-bold shadow-sm ${
                           isCorrect 
                             ? 'bg-emerald-500 text-white' 
                             : isSelected 
                             ? 'bg-red-500 text-white' 
-                            : 'bg-slate-600 text-slate-300'
+                            : 'bg-gray-300 text-gray-700'
                         }`}>
                           {String.fromCharCode(65 + i)}
                         </div>
                         <span className={`flex-1 ${
-                          isCorrect || isSelected ? 'text-white font-medium' : 'text-slate-300'
+                          isCorrect || isSelected ? 'text-gray-800 font-medium' : 'text-gray-700'
                         }`}>
                           {opt}
                         </span>
                         {isCorrect && (
-                          <CheckCircle className="h-6 w-6 text-emerald-400 flex-shrink-0" />
+                          <CheckCircle className="h-6 w-6 text-emerald-600 flex-shrink-0" />
                         )}
                         {isSelected && !isCorrect && (
-                          <XCircle className="h-6 w-6 text-red-400 flex-shrink-0" />
+                          <XCircle className="h-6 w-6 text-red-600 flex-shrink-0" />
                         )}
                       </div>
                     );
@@ -542,14 +540,14 @@ const UserResponsesPage: React.FC = () => {
 
                 {/* Explanation */}
                 {q.explanation && (
-                  <div className="bg-gradient-to-r from-blue-500/10 to-purple-500/10 border border-blue-500/20 rounded-2xl p-5">
+                  <div className="bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-300 rounded-2xl p-5 shadow-sm">
                     <div className="flex items-start gap-3">
-                      <div className="flex-shrink-0 p-2 bg-blue-500/20 rounded-lg">
-                        <Info className="h-5 w-5 text-blue-400" />
+                      <div className="flex-shrink-0 p-2 bg-blue-100 rounded-lg">
+                        <Info className="h-5 w-5 text-blue-600" />
                       </div>
                       <div>
-                        <p className="font-semibold text-blue-300 mb-2">Explanation</p>
-                        <p className="text-slate-300 leading-relaxed">{q.explanation}</p>
+                        <p className="font-semibold text-blue-700 mb-2">Explanation</p>
+                        <p className="text-gray-700 leading-relaxed">{q.explanation}</p>
                       </div>
                     </div>
                   </div>
