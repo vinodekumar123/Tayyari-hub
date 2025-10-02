@@ -38,10 +38,10 @@ export default function CreateUserQuizPage() {
   const [user, setUser] = useState<User | null>(null);
 
   const [loading, setLoading] = useState(true);
-  const [subjects, setSubjects] = useState<string[]>([]);
-  const [chaptersBySubject, setChaptersBySubject] = useState<Record<string, string[]>>({});
-  const [selectedSubjects, setSelectedSubjects] = useState<string[]>([]);
-  const [selectedChapters, setSelectedChapters] = useState<string[]>([]);
+  const [subjects, setSubjects] = useState<{id?: string, name: string}[]>([]);
+  const [chaptersBySubject, setChaptersBySubject] = useState<Record<string, {id?: string, name: string}[]>>({});
+  const [selectedSubjects, setSelectedSubjects] = useState<{id?: string, name: string}[]>([]);
+  const [selectedChapters, setSelectedChapters] = useState<{id?: string, name: string}[]>([]);
   const [numQuestions, setNumQuestions] = useState<number>(20);
   const [questionsPerPage, setQuestionsPerPage] = useState<number>(10);
   const [duration, setDuration] = useState<number>(60);
@@ -66,25 +66,27 @@ export default function CreateUserQuizPage() {
         const q = query(collection(db, 'mock-questions'));
         const snap = await getDocs(q);
 
-        const sSet = new Set<string>();
-        const chaptersMap: Record<string, Set<string>> = {};
+        const sMap = new Map<string, {id?: string, name: string}>();
+        const chaptersMap: Record<string, Map<string, {id?: string, name: string}>> = {};
 
         snap.docs.forEach((d) => {
           const data = d.data();
-          const subject = (data.subject || 'Uncategorized').toString();
-          const chapter = (data.chapter || 'Uncategorized').toString();
+          let subject = (data.subject || 'Uncategorized').toString();
+          let chapter = (data.chapter || 'Uncategorized').toString();
+          let subjectId = data.subjectId || undefined;
+          let chapterId = data.chapterId || undefined;
 
-          sSet.add(subject);
-          if (!chaptersMap[subject]) chaptersMap[subject] = new Set();
-          chaptersMap[subject].add(chapter);
+          sMap.set(subject, { id: subjectId, name: subject });
+          if (!chaptersMap[subject]) chaptersMap[subject] = new Map();
+          chaptersMap[subject].set(chapter, { id: chapterId, name: chapter });
         });
 
         if (!mounted) return;
 
-        const sArr = Array.from(sSet).sort();
-        const chaptersObj: Record<string, string[]> = {};
+        const sArr = Array.from(sMap.values()).sort((a, b) => a.name.localeCompare(b.name));
+        const chaptersObj: Record<string, {id?: string, name: string}[]> = {};
         Object.entries(chaptersMap).forEach(([k, v]) => {
-          chaptersObj[k] = Array.from(v).sort();
+          chaptersObj[k] = Array.from(v.values()).sort((a, b) => a.name.localeCompare(b.name));
         });
 
         setSubjects(sArr);
@@ -92,7 +94,7 @@ export default function CreateUserQuizPage() {
 
         if (sArr.length > 0 && selectedSubjects.length === 0) {
           setSelectedSubjects([sArr[0]]);
-          setSelectedChapters(chaptersObj[sArr[0]]?.slice(0, 1) || []);
+          setSelectedChapters(chaptersObj[sArr[0].name]?.slice(0, 1) || []);
         }
       } catch (err) {
         console.error('Failed to load mock-questions meta', err);
@@ -109,13 +111,14 @@ export default function CreateUserQuizPage() {
   }, []);
 
   // Handle subject selection (multiple, with checkboxes)
-  const handleSubjectChange = (subject: string) => {
+  const handleSubjectChange = (subject: {id?: string, name: string}) => {
     setSelectedSubjects((prev) => {
-      if (prev.includes(subject)) {
-        const filtered = prev.filter((s) => s !== subject);
+      const already = prev.find((s) => s.name === subject.name);
+      if (already) {
+        const filtered = prev.filter((s) => s.name !== subject.name);
         setSelectedChapters((prevChapters) =>
           prevChapters.filter(
-            (chapter) => !chaptersBySubject[subject]?.includes(chapter)
+            (chapter) => !(chaptersBySubject[subject.name]?.some(ch => ch.name === chapter.name))
           )
         );
         return filtered;
@@ -126,10 +129,11 @@ export default function CreateUserQuizPage() {
   };
 
   // Handle chapter selection (multiple, with checkboxes)
-  const handleChapterChange = (chapter: string) => {
+  const handleChapterChange = (chapter: {id?: string, name: string}) => {
     setSelectedChapters((prev) => {
-      if (prev.includes(chapter)) {
-        return prev.filter((c) => c !== chapter);
+      const already = prev.find((c) => c.name === chapter.name);
+      if (already) {
+        return prev.filter((c) => c.name !== chapter.name);
       } else {
         return [...prev, chapter];
       }
@@ -137,14 +141,14 @@ export default function CreateUserQuizPage() {
   };
 
   // Save selected subjects to "subjects" collection if not exist
-  const saveSubjectsToDb = async (subjectsToSave: string[]) => {
+  const saveSubjectsToDb = async (subjectsToSave: {id?: string, name: string}[]) => {
     const subjectsCollection = collection(db, 'subjects');
     for (const subject of subjectsToSave) {
-      const subjectDocRef = doc(subjectsCollection, subject);
+      const subjectDocRef = doc(subjectsCollection, subject.name);
       const docSnap = await getDoc(subjectDocRef);
       if (!docSnap.exists()) {
         await setDoc(subjectDocRef, {
-          name: subject,
+          name: subject.name,
           createdAt: serverTimestamp(),
           createdBy: user?.uid || null,
         });
@@ -209,7 +213,7 @@ export default function CreateUserQuizPage() {
       // Save quiz title to "quiz-titles" collection
       const quizTitle =
         title?.trim() ||
-        `${selectedSubjects.join(', ')} Test - ${new Date().toLocaleDateString()}`;
+        `${selectedSubjects.map(subj => subj.name).join(', ')} Test - ${new Date().toLocaleDateString()}`;
       await saveTitleToDb(quizTitle);
 
       // 1) Fetch pool matching subjects & chapters
@@ -217,10 +221,10 @@ export default function CreateUserQuizPage() {
       let allQuestions: MockQuestion[] = [];
 
       for (const subject of selectedSubjects) {
-        const q = query(mqRef, where('subject', '==', subject));
+        const q = query(mqRef, where('subject', '==', subject.name));
         const snap = await getDocs(q);
         const pool: MockQuestion[] = snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) }));
-        const filtered = pool.filter((p) => selectedChapters.includes(p.chapter || ''));
+        const filtered = pool.filter((p) => selectedChapters.find(c => c.name === (p.chapter || '')));
         allQuestions = [...allQuestions, ...filtered];
       }
 
@@ -252,13 +256,13 @@ export default function CreateUserQuizPage() {
         chapter: q.chapter || '',
       }));
 
-      // 5) Create user-quizzes doc (subjects/chapters as array of strings)
+      // 5) Create user-quizzes doc (subjects/chapters as array of objects with name/id)
       const newDocRef = doc(collection(db, 'user-quizzes'));
       await setDoc(newDocRef, {
         title: quizTitle,
         createdBy: user.uid,
-        subjects: selectedSubjects, // <-- now array of strings
-        chapters: selectedChapters, // <-- now array of strings
+        subjects: selectedSubjects.map(subj => ({ id: subj.id, name: subj.name })),
+        chapters: selectedChapters.map(chap => ({ id: chap.id, name: chap.name })),
         duration: duration,
         questionCount: selectedSnapshot.length,
         selectedQuestions: selectedSnapshot,
@@ -312,14 +316,14 @@ export default function CreateUserQuizPage() {
           <label className="block text-sm font-semibold text-indigo-800 mb-1">Subjects</label>
           <div className="flex flex-wrap gap-3 mt-2">
             {subjects.map((s) => (
-              <label key={s} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white shadow hover:bg-indigo-50 cursor-pointer border border-indigo-100 font-medium">
+              <label key={s.name} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white shadow hover:bg-indigo-50 cursor-pointer border border-indigo-100 font-medium">
                 <input
                   type="checkbox"
-                  checked={selectedSubjects.includes(s)}
+                  checked={!!selectedSubjects.find(sub => sub.name === s.name)}
                   onChange={() => handleSubjectChange(s)}
                   className="form-checkbox h-4 w-4 text-indigo-600 border-indigo-300"
                 />
-                <span className="text-indigo-700">{s}</span>
+                <span className="text-indigo-700">{s.name}</span>
               </label>
             ))}
           </div>
@@ -332,15 +336,15 @@ export default function CreateUserQuizPage() {
               <span className="text-gray-400 italic">Select subjects to see chapters</span>
             ) : (
               selectedSubjects.flatMap((subject) =>
-                (chaptersBySubject[subject] || []).map((c) => (
-                  <label key={`${subject}-${c}`} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white shadow hover:bg-blue-50 cursor-pointer border border-blue-100 font-medium">
+                (chaptersBySubject[subject.name] || []).map((c) => (
+                  <label key={`${subject.name}-${c.name}`} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white shadow hover:bg-blue-50 cursor-pointer border border-blue-100 font-medium">
                     <input
                       type="checkbox"
-                      checked={selectedChapters.includes(c)}
+                      checked={!!selectedChapters.find(chap => chap.name === c.name)}
                       onChange={() => handleChapterChange(c)}
                       className="form-checkbox h-4 w-4 text-blue-600 border-blue-300"
                     />
-                    <span className="text-blue-700">{c}</span>
+                    <span className="text-blue-700">{c.name}</span>
                   </label>
                 ))
               )
