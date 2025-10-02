@@ -8,8 +8,10 @@ import {
   getFirestore,
   doc,
   getDoc,
+  query,
+  orderBy,
 } from 'firebase/firestore';
-import { app } from '@/app/firebase';
+import { app, auth as clientAuth, db as clientDb } from '@/app/firebase';
 import { useRouter } from 'next/navigation';
 import {
   Card,
@@ -29,24 +31,29 @@ import {
   SelectItem,
 } from '@/components/ui/select';
 
-export default function StudentResultsPage() {
+const ADMIN = 'admin';
+const USER = 'user';
+
+export default function UnifiedResultsPage() {
   const [userId, setUserId] = useState<string | null>(null);
   const [userCourse, setUserCourse] = useState('');
   const [subjects, setSubjects] = useState<string[]>([]);
   const [chapters, setChapters] = useState<string[]>([]);
   const [subjectMap, setSubjectMap] = useState<Record<string, string>>({});
-  const [results, setResults] = useState<any[]>([]);
-  const [filtered, setFiltered] = useState<any[]>([]);
+  const [adminResults, setAdminResults] = useState<any[]>([]);
+  const [userResults, setUserResults] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [selectedSubject, setSelectedSubject] = useState('all');
   const [selectedChapter, setSelectedChapter] = useState('all');
-  const [quizType, setQuizType] = useState<'all' | 'admin' | 'user'>('all');
+  const [viewType, setViewType] = useState<typeof ADMIN | typeof USER>(ADMIN);
+  const [filtered, setFiltered] = useState<any[]>([]);
 
   const router = useRouter();
   const auth = getAuth(app);
   const db = getFirestore(app);
 
+  // --------- Auth + User Info -----------
   useEffect(() => {
     onAuthStateChanged(auth, async (user) => {
       if (!user) {
@@ -62,6 +69,7 @@ export default function StudentResultsPage() {
     });
   }, [router]);
 
+  // --------- Subject/Chapter Filters ----------
   useEffect(() => {
     const fetchSubjects = async () => {
       if (!userCourse) return;
@@ -111,29 +119,19 @@ export default function StudentResultsPage() {
     fetchChapters();
   }, [selectedSubject, subjectMap]);
 
+  // --------- Fetch Admin Quizzes (adminResults) ----------
   useEffect(() => {
     const fetchResults = async () => {
       if (!userId) return;
+      setLoading(true);
       const paths = [
-        { 
-          attemptPath: 'quizAttempts', 
-          quizSource: 'quizzes', 
-          isMock: false,
-          resultSubPath: 'results',
-          quizMetaPath: (userId: string, quizId: string) => doc(db, 'quizzes', quizId)
-        },
-        { 
-          attemptPath: 'user-quizAttempts', 
-          quizSource: 'User-quizzes', 
-          isMock: true,
-          resultSubPath: 'user-responses',
-          quizMetaPath: (userId: string, quizId: string) => doc(db, 'users', userId, 'User-quizzes', quizId)
-        },
+        { attemptPath: 'quizAttempts', quizSource: 'quizzes', isMock: false },
+        { attemptPath: 'mock-quizAttempts', quizSource: 'mock-quizzes', isMock: true },
       ];
 
       const allResults: any[] = [];
 
-      for (const { attemptPath, quizSource, isMock, resultSubPath, quizMetaPath } of paths) {
+      for (const { attemptPath, quizSource, isMock } of paths) {
         const attemptsRef = collection(db, 'users', userId, attemptPath);
         const attemptsSnap = await getDocs(attemptsRef);
 
@@ -142,8 +140,12 @@ export default function StudentResultsPage() {
             const quizId = attemptDoc.id;
             // get result and quiz meta in parallel
             const [resultSnap, quizSnap] = await Promise.all([
-              getDoc(doc(db, 'users', userId, attemptPath, quizId, resultSubPath, quizId)),
-              getDoc(quizMetaPath(userId, quizId)),
+              getDoc(doc(db, 'users', userId, attemptPath, quizId, 'results', quizId)),
+              getDoc(
+                quizSource === 'mock-quizzes'
+                  ? doc(db, 'users', userId, 'mock-quizzes', quizId)
+                  : doc(db, 'quizzes', quizId)
+              ),
             ]);
 
             if (resultSnap.exists() && quizSnap.exists()) {
@@ -177,7 +179,7 @@ export default function StudentResultsPage() {
               // Course
               const courseName = quizMeta.course?.name || quizMeta.course || 'Unknown';
 
-              // ========== LIVE SCORE CALCULATION ========== 
+              // ========== LIVE SCORE CALCULATION ==========
               // Use selectedQuestions and answers to calculate score live
               const questions: any[] = quizMeta.selectedQuestions || [];
               const answers: Record<string, string> = resultData.answers || {};
@@ -186,7 +188,7 @@ export default function StudentResultsPage() {
 
               allResults.push({
                 id: quizId,
-                answers, // for debugging, not needed for display
+                answers,
                 title: quizMeta.title || 'Untitled Quiz',
                 subject: subjectNames,
                 chapter: chapterNames,
@@ -195,6 +197,7 @@ export default function StudentResultsPage() {
                 timestamp: resultData.timestamp,
                 score: correct,
                 total: total,
+                type: ADMIN,
               });
             }
           })
@@ -202,76 +205,137 @@ export default function StudentResultsPage() {
       }
 
       allResults.sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
-      setResults(allResults);
-      setFiltered(allResults);
+      setAdminResults(allResults);
       setLoading(false);
     };
 
     fetchResults();
   }, [userId]);
 
+  // --------- Fetch User Quizzes (userResults) ----------
+  useEffect(() => {
+    if (!userId) return;
+    setLoading(true);
+
+    // Use same Firestore instance as 'student-results-page.jsx'
+    const fetchUserQuizAttempts = async () => {
+      try {
+        const attemptsRef = collection(clientDb, 'users', userId, 'user-quizattempts');
+        const q = query(attemptsRef, orderBy('submittedAt', 'desc'));
+        const snap = await getDocs(q);
+
+        const attempts: any[] = [];
+        const metaFetches: Promise<void>[] = [];
+        const quizMetas: Record<string, any> = {};
+        snap.forEach(docSnap => {
+          const data = docSnap.data();
+          if (!data.completed) return;
+          attempts.push({
+            ...data,
+            id: docSnap.id,
+            quizId: docSnap.id,
+            type: USER,
+          });
+          // Prefetch quiz meta
+          metaFetches.push(
+            getDoc(doc(clientDb, 'user-quizzes', docSnap.id)).then(metaSnap => {
+              if (metaSnap.exists()) {
+                quizMetas[docSnap.id] = {
+                  name: metaSnap.data().name,
+                  subject: metaSnap.data().subject,
+                };
+              }
+            })
+          );
+        });
+        await Promise.all(metaFetches);
+
+        // Shape to match adminResults structure
+        const shaped = attempts.map(attempt => {
+          const meta = quizMetas[attempt.quizId] || {};
+          const date = attempt.submittedAt
+            ? new Date(attempt.submittedAt.seconds * 1000)
+            : null;
+          return {
+            id: attempt.id,
+            title: meta.name || 'Quiz',
+            subject: meta.subject || 'N/A',
+            chapter: 'N/A',
+            course: 'N/A',
+            isMock: false,
+            timestamp: attempt.submittedAt,
+            score: attempt.score,
+            total: attempt.total,
+            type: USER,
+            // so we can route to the correct response page
+            quizId: attempt.quizId,
+            date: date,
+          };
+        });
+        shaped.sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
+        setUserResults(shaped);
+      } catch (err) {
+        // fail silently
+      }
+      setLoading(false);
+    };
+    fetchUserQuizAttempts();
+  }, [userId]);
+
+  // --------- Filtering (Unified) ----------
   useEffect(() => {
     const timeout = setTimeout(() => {
+      let list = viewType === ADMIN ? adminResults : userResults;
       const lower = search.toLowerCase();
 
-      let filteredList = results;
-
-      if (quizType === 'admin') {
-        filteredList = filteredList.filter(r => !r.isMock);
-      } else if (quizType === 'user') {
-        filteredList = filteredList.filter(r => r.isMock);
-      }
-
+      // Subject filter
       if (selectedSubject !== 'all') {
-        filteredList = filteredList.filter((r) =>
-          r.subject?.toLowerCase().includes(selectedSubject.toLowerCase())
+        list = list.filter((r) =>
+          (r.subject || '').toLowerCase().includes(selectedSubject.toLowerCase())
         );
       }
 
-      if (selectedChapter !== 'all') {
-        filteredList = filteredList.filter((r) =>
-          r.chapter?.toLowerCase().includes(selectedChapter.toLowerCase())
+      // Chapter filter (admin results only)
+      if (viewType === ADMIN && selectedChapter !== 'all') {
+        list = list.filter((r) =>
+          (r.chapter || '').toLowerCase().includes(selectedChapter.toLowerCase())
         );
       }
 
-      filteredList = filteredList.filter(
+      // Search filter
+      list = list.filter(
         (r) =>
-          r.title?.toLowerCase().includes(lower) ||
-          r.course?.toLowerCase().includes(lower) ||
-          r.subject?.toLowerCase().includes(lower)
+          (r.title || '').toLowerCase().includes(lower) ||
+          (r.course || '').toLowerCase().includes(lower) ||
+          (r.subject || '').toLowerCase().includes(lower)
       );
 
-      setFiltered(filteredList);
+      setFiltered(list);
     }, 300);
 
     return () => clearTimeout(timeout);
-  }, [search, selectedSubject, selectedChapter, results, quizType]);
+  }, [search, selectedSubject, selectedChapter, viewType, adminResults, userResults]);
 
+  // --------- UI ----------
   return (
     <div className="mx-auto py-12 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-white to-blue-50 min-h-screen">
-      <h1 className="text-4xl font-extrabold text-gray-800 mb-10 text-left">
-        📋 Quiz Results
-      </h1>
+      <h1 className="text-4xl font-extrabold text-gray-800 mb-10 text-left">📋 Quiz Results</h1>
 
-      {/* Quiz Type Toggle */}
-      <div className="mb-4 flex gap-2">
+      {/* Quiz Type Filter */}
+      <div className="flex gap-4 mb-8">
         <Button
-          variant={quizType === 'all' ? 'default' : 'outline'}
-          onClick={() => setQuizType('all')}
+          variant={viewType === ADMIN ? 'default' : 'outline'}
+          className={`font-semibold ${viewType === ADMIN ? 'bg-blue-600 text-white' : 'text-blue-700 border-blue-500'}`}
+          onClick={() => setViewType(ADMIN)}
         >
-          All
+          Admin Quizzes
         </Button>
         <Button
-          variant={quizType === 'admin' ? 'default' : 'outline'}
-          onClick={() => setQuizType('admin')}
+          variant={viewType === USER ? 'default' : 'outline'}
+          className={`font-semibold ${viewType === USER ? 'bg-blue-600 text-white' : 'text-blue-700 border-blue-500'}`}
+          onClick={() => setViewType(USER)}
         >
-          Admin Created
-        </Button>
-        <Button
-          variant={quizType === 'user' ? 'default' : 'outline'}
-          onClick={() => setQuizType('user')}
-        >
-          User Created
+          User Quizzes
         </Button>
       </div>
 
@@ -291,45 +355,37 @@ export default function StudentResultsPage() {
             setSelectedChapter('all');
           }}
         >
-          <SelectTrigger>
-            <SelectValue placeholder="Filter by Subject" />
-          </SelectTrigger>
+          <SelectTrigger><SelectValue placeholder="Filter by Subject" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Subjects</SelectItem>
             {subjects.map((subj, idx) => (
-              <SelectItem key={idx} value={subj}>
-                {subj}
-              </SelectItem>
+              <SelectItem key={idx} value={subj}>{subj}</SelectItem>
             ))}
           </SelectContent>
         </Select>
 
+        {/* Only enable chapter filter for admin view */}
         <Select
           value={selectedChapter}
           onValueChange={setSelectedChapter}
-          disabled={chapters.length === 0}
+          disabled={viewType === USER || chapters.length === 0}
         >
-          <SelectTrigger>
-            <SelectValue placeholder="Filter by Chapter" />
-          </SelectTrigger>
+          <SelectTrigger><SelectValue placeholder="Filter by Chapter" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Chapters</SelectItem>
             {chapters.map((ch, idx) => (
-              <SelectItem key={idx} value={ch}>
-                {ch}
-              </SelectItem>
+              <SelectItem key={idx} value={ch}>{ch}</SelectItem>
             ))}
           </SelectContent>
         </Select>
       </div>
 
+      {/* Main Results */}
       {loading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {Array.from({ length: 6 }).map((_, i) => (
             <Card key={i} className="p-6 w-full rounded-xl shadow-md">
-              <CardHeader>
-                <Skeleton className="h-6 w-3/4 mb-2" />
-              </CardHeader>
+              <CardHeader><Skeleton className="h-6 w-3/4 mb-2" /></CardHeader>
               <CardContent className="space-y-4">
                 <Skeleton className="h-4 w-full" />
                 <Skeleton className="h-4 w-1/2" />
@@ -352,36 +408,27 @@ export default function StudentResultsPage() {
                 <CardTitle className="text-xl font-bold">{result.title}</CardTitle>
               </CardHeader>
               <CardContent className="text-sm text-gray-700 space-y-3 px-6 py-5">
-                <p>
-                  <strong>📘 Course:</strong> {result.course}
-                </p>
-                <p>
-                  <strong>📚 Subject:</strong> {result.subject}
-                </p>
-                <p>
-                  <strong>📖 Chapter:</strong> {result.chapter}
-                </p>
-                <p>
-                  <strong>📊 Score:</strong> {result.score} / {result.total}
-                </p>
-                <p>
-                  <strong>🧾 Type:</strong>{' '}
-                  {result.isMock ? 'User Created' : 'Admin Created'}
-                </p>
-                <p>
-                  <strong>📅 Date:</strong>{' '}
-                  {result.timestamp?.toDate
-                    ? format(result.timestamp.toDate(), 'dd MMM yyyy, hh:mm a')
-                    : 'N/A'}
-                </p>
+                <p><strong>📘 Course:</strong> {result.course}</p>
+                <p><strong>📚 Subject:</strong> {result.subject}</p>
+                <p><strong>📖 Chapter:</strong> {result.chapter}</p>
+                <p><strong>📊 Score:</strong> {result.score} / {result.total}</p>
+                <p><strong>🧾 Type:</strong> {result.type === USER ? 'User Quiz' : (result.isMock ? 'By Own' : 'By Admin')}</p>
+                <p><strong>📅 Date:</strong> {result.timestamp?.toDate
+                  ? format(result.timestamp.toDate(), 'dd MMM yyyy, hh:mm a')
+                  : (result.date
+                    ? format(result.date, 'dd MMM yyyy, hh:mm a')
+                    : 'N/A')
+                }</p>
                 <Button
                   variant="outline"
                   className="w-full text-sm font-semibold border-blue-500 text-blue-700 hover:bg-blue-50 mt-4"
-                  onClick={() =>
-                    router.push(
-                      `/admin/students/responses?id=${result.id}&mock=${result.isMock}&studentId=${userId}`
-                    )
-                  }
+                  onClick={() => {
+                    if (result.type === ADMIN) {
+                      router.push(`/admin/students/responses?id=${result.id}&mock=${result.isMock}&studentId=${userId}`);
+                    } else {
+                      router.push(`/admin/students/user-responses?id=${result.quizId || result.id}`);
+                    }
+                  }}
                 >
                   🔎 View Responses
                 </Button>
