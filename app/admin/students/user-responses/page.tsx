@@ -96,14 +96,7 @@ const UserResponsesPage: React.FC = () => {
     if (!quizId || !user) return;
     const load = async () => {
       try {
-        const quizSnap = await getDoc(doc(db, 'user-quizzes', quizId));
-        if (!quizSnap.exists()) {
-          setError('Quiz not found.');
-          setLoading(false);
-          return;
-        }
-        setQuiz(quizSnap.data() as UserQuizDoc);
-
+        // Load attempt first
         const attemptRef = doc(db, 'users', user.uid, 'user-quizattempts', quizId);
         const attemptSnap = await getDoc(attemptRef);
         if (!attemptSnap.exists()) {
@@ -111,7 +104,21 @@ const UserResponsesPage: React.FC = () => {
           setLoading(false);
           return;
         }
-        setAttempt(attemptSnap.data() as QuizAttempt);
+        const attemptData = attemptSnap.data() as QuizAttempt;
+        setAttempt(attemptData);
+
+        // Load quiz meta from user-quizzes collection using the quizId
+        const quizSnap = await getDoc(doc(db, 'user-quizzes', quizId));
+        if (quizSnap.exists()) {
+          setQuiz(quizSnap.data() as UserQuizDoc);
+        } else {
+          // Fallback: create a basic quiz object with name from attempt if available
+          setQuiz({
+            name: attemptData.quizType || 'Quiz Results',
+            subject: attemptData.detailed[0]?.subject || undefined
+          });
+        }
+        
         setLoading(false);
       } catch (err: any) {
         setError('Error loading quiz result: ' + (err?.message || String(err)));
