@@ -8,7 +8,7 @@ import { onAuthStateChanged, User } from 'firebase/auth';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { BookOpen, CheckCircle, XCircle, Info, BarChart2 } from 'lucide-react';
+import { BookOpen, CheckCircle, XCircle, Info, BarChart2, Clock, Award, TrendingUp, ArrowLeft, Sparkles } from 'lucide-react';
 import {
   ResponsiveContainer,
   PieChart,
@@ -21,6 +21,11 @@ import {
   XAxis,
   YAxis,
   CartesianGrid,
+  RadarChart,
+  PolarGrid,
+  PolarAngleAxis,
+  PolarRadiusAxis,
+  Radar,
 } from 'recharts';
 
 interface DetailedResponse {
@@ -46,7 +51,7 @@ interface QuizAttempt {
   total: number;
   submittedAt?: any;
   quizType?: string;
-  timeTaken?: number; // seconds for the whole quiz
+  timeTaken?: number;
 }
 
 interface UserQuizDoc {
@@ -56,13 +61,13 @@ interface UserQuizDoc {
   duration?: number;
 }
 
-const COLORS = ['#34d399', '#f87171', '#fbbf24', '#60a5fa', '#6366f1', '#f472b6', '#65a30d', '#dc2626'];
+const COLORS = ['#10b981', '#ef4444', '#f59e0b', '#3b82f6', '#8b5cf6', '#ec4899'];
 
 const TABS = [
-  { key: 'all', label: 'All' },
-  { key: 'correct', label: 'Correct' },
-  { key: 'wrong', label: 'Wrong' },
-  { key: 'skipped', label: 'Skipped' },
+  { key: 'all', label: 'All Questions', icon: BookOpen },
+  { key: 'correct', label: 'Correct', icon: CheckCircle },
+  { key: 'wrong', label: 'Wrong', icon: XCircle },
+  { key: 'skipped', label: 'Skipped', icon: Info },
 ];
 
 const UserResponsesPage: React.FC = () => {
@@ -75,7 +80,6 @@ const UserResponsesPage: React.FC = () => {
   const [attempt, setAttempt] = useState<QuizAttempt | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
   const [activeTab, setActiveTab] = useState<'all' | 'correct' | 'wrong' | 'skipped'>('all');
 
   useEffect(() => {
@@ -92,7 +96,6 @@ const UserResponsesPage: React.FC = () => {
     if (!quizId || !user) return;
     const load = async () => {
       try {
-        // Load quiz meta
         const quizSnap = await getDoc(doc(db, 'user-quizzes', quizId));
         if (!quizSnap.exists()) {
           setError('Quiz not found.');
@@ -101,7 +104,6 @@ const UserResponsesPage: React.FC = () => {
         }
         setQuiz(quizSnap.data() as UserQuizDoc);
 
-        // Load attempt
         const attemptRef = doc(db, 'users', user.uid, 'user-quizattempts', quizId);
         const attemptSnap = await getDoc(attemptRef);
         if (!attemptSnap.exists()) {
@@ -119,15 +121,33 @@ const UserResponsesPage: React.FC = () => {
     load();
   }, [quizId, user]);
 
-  if (error) return <div className="text-red-600 text-center py-10">{error}</div>;
-  if (loading) return <p className="text-center py-10">Loading...</p>;
-  if (!attempt || !quiz) return <div className="text-center py-10">No result found.</div>;
+  if (error) return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center">
+      <div className="text-red-400 text-center py-10 bg-slate-800/50 backdrop-blur-lg rounded-2xl px-8 border border-red-500/20">{error}</div>
+    </div>
+  );
+  
+  if (loading) return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center">
+      <div className="text-center">
+        <Sparkles className="h-12 w-12 text-purple-400 animate-pulse mx-auto mb-4" />
+        <p className="text-white text-lg">Loading your results...</p>
+      </div>
+    </div>
+  );
+  
+  if (!attempt || !quiz) return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center">
+      <div className="text-center py-10 text-slate-300">No result found.</div>
+    </div>
+  );
 
   const percent = Math.round((attempt.score / (attempt.total || 1)) * 100);
 
-  // Analytics
   let correctCount = 0, wrongCount = 0, skippedCount = 0;
   const subjectStats: Record<string, { correct: number; wrong: number; skipped: number; total: number }> = {};
+  const difficultyStats: Record<string, { correct: number; total: number }> = {};
+  
   attempt.detailed.forEach((q) => {
     if (!q.selected || q.selected === '') {
       skippedCount++;
@@ -145,6 +165,10 @@ const UserResponsesPage: React.FC = () => {
         subjectStats[q.subject].wrong++;
         subjectStats[q.subject].total++;
       }
+      if (q.difficulty) {
+        difficultyStats[q.difficulty] ||= { correct: 0, total: 0 };
+        difficultyStats[q.difficulty].total++;
+      }
       return;
     }
     if (q.isCorrect) {
@@ -153,6 +177,11 @@ const UserResponsesPage: React.FC = () => {
         subjectStats[q.subject] ||= { correct: 0, wrong: 0, skipped: 0, total: 0 };
         subjectStats[q.subject].correct++;
         subjectStats[q.subject].total++;
+      }
+      if (q.difficulty) {
+        difficultyStats[q.difficulty] ||= { correct: 0, total: 0 };
+        difficultyStats[q.difficulty].correct++;
+        difficultyStats[q.difficulty].total++;
       }
     }
   });
@@ -163,16 +192,14 @@ const UserResponsesPage: React.FC = () => {
     { name: 'Skipped', value: skippedCount },
   ];
 
-  const subjectData = Object.entries(subjectStats).map(([subject, stats], idx) => ({
-    subject,
-    Correct: stats.correct,
-    Wrong: stats.wrong,
-    Skipped: stats.skipped,
-    total: stats.total,
-    fill: COLORS[idx % COLORS.length],
+  const subjectData = Object.entries(subjectStats).map(([subject, stats]) => ({
+    subject: subject.length > 15 ? subject.substring(0, 12) + '...' : subject,
+    accuracy: stats.total > 0 ? Math.round((stats.correct / stats.total) * 100) : 0,
+    correct: stats.correct,
+    wrong: stats.wrong,
+    skipped: stats.skipped,
   }));
 
-  // Filtered questions by tab
   let filteredQuestions = attempt.detailed;
   if (activeTab === 'correct') {
     filteredQuestions = attempt.detailed.filter(q => q.isCorrect);
@@ -182,222 +209,355 @@ const UserResponsesPage: React.FC = () => {
     filteredQuestions = attempt.detailed.filter(q => !q.selected || q.selected === '');
   }
 
+  const getPerformanceLevel = (percent: number) => {
+    if (percent >= 90) return { text: 'Outstanding', color: 'text-emerald-400', bg: 'bg-emerald-500/20' };
+    if (percent >= 75) return { text: 'Excellent', color: 'text-green-400', bg: 'bg-green-500/20' };
+    if (percent >= 60) return { text: 'Good', color: 'text-blue-400', bg: 'bg-blue-500/20' };
+    if (percent >= 50) return { text: 'Average', color: 'text-yellow-400', bg: 'bg-yellow-500/20' };
+    return { text: 'Needs Improvement', color: 'text-orange-400', bg: 'bg-orange-500/20' };
+  };
+
+  const performance = getPerformanceLevel(percent);
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-pink-50 px-4">
-      <header className="bg-white border-b sticky top-0 z-40 shadow-md">
-        <div className="max-w-4xl mx-auto px-4 py-4 flex justify-between items-center">
-          <div className="flex items-center gap-3">
-            <BookOpen className="h-6 w-6 text-blue-600" />
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
+      {/* Hero Header */}
+      <div className="relative overflow-hidden bg-gradient-to-r from-purple-600/20 via-pink-600/20 to-blue-600/20 backdrop-blur-xl border-b border-white/10">
+        <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGRlZnM+PHBhdHRlcm4gaWQ9ImdyaWQiIHdpZHRoPSI2MCIgaGVpZ2h0PSI2MCIgcGF0dGVyblVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHBhdGggZD0iTSAxMCAwIEwgMCAwIDAgMTAiIGZpbGw9Im5vbmUiIHN0cm9rZT0id2hpdGUiIHN0cm9rZS1vcGFjaXR5PSIwLjAzIiBzdHJva2Utd2lkdGg9IjEiLz48L3BhdHRlcm4+PC9kZWZzPjxyZWN0IHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiIGZpbGw9InVybCgjZ3JpZCkiLz48L3N2Zz4=')] opacity-30"></div>
+        
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 relative">
+          <Button 
+            variant="ghost" 
+            onClick={() => router.push('/students/user-quizzes')}
+            className="text-white hover:bg-white/10 mb-6 backdrop-blur-sm"
+          >
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Back to Quizzes
+          </Button>
+
+          <div className="grid md:grid-cols-2 gap-8 items-center">
             <div>
-              <h1 className="text-lg font-bold tracking-tight">{quiz.name}</h1>
-              {quiz.subject && (
-                <p className="text-sm text-gray-600">{quiz.subject}</p>
-              )}
+              <div className="flex items-center gap-3 mb-4">
+                <div className="p-3 bg-gradient-to-br from-purple-500 to-pink-500 rounded-2xl shadow-lg shadow-purple-500/50">
+                  <BookOpen className="h-8 w-8 text-white" />
+                </div>
+                <div>
+                  <h1 className="text-3xl font-bold text-white tracking-tight">{quiz.name}</h1>
+                  {quiz.subject && (
+                    <p className="text-purple-200 mt-1 text-lg">{quiz.subject}</p>
+                  )}
+                </div>
+              </div>
+              
+              <div className="flex items-center gap-4 mt-6">
+                <div className={`px-4 py-2 rounded-full ${performance.bg} backdrop-blur-sm border border-white/10`}>
+                  <span className={`${performance.color} font-bold text-lg flex items-center gap-2`}>
+                    <Award className="h-5 w-5" />
+                    {performance.text}
+                  </span>
+                </div>
+                <div className="text-slate-300 text-sm">
+                  Attempt #{attempt.attemptNumber}
+                </div>
+              </div>
             </div>
-          </div>
-          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4">
-            <div className="text-sm font-semibold text-gray-600">
-              Attempt: {attempt.attemptNumber}
-            </div>
-            <div className="w-full sm:w-48">
-              <div className="text-xs text-gray-600">Score: {attempt.score}/{attempt.total}</div>
-              <Progress value={percent} className="mt-1" />
-              <div className="text-xs text-gray-600 mt-1">{percent}%</div>
+
+            {/* Score Card */}
+            <div className="relative">
+              <div className="absolute inset-0 bg-gradient-to-br from-purple-500 to-pink-500 rounded-3xl blur-xl opacity-30"></div>
+              <div className="relative bg-slate-800/50 backdrop-blur-xl rounded-3xl p-8 border border-white/10 shadow-2xl">
+                <div className="flex justify-between items-start mb-6">
+                  <div>
+                    <p className="text-slate-400 text-sm font-medium mb-2">Your Score</p>
+                    <p className="text-5xl font-bold text-white">{percent}<span className="text-3xl text-slate-400">%</span></p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-slate-400 text-sm mb-1">Questions</p>
+                    <p className="text-2xl font-bold text-white">{attempt.score}<span className="text-slate-400">/{attempt.total}</span></p>
+                  </div>
+                </div>
+                
+                <div className="space-y-3">
+                  <div className="h-3 bg-slate-700/50 rounded-full overflow-hidden">
+                    <div 
+                      className="h-full bg-gradient-to-r from-emerald-500 via-blue-500 to-purple-500 rounded-full transition-all duration-1000 ease-out"
+                      style={{ width: `${percent}%` }}
+                    ></div>
+                  </div>
+                  
+                  <div className="flex justify-between items-center text-sm">
+                    <div className="flex items-center gap-2">
+                      <Clock className="h-4 w-4 text-slate-400" />
+                      <span className="text-slate-300">
+                        {attempt.timeTaken ? `${Math.floor(attempt.timeTaken / 60)}m ${attempt.timeTaken % 60}s` : 'N/A'}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="flex items-center gap-1 text-emerald-400">
+                        <CheckCircle className="h-4 w-4" /> {correctCount}
+                      </span>
+                      <span className="flex items-center gap-1 text-red-400">
+                        <XCircle className="h-4 w-4" /> {wrongCount}
+                      </span>
+                      <span className="flex items-center gap-1 text-amber-400">
+                        <Info className="h-4 w-4" /> {skippedCount}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
-      </header>
+      </div>
 
-      <main className="max-w-3xl w-full mx-auto py-8 px-2 md:px-0">
-        {/* Analytics Cards - stacked vertically, full width */}
-        <div className="space-y-8 mb-8">
-          {/* Pie Chart */}
-          <Card className="shadow-xl rounded-2xl border-2 border-indigo-100 bg-gradient-to-r from-white via-indigo-50 to-blue-50">
-            <CardHeader>
-              <CardTitle className="text-xl font-semibold flex items-center gap-2 text-indigo-700">
-                <BarChart2 className="h-7 w-7 text-indigo-600" />
-                Answer Distribution
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="w-full">
-                <ResponsiveContainer width="100%" height={240}>
-                  <PieChart>
-                    <Pie
-                      data={analyticsData}
-                      dataKey="value"
-                      nameKey="name"
-                      cx="50%"
-                      cy="50%"
-                      outerRadius={100}
-                      label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-                    >
-                      {analyticsData.map((entry, idx) => (
-                        <Cell key={`cell-${idx}`} fill={COLORS[idx % COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip />
-                    <Legend />
-                  </PieChart>
-                </ResponsiveContainer>
-                <div className="flex justify-around mt-4 text-base font-semibold">
-                  <span className="text-green-600">Correct: {correctCount}</span>
-                  <span className="text-red-600">Wrong: {wrongCount}</span>
-                  <span className="text-yellow-600">Skipped: {skippedCount}</span>
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        {/* Analytics Section */}
+        <div className="grid lg:grid-cols-2 gap-8 mb-12">
+          {/* Distribution Chart */}
+          <div className="relative group">
+            <div className="absolute inset-0 bg-gradient-to-br from-blue-500/20 to-purple-500/20 rounded-3xl blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+            <div className="relative bg-slate-800/50 backdrop-blur-xl rounded-3xl p-6 border border-white/10 shadow-xl">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="p-2 bg-gradient-to-br from-blue-500 to-purple-500 rounded-xl">
+                  <BarChart2 className="h-5 w-5 text-white" />
                 </div>
-                <div className="mt-2 text-xs text-gray-500 text-center">
-                  Total Time Taken: {attempt.timeTaken
-                    ? `${Math.floor(attempt.timeTaken / 60)}m ${attempt.timeTaken % 60}s`
-                    : 'N/A'}
-                </div>
+                <h2 className="text-xl font-bold text-white">Answer Distribution</h2>
               </div>
-            </CardContent>
-          </Card>
-          {/* Subject-wise Bar Chart */}
-          <Card className="shadow-xl rounded-2xl border-2 border-indigo-100 bg-gradient-to-r from-white via-indigo-50 to-blue-50">
-            <CardHeader>
-              <CardTitle className="text-xl font-semibold text-indigo-700">
-                Subject-wise Performance
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ResponsiveContainer width="100%" height={260}>
-                <BarChart
-                  data={subjectData}
-                  margin={{ top: 10, right: 10, left: 0, bottom: 10 }}
-                  barCategoryGap="30%"
-                >
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="subject" tick={{ fontSize: 13, fill: "#6366f1", fontWeight: 600 }} />
-                  <YAxis allowDecimals={false} />
-                  <Tooltip />
-                  <Legend />
-                  <Bar dataKey="Correct" stackId="a" fill="#34d399" radius={[8, 8, 0, 0]} />
-                  <Bar dataKey="Wrong" stackId="a" fill="#f87171" radius={[8, 8, 0, 0]} />
-                  <Bar dataKey="Skipped" stackId="a" fill="#fbbf24" radius={[8, 8, 0, 0]} />
-                </BarChart>
+              
+              <ResponsiveContainer width="100%" height={280}>
+                <PieChart>
+                  <Pie
+                    data={analyticsData}
+                    dataKey="value"
+                    nameKey="name"
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={60}
+                    outerRadius={100}
+                    paddingAngle={5}
+                    label={({ name, percent }) => `${(percent * 100).toFixed(0)}%`}
+                  >
+                    {analyticsData.map((entry, idx) => (
+                      <Cell key={`cell-${idx}`} fill={COLORS[idx]} />
+                    ))}
+                  </Pie>
+                  <Tooltip 
+                    contentStyle={{ 
+                      backgroundColor: 'rgba(15, 23, 42, 0.9)', 
+                      border: '1px solid rgba(255, 255, 255, 0.1)',
+                      borderRadius: '12px',
+                      backdropFilter: 'blur(12px)'
+                    }}
+                    labelStyle={{ color: '#fff' }}
+                  />
+                </PieChart>
               </ResponsiveContainer>
-              <div className="mt-2 text-xs text-gray-500 text-center">
-                Subjects Attempted: {subjectData.length}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+            </div>
+          </div>
 
-        {/* Tabs for question filtering + remake tabs for counts */}
-        <div className="flex items-center mb-4 gap-1 flex-wrap">
-          {TABS.map(tab => (
-            <button
-              key={tab.key}
-              className={`px-4 py-2 rounded-t-lg font-medium text-base transition
-                ${
-                  activeTab === tab.key
-                    ? 'bg-indigo-600 text-white shadow'
-                    : 'bg-white text-indigo-700 border border-indigo-200 hover:bg-indigo-50'
-                }
-              `}
-              onClick={() => setActiveTab(tab.key as typeof activeTab)}
-            >
-              {tab.label}
-              <span className="ml-2 px-2 py-0.5 text-xs rounded bg-indigo-100 text-indigo-800 font-semibold">
-                {
-                  tab.key === 'all'
-                    ? attempt.detailed.length
-                    : tab.key === 'correct'
-                    ? correctCount
-                    : tab.key === 'wrong'
-                    ? wrongCount
-                    : skippedCount
-                }
-              </span>
-            </button>
-          ))}
-        </div>
-
-        {/* Responses */}
-        <Card className="shadow-lg rounded-2xl">
-          <CardHeader>
-            <CardTitle className="text-lg font-semibold">Your Responses &amp; Results</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-10">
-            {filteredQuestions.length === 0 && (
-              <div className="text-center py-6 text-indigo-600 text-lg font-semibold">
-                No questions to show in this tab.
-              </div>
-            )}
-            {filteredQuestions.map((q, idx) => (
-              <div key={q.questionId} className="space-y-2 border-b pb-6 mb-6">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="font-semibold text-indigo-700">Q{idx + 1}.</span>
-                  <span className="font-medium prose max-w-none">{q.questionText}</span>
-                  {q.subject && (
-                    <span className="ml-2 px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs font-bold shadow">
-                      {q.subject}
-                    </span>
-                  )}
-                  {q.chapter && (
-                    <span className="ml-1 px-2 py-1 bg-indigo-100 text-indigo-700 rounded text-xs font-bold shadow">
-                      {q.chapter}
-                    </span>
-                  )}
-                  {q.difficulty && (
-                    <span className="ml-1 px-2 py-1 bg-pink-100 text-pink-700 rounded text-xs font-bold shadow">
-                      {q.difficulty}
-                    </span>
-                  )}
+          {/* Subject Performance Radar */}
+          <div className="relative group">
+            <div className="absolute inset-0 bg-gradient-to-br from-purple-500/20 to-pink-500/20 rounded-3xl blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+            <div className="relative bg-slate-800/50 backdrop-blur-xl rounded-3xl p-6 border border-white/10 shadow-xl">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="p-2 bg-gradient-to-br from-purple-500 to-pink-500 rounded-xl">
+                  <TrendingUp className="h-5 w-5 text-white" />
                 </div>
-                <div className="grid gap-2 mt-2">
+                <h2 className="text-xl font-bold text-white">Subject Performance</h2>
+              </div>
+              
+              <ResponsiveContainer width="100%" height={280}>
+                <RadarChart data={subjectData}>
+                  <PolarGrid stroke="rgba(255, 255, 255, 0.1)" />
+                  <PolarAngleAxis 
+                    dataKey="subject" 
+                    tick={{ fill: '#94a3b8', fontSize: 12 }}
+                  />
+                  <PolarRadiusAxis angle={90} domain={[0, 100]} tick={{ fill: '#94a3b8' }} />
+                  <Radar 
+                    name="Accuracy %" 
+                    dataKey="accuracy" 
+                    stroke="#8b5cf6" 
+                    fill="#8b5cf6" 
+                    fillOpacity={0.6}
+                  />
+                  <Tooltip 
+                    contentStyle={{ 
+                      backgroundColor: 'rgba(15, 23, 42, 0.9)', 
+                      border: '1px solid rgba(255, 255, 255, 0.1)',
+                      borderRadius: '12px',
+                      backdropFilter: 'blur(12px)'
+                    }}
+                    labelStyle={{ color: '#fff' }}
+                  />
+                </RadarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        </div>
+
+        {/* Tabs */}
+        <div className="flex gap-2 mb-8 overflow-x-auto pb-2">
+          {TABS.map(tab => {
+            const Icon = tab.icon;
+            const count = tab.key === 'all' ? attempt.detailed.length 
+              : tab.key === 'correct' ? correctCount 
+              : tab.key === 'wrong' ? wrongCount 
+              : skippedCount;
+            
+            return (
+              <button
+                key={tab.key}
+                onClick={() => setActiveTab(tab.key as typeof activeTab)}
+                className={`group flex items-center gap-2 px-6 py-3 rounded-2xl font-semibold transition-all duration-300 whitespace-nowrap ${
+                  activeTab === tab.key
+                    ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-lg shadow-purple-500/50 scale-105'
+                    : 'bg-slate-800/50 text-slate-300 hover:bg-slate-700/50 border border-white/10'
+                }`}
+              >
+                <Icon className="h-5 w-5" />
+                <span>{tab.label}</span>
+                <span className={`px-2.5 py-0.5 rounded-full text-sm font-bold ${
+                  activeTab === tab.key 
+                    ? 'bg-white/20 text-white' 
+                    : 'bg-slate-700 text-slate-300'
+                }`}>
+                  {count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Questions */}
+        <div className="space-y-6">
+          {filteredQuestions.length === 0 && (
+            <div className="text-center py-16">
+              <Info className="h-16 w-16 text-slate-600 mx-auto mb-4" />
+              <p className="text-slate-400 text-lg">No questions to show in this category</p>
+            </div>
+          )}
+          
+          {filteredQuestions.map((q, idx) => (
+            <div 
+              key={q.questionId} 
+              className="relative group"
+            >
+              <div className="absolute inset-0 bg-gradient-to-r from-purple-500/10 to-pink-500/10 rounded-3xl blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+              <div className="relative bg-slate-800/50 backdrop-blur-xl rounded-3xl p-6 border border-white/10 shadow-xl">
+                {/* Question Header */}
+                <div className="flex items-start gap-4 mb-6">
+                  <div className={`flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center font-bold text-lg ${
+                    q.isCorrect 
+                      ? 'bg-gradient-to-br from-emerald-500 to-green-500 text-white'
+                      : !q.selected || q.selected === ''
+                      ? 'bg-gradient-to-br from-amber-500 to-orange-500 text-white'
+                      : 'bg-gradient-to-br from-red-500 to-pink-500 text-white'
+                  }`}>
+                    {idx + 1}
+                  </div>
+                  
+                  <div className="flex-1">
+                    <p className="text-white text-lg font-medium mb-3 leading-relaxed">{q.questionText}</p>
+                    <div className="flex flex-wrap gap-2">
+                      {q.subject && (
+                        <span className="px-3 py-1 bg-blue-500/20 border border-blue-500/30 text-blue-300 rounded-full text-xs font-semibold">
+                          {q.subject}
+                        </span>
+                      )}
+                      {q.chapter && (
+                        <span className="px-3 py-1 bg-purple-500/20 border border-purple-500/30 text-purple-300 rounded-full text-xs font-semibold">
+                          {q.chapter}
+                        </span>
+                      )}
+                      {q.difficulty && (
+                        <span className="px-3 py-1 bg-pink-500/20 border border-pink-500/30 text-pink-300 rounded-full text-xs font-semibold">
+                          {q.difficulty}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  
+                  <div>
+                    {q.selected === null || q.selected === '' ? (
+                      <div className="flex items-center gap-2 px-4 py-2 bg-amber-500/20 border border-amber-500/30 rounded-xl">
+                        <Info className="h-4 w-4 text-amber-400" />
+                        <span className="text-amber-300 font-medium text-sm">Skipped</span>
+                      </div>
+                    ) : q.isCorrect ? (
+                      <div className="flex items-center gap-2 px-4 py-2 bg-emerald-500/20 border border-emerald-500/30 rounded-xl">
+                        <CheckCircle className="h-4 w-4 text-emerald-400" />
+                        <span className="text-emerald-300 font-medium text-sm">Correct</span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 px-4 py-2 bg-red-500/20 border border-red-500/30 rounded-xl">
+                        <XCircle className="h-4 w-4 text-red-400" />
+                        <span className="text-red-300 font-medium text-sm">Wrong</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Options */}
+                <div className="space-y-3 mb-6">
                   {q.options.map((opt, i) => {
                     const isSelected = q.selected === opt;
                     const isCorrect = q.correct === opt;
                     return (
                       <div
                         key={i}
-                        className={`flex items-center p-3 border rounded-lg transition
-                          ${isSelected ? 'border-blue-500 bg-blue-50' : 'border-gray-200 bg-white'}
-                          ${isCorrect ? 'border-green-600 bg-green-50' : ''}
-                        `}
+                        className={`flex items-center gap-3 p-4 rounded-2xl transition-all duration-300 ${
+                          isCorrect
+                            ? 'bg-emerald-500/10 border-2 border-emerald-500/50'
+                            : isSelected
+                            ? 'bg-red-500/10 border-2 border-red-500/50'
+                            : 'bg-slate-700/30 border border-white/5 hover:bg-slate-700/50'
+                        }`}
                       >
-                        <span className="font-semibold mr-2">{String.fromCharCode(65 + i)}.</span>
-                        <span className="prose max-w-none">{opt}</span>
+                        <div className={`flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center font-bold ${
+                          isCorrect 
+                            ? 'bg-emerald-500 text-white' 
+                            : isSelected 
+                            ? 'bg-red-500 text-white' 
+                            : 'bg-slate-600 text-slate-300'
+                        }`}>
+                          {String.fromCharCode(65 + i)}
+                        </div>
+                        <span className={`flex-1 ${
+                          isCorrect || isSelected ? 'text-white font-medium' : 'text-slate-300'
+                        }`}>
+                          {opt}
+                        </span>
                         {isCorrect && (
-                          <CheckCircle className="ml-3 h-5 w-5 text-green-600" title="Correct Answer" />
+                          <CheckCircle className="h-6 w-6 text-emerald-400 flex-shrink-0" />
                         )}
                         {isSelected && !isCorrect && (
-                          <XCircle className="ml-3 h-5 w-5 text-red-600" title="Your Answer" />
+                          <XCircle className="h-6 w-6 text-red-400 flex-shrink-0" />
                         )}
                       </div>
                     );
                   })}
                 </div>
-                <div className="flex items-center gap-2 mt-2">
-                  {q.selected === null || q.selected === '' ? (
-                    <span className="text-yellow-700 flex items-center gap-1">
-                      <Info className="h-4 w-4" /> Skipped
-                    </span>
-                  ) : q.isCorrect ? (
-                    <span className="text-green-700 flex items-center gap-1">
-                      <CheckCircle className="h-4 w-4" /> Correct
-                    </span>
-                  ) : (
-                    <span className="text-red-700 flex items-center gap-1">
-                      <XCircle className="h-4 w-4" /> Wrong
-                    </span>
-                  )}
-                </div>
+
+                {/* Explanation */}
                 {q.explanation && (
-                  <div className="bg-gray-50 border-l-4 border-blue-400 p-3 mt-2 rounded">
-                    <span className="font-semibold text-blue-700">Explanation:</span>
-                    <div className="mt-1 prose max-w-none text-gray-700">{q.explanation}</div>
+                  <div className="bg-gradient-to-r from-blue-500/10 to-purple-500/10 border border-blue-500/20 rounded-2xl p-5">
+                    <div className="flex items-start gap-3">
+                      <div className="flex-shrink-0 p-2 bg-blue-500/20 rounded-lg">
+                        <Info className="h-5 w-5 text-blue-400" />
+                      </div>
+                      <div>
+                        <p className="font-semibold text-blue-300 mb-2">Explanation</p>
+                        <p className="text-slate-300 leading-relaxed">{q.explanation}</p>
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
-            ))}
-            <div className="flex justify-end">
-              <Button variant="outline" onClick={() => router.push('/students/user-quizzes')}>Back to Quizzes</Button>
             </div>
-          </CardContent>
-        </Card>
+          ))}
+        </div>
       </main>
     </div>
   );
