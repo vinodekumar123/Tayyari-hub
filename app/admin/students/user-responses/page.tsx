@@ -240,11 +240,11 @@ const UserResponsesPage: React.FC = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 relative">
           <Button 
             variant="outline" 
-            onClick={() => router.push('/students/user-quizzes')}
+            onClick={() => router.push('/students/results')}
             className="bg-white hover:bg-gray-50 mb-6 shadow-sm border-purple-200"
           >
             <ArrowLeft className="h-4 w-4 mr-2" />
-            Back to Quizzes
+            Back to Results
           </Button>
 
           <div className="grid md:grid-cols-2 gap-8 items-center">
