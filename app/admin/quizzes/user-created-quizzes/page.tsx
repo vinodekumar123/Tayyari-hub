@@ -15,7 +15,7 @@ import { db, auth } from 'app/firebase';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Eye, CheckCircle } from 'lucide-react';
+import { Plus, Eye, RotateCw, CheckCircle } from 'lucide-react';
 
 interface UserCreatedQuiz {
   id: string;
@@ -28,6 +28,7 @@ interface UserCreatedQuiz {
   createdAt: any;
   attempted?: boolean;
   startedAt?: Date | null;
+  inProgress?: boolean;
 }
 
 const UserCreatedQuizzesPage = () => {
@@ -61,14 +62,20 @@ const UserCreatedQuizzesPage = () => {
 
           let attempted = false;
           let startedAt = null;
+          let inProgress = false;
           if (attemptSnap.exists()) {
             const attemptData = attemptSnap.data();
             attempted = attemptData.completed === true;
-            startedAt = attemptData.startedAt
-              ? (typeof attemptData.startedAt.toDate === 'function'
+            if (attemptData.startedAt) {
+              startedAt =
+                typeof attemptData.startedAt.toDate === 'function'
                   ? attemptData.startedAt.toDate()
-                  : new Date(attemptData.startedAt))
-              : null;
+                  : new Date(attemptData.startedAt);
+            }
+            // If started but not completed
+            if (startedAt && !attempted) {
+              inProgress = true;
+            }
           }
           list.push({
             id: docSnap.id,
@@ -81,6 +88,7 @@ const UserCreatedQuizzesPage = () => {
             createdAt: d.createdAt,
             attempted,
             startedAt,
+            inProgress,
           });
         }
         setQuizzes(list);
@@ -126,7 +134,7 @@ const UserCreatedQuizzesPage = () => {
                 <div className="flex justify-between items-center">
                   <CardTitle className="text-2xl font-bold text-gray-900">{q.name}</CardTitle>
                   <div className="flex gap-2">
-                    {!q.attempted ? (
+                    {!q.attempted && !q.inProgress ? (
                       <Button
                         variant="outline"
                         size="sm"
@@ -134,6 +142,15 @@ const UserCreatedQuizzesPage = () => {
                         onClick={() => router.push(`/quiz/start-user-quiz?id=${q.id}`)}
                       >
                         <Eye className="h-4 w-4 mr-1" /> Start
+                      </Button>
+                    ) : q.inProgress ? (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="border-purple-500 text-purple-600 hover:bg-purple-50 rounded-full"
+                        onClick={() => router.push(`/quiz/resume-user-quiz?id=${q.id}`)}
+                      >
+                        <RotateCw className="h-4 w-4 mr-1" /> Resume
                       </Button>
                     ) : (
                       <Button
