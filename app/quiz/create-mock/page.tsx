@@ -12,6 +12,7 @@ import {
   serverTimestamp,
   writeBatch,
   increment,
+  getDoc,
 } from 'firebase/firestore';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { db, auth } from 'app/firebase';
@@ -62,7 +63,7 @@ export default function CreateUserQuizPage() {
     const loadMeta = async () => {
       setLoading(true);
       try {
-        const q = query(collection(db, 'mock-questions')); // load all to derive metadata
+        const q = query(collection(db, 'mock-questions'));
         const snap = await getDocs(q);
 
         const sSet = new Set<string>();
@@ -89,7 +90,6 @@ export default function CreateUserQuizPage() {
         setSubjects(sArr);
         setChaptersBySubject(chaptersObj);
 
-        // auto-select first subject if exists
         if (sArr.length > 0 && selectedSubjects.length === 0) {
           setSelectedSubjects([sArr[0]]);
           setSelectedChapters(chaptersObj[sArr[0]]?.slice(0, 1) || []);
@@ -109,9 +109,7 @@ export default function CreateUserQuizPage() {
   const handleSubjectChange = (subject: string) => {
     setSelectedSubjects((prev) => {
       if (prev.includes(subject)) {
-        // Remove subject
         const filtered = prev.filter((s) => s !== subject);
-        // Remove corresponding chapters
         setSelectedChapters((prevChapters) =>
           prevChapters.filter(
             (chapter) => !chaptersBySubject[subject]?.includes(chapter)
@@ -119,7 +117,6 @@ export default function CreateUserQuizPage() {
         );
         return filtered;
       } else {
-        // Add subject
         return [...prev, subject];
       }
     });
@@ -134,6 +131,37 @@ export default function CreateUserQuizPage() {
         return [...prev, chapter];
       }
     });
+  };
+
+  // Save selected subjects to "subjects" collection if not exist
+  const saveSubjectsToDb = async (subjectsToSave: string[]) => {
+    const subjectsCollection = collection(db, 'subjects');
+    for (const subject of subjectsToSave) {
+      const subjectDocRef = doc(subjectsCollection, subject);
+      const docSnap = await getDoc(subjectDocRef);
+      if (!docSnap.exists()) {
+        await setDoc(subjectDocRef, {
+          name: subject,
+          createdAt: serverTimestamp(),
+          createdBy: user?.uid || null,
+        });
+      }
+    }
+  };
+
+  // Save quiz title to "quiz-titles" collection if not exist
+  const saveTitleToDb = async (quizTitle: string) => {
+    if (!quizTitle.trim()) return;
+    const titlesCollection = collection(db, 'quiz-titles');
+    const titleDocRef = doc(titlesCollection, quizTitle.trim());
+    const docSnap = await getDoc(titleDocRef);
+    if (!docSnap.exists()) {
+      await setDoc(titleDocRef, {
+        title: quizTitle.trim(),
+        createdAt: serverTimestamp(),
+        createdBy: user?.uid || null,
+      });
+    }
   };
 
   const handleCreate = async (e?: React.FormEvent) => {
@@ -172,6 +200,15 @@ export default function CreateUserQuizPage() {
     setCreating(true);
 
     try {
+      // Save selected subjects to "subjects" collection
+      await saveSubjectsToDb(selectedSubjects);
+
+      // Save quiz title to "quiz-titles" collection
+      const quizTitle =
+        title?.trim() ||
+        `${selectedSubjects.join(', ')} Test - ${new Date().toLocaleDateString()}`;
+      await saveTitleToDb(quizTitle);
+
       // 1) Fetch pool matching subjects & chapters
       const mqRef = collection(db, 'mock-questions');
       let allQuestions: MockQuestion[] = [];
@@ -180,7 +217,6 @@ export default function CreateUserQuizPage() {
         const q = query(mqRef, where('subject', '==', subject));
         const snap = await getDocs(q);
         const pool: MockQuestion[] = snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) }));
-        // filter by selected chapters
         const filtered = pool.filter((p) => selectedChapters.includes(p.chapter || ''));
         allQuestions = [...allQuestions, ...filtered];
       }
@@ -214,11 +250,7 @@ export default function CreateUserQuizPage() {
       }));
 
       // 5) Create user-quizzes doc
-      const newDocRef = doc(collection(db, 'user-quizzes')); // auto id
-      const quizTitle =
-        title?.trim() ||
-        `${selectedSubjects.join(', ')} Test - ${new Date().toLocaleDateString()}`;
-
+      const newDocRef = doc(collection(db, 'user-quizzes'));
       await setDoc(newDocRef, {
         title: quizTitle,
         createdBy: user.uid,
