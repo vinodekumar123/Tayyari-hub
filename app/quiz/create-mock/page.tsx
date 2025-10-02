@@ -102,7 +102,10 @@ export default function CreateUserQuizPage() {
       }
     };
     loadMeta();
-    return () => { mounted = false; };
+    return () => {
+      mounted = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Handle subject selection (multiple, with checkboxes)
@@ -249,13 +252,13 @@ export default function CreateUserQuizPage() {
         chapter: q.chapter || '',
       }));
 
-      // 5) Create user-quizzes doc
+      // 5) Create user-quizzes doc (FIX: store subjects/chapters as objects)
       const newDocRef = doc(collection(db, 'user-quizzes'));
       await setDoc(newDocRef, {
         title: quizTitle,
         createdBy: user.uid,
-        subjects: selectedSubjects,
-        chapters: selectedChapters,
+        subjects: selectedSubjects.map(name => ({ name })),   // <-- FIX
+        chapters: selectedChapters.map(name => ({ name })),   // <-- FIX
         duration: duration,
         questionCount: selectedSnapshot.length,
         selectedQuestions: selectedSnapshot,
