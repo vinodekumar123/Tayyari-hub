@@ -252,13 +252,13 @@ export default function CreateUserQuizPage() {
         chapter: q.chapter || '',
       }));
 
-      // 5) Create user-quizzes doc (FIX: store subjects/chapters as objects)
+      // 5) Create user-quizzes doc (subjects/chapters as array of strings)
       const newDocRef = doc(collection(db, 'user-quizzes'));
       await setDoc(newDocRef, {
         title: quizTitle,
         createdBy: user.uid,
-        subjects: selectedSubjects.map(name => ({ name })),   // <-- FIX
-        chapters: selectedChapters.map(name => ({ name })),   // <-- FIX
+        subjects: selectedSubjects, // <-- now array of strings
+        chapters: selectedChapters, // <-- now array of strings
         duration: duration,
         questionCount: selectedSnapshot.length,
         selectedQuestions: selectedSnapshot,
