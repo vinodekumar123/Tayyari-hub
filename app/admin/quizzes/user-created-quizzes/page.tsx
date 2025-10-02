@@ -108,7 +108,7 @@ const UserCreatedQuizzesPage = () => {
       <div className="flex justify-between items-center mb-8">
         <h1 className="text-4xl font-extrabold text-gray-900">Your Created Quizzes</h1>
         <Button
-          onClick={() => router.push('/create-your-own-test')}
+          onClick={() => router.push('/quiz/create-mock')}
           className="bg-gradient-to-r from-blue-500 to-purple-600 text-white hover:from-blue-600 hover:to-purple-700 font-semibold rounded-lg shadow-lg px-5 py-2"
         >
           <Plus className="mr-2 h-5 w-5" /> Create New Test
