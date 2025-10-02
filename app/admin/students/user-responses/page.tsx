@@ -55,7 +55,8 @@ interface QuizAttempt {
 }
 
 interface UserQuizDoc {
-  name: string;
+  name?: string;
+  title?: string;
   subject?: string;
   chapters?: string[];
   duration?: number;
@@ -110,11 +111,15 @@ const UserResponsesPage: React.FC = () => {
         // Load quiz meta from user-quizzes collection using the quizId
         const quizSnap = await getDoc(doc(db, 'user-quizzes', quizId));
         if (quizSnap.exists()) {
-          setQuiz(quizSnap.data() as UserQuizDoc);
+          const quizData = quizSnap.data() as UserQuizDoc;
+          setQuiz(quizData);
+          console.log('Quiz data loaded:', quizData); // Debug log
         } else {
+          console.log('Quiz document not found, using fallback'); // Debug log
           // Fallback: create a basic quiz object with name from attempt if available
           setQuiz({
             name: attemptData.quizType || 'Quiz Results',
+            title: attemptData.quizType || 'Quiz Results',
             subject: attemptData.detailed[0]?.subject || undefined
           });
         }
@@ -249,7 +254,7 @@ const UserResponsesPage: React.FC = () => {
                   <BookOpen className="h-8 w-8 text-white" />
                 </div>
                 <div>
-                  <h1 className="text-3xl font-bold text-gray-800 tracking-tight">{quiz.name}</h1>
+                  <h1 className="text-3xl font-bold text-gray-800 tracking-tight">{quiz.title || quiz.name || 'Quiz Results'}</h1>
                   {quiz.subject && (
                     <p className="text-purple-700 mt-1 text-lg font-medium">{quiz.subject}</p>
                   )}
