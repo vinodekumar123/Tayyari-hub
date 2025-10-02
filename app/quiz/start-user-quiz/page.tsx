@@ -305,7 +305,7 @@ const StartUserQuizPage: React.FC = () => {
       setShowSummaryModal(false);
       setTimeout(() => {
         setShowSubmissionModal(false);
-        router.push(`/user-quizzes/${quizId}/result`);
+router.push(`/admin/students/responses?id=${quizId}`);
       }, 2500);
     } catch (err: any) {
       setError('Submission failed: ' + (err?.message || String(err)));
