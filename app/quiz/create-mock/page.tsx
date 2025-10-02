@@ -16,10 +16,9 @@ import {
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { db, auth } from 'app/firebase';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input'; // replace with your actual input component (or simple <input>)
-import { Select } from '@/components/ui/select'; // optional - or use native selects
 
-const MAX_QUESTIONS = 100;
+const MAX_QUESTIONS = 180;
+const MAX_QUESTIONS_PER_PAGE = 180;
 
 interface MockQuestion {
   id: string;
@@ -31,7 +30,6 @@ interface MockQuestion {
   subject?: string;
   chapter?: string;
   usedInQuizzes?: number;
-  // other fields...
 }
 
 export default function CreateUserQuizPage() {
@@ -41,9 +39,10 @@ export default function CreateUserQuizPage() {
   const [loading, setLoading] = useState(true);
   const [subjects, setSubjects] = useState<string[]>([]);
   const [chaptersBySubject, setChaptersBySubject] = useState<Record<string, string[]>>({});
-  const [selectedSubject, setSelectedSubject] = useState<string>('');
+  const [selectedSubjects, setSelectedSubjects] = useState<string[]>([]);
   const [selectedChapters, setSelectedChapters] = useState<string[]>([]);
   const [numQuestions, setNumQuestions] = useState<number>(20);
+  const [questionsPerPage, setQuestionsPerPage] = useState<number>(10);
   const [duration, setDuration] = useState<number>(60);
   const [title, setTitle] = useState<string>('');
   const [creating, setCreating] = useState(false);
@@ -91,8 +90,8 @@ export default function CreateUserQuizPage() {
         setChaptersBySubject(chaptersObj);
 
         // auto-select first subject if exists
-        if (sArr.length > 0 && !selectedSubject) {
-          setSelectedSubject(sArr[0]);
+        if (sArr.length > 0 && selectedSubjects.length === 0) {
+          setSelectedSubjects([sArr[0]]);
           setSelectedChapters(chaptersObj[sArr[0]]?.slice(0, 1) || []);
         }
       } catch (err) {
@@ -106,10 +105,34 @@ export default function CreateUserQuizPage() {
     return () => { mounted = false; };
   }, []);
 
-  const toggleChapter = (c: string) => {
+  // Handle subject selection (multiple, with checkboxes)
+  const handleSubjectChange = (subject: string) => {
+    setSelectedSubjects((prev) => {
+      if (prev.includes(subject)) {
+        // Remove subject
+        const filtered = prev.filter((s) => s !== subject);
+        // Remove corresponding chapters
+        setSelectedChapters((prevChapters) =>
+          prevChapters.filter(
+            (chapter) => !chaptersBySubject[subject]?.includes(chapter)
+          )
+        );
+        return filtered;
+      } else {
+        // Add subject
+        return [...prev, subject];
+      }
+    });
+  };
+
+  // Handle chapter selection (multiple, with checkboxes)
+  const handleChapterChange = (chapter: string) => {
     setSelectedChapters((prev) => {
-      if (prev.includes(c)) return prev.filter((x) => x !== c);
-      return [...prev, c];
+      if (prev.includes(chapter)) {
+        return prev.filter((c) => c !== chapter);
+      } else {
+        return [...prev, chapter];
+      }
     });
   };
 
@@ -121,8 +144,8 @@ export default function CreateUserQuizPage() {
       setError('You must be logged in to create a test.');
       return;
     }
-    if (!selectedSubject) {
-      setError('Please select a subject.');
+    if (selectedSubjects.length === 0) {
+      setError('Please select at least one subject.');
       return;
     }
     if (selectedChapters.length === 0) {
@@ -137,36 +160,45 @@ export default function CreateUserQuizPage() {
       setError(`Max questions allowed: ${MAX_QUESTIONS}`);
       return;
     }
+    if (!questionsPerPage || questionsPerPage <= 0) {
+      setError('Questions per page must be greater than 0.');
+      return;
+    }
+    if (questionsPerPage > MAX_QUESTIONS_PER_PAGE) {
+      setError(`Max questions per page: ${MAX_QUESTIONS_PER_PAGE}`);
+      return;
+    }
 
     setCreating(true);
 
     try {
-      // 1) Fetch pool matching subject & chapters
+      // 1) Fetch pool matching subjects & chapters
       const mqRef = collection(db, 'mock-questions');
+      let allQuestions: MockQuestion[] = [];
 
-      //  -> For simplicity: fetch all with subject == selectedSubject then filter chapters client-side.
-      const q = query(mqRef, where('subject', '==', selectedSubject));
-      const snap = await getDocs(q);
-      const pool: MockQuestion[] = snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) }));
+      for (const subject of selectedSubjects) {
+        const q = query(mqRef, where('subject', '==', subject));
+        const snap = await getDocs(q);
+        const pool: MockQuestion[] = snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) }));
+        // filter by selected chapters
+        const filtered = pool.filter((p) => selectedChapters.includes(p.chapter || ''));
+        allQuestions = [...allQuestions, ...filtered];
+      }
 
-      // filter by selected chapters
-      const filtered = pool.filter((p) => selectedChapters.includes(p.chapter || ''));
-      if (filtered.length === 0) {
-        setError('No questions found for selected subject/chapters.');
+      if (allQuestions.length === 0) {
+        setError('No questions found for selected subjects/chapters.');
         setCreating(false);
         return;
       }
 
       // 2) Partition unused vs used
-      const unused = filtered.filter((p) => !p.usedInQuizzes || p.usedInQuizzes === 0);
-      const used = filtered.filter((p) => p.usedInQuizzes && p.usedInQuizzes > 0);
+      const unused = allQuestions.filter((p) => !p.usedInQuizzes || p.usedInQuizzes === 0);
+      const used = allQuestions.filter((p) => p.usedInQuizzes && p.usedInQuizzes > 0);
 
       // 3) Pick N questions prefer unused
-      const N = Math.min(numQuestions, filtered.length);
+      const N = Math.min(numQuestions, allQuestions.length);
       const selected: MockQuestion[] = [];
-      // fill from unused
       for (let i = 0; i < unused.length && selected.length < N; i++) selected.push(unused[i]);
-      // fill from used if still short
       for (let i = 0; i < used.length && selected.length < N; i++) selected.push(used[i]);
 
       // 4) Build embedded question snapshot
@@ -183,17 +215,20 @@ export default function CreateUserQuizPage() {
 
       // 5) Create user-quizzes doc
       const newDocRef = doc(collection(db, 'user-quizzes')); // auto id
-      const quizTitle = title?.trim() || `${selectedSubject} Test - ${new Date().toLocaleDateString()}`;
+      const quizTitle =
+        title?.trim() ||
+        `${selectedSubjects.join(', ')} Test - ${new Date().toLocaleDateString()}`;
 
       await setDoc(newDocRef, {
         title: quizTitle,
         createdBy: user.uid,
-        subject: selectedSubject,
+        subjects: selectedSubjects,
         chapters: selectedChapters,
         duration: duration,
         questionCount: selectedSnapshot.length,
         selectedQuestions: selectedSnapshot,
         createdAt: serverTimestamp(),
+        questionsPerPage,
       });
 
       // 6) Update usedInQuizzes counters in batch
@@ -202,13 +237,10 @@ export default function CreateUserQuizPage() {
         const qRef = doc(db, 'mock-questions', q.id);
         batch.update(qRef, {
           usedInQuizzes: increment(1),
-          // if you want to track which user used it:
-          // usedBy: arrayUnion(user.uid)
         });
       });
       await batch.commit();
 
-      // 7) Redirect to start page for user quizzes (create StartUserQuizPage to expect user-quizzes)
       router.push(`/quiz/start-user-quiz?id=${newDocRef.id}`);
     } catch (err) {
       console.error('Error creating user quiz', err);
@@ -221,84 +253,109 @@ export default function CreateUserQuizPage() {
   if (loading) return <div className="p-6">Loading...</div>;
 
   return (
-    <div className="max-w-3xl mx-auto p-6 bg-white rounded shadow">
-      <h2 className="text-2xl font-semibold mb-4">Create Your Own Test</h2>
+    <div className="max-w-3xl mx-auto p-8 bg-gradient-to-br from-blue-50 via-indigo-50 to-white rounded-2xl shadow-xl">
+      <h2 className="text-3xl font-bold mb-6 text-indigo-700">Create Your Own Test</h2>
 
-      {error && <div className="mb-4 text-sm text-red-700 bg-red-100 p-2 rounded">{error}</div>}
+      {error && (
+        <div className="mb-4 text-sm text-red-700 bg-red-100 p-2 rounded border border-red-300">
+          {error}
+        </div>
+      )}
 
-      <form onSubmit={handleCreate} className="space-y-4">
+      <form onSubmit={handleCreate} className="space-y-6">
         <div>
-          <label className="block text-sm font-medium">Title (optional)</label>
+          <label className="block text-sm font-semibold text-indigo-800 mb-1">Title (optional)</label>
           <input
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            placeholder="My Chemistry Practice Test"
-            className="mt-1 block w-full border rounded p-2"
+            placeholder="e.g. My Science Practice Test"
+            className="mt-1 block w-full border border-indigo-200 rounded-lg p-2 bg-indigo-50 focus:outline-none focus:ring-2 focus:ring-indigo-300"
           />
         </div>
 
         <div>
-          <label className="block text-sm font-medium">Subject</label>
-          <select
-            value={selectedSubject}
-            onChange={(e) => {
-              const s = e.target.value;
-              setSelectedSubject(s);
-              // auto-set chapters to first one
-              const ch = chaptersBySubject[s] || [];
-              setSelectedChapters(ch.length > 0 ? [ch[0]] : []);
-            }}
-            className="mt-1 block w-full border rounded p-2"
-          >
-            {subjects.map((s) => <option key={s} value={s}>{s}</option>)}
-          </select>
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium">Chapters (select one or more)</label>
-          <div className="mt-2 flex flex-wrap gap-2">
-            {(chaptersBySubject[selectedSubject] || []).map((c) => (
-              <button
-                type="button"
-                key={c}
-                onClick={() => toggleChapter(c)}
-                className={`px-3 py-1 rounded border ${
-                  selectedChapters.includes(c) ? 'bg-blue-600 text-white' : 'bg-white text-gray-700'
-                }`}
-              >
-                {c}
-              </button>
+          <label className="block text-sm font-semibold text-indigo-800 mb-1">Subjects</label>
+          <div className="flex flex-wrap gap-3 mt-2">
+            {subjects.map((s) => (
+              <label key={s} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white shadow hover:bg-indigo-50 cursor-pointer border border-indigo-100 font-medium">
+                <input
+                  type="checkbox"
+                  checked={selectedSubjects.includes(s)}
+                  onChange={() => handleSubjectChange(s)}
+                  className="form-checkbox h-4 w-4 text-indigo-600 border-indigo-300"
+                />
+                <span className="text-indigo-700">{s}</span>
+              </label>
             ))}
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm font-semibold text-indigo-800 mb-1">Chapters</label>
+          <div className="flex flex-wrap gap-3 mt-2">
+            {selectedSubjects.length === 0 ? (
+              <span className="text-gray-400 italic">Select subjects to see chapters</span>
+            ) : (
+              selectedSubjects.flatMap((subject) =>
+                (chaptersBySubject[subject] || []).map((c) => (
+                  <label key={`${subject}-${c}`} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white shadow hover:bg-blue-50 cursor-pointer border border-blue-100 font-medium">
+                    <input
+                      type="checkbox"
+                      checked={selectedChapters.includes(c)}
+                      onChange={() => handleChapterChange(c)}
+                      className="form-checkbox h-4 w-4 text-blue-600 border-blue-300"
+                    />
+                    <span className="text-blue-700">{c}</span>
+                  </label>
+                ))
+              )
+            )}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div>
-            <label className="block text-sm font-medium">Number of Questions</label>
+            <label className="block text-sm font-semibold text-indigo-800 mb-1">Number of Questions</label>
             <input
               type="number"
               min={1}
               max={MAX_QUESTIONS}
               value={numQuestions}
               onChange={(e) => setNumQuestions(Number(e.target.value))}
-              className="mt-1 block w-full border rounded p-2"
+              className="mt-1 block w-full border border-indigo-200 rounded-lg p-2 bg-indigo-50 focus:outline-none focus:ring-2 focus:ring-indigo-300"
             />
+            <span className="text-xs text-gray-400">Max {MAX_QUESTIONS}</span>
           </div>
-
           <div>
-            <label className="block text-sm font-medium">Duration (minutes)</label>
+            <label className="block text-sm font-semibold text-indigo-800 mb-1">Questions Per Page</label>
+            <input
+              type="number"
+              min={1}
+              max={MAX_QUESTIONS_PER_PAGE}
+              value={questionsPerPage}
+              onChange={(e) => setQuestionsPerPage(Number(e.target.value))}
+              className="mt-1 block w-full border border-indigo-200 rounded-lg p-2 bg-indigo-50 focus:outline-none focus:ring-2 focus:ring-indigo-300"
+            />
+            <span className="text-xs text-gray-400">Max {MAX_QUESTIONS_PER_PAGE}</span>
+          </div>
+          <div>
+            <label className="block text-sm font-semibold text-indigo-800 mb-1">Duration (minutes)</label>
             <input
               type="number"
               min={1}
               value={duration}
               onChange={(e) => setDuration(Number(e.target.value))}
-              className="mt-1 block w-full border rounded p-2"
+              className="mt-1 block w-full border border-indigo-200 rounded-lg p-2 bg-indigo-50 focus:outline-none focus:ring-2 focus:ring-indigo-300"
             />
           </div>
         </div>
 
         <div className="flex justify-end">
-          <Button type="submit" disabled={creating} className="bg-blue-600 text-white">
+          <Button
+            type="submit"
+            disabled={creating}
+            className="bg-indigo-600 hover:bg-indigo-700 text-white text-base font-semibold px-6 py-2 rounded-lg shadow transition-all"
+          >
             {creating ? 'Creating...' : 'Create Test & Start'}
           </Button>
         </div>
