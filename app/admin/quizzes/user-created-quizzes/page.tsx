@@ -11,7 +11,7 @@ import { BadgeCheck, PlayCircle, Clock, RefreshCw } from 'lucide-react';
 export default function StartUserQuizPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const quizId = searchParams.get('id') as string;
+  const quizId = searchParams.get('id') as string | null;
 
   const [user, setUser] = useState<User | null>(null);
   const [quiz, setQuiz] = useState<any>(null);
@@ -20,42 +20,60 @@ export default function StartUserQuizPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    let mounted = true;
     const unsub = onAuthStateChanged(auth, async (u) => {
+      if (!mounted) return;
       setUser(u);
       if (!u) {
         router.push('/login');
         return;
       }
-      // Load quiz meta
-      const quizSnap = await getDoc(doc(db, 'user-quizzes', quizId));
-      if (!quizSnap.exists()) {
-        setError('Quiz not found.');
+      if (!quizId) {
+        setError('Quiz ID missing from URL.');
         setLoading(false);
         return;
       }
-      setQuiz(quizSnap.data());
+      try {
+        const quizRef = doc(db, 'user-quizzes', quizId);
+        const quizSnap = await getDoc(quizRef);
+        if (!quizSnap.exists()) {
+          setError('Quiz not found.');
+          setLoading(false);
+          return;
+        }
+        const quizData = quizSnap.data() ?? {};
+        setQuiz(quizData);
 
-      // Check for previous attempt for this user and quiz
-      const attemptRef = doc(db, 'users', u.uid, 'user-quizattempts', quizId);
-      const attemptSnap = await getDoc(attemptRef);
-      if (attemptSnap.exists()) {
-        setAttempt(attemptSnap.data());
+        // Check previous attempt
+        const attemptRef = doc(db, 'users', u.uid, 'user-quizattempts', quizId);
+        const attemptSnap = await getDoc(attemptRef);
+        if (attemptSnap.exists()) {
+          setAttempt(attemptSnap.data());
+        }
+        setLoading(false);
+      } catch (err) {
+        setError('Failed to load quiz.');
+        setLoading(false);
       }
-      setLoading(false);
     });
-    return () => unsub();
+    return () => {
+      mounted = false;
+      unsub();
+    };
   }, [quizId, router]);
 
   // Start quiz handler
   const handleStartQuiz = async () => {
-    if (!user || !quizId) return;
+    if (!user || !quizId || !quiz) return;
     setError(null);
 
     try {
       const attemptRef = doc(db, 'users', user.uid, 'user-quizattempts', quizId);
       const attemptSnap = await getDoc(attemptRef);
       if (!attemptSnap.exists()) {
-        // Create a new attempt with startedAt
+        const totalQuestions = Array.isArray(quiz.selectedQuestions)
+          ? quiz.selectedQuestions.length
+          : quiz.questionCount || 0;
         await setDoc(attemptRef, {
           startedAt: serverTimestamp(),
           attemptNumber: 1,
@@ -63,12 +81,11 @@ export default function StartUserQuizPage() {
           flags: {},
           completed: false,
           score: 0,
-          total: quiz.selectedQuestions.length,
+          total: totalQuestions,
           detailed: [],
         });
         router.push(`/quiz/take?id=${quizId}`);
       } else {
-        // Resume if not completed
         if (!attemptSnap.data().completed) {
           router.push(`/quiz/take?id=${quizId}`);
         }
@@ -137,9 +154,11 @@ export default function StartUserQuizPage() {
         <div className="flex items-center gap-4 mb-6">
           <PlayCircle className="h-12 w-12 text-indigo-600" />
           <div>
-            <h1 className="text-2xl font-bold text-indigo-700">{quiz.title || quiz.name}</h1>
-            <div className="flex gap-2 items-center mt-1">
-              {quiz.subjects ? (
+            <h1 className="text-2xl font-bold text-indigo-700">
+              {quiz.title || quiz.name || 'Untitled Quiz'}
+            </h1>
+            <div className="flex gap-2 items-center mt-1 flex-wrap">
+              {Array.isArray(quiz.subjects) ? (
                 quiz.subjects.map((sub: string) => (
                   <span
                     key={sub}
@@ -153,7 +172,7 @@ export default function StartUserQuizPage() {
                   {quiz.subject}
                 </span>
               ) : null}
-              {quiz.chapters && quiz.chapters.length > 0 && (
+              {Array.isArray(quiz.chapters) && quiz.chapters.length > 0 &&
                 quiz.chapters.map((ch: string) => (
                   <span
                     key={ch}
@@ -161,8 +180,7 @@ export default function StartUserQuizPage() {
                   >
                     {ch}
                   </span>
-                ))
-              )}
+                ))}
               {statusTag}
             </div>
           </div>
@@ -171,11 +189,15 @@ export default function StartUserQuizPage() {
         <div className="mb-6 grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
           <div>
             <span className="font-semibold text-indigo-800">Duration:</span>{' '}
-            <span className="text-indigo-700">{quiz.duration} min</span>
+            <span className="text-indigo-700">{quiz.duration || 'N/A'} min</span>
           </div>
           <div>
             <span className="font-semibold text-indigo-800">Questions:</span>{' '}
-            <span className="text-indigo-700">{quiz.questionCount || (quiz.selectedQuestions ? quiz.selectedQuestions.length : '')}</span>
+            <span className="text-indigo-700">
+              {Array.isArray(quiz.selectedQuestions)
+                ? quiz.selectedQuestions.length
+                : quiz.questionCount || 'N/A'}
+            </span>
           </div>
           <div>
             <span className="font-semibold text-indigo-800">Questions Per Page:</span>{' '}
@@ -191,7 +213,6 @@ export default function StartUserQuizPage() {
 
         {/* Action Buttons */}
         <div className="flex flex-col gap-4 mt-8">
-          {/* Only show Start if not started */}
           {!attempt && (
             <Button
               onClick={handleStartQuiz}
@@ -200,7 +221,6 @@ export default function StartUserQuizPage() {
               <PlayCircle className="h-6 w-6" /> Start Quiz
             </Button>
           )}
-          {/* Show Resume if started but not completed */}
           {attempt && !attempt.completed && (
             <Button
               onClick={handleStartQuiz}
@@ -209,7 +229,6 @@ export default function StartUserQuizPage() {
               <RefreshCw className="h-6 w-6" /> Resume Quiz
             </Button>
           )}
-          {/* Show attempted info if completed */}
           {attempt && attempt.completed && (
             <div className="w-full flex flex-col items-center gap-2">
               <BadgeCheck className="h-8 w-8 text-green-600" />
