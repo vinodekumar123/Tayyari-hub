@@ -115,13 +115,25 @@ export default function StudentResultsPage() {
     const fetchResults = async () => {
       if (!userId) return;
       const paths = [
-        { attemptPath: 'quizAttempts', quizSource: 'quizzes', isMock: false },
-        { attemptPath: 'mock-quizAttempts', quizSource: 'mock-quizzes', isMock: true },
+        { 
+          attemptPath: 'quizAttempts', 
+          quizSource: 'quizzes', 
+          isMock: false,
+          resultSubPath: 'results',
+          quizMetaPath: (userId: string, quizId: string) => doc(db, 'quizzes', quizId)
+        },
+        { 
+          attemptPath: 'user-quizAttempts', 
+          quizSource: 'User-quizzes', 
+          isMock: true,
+          resultSubPath: 'user-responses',
+          quizMetaPath: (userId: string, quizId: string) => doc(db, 'users', userId, 'User-quizzes', quizId)
+        },
       ];
 
       const allResults: any[] = [];
 
-      for (const { attemptPath, quizSource, isMock } of paths) {
+      for (const { attemptPath, quizSource, isMock, resultSubPath, quizMetaPath } of paths) {
         const attemptsRef = collection(db, 'users', userId, attemptPath);
         const attemptsSnap = await getDocs(attemptsRef);
 
@@ -130,12 +142,8 @@ export default function StudentResultsPage() {
             const quizId = attemptDoc.id;
             // get result and quiz meta in parallel
             const [resultSnap, quizSnap] = await Promise.all([
-              getDoc(doc(db, 'users', userId, attemptPath, quizId, 'results', quizId)),
-              getDoc(
-                quizSource === 'mock-quizzes'
-                  ? doc(db, 'users', userId, 'mock-quizzes', quizId)
-                  : doc(db, 'quizzes', quizId)
-              ),
+              getDoc(doc(db, 'users', userId, attemptPath, quizId, resultSubPath, quizId)),
+              getDoc(quizMetaPath(userId, quizId)),
             ]);
 
             if (resultSnap.exists() && quizSnap.exists()) {
