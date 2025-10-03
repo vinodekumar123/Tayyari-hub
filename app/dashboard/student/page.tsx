@@ -90,10 +90,8 @@ export default function UltraFastStudentDashboard() {
   const [studentData, setStudentData] = useState<any | null>(null);
   const [completedQuizzes, setCompletedQuizzes] = useState<any[]>([]);
   const [quizSubjectStats, setQuizSubjectStats] = useState<any[]>([]);
-  const [mockSubjectStats, setMockSubjectStats] = useState<any[]>([]);
   const [avgPerformance, setAvgPerformance] = useState<number | null>(null);
   const [quizStats, setQuizStats] = useState<{ attempted: number; correct: number } | null>(null);
-  const [mockStats, setMockStats] = useState<{ attempted: number; correct: number } | null>(null);
   const [rank, setRank] = useState<number | null>(null);
   const [topStudents, setTopStudents] = useState<any[]>([]);
   const [loading, setLoading] = useState(false); // Start false for instant UI
@@ -135,10 +133,8 @@ export default function UltraFastStudentDashboard() {
         setStudentData(data.studentData || null);
         setCompletedQuizzes(data.completedQuizzes || []);
         setQuizSubjectStats(data.quizSubjectStats || []);
-        setMockSubjectStats(data.mockSubjectStats || []);
         setAvgPerformance(data.avgPerformance ?? null);
         setQuizStats(data.quizStats ?? null);
-        setMockStats(data.mockStats ?? null);
         setRank(data.rank ?? null);
         setTopStudents(data.topStudents || []);
         setFilling(false);
@@ -153,10 +149,8 @@ export default function UltraFastStudentDashboard() {
           setStudentData(data.studentData || null);
           setCompletedQuizzes(data.completedQuizzes || []);
           setQuizSubjectStats(data.quizSubjectStats || []);
-          setMockSubjectStats(data.mockSubjectStats || []);
           setAvgPerformance(data.avgPerformance ?? null);
           setQuizStats(data.quizStats ?? null);
-          setMockStats(data.mockStats ?? null);
           setRank(data.rank ?? null);
           setTopStudents(data.topStudents || []);
           
@@ -205,10 +199,9 @@ export default function UltraFastStudentDashboard() {
       }
 
       // 2. Priority data fetch - core user info first (fastest queries)
-      const [userSnap, quizSnap, mockSnap] = await Promise.all([
+      const [userSnap, quizSnap] = await Promise.all([
         getDoc(doc(db, 'users', uid)),
         getDocs(query(collection(db, 'users', uid, 'quizAttempts'))),
-        getDocs(query(collection(db, 'users', uid, 'mock-quizAttempts'))),
       ]);
 
       // Immediate UI updates
@@ -216,7 +209,6 @@ export default function UltraFastStudentDashboard() {
       setStudentData(studentData);
 
       const completedQuizzes = quizSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
-      const completedMocks = mockSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
       setCompletedQuizzes(completedQuizzes);
 
       // 3. Smart result processing with progressive updates
@@ -229,85 +221,45 @@ export default function UltraFastStudentDashboard() {
         if (!resultSnap.exists()) return null;
         const resultData = resultSnap.data();
         const selectedQuestions = quizSnap.exists() ? quizSnap.data()?.selectedQuestions || [] : [];
-        return { ...resultData, selectedQuestions, isMock: false };
-      };
-
-      const processMockResult = async (mock) => {
-        const [resultSnap, quizSnap] = await Promise.all([
-          getDoc(doc(db, 'users', uid, 'mock-quizAttempts', mock.id, 'results', mock.id)),
-          getDoc(doc(db, 'users', uid, 'mock-quizzes', mock.id)),
-        ]);
-        
-        if (!resultSnap.exists()) return null;
-        const resultData = resultSnap.data();
-        const selectedQuestions = quizSnap.exists() ? quizSnap.data()?.selectedQuestions || [] : [];
-        return {
-          isMock: true,
-          attempted: resultData.total || 0,
-          correct: resultData.score || 0,
-          selectedQuestions,
-          answers: resultData.answers || {},
-        };
+        return { ...resultData, selectedQuestions };
       };
 
       // Process in batches for better performance and progressive updates
-      const [quizResults, mockResults] = await Promise.all([
-        processBatch(completedQuizzes, processQuizResult),
-        processBatch(completedMocks, processMockResult),
-      ]);
+      const quizResults = await processBatch(completedQuizzes, processQuizResult);
 
-      const allResults = [...quizResults, ...mockResults].filter(Boolean);
+      const allResults = quizResults.filter(Boolean);
 
       // 4. Ultra-fast stats calculation with memoization
       const calculateStats = () => {
         let totalPercent = 0, percentCount = 0;
         let quizAttempted = 0, quizCorrect = 0;
-        let mockAttempted = 0, mockCorrect = 0;
         const quizMap = new Map();
-        const mockMap = new Map();
 
         for (const result of allResults) {
-          if (result.isMock) {
-            mockAttempted += result.attempted;
-            mockCorrect += result.correct;
+          const answers = result.answers || {};
+          let correct = 0, attempted = 0;
+          
+          for (const q of result.selectedQuestions || []) {
+            if (!q.id) continue;
+            const subject = typeof q.subject === 'string' ? q.subject : q.subject?.name || 'N/A';
+            const userAnswer = answers[q.id];
+            const isCorrect = (userAnswer?.trim().toLowerCase() || '') === (q.correctAnswer?.trim().toLowerCase() || '');
             
-            for (const q of result.selectedQuestions || []) {
-              const subject = typeof q.subject === 'string' ? q.subject : q.subject?.name || 'N/A';
-              const userAnswer = result.answers[q.id];
-              const isCorrect = (userAnswer?.trim().toLowerCase() || '') === (q.correctAnswer?.trim().toLowerCase() || '');
-              
-              const stats = mockMap.get(subject) || { attempted: 0, correct: 0, wrong: 0 };
-              stats.attempted++;
-              if (isCorrect) stats.correct++;
-              else if (userAnswer) stats.wrong++;
-              mockMap.set(subject, stats);
-            }
-          } else {
-            const answers = result.answers || {};
-            let correct = 0, attempted = 0;
+            attempted++;
+            if (isCorrect) correct++;
             
-            for (const q of result.selectedQuestions || []) {
-              if (!q.id) continue;
-              const subject = typeof q.subject === 'string' ? q.subject : q.subject?.name || 'N/A';
-              const userAnswer = answers[q.id];
-              const isCorrect = (userAnswer?.trim().toLowerCase() || '') === (q.correctAnswer?.trim().toLowerCase() || '');
-              
-              attempted++;
-              if (isCorrect) correct++;
-              
-              const stats = quizMap.get(subject) || { attempted: 0, correct: 0, wrong: 0 };
-              stats.attempted++;
-              if (isCorrect) stats.correct++;
-              else if (userAnswer) stats.wrong++;
-              quizMap.set(subject, stats);
-            }
-            
-            quizAttempted += attempted;
-            quizCorrect += correct;
-            if (attempted > 0) {
-              totalPercent += Math.round((correct / attempted) * 100);
-              percentCount++;
-            }
+            const stats = quizMap.get(subject) || { attempted: 0, correct: 0, wrong: 0 };
+            stats.attempted++;
+            if (isCorrect) stats.correct++;
+            else if (userAnswer) stats.wrong++;
+            quizMap.set(subject, stats);
+          }
+          
+          quizAttempted += attempted;
+          quizCorrect += correct;
+          if (attempted > 0) {
+            totalPercent += Math.round((correct / attempted) * 100);
+            percentCount++;
           }
         }
 
@@ -321,10 +273,8 @@ export default function UltraFastStudentDashboard() {
 
         return {
           quizSubjectStats: formatStats(quizMap),
-          mockSubjectStats: formatStats(mockMap),
           avgPerformance: userAvg,
           quizStats: { attempted: quizAttempted, correct: quizCorrect },
-          mockStats: { attempted: mockAttempted, correct: mockCorrect },
         };
       };
 
@@ -332,10 +282,8 @@ export default function UltraFastStudentDashboard() {
       
       // Update UI progressively
       setQuizSubjectStats(stats.quizSubjectStats);
-      setMockSubjectStats(stats.mockSubjectStats);
       setAvgPerformance(stats.avgPerformance);
       setQuizStats(stats.quizStats);
-      setMockStats(stats.mockStats);
 
       // 5. Optimized leaderboard - only fetch top 10 efficiently
       const fetchLeaderboard = async () => {
@@ -425,7 +373,6 @@ export default function UltraFastStudentDashboard() {
       saveToCache({
         studentData,
         completedQuizzes,
-        completedMocks,
         ...stats,
         ...leaderboardData,
       });
