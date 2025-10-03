@@ -257,9 +257,17 @@ export default function UnifiedResultsPage() {
           metaFetches.push(
             getDoc(doc(clientDb, 'user-quizzes', docSnap.id)).then(metaSnap => {
               if (metaSnap.exists()) {
+                const metaData = metaSnap.data();
+                // --- Subject logic correction here ---
+                let subjectNames = 'N/A';
+                if (metaData.subjects && Array.isArray(metaData.subjects) && metaData.subjects.length) {
+                  subjectNames = metaData.subjects.join(', ');
+                } else if (typeof metaData.subject === 'string') {
+                  subjectNames = metaData.subject;
+                }
                 quizMetas[docSnap.id] = {
-                  name: metaSnap.data().name,
-                  subject: metaSnap.data().subject,
+                  name: metaData.name || metaData.title,
+                  subject: subjectNames,
                 };
               }
             })
