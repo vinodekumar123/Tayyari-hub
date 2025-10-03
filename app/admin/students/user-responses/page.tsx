@@ -234,7 +234,7 @@ const UserResponsesPage: React.FC = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 relative">
           <Button 
             variant="outline" 
-            onClick={() => router.push('/students/results')}
+            onClick={() => router.push('/admin/students/results')}
             className="bg-white hover:bg-gray-50 mb-6 shadow-sm border-purple-200"
           >
             <ArrowLeft className="h-4 w-4 mr-2" />
