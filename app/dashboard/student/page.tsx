@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import { db } from '@/app/firebase';
 import {
   collection,
@@ -9,13 +9,9 @@ import {
   doc,
   query,
   orderBy,
-  limit,
 } from 'firebase/firestore';
 import { getAuth, onAuthStateChanged } from 'firebase/auth';
-import {
-  Card,
-  CardContent,
-} from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Sidebar } from '@/components/ui/sidebar';
 import {
   PieChart,
@@ -38,10 +34,6 @@ import {
   Activity,
   ClipboardList,
   BookOpen,
-  CheckCircle,
-  XCircle,
-  Info,
-  Sparkles,
 } from 'lucide-react';
 
 const PIE_COLORS = ['#4CAF50', '#FF9800', '#F44336', '#1976D2', '#9C27B0', '#607D8B'];
@@ -54,24 +46,22 @@ export default function UltraFastStudentDash() {
   const [uid, setUid] = useState<string | null>(null);
   const [student, setStudent] = useState<any>(null);
 
-  // Quiz stats
   const [adminResults, setAdminResults] = useState<any[]>([]);
   const [userResults, setUserResults] = useState<any[]>([]);
   const [adminStats, setAdminStats] = useState<any>(null);
   const [userStats, setUserStats] = useState<any>(null);
 
-  // User quiz bank
   const [userQuizBank, setUserQuizBank] = useState<any[]>([]);
   const [userQuizAnalytics, setUserQuizAnalytics] = useState<any>(null);
 
-  // Mock question bank
   const [mockBank, setMockBank] = useState({ total: 0, used: 0, unused: 0, bySubject: [] as any[] });
 
-  // UI
+  const [leaderboard, setLeaderboard] = useState<any[]>([]);
+  const [myRank, setMyRank] = useState<number | null>(null);
+
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  // Auth
   useEffect(() => {
     const auth = getAuth();
     return onAuthStateChanged(auth, (user) => {
@@ -79,7 +69,6 @@ export default function UltraFastStudentDash() {
     });
   }, []);
 
-  // Load student info, quiz stats, user quiz bank, mock bank
   const fetchAll = useCallback(async () => {
     if (!uid) return;
     setRefreshing(true);
@@ -118,8 +107,8 @@ export default function UltraFastStudentDash() {
     }
     setUserResults(userRes);
 
-    // 4. User quiz bank (quiz creations)
-    const userQuizBankSnap = await getDocs(query(collection(db, 'user-quizzes'), orderBy('createdAt', 'desc'), limit(100)));
+    // 4. User quiz bank (quizzes created by this user)
+    const userQuizBankSnap = await getDocs(query(collection(db, 'user-quizzes'), orderBy('createdAt', 'desc')));
     const bank: any[] = [];
     userQuizBankSnap.forEach(d => {
       const data = d.data();
@@ -128,7 +117,7 @@ export default function UltraFastStudentDash() {
     });
     setUserQuizBank(bank);
 
-    // 5. Mock questions bank stats (with subject breakdown)
+    // 5. Mock questions bank
     const mockSnap = await getDocs(collection(db, 'mock-questions'));
     let used = 0, unused = 0;
     const bySubject: Record<string, { used: number; unused: number; total: number }> = {};
@@ -150,6 +139,38 @@ export default function UltraFastStudentDash() {
         percentUsed: percent(stats.used, stats.total),
       })),
     });
+
+    // 6. Leaderboard
+    // For demo: show top 10 students by accuracy for admin quizzes
+    const allUsers = await getDocs(collection(db, 'users'));
+    const leaderboardData: { id: string; name: string; accuracy: number }[] = [];
+    for (const userDoc of allUsers.docs) {
+      const attempts = await getDocs(collection(db, 'users', userDoc.id, 'quizAttempts'));
+      let attempted = 0, correct = 0;
+      for (const att of attempts.docs) {
+        const attData = att.data();
+        if (!attData.completed) continue;
+        const quizMetaSnap = await getDoc(doc(db, 'quizzes', att.id));
+        const meta = quizMetaSnap.exists() ? quizMetaSnap.data() : {};
+        const questions = meta.selectedQuestions || [];
+        const answers = attData.answers || {};
+        for (const q of questions) {
+          attempted++;
+          if ((answers[q.id]?.trim?.().toLowerCase?.() ?? '') === (q.correctAnswer?.trim?.().toLowerCase?.() ?? '')) {
+            correct++;
+          }
+        }
+      }
+      leaderboardData.push({
+        id: userDoc.id,
+        name: userDoc.data().fullName || 'Student',
+        accuracy: percent(correct, attempted),
+      });
+    }
+    leaderboardData.sort((a, b) => b.accuracy - a.accuracy || a.name.localeCompare(b.name));
+    setLeaderboard(leaderboardData.slice(0, 10));
+    const myIdx = leaderboardData.findIndex(u => u.id === uid);
+    setMyRank(myIdx >= 0 ? myIdx + 1 : null);
 
     setRefreshing(false);
     setLoading(false);
@@ -197,7 +218,6 @@ export default function UltraFastStudentDash() {
 
   // User quiz bank analytics
   useEffect(() => {
-    // Aggregate how many students took, avg scores, total questions, breakdown by subject
     const subjectMap: Record<string, { quizzes: number; totalQuestions: number }> = {};
     let totalQuizzes = 0, totalQuestions = 0;
     userQuizBank.forEach(qb => {
@@ -303,6 +323,31 @@ export default function UltraFastStudentDash() {
             </CardContent>
           </Card>
         </div>
+
+        {/* Leaderboard */}
+        <Card>
+          <CardContent className="p-3 sm:p-4">
+            <h2 className="text-lg sm:text-xl font-bold mb-4 text-gray-800">🏆 Leaderboard (Admin Quizzes Accuracy)</h2>
+            <div className="max-h-60 overflow-y-auto space-y-2">
+              {leaderboard.length === 0 ? (
+                <p className="text-gray-500 text-center text-sm sm:text-base">No leaderboard data.</p>
+              ) : (
+                leaderboard.map((student, index) => (
+                  <div key={student.id} className={`flex justify-between items-center px-3 py-2 rounded-md ${student.id === uid ? 'bg-blue-100 font-bold' : 'bg-gray-50'}`}>
+                    <span>{index + 1}. {student.name}</span>
+                    <span className="text-green-700">{student.accuracy}%</span>
+                  </div>
+                ))
+              )}
+              {myRank && (
+                <div className="flex justify-between items-center px-3 py-2 mt-2 rounded-md bg-green-50 font-bold border-t border-green-100">
+                  <span>Your Rank: {myRank}</span>
+                  <span />
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
 
         {/* User Quiz Bank (CREATOR/OWNER) */}
         <Card>
