@@ -12,12 +12,13 @@ import {
   serverTimestamp,
   writeBatch,
   increment,
+  getDoc,
+  updateDoc,
+  arrayUnion,
 } from 'firebase/firestore';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { db, auth } from 'app/firebase';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input'; // replace with your actual input component (or simple <input>)
-// import { Select } from '@/components/ui/select'; // optional - or use native selects
 
 const MAX_QUESTIONS = 100;
 
@@ -31,7 +32,13 @@ interface MockQuestion {
   subject?: string;
   chapter?: string;
   usedInQuizzes?: number;
-  // other fields...
+}
+
+interface AnalyticsDoc {
+  totalQuestions: number;
+  usedQuestionsCount: number;
+  unusedQuestionsCount: number;
+  updatedAt: any;
 }
 
 export default function CreateUserQuizPage() {
@@ -50,6 +57,9 @@ export default function CreateUserQuizPage() {
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // For analytics
+  const [subjectAnalytics, setSubjectAnalytics] = useState<Record<string, AnalyticsDoc>>({});
+
   // Auth listener
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (u) => {
@@ -64,7 +74,7 @@ export default function CreateUserQuizPage() {
     const loadMeta = async () => {
       setLoading(true);
       try {
-        const q = query(collection(db, 'mock-questions')); // load all to derive metadata
+        const q = query(collection(db, 'mock-questions'));
         const snap = await getDocs(q);
 
         const sSet = new Set<string>();
@@ -91,7 +101,6 @@ export default function CreateUserQuizPage() {
         setSubjects(sArr);
         setChaptersBySubject(chaptersObj);
 
-        // auto-select first subject if exists
         if (sArr.length > 0 && selectedSubjects.length === 0) {
           setSelectedSubjects([sArr[0]]);
           setSelectedChapters(chaptersObj[sArr[0]]?.slice(0, 1) || []);
@@ -111,7 +120,6 @@ export default function CreateUserQuizPage() {
   // Update selected chapters when selectedSubjects changes
   useEffect(() => {
     if (selectedSubjects.length > 0) {
-      // If any newly added subject, auto-add its first chapter
       setSelectedChapters((prev) => {
         let chapters = [...prev];
         selectedSubjects.forEach((s) => {
@@ -120,7 +128,6 @@ export default function CreateUserQuizPage() {
             chapters.push(chs[0]);
           }
         });
-        // Remove chapters of subjects no longer selected
         chapters = chapters.filter((c) =>
           selectedSubjects.some((s) => (chaptersBySubject[s] || []).includes(c))
         );
@@ -132,6 +139,40 @@ export default function CreateUserQuizPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedSubjects, chaptersBySubject]);
 
+  // Load precomputed analytics for dashboard speed
+  useEffect(() => {
+    const fetchAnalytics = async () => {
+      if (!user) return;
+      const analytics: Record<string, AnalyticsDoc> = {};
+      for (const subject of subjects) {
+        const analyticsDocRef = doc(db, 'users', user.uid, 'dashboard-analytics', subject);
+        try {
+          const snap = await getDoc(analyticsDocRef);
+          if (snap.exists()) {
+            analytics[subject] = snap.data() as AnalyticsDoc;
+          } else {
+            analytics[subject] = {
+              totalQuestions: 0,
+              usedQuestionsCount: 0,
+              unusedQuestionsCount: 0,
+              updatedAt: null,
+            };
+          }
+        } catch {
+          analytics[subject] = {
+            totalQuestions: 0,
+            usedQuestionsCount: 0,
+            unusedQuestionsCount: 0,
+            updatedAt: null,
+          };
+        }
+      }
+      setSubjectAnalytics(analytics);
+    };
+    if (subjects.length > 0 && user) fetchAnalytics();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [subjects, user]);
+
   const toggleChapter = (c: string) => {
     setSelectedChapters((prev) => {
       if (prev.includes(c)) return prev.filter((x) => x !== c);
@@ -142,13 +183,11 @@ export default function CreateUserQuizPage() {
   const toggleSubject = (s: string) => {
     setSelectedSubjects((prev) => {
       if (prev.includes(s)) {
-        // Remove subject, also remove its chapters
         setSelectedChapters((chs) =>
           chs.filter((ch) => !(chaptersBySubject[s] || []).includes(ch))
         );
         return prev.filter((x) => x !== s);
       } else {
-        // Add subject, auto-select its first chapter if none present
         const chs = chaptersBySubject[s] || [];
         setSelectedChapters((prevChs) => {
           if (chs.length > 0 && !prevChs.some((c) => chs.includes(c))) {
@@ -197,13 +236,16 @@ export default function CreateUserQuizPage() {
     setCreating(true);
 
     try {
-      // 1) Fetch pool matching all selected subjects (then filter chapters client-side)
+      // 1) Gather all relevant questions for selected subjects/chapters
       let allQuestions: MockQuestion[] = [];
+      const subjectPools: Record<string, MockQuestion[]> = {};
+
       for (const subj of selectedSubjects) {
         const mqRef = collection(db, 'mock-questions');
         const q = query(mqRef, where('subject', '==', subj));
         const snap = await getDocs(q);
         const pool: MockQuestion[] = snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) }));
+        subjectPools[subj] = pool;
         allQuestions = allQuestions.concat(pool);
       }
 
@@ -215,19 +257,39 @@ export default function CreateUserQuizPage() {
         return;
       }
 
-      // 2) Partition unused vs used
-      const unused = filtered.filter((p) => !p.usedInQuizzes || p.usedInQuizzes === 0);
-      const used = filtered.filter((p) => p.usedInQuizzes && p.usedInQuizzes > 0);
+      // 2) For each selected subject, fetch user's used questions for that subject
+      const userUsedBySubject: Record<string, Set<string>> = {};
+      for (const subj of selectedSubjects) {
+        const usageDocRef = doc(db, 'users', user.uid, 'question-usage', subj);
+        let usedArr: string[] = [];
+        try {
+          const usageSnap = await getDoc(usageDocRef);
+          if (usageSnap.exists()) {
+            usedArr = usageSnap.data().usedQuestions || [];
+          }
+        } catch (e) { /* ignore */ }
+        userUsedBySubject[subj] = new Set(usedArr);
+      }
 
-      // 3) Pick N questions prefer unused
+      // 3) Partition filtered pool into unused and used for this user
+      const unused: MockQuestion[] = [];
+      const used: MockQuestion[] = [];
+      for (const q of filtered) {
+        const subj = q.subject || '';
+        if (userUsedBySubject[subj]?.has(q.id)) {
+          used.push(q);
+        } else {
+          unused.push(q);
+        }
+      }
+
+      // 4) Pick N questions, prefer unused
       const N = Math.min(numQuestions, filtered.length);
       const selected: MockQuestion[] = [];
-      // fill from unused
       for (let i = 0; i < unused.length && selected.length < N; i++) selected.push(unused[i]);
-      // fill from used if still short
       for (let i = 0; i < used.length && selected.length < N; i++) selected.push(used[i]);
 
-      // 4) Build embedded question snapshot
+      // 5) Build embedded question snapshot
       const selectedSnapshot = selected.map((q) => ({
         id: q.id,
         questionText: q.questionText,
@@ -239,8 +301,8 @@ export default function CreateUserQuizPage() {
         chapter: q.chapter || '',
       }));
 
-      // 5) Create user-quizzes doc
-      const newDocRef = doc(collection(db, 'user-quizzes')); // auto id
+      // 6) Create user-quizzes doc
+      const newDocRef = doc(collection(db, 'user-quizzes'));
       const quizTitle =
         title?.trim() ||
         `${selectedSubjects.join(', ')} Test - ${new Date().toLocaleDateString()}`;
@@ -257,19 +319,52 @@ export default function CreateUserQuizPage() {
         createdAt: serverTimestamp(),
       });
 
-      // 6) Update usedInQuizzes counters in batch
+      // 7) Update user's usedQuestions per subject in batch and update dashboard analytics
       const batch = writeBatch(db);
+      const subjectToIds: Record<string, string[]> = {};
+      for (const q of selected) {
+        const subj = q.subject || '';
+        if (!subjectToIds[subj]) subjectToIds[subj] = [];
+        subjectToIds[subj].push(q.id);
+      }
+
+      for (const subj of Object.keys(subjectToIds)) {
+        // Update used questions doc
+        const usageDocRef = doc(db, 'users', user.uid, 'question-usage', subj);
+        batch.set(usageDocRef, { usedQuestions: [] }, { merge: true });
+        batch.update(usageDocRef, {
+          usedQuestions: arrayUnion(...subjectToIds[subj])
+        });
+
+        // RECALCULATE ANALYTICS FOR THIS SUBJECT
+        // Get total questions for subject
+        const pool = subjectPools[subj] || [];
+        // Get old used set and add newly used
+        const usedSet = userUsedBySubject[subj] || new Set();
+        subjectToIds[subj].forEach((id) => usedSet.add(id));
+        const usedCount = pool.filter(q => usedSet.has(q.id)).length;
+        const total = pool.length;
+        const unusedCount = total - usedCount;
+        // Update dashboard analytics doc
+        const analyticsDocRef = doc(db, 'users', user.uid, 'dashboard-analytics', subj);
+        batch.set(analyticsDocRef, {
+          totalQuestions: total,
+          usedQuestionsCount: usedCount,
+          unusedQuestionsCount: unusedCount,
+          updatedAt: serverTimestamp(),
+        }, { merge: true });
+      }
+
+      // Optionally, update usedInQuizzes counters in mock-questions too
       selected.forEach((q) => {
         const qRef = doc(db, 'mock-questions', q.id);
         batch.update(qRef, {
           usedInQuizzes: increment(1),
-          // if you want to track which user used it:
-          // usedBy: arrayUnion(user.uid)
         });
       });
       await batch.commit();
 
-      // 7) Redirect to start page for user quizzes (create StartUserQuizPage to expect user-quizzes)
+      // 8) Redirect to start page for user quizzes
       router.push(`/quiz/start-user-quiz?id=${newDocRef.id}`);
     } catch (err) {
       console.error('Error creating user quiz', err);
@@ -314,6 +409,12 @@ export default function CreateUserQuizPage() {
                 }`}
               >
                 {s}
+                {/* Analytics: show total/used/unused if loaded */}
+                {subjectAnalytics[s] &&
+                  <span className="ml-2 text-xs text-gray-500">
+                    T:{subjectAnalytics[s].totalQuestions} U:{subjectAnalytics[s].unusedQuestionsCount} Used:{subjectAnalytics[s].usedQuestionsCount}
+                  </span>
+                }
               </button>
             ))}
           </div>
