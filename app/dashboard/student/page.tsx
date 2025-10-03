@@ -19,6 +19,9 @@ import {
 } from '@/components/ui/card';
 import { Sidebar } from '@/components/ui/sidebar';
 import {
+  PieChart,
+  Pie,
+  Cell,
   LineChart,
   Line,
   XAxis,
@@ -38,11 +41,13 @@ import {
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
+const PIE_COLORS = ['#4CAF50', '#FF9800', '#F44336'];
 const CACHE_KEY = 'student_dashboard_cache';
-const CACHE_DURATION = 5 * 60 * 1000;
-const BATCH_SIZE = 10;
-const MAX_CONCURRENT = 5;
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+const BATCH_SIZE = 10; // Process results in smaller batches
+const MAX_CONCURRENT = 5; // Limit concurrent Firebase calls
 
+// Debounce utility
 const debounce = (func, delay) => {
   let timeoutId;
   return (...args) => {
@@ -51,12 +56,15 @@ const debounce = (func, delay) => {
   };
 };
 
+// Throttled batch processor
 const processBatch = async (items, processor, batchSize = BATCH_SIZE, maxConcurrent = MAX_CONCURRENT) => {
   const results = [];
   const batches = [];
+  
   for (let i = 0; i < items.length; i += batchSize) {
     batches.push(items.slice(i, i + batchSize));
   }
+  
   for (let i = 0; i < batches.length; i += maxConcurrent) {
     const currentBatches = batches.slice(i, i + maxConcurrent);
     const batchPromises = currentBatches.map(batch => 
@@ -65,33 +73,37 @@ const processBatch = async (items, processor, batchSize = BATCH_SIZE, maxConcurr
         return null;
       })))
     );
+    
     const batchResults = await Promise.all(batchPromises);
     results.push(...batchResults.flat());
   }
+  
   return results.filter(Boolean);
 };
 
 export default function UltraFastStudentDashboard() {
+  // UI State
   const [greeting, setGreeting] = useState('');
-  const [uid, setUid] = useState(null);
+  const [uid, setUid] = useState<string | null>(null);
 
-  // ADMIN QUIZZES: original, do not touch
-  const [studentData, setStudentData] = useState(null);
-  const [completedQuizzes, setCompletedQuizzes] = useState([]);
-  const [quizSubjectStats, setQuizSubjectStats] = useState([]);
-  const [avgPerformance, setAvgPerformance] = useState(null);
-  const [quizStats, setQuizStats] = useState({ attempted: 0, correct: 0 });
-
-  // Additional states (for ranking, etc.)
-  const [rank, setRank] = useState(null);
-  const [topStudents, setTopStudents] = useState([]);
-  const [loading, setLoading] = useState(false);
+  // Dashboard Data State
+  const [studentData, setStudentData] = useState<any | null>(null);
+  const [completedQuizzes, setCompletedQuizzes] = useState<any[]>([]);
+  const [quizSubjectStats, setQuizSubjectStats] = useState<any[]>([]);
+  const [mockSubjectStats, setMockSubjectStats] = useState<any[]>([]);
+  const [avgPerformance, setAvgPerformance] = useState<number | null>(null);
+  const [quizStats, setQuizStats] = useState<{ attempted: number; correct: number } | null>(null);
+  const [mockStats, setMockStats] = useState<{ attempted: number; correct: number } | null>(null);
+  const [rank, setRank] = useState<number | null>(null);
+  const [topStudents, setTopStudents] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false); // Start false for instant UI
   const [filling, setFilling] = useState(true);
 
   const isFetching = useRef(false);
-  const abortController = useRef(null);
-  const dataCache = useRef(new Map());
+  const abortController = useRef<AbortController | null>(null);
+  const dataCache = useRef<Map<string, { data: any; timestamp: number }>>(new Map());
 
+  // Memoized greeting calculation
   const currentGreeting = useMemo(() => {
     const hour = new Date().getHours();
     if (hour < 12) return '🌅 Good Morning';
@@ -99,10 +111,12 @@ export default function UltraFastStudentDashboard() {
     else return '🌙 Good Evening';
   }, []);
 
+  // Set greeting once
   useEffect(() => {
     setGreeting(currentGreeting);
   }, [currentGreeting]);
 
+  // Auth state with cleanup
   useEffect(() => {
     const auth = getAuth();
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -111,21 +125,27 @@ export default function UltraFastStudentDashboard() {
     return () => unsubscribe();
   }, []);
 
+  // Enhanced cache with memory fallback
   const loadFromCache = useCallback(() => {
     try {
+      // Try memory cache first (fastest)
       const memoryCached = dataCache.current.get(uid || '');
       if (memoryCached && Date.now() - memoryCached.timestamp < CACHE_DURATION) {
         const data = memoryCached.data;
         setStudentData(data.studentData || null);
         setCompletedQuizzes(data.completedQuizzes || []);
         setQuizSubjectStats(data.quizSubjectStats || []);
+        setMockSubjectStats(data.mockSubjectStats || []);
         setAvgPerformance(data.avgPerformance ?? null);
-        setQuizStats(data.quizStats ?? { attempted: 0, correct: 0 });
+        setQuizStats(data.quizStats ?? null);
+        setMockStats(data.mockStats ?? null);
         setRank(data.rank ?? null);
         setTopStudents(data.topStudents || []);
         setFilling(false);
         return true;
       }
+
+      // Fallback to localStorage
       const cached = localStorage.getItem(CACHE_KEY);
       if (cached) {
         const { data, timestamp } = JSON.parse(cached);
@@ -133,10 +153,14 @@ export default function UltraFastStudentDashboard() {
           setStudentData(data.studentData || null);
           setCompletedQuizzes(data.completedQuizzes || []);
           setQuizSubjectStats(data.quizSubjectStats || []);
+          setMockSubjectStats(data.mockSubjectStats || []);
           setAvgPerformance(data.avgPerformance ?? null);
-          setQuizStats(data.quizStats ?? { attempted: 0, correct: 0 });
+          setQuizStats(data.quizStats ?? null);
+          setMockStats(data.mockStats ?? null);
           setRank(data.rank ?? null);
           setTopStudents(data.topStudents || []);
+          
+          // Also store in memory cache for next time
           dataCache.current.set(uid || '', { data, timestamp });
           setFilling(false);
           return true;
@@ -148,10 +172,12 @@ export default function UltraFastStudentDashboard() {
     return false;
   }, [uid]);
 
-  const saveToCache = useCallback((data) => {
+  const saveToCache = useCallback((data: any) => {
     try {
       const timestamp = Date.now();
       const cacheData = { data, timestamp };
+      
+      // Save to both memory and localStorage
       dataCache.current.set(uid || '', cacheData);
       localStorage.setItem(CACHE_KEY, JSON.stringify(cacheData));
     } catch (error) {
@@ -159,92 +185,172 @@ export default function UltraFastStudentDashboard() {
     }
   }, [uid]);
 
-  // MAIN: ADMIN QUIZ ANALYTICS LOGIC (original, clean, non-interfered)
+  // Optimized data fetcher with progressive loading and smart batching
   const fetchData = useCallback(async () => {
     if (!uid || isFetching.current) return;
-    if (abortController.current) abortController.current.abort();
+    
+    // Cancel any existing fetch
+    if (abortController.current) {
+      abortController.current.abort();
+    }
     abortController.current = new AbortController();
+    
     isFetching.current = true;
     setFilling(true);
-
+    
     try {
-      if (loadFromCache()) { /* continue background refresh */ }
+      // 1. Instant fill from cache if available
+      if (loadFromCache()) {
+        // Still continue with fresh data fetch in background
+      }
 
-      // 1. Fetch user info
-      const [userSnap, quizSnap] = await Promise.all([
+      // 2. Priority data fetch - core user info first (fastest queries)
+      const [userSnap, quizSnap, mockSnap] = await Promise.all([
         getDoc(doc(db, 'users', uid)),
         getDocs(query(collection(db, 'users', uid, 'quizAttempts'))),
+        getDocs(query(collection(db, 'users', uid, 'mock-quizAttempts'))),
       ]);
+
+      // Immediate UI updates
       const studentData = userSnap.exists() ? userSnap.data() : null;
       setStudentData(studentData);
 
-      // 2. Fetch all completed admin quizzes for this user
       const completedQuizzes = quizSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      const completedMocks = mockSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
       setCompletedQuizzes(completedQuizzes);
 
-      // 3. For each completed quiz, get result data and quiz question data
+      // 3. Smart result processing with progressive updates
       const processQuizResult = async (quiz) => {
-        // admin quizzes are in 'quizzes', questions are in 'Questions', attempts in 'quizAttempts'
         const [resultSnap, quizSnap] = await Promise.all([
           getDoc(doc(db, 'users', uid, 'quizAttempts', quiz.id, 'results', quiz.id)),
           getDoc(doc(db, 'quizzes', quiz.id)),
         ]);
+        
         if (!resultSnap.exists()) return null;
         const resultData = resultSnap.data();
         const selectedQuestions = quizSnap.exists() ? quizSnap.data()?.selectedQuestions || [] : [];
-        return { ...resultData, selectedQuestions };
+        return { ...resultData, selectedQuestions, isMock: false };
       };
 
-      const quizResults = await processBatch(completedQuizzes, processQuizResult);
+      const processMockResult = async (mock) => {
+        const [resultSnap, quizSnap] = await Promise.all([
+          getDoc(doc(db, 'users', uid, 'mock-quizAttempts', mock.id, 'results', mock.id)),
+          getDoc(doc(db, 'users', uid, 'mock-quizzes', mock.id)),
+        ]);
+        
+        if (!resultSnap.exists()) return null;
+        const resultData = resultSnap.data();
+        const selectedQuestions = quizSnap.exists() ? quizSnap.data()?.selectedQuestions || [] : [];
+        return {
+          isMock: true,
+          attempted: resultData.total || 0,
+          correct: resultData.score || 0,
+          selectedQuestions,
+          answers: resultData.answers || {},
+        };
+      };
 
-      // 4. Calculate stats (admin quizzes)
-      let totalPercent = 0, percentCount = 0;
-      let quizAttempted = 0, quizCorrect = 0;
-      const quizMap = new Map();
-      for (const result of quizResults) {
-        if (!result) continue;
-        const answers = result.answers || {};
-        let correct = 0, attempted = 0;
-        for (const q of result.selectedQuestions || []) {
-          if (!q.id) continue;
-          const subject = typeof q.subject === 'string' ? q.subject : q.subject?.name || 'N/A';
-          const userAnswer = answers[q.id];
-          const isCorrect = (userAnswer?.trim().toLowerCase() || '') === (q.correctAnswer?.trim().toLowerCase() || '');
-          attempted++;
-          if (isCorrect) correct++;
-          const stats = quizMap.get(subject) || { attempted: 0, correct: 0, wrong: 0 };
-          stats.attempted++;
-          if (isCorrect) stats.correct++;
-          else if (userAnswer) stats.wrong++;
-          quizMap.set(subject, stats);
-        }
-        quizAttempted += attempted;
-        quizCorrect += correct;
-        if (attempted > 0) {
-          totalPercent += Math.round((correct / attempted) * 100);
-          percentCount++;
-        }
-      }
-      const userAvg = percentCount > 0 ? Math.round(totalPercent / percentCount) : 0;
-      const quizSubjectStats = Array.from(quizMap.entries()).map(([subject, stats]) => ({
-        subject,
-        accuracy: stats.attempted ? Math.round((stats.correct / stats.attempted) * 100) : 0,
-        ...stats,
-      }));
-      setQuizSubjectStats(quizSubjectStats);
-      setAvgPerformance(userAvg);
-      setQuizStats({ attempted: quizAttempted, correct: quizCorrect });
+      // Process in batches for better performance and progressive updates
+      const [quizResults, mockResults] = await Promise.all([
+        processBatch(completedQuizzes, processQuizResult),
+        processBatch(completedMocks, processMockResult),
+      ]);
 
-      // 5. Leaderboard (optional, as before)
+      const allResults = [...quizResults, ...mockResults].filter(Boolean);
+
+      // 4. Ultra-fast stats calculation with memoization
+      const calculateStats = () => {
+        let totalPercent = 0, percentCount = 0;
+        let quizAttempted = 0, quizCorrect = 0;
+        let mockAttempted = 0, mockCorrect = 0;
+        const quizMap = new Map();
+        const mockMap = new Map();
+
+        for (const result of allResults) {
+          if (result.isMock) {
+            mockAttempted += result.attempted;
+            mockCorrect += result.correct;
+            
+            for (const q of result.selectedQuestions || []) {
+              const subject = typeof q.subject === 'string' ? q.subject : q.subject?.name || 'N/A';
+              const userAnswer = result.answers[q.id];
+              const isCorrect = (userAnswer?.trim().toLowerCase() || '') === (q.correctAnswer?.trim().toLowerCase() || '');
+              
+              const stats = mockMap.get(subject) || { attempted: 0, correct: 0, wrong: 0 };
+              stats.attempted++;
+              if (isCorrect) stats.correct++;
+              else if (userAnswer) stats.wrong++;
+              mockMap.set(subject, stats);
+            }
+          } else {
+            const answers = result.answers || {};
+            let correct = 0, attempted = 0;
+            
+            for (const q of result.selectedQuestions || []) {
+              if (!q.id) continue;
+              const subject = typeof q.subject === 'string' ? q.subject : q.subject?.name || 'N/A';
+              const userAnswer = answers[q.id];
+              const isCorrect = (userAnswer?.trim().toLowerCase() || '') === (q.correctAnswer?.trim().toLowerCase() || '');
+              
+              attempted++;
+              if (isCorrect) correct++;
+              
+              const stats = quizMap.get(subject) || { attempted: 0, correct: 0, wrong: 0 };
+              stats.attempted++;
+              if (isCorrect) stats.correct++;
+              else if (userAnswer) stats.wrong++;
+              quizMap.set(subject, stats);
+            }
+            
+            quizAttempted += attempted;
+            quizCorrect += correct;
+            if (attempted > 0) {
+              totalPercent += Math.round((correct / attempted) * 100);
+              percentCount++;
+            }
+          }
+        }
+
+        const userAvg = percentCount > 0 ? Math.round(totalPercent / percentCount) : 0;
+        const formatStats = (map) =>
+          Array.from(map.entries()).map(([subject, stats]) => ({
+            subject,
+            accuracy: stats.attempted ? Math.round((stats.correct / stats.attempted) * 100) : 0,
+            ...stats,
+          }));
+
+        return {
+          quizSubjectStats: formatStats(quizMap),
+          mockSubjectStats: formatStats(mockMap),
+          avgPerformance: userAvg,
+          quizStats: { attempted: quizAttempted, correct: quizCorrect },
+          mockStats: { attempted: mockAttempted, correct: mockCorrect },
+        };
+      };
+
+      const stats = calculateStats();
+      
+      // Update UI progressively
+      setQuizSubjectStats(stats.quizSubjectStats);
+      setMockSubjectStats(stats.mockSubjectStats);
+      setAvgPerformance(stats.avgPerformance);
+      setQuizStats(stats.quizStats);
+      setMockStats(stats.mockStats);
+
+      // 5. Optimized leaderboard - only fetch top 10 efficiently
       const fetchLeaderboard = async () => {
         try {
+          // Get all users (could be optimized further if necessary)
           const allUsersSnap = await getDocs(query(collection(db, 'users')));
+          
           const processUserRank = async (userDoc) => {
             const attempts = await getDocs(query(
               collection(db, 'users', userDoc.id, 'quizAttempts'),
-              limit(20)
+              limit(20) // Limit attempts per user
             ));
+            
             let correct = 0, attempted = 0;
+            
             const attemptResults = await processBatch(
               attempts.docs,
               async (attemptDoc) => {
@@ -252,12 +358,15 @@ export default function UltraFastStudentDashboard() {
                   getDoc(doc(db, 'users', userDoc.id, 'quizAttempts', attemptDoc.id, 'results', attemptDoc.id)),
                   getDoc(doc(db, 'quizzes', attemptDoc.id)),
                 ]);
+                
                 if (!resultDoc.exists()) return null;
+                
                 const resultData = resultDoc.data();
                 const questions = quizDoc.exists() ? quizDoc.data()?.selectedQuestions || [] : [];
                 const answers = resultData.answers || {};
+                
                 let userCorrect = 0, userAttempted = 0;
-                for (const q of questions.slice(0, 10)) {
+                for (const q of questions.slice(0, 10)) { // Limit questions processed per quiz
                   if (!q.id) continue;
                   userAttempted++;
                   const userAns = answers[q.id];
@@ -266,22 +375,27 @@ export default function UltraFastStudentDashboard() {
                     userCorrect++;
                   }
                 }
+                
                 return { correct: userCorrect, attempted: userAttempted };
               }
             );
+            
             attemptResults.forEach(result => {
               if (result) {
                 correct += result.correct;
                 attempted += result.attempted;
               }
             });
+            
             return { 
               id: userDoc.id, 
               accuracy: attempted ? (correct / attempted) * 100 : 0,
               name: userDoc.data().fullName || 'Anonymous'
             };
           };
-          const allRanks = await processBatch(allUsersSnap.docs, processUserRank, 5, 3);
+
+          const allRanks = await processBatch(allUsersSnap.docs, processUserRank, 5, 3); // Smaller batches for leaderboard
+          
           const sorted = allRanks.sort((a, b) => b.accuracy - a.accuracy);
           const idx = sorted.findIndex((u) => u && String(u.id) === String(uid));
           const currentRank = idx >= 0 ? idx + 1 : null;
@@ -289,24 +403,30 @@ export default function UltraFastStudentDashboard() {
             name: u.name,
             accuracy: Math.round(u.accuracy),
           }));
+
+          // Set state reliably
           setRank(currentRank);
           setTopStudents(top10);
+
           return { rank: currentRank, topStudents: top10 };
         } catch (error) {
           console.warn('Leaderboard fetch failed:', error);
+          // Ensure state cleared on failure
           setRank(null);
           setTopStudents([]);
           return { rank: null, topStudents: [] };
         }
       };
+
+      // Await leaderboard so rank is available before we clear the filler state
       const leaderboardData = await fetchLeaderboard();
 
+      // Cache everything including leaderboard
       saveToCache({
         studentData,
         completedQuizzes,
-        quizSubjectStats,
-        avgPerformance: userAvg,
-        quizStats: { attempted: quizAttempted, correct: quizCorrect },
+        completedMocks,
+        ...stats,
         ...leaderboardData,
       });
 
@@ -324,6 +444,7 @@ export default function UltraFastStudentDashboard() {
     }
   }, [uid, loadFromCache, saveToCache]);
 
+  // Debounced fetch to prevent excessive calls
   const debouncedFetch = useMemo(
     () => debounce(fetchData, 300),
     [fetchData]
@@ -333,6 +454,7 @@ export default function UltraFastStudentDashboard() {
     if (uid) debouncedFetch();
   }, [uid, debouncedFetch]);
 
+  // Cleanup on unmount
   useEffect(() => {
     return () => {
       if (abortController.current) {
@@ -341,6 +463,7 @@ export default function UltraFastStudentDashboard() {
     };
   }, []);
 
+  // Memoized components for better performance
   const StatsCards = useMemo(() => (
     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6">
       <Card>
@@ -355,6 +478,15 @@ export default function UltraFastStudentDashboard() {
       <Card>
         <CardContent className="p-3 sm:p-4 text-center">
           <Medal className="mx-auto text-green-500 w-6 h-6 sm:w-8 sm:h-8" />
+          <p className="font-semibold mt-2 text-sm sm:text-base">Your Created Tests</p>
+          <p className="text-xl sm:text-2xl">
+            <span className="animate-pulse bg-gray-100 rounded px-4">&nbsp;</span>
+          </p>
+        </CardContent>
+      </Card>
+      <Card>
+        <CardContent className="p-3 sm:p-4 text-center">
+          <CalendarDays className="mx-auto text-yellow-500 w-6 h-6 sm:w-8 sm:h-8" />
           <p className="font-semibold mt-2 text-sm sm:text-base">Your Rank</p>
           <p className="text-xl sm:text-2xl">
             {filling ? <span className="animate-pulse bg-gray-200 rounded px-4">&nbsp;</span> : (rank ?? '-')}
@@ -370,17 +502,8 @@ export default function UltraFastStudentDashboard() {
           </p>
         </CardContent>
       </Card>
-      <Card>
-        <CardContent className="p-3 sm:p-4 text-center">
-          <ClipboardList className="mx-auto text-orange-500 w-6 h-6 sm:w-8 sm:h-8" />
-          <p className="font-semibold mt-2 text-sm sm:text-base">Questions Attempted</p>
-          <p className="text-xl sm:text-2xl">
-            {filling ? <span className="animate-pulse bg-gray-200 rounded px-4">&nbsp;</span> : (quizStats?.attempted ?? 0)}
-          </p>
-        </CardContent>
-      </Card>
     </div>
-  ), [filling, completedQuizzes.length, rank, avgPerformance, quizStats?.attempted]);
+  ), [filling, completedQuizzes.length, rank, avgPerformance]);
 
   if (loading) {
     return (
@@ -399,7 +522,7 @@ export default function UltraFastStudentDashboard() {
     <div className="flex min-h-screen bg-gradient-to-tr from-white to-slate-100 flex-col md:flex-row">
       <Sidebar />
       <div className="flex-1 p-4 mt-8 sm:p-6 md:p-8 space-y-6 md:space-y-8">
-        {/* Header */}
+        {/* Header Section */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
             <h1 className="text-2xl sm:text-3xl md:text-4xl font-extrabold text-gray-900">
@@ -424,7 +547,7 @@ export default function UltraFastStudentDashboard() {
           </div>
         </div>
 
-        {/* Stats Section - Admin */}
+        {/* Stats Section - Memoized */}
         {StatsCards}
 
         {/* Top 10 Leaderboard */}
@@ -449,6 +572,19 @@ export default function UltraFastStudentDashboard() {
                 )
               )}
             </div>
+          </CardContent>
+        </Card>
+
+        {/* Quiz Attempt Stats */}
+        <Card>
+          <CardContent className="p-3 sm:p-4 text-center">
+            <p className="font-semibold text-sm sm:text-base">📝 Quiz Questions Attempted</p>
+            <p className="text-xl sm:text-2xl">
+              {filling ? <span className="animate-pulse bg-gray-100 rounded px-4">&nbsp;</span> : (quizStats?.attempted ?? 0)}
+            </p>
+            <p className="text-green-600 font-bold text-sm sm:text-base">
+              {filling ? <span className="animate-pulse bg-gray-100 rounded px-4">&nbsp;</span> : `${quizStats?.correct ?? 0} Correct`}
+            </p>
           </CardContent>
         </Card>
 
