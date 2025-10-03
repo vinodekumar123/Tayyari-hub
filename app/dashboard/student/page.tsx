@@ -39,7 +39,7 @@ import {
 import { toast } from 'react-hot-toast';
 
 const CACHE_KEY = 'student_dashboard_cache';
-const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+const CACHE_DURATION = 5 * 60 * 1000;
 const BATCH_SIZE = 10;
 const MAX_CONCURRENT = 5;
 
@@ -75,21 +75,14 @@ export default function UltraFastStudentDashboard() {
   const [greeting, setGreeting] = useState('');
   const [uid, setUid] = useState(null);
 
-  // Admin Quiz States
+  // ADMIN QUIZZES: original, do not touch
   const [studentData, setStudentData] = useState(null);
   const [completedQuizzes, setCompletedQuizzes] = useState([]);
   const [quizSubjectStats, setQuizSubjectStats] = useState([]);
   const [avgPerformance, setAvgPerformance] = useState(null);
   const [quizStats, setQuizStats] = useState({ attempted: 0, correct: 0 });
 
-  // User Quiz States
-  const [userQuizzes, setUserQuizzes] = useState([]);
-  const [userQuizAttempts, setUserQuizAttempts] = useState([]);
-  const [userQuizSubjectStats, setUserQuizSubjectStats] = useState([]);
-  const [userAvgPerformance, setUserAvgPerformance] = useState(null);
-  const [userQuizStats, setUserQuizStats] = useState({ attempted: 0, correct: 0 });
-
-  // Both
+  // Additional states (for ranking, etc.)
   const [rank, setRank] = useState(null);
   const [topStudents, setTopStudents] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -128,13 +121,6 @@ export default function UltraFastStudentDashboard() {
         setQuizSubjectStats(data.quizSubjectStats || []);
         setAvgPerformance(data.avgPerformance ?? null);
         setQuizStats(data.quizStats ?? { attempted: 0, correct: 0 });
-
-        setUserQuizzes(data.userQuizzes || []);
-        setUserQuizAttempts(data.userQuizAttempts || []);
-        setUserQuizSubjectStats(data.userQuizSubjectStats || []);
-        setUserAvgPerformance(data.userAvgPerformance ?? null);
-        setUserQuizStats(data.userQuizStats ?? { attempted: 0, correct: 0 });
-
         setRank(data.rank ?? null);
         setTopStudents(data.topStudents || []);
         setFilling(false);
@@ -149,13 +135,6 @@ export default function UltraFastStudentDashboard() {
           setQuizSubjectStats(data.quizSubjectStats || []);
           setAvgPerformance(data.avgPerformance ?? null);
           setQuizStats(data.quizStats ?? { attempted: 0, correct: 0 });
-
-          setUserQuizzes(data.userQuizzes || []);
-          setUserQuizAttempts(data.userQuizAttempts || []);
-          setUserQuizSubjectStats(data.userQuizSubjectStats || []);
-          setUserAvgPerformance(data.userAvgPerformance ?? null);
-          setUserQuizStats(data.userQuizStats ?? { attempted: 0, correct: 0 });
-
           setRank(data.rank ?? null);
           setTopStudents(data.topStudents || []);
           dataCache.current.set(uid || '', { data, timestamp });
@@ -180,97 +159,7 @@ export default function UltraFastStudentDashboard() {
     }
   }, [uid]);
 
-  // Fetches all user-created quizzes (createdBy = uid)
-  const fetchUserQuizzes = useCallback(async () => {
-    if (!uid) return [];
-    const quizzesSnap = await getDocs(query(collection(db, 'user-quizzes'), where('createdBy', '==', uid)));
-    return quizzesSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-  }, [uid]);
-
-  // Fetches all attempts for your created quizzes (by all users)
-  const fetchUserQuizAttempts = useCallback(async (quizIds) => {
-    if (!quizIds || quizIds.length === 0) return [];
-    // Firestore's 'in' queries are limited to 10 elements, so batch as needed
-    const allAttempts = [];
-    for (let i = 0; i < quizIds.length; i += 10) {
-      const batchIds = quizIds.slice(i, i + 10);
-      const attemptsSnap = await getDocs(query(collection(db, 'user-quizattempts'), where('quizId', 'in', batchIds)));
-      attemptsSnap.forEach((doc) => {
-        allAttempts.push({ id: doc.id, ...doc.data(), quizId: doc.data().quizId });
-      });
-    }
-    return allAttempts;
-  }, []);
-
-  // Fetches mock-questions for a quizId
-  const fetchMockQuestions = useCallback(async (quizId) => {
-    const qSnap = await getDocs(query(collection(db, 'mock-questions'), where('quizId', '==', quizId)));
-    return qSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-  }, []);
-
-  // Calculate analytics for your user-created quizzes
-  const calculateUserQuizStats = useCallback(async (userQuizzes, userQuizAttempts) => {
-    let attempted = 0;
-    let correct = 0;
-    let totalPercent = 0, percentCount = 0;
-    const subjectMap = new Map();
-
-    // Group attempts by quizId
-    const attemptsGrouped = {};
-    userQuizAttempts.forEach(attempt => {
-      if (!attemptsGrouped[attempt.quizId]) attemptsGrouped[attempt.quizId] = [];
-      attemptsGrouped[attempt.quizId].push(attempt);
-    });
-
-    // For each quizId, fetch questions once, then process all attempts
-    for (const quiz of userQuizzes) {
-      const quizQuestions = await fetchMockQuestions(quiz.id);
-      if (!quizQuestions.length) continue;
-      const attempts = attemptsGrouped[quiz.id] || [];
-      if (!attempts.length) continue;
-
-      for (const attempt of attempts) {
-        const answers = attempt.answers || {};
-        let quizAttempted = 0, quizCorrect = 0;
-        for (const q of quizQuestions) {
-          const userAnswer = (answers[q.id] || '').trim().toLowerCase();
-          const correctAnswer = (q.correctAnswer || '').trim().toLowerCase();
-          if (userAnswer) quizAttempted++;
-          if (userAnswer && userAnswer === correctAnswer) quizCorrect++;
-
-          const subject = typeof q.subject === 'string' ? q.subject : q.subject?.name || 'N/A';
-          const stats = subjectMap.get(subject) || { attempted: 0, correct: 0, wrong: 0 };
-          if (userAnswer) {
-            stats.attempted++;
-            if (userAnswer === correctAnswer) stats.correct++;
-            else stats.wrong++;
-            subjectMap.set(subject, stats);
-          }
-        }
-        attempted += quizAttempted;
-        correct += quizCorrect;
-        if (quizAttempted > 0) {
-          totalPercent += Math.round((quizCorrect / quizAttempted) * 100);
-          percentCount++;
-        }
-      }
-    }
-
-    const avg = percentCount > 0 ? Math.round(totalPercent / percentCount) : 0;
-    const subjectStats = Array.from(subjectMap.entries()).map(([subject, stats]) => ({
-      subject,
-      ...stats,
-      accuracy: stats.attempted ? Math.round((stats.correct / stats.attempted) * 100) : 0,
-    }));
-
-    return {
-      userQuizStats: { attempted, correct },
-      userQuizSubjectStats: subjectStats,
-      userAvgPerformance: avg,
-    };
-  }, [fetchMockQuestions]);
-
-  // Main fetch function
+  // MAIN: ADMIN QUIZ ANALYTICS LOGIC (original, clean, non-interfered)
   const fetchData = useCallback(async () => {
     if (!uid || isFetching.current) return;
     if (abortController.current) abortController.current.abort();
@@ -279,9 +168,7 @@ export default function UltraFastStudentDashboard() {
     setFilling(true);
 
     try {
-      if (loadFromCache()) {
-        // Continue background refresh
-      }
+      if (loadFromCache()) { /* continue background refresh */ }
 
       // 1. Fetch user info
       const [userSnap, quizSnap] = await Promise.all([
@@ -291,12 +178,13 @@ export default function UltraFastStudentDashboard() {
       const studentData = userSnap.exists() ? userSnap.data() : null;
       setStudentData(studentData);
 
-      // 2. Admin Quiz Analytics
+      // 2. Fetch all completed admin quizzes for this user
       const completedQuizzes = quizSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
       setCompletedQuizzes(completedQuizzes);
 
-      // For each admin quiz, get result and selectedQuestions
+      // 3. For each completed quiz, get result data and quiz question data
       const processQuizResult = async (quiz) => {
+        // admin quizzes are in 'quizzes', questions are in 'Questions', attempts in 'quizAttempts'
         const [resultSnap, quizSnap] = await Promise.all([
           getDoc(doc(db, 'users', uid, 'quizAttempts', quiz.id, 'results', quiz.id)),
           getDoc(doc(db, 'quizzes', quiz.id)),
@@ -304,71 +192,50 @@ export default function UltraFastStudentDashboard() {
         if (!resultSnap.exists()) return null;
         const resultData = resultSnap.data();
         const selectedQuestions = quizSnap.exists() ? quizSnap.data()?.selectedQuestions || [] : [];
-        return { ...resultData, selectedQuestions, isMock: false };
+        return { ...resultData, selectedQuestions };
       };
 
       const quizResults = await processBatch(completedQuizzes, processQuizResult);
 
-      // Admin stats calculation
-      const calculateStats = () => {
-        let totalPercent = 0, percentCount = 0;
-        let quizAttempted = 0, quizCorrect = 0;
-        const quizMap = new Map();
-        for (const result of quizResults) {
-          const answers = result?.answers || {};
-          let correct = 0, attempted = 0;
-          for (const q of result?.selectedQuestions || []) {
-            if (!q.id) continue;
-            const subject = typeof q.subject === 'string' ? q.subject : q.subject?.name || 'N/A';
-            const userAnswer = answers[q.id];
-            const isCorrect = (userAnswer?.trim().toLowerCase() || '') === (q.correctAnswer?.trim().toLowerCase() || '');
-            attempted++;
-            if (isCorrect) correct++;
-            const stats = quizMap.get(subject) || { attempted: 0, correct: 0, wrong: 0 };
-            stats.attempted++;
-            if (isCorrect) stats.correct++;
-            else if (userAnswer) stats.wrong++;
-            quizMap.set(subject, stats);
-          }
-          quizAttempted += attempted;
-          quizCorrect += correct;
-          if (attempted > 0) {
-            totalPercent += Math.round((correct / attempted) * 100);
-            percentCount++;
-          }
+      // 4. Calculate stats (admin quizzes)
+      let totalPercent = 0, percentCount = 0;
+      let quizAttempted = 0, quizCorrect = 0;
+      const quizMap = new Map();
+      for (const result of quizResults) {
+        if (!result) continue;
+        const answers = result.answers || {};
+        let correct = 0, attempted = 0;
+        for (const q of result.selectedQuestions || []) {
+          if (!q.id) continue;
+          const subject = typeof q.subject === 'string' ? q.subject : q.subject?.name || 'N/A';
+          const userAnswer = answers[q.id];
+          const isCorrect = (userAnswer?.trim().toLowerCase() || '') === (q.correctAnswer?.trim().toLowerCase() || '');
+          attempted++;
+          if (isCorrect) correct++;
+          const stats = quizMap.get(subject) || { attempted: 0, correct: 0, wrong: 0 };
+          stats.attempted++;
+          if (isCorrect) stats.correct++;
+          else if (userAnswer) stats.wrong++;
+          quizMap.set(subject, stats);
         }
-        const userAvg = percentCount > 0 ? Math.round(totalPercent / percentCount) : 0;
-        const formatStats = (map) =>
-          Array.from(map.entries()).map(([subject, stats]) => ({
-            subject,
-            accuracy: stats.attempted ? Math.round((stats.correct / stats.attempted) * 100) : 0,
-            ...stats,
-          }));
-        return {
-          quizSubjectStats: formatStats(quizMap),
-          avgPerformance: userAvg,
-          quizStats: { attempted: quizAttempted, correct: quizCorrect },
-        };
-      };
+        quizAttempted += attempted;
+        quizCorrect += correct;
+        if (attempted > 0) {
+          totalPercent += Math.round((correct / attempted) * 100);
+          percentCount++;
+        }
+      }
+      const userAvg = percentCount > 0 ? Math.round(totalPercent / percentCount) : 0;
+      const quizSubjectStats = Array.from(quizMap.entries()).map(([subject, stats]) => ({
+        subject,
+        accuracy: stats.attempted ? Math.round((stats.correct / stats.attempted) * 100) : 0,
+        ...stats,
+      }));
+      setQuizSubjectStats(quizSubjectStats);
+      setAvgPerformance(userAvg);
+      setQuizStats({ attempted: quizAttempted, correct: quizCorrect });
 
-      const stats = calculateStats();
-      setQuizSubjectStats(stats.quizSubjectStats);
-      setAvgPerformance(stats.avgPerformance);
-      setQuizStats(stats.quizStats);
-
-      // 3. User Quiz Analytics
-      const userQuizzes = await fetchUserQuizzes();
-      setUserQuizzes(userQuizzes);
-      const userQuizIds = userQuizzes.map(q => q.id);
-      const userQuizAttempts = await fetchUserQuizAttempts(userQuizIds);
-      setUserQuizAttempts(userQuizAttempts);
-
-      const userStats = await calculateUserQuizStats(userQuizzes, userQuizAttempts);
-      setUserQuizSubjectStats(userStats.userQuizSubjectStats);
-      setUserAvgPerformance(userStats.userAvgPerformance);
-      setUserQuizStats(userStats.userQuizStats);
-
-      // 4. Leaderboard (admin quiz only for now)
+      // 5. Leaderboard (optional, as before)
       const fetchLeaderboard = async () => {
         try {
           const allUsersSnap = await getDocs(query(collection(db, 'users')));
@@ -437,14 +304,9 @@ export default function UltraFastStudentDashboard() {
       saveToCache({
         studentData,
         completedQuizzes,
-        quizSubjectStats: stats.quizSubjectStats,
-        avgPerformance: stats.avgPerformance,
-        quizStats: stats.quizStats,
-        userQuizzes,
-        userQuizAttempts,
-        userQuizSubjectStats: userStats.userQuizSubjectStats,
-        userAvgPerformance: userStats.userAvgPerformance,
-        userQuizStats: userStats.userQuizStats,
+        quizSubjectStats,
+        avgPerformance: userAvg,
+        quizStats: { attempted: quizAttempted, correct: quizCorrect },
         ...leaderboardData,
       });
 
@@ -460,14 +322,7 @@ export default function UltraFastStudentDashboard() {
       isFetching.current = false;
       abortController.current = null;
     }
-  }, [
-    uid,
-    loadFromCache,
-    saveToCache,
-    fetchUserQuizzes,
-    fetchUserQuizAttempts,
-    calculateUserQuizStats,
-  ]);
+  }, [uid, loadFromCache, saveToCache]);
 
   const debouncedFetch = useMemo(
     () => debounce(fetchData, 300),
@@ -491,7 +346,7 @@ export default function UltraFastStudentDashboard() {
       <Card>
         <CardContent className="p-3 sm:p-4 text-center">
           <Trophy className="mx-auto text-purple-500 w-6 h-6 sm:w-8 sm:h-8" />
-          <p className="font-semibold mt-2 text-sm sm:text-base">Admin Quizzes Completed</p>
+          <p className="font-semibold mt-2 text-sm sm:text-base">Quizzes Completed</p>
           <p className="text-xl sm:text-2xl">
             {filling ? <span className="animate-pulse bg-gray-200 rounded px-4">&nbsp;</span> : completedQuizzes.length}
           </p>
@@ -500,15 +355,6 @@ export default function UltraFastStudentDashboard() {
       <Card>
         <CardContent className="p-3 sm:p-4 text-center">
           <Medal className="mx-auto text-green-500 w-6 h-6 sm:w-8 sm:h-8" />
-          <p className="font-semibold mt-2 text-sm sm:text-base">Your Created Quizzes</p>
-          <p className="text-xl sm:text-2xl">
-            {filling ? <span className="animate-pulse bg-gray-100 rounded px-4">&nbsp;</span> : userQuizzes.length}
-          </p>
-        </CardContent>
-      </Card>
-      <Card>
-        <CardContent className="p-3 sm:p-4 text-center">
-          <CalendarDays className="mx-auto text-yellow-500 w-6 h-6 sm:w-8 sm:h-8" />
           <p className="font-semibold mt-2 text-sm sm:text-base">Your Rank</p>
           <p className="text-xl sm:text-2xl">
             {filling ? <span className="animate-pulse bg-gray-200 rounded px-4">&nbsp;</span> : (rank ?? '-')}
@@ -518,46 +364,23 @@ export default function UltraFastStudentDashboard() {
       <Card>
         <CardContent className="p-3 sm:p-4 text-center">
           <Activity className="mx-auto text-indigo-600 w-6 h-6 sm:w-8 sm:h-8" />
-          <p className="font-semibold mt-2 text-sm sm:text-base">Admin Quiz Accuracy</p>
+          <p className="font-semibold mt-2 text-sm sm:text-base">Overall Accuracy</p>
           <p className="text-xl sm:text-2xl">
             {filling ? <span className="animate-pulse bg-gray-200 rounded px-4">&nbsp;</span> : (avgPerformance != null ? `${avgPerformance}%` : '-')}
-          </p>
-        </CardContent>
-      </Card>
-    </div>
-  ), [filling, completedQuizzes.length, userQuizzes.length, rank, avgPerformance]);
-
-  const UserStatsCards = useMemo(() => (
-    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 sm:gap-6">
-      <Card>
-        <CardContent className="p-3 sm:p-4 text-center">
-          <Medal className="mx-auto text-blue-500 w-6 h-6 sm:w-8 sm:h-8" />
-          <p className="font-semibold mt-2 text-sm sm:text-base">User Quiz Attempts</p>
-          <p className="text-xl sm:text-2xl">
-            {filling ? <span className="animate-pulse bg-gray-100 rounded px-4">&nbsp;</span> : userQuizAttempts.length}
-          </p>
-        </CardContent>
-      </Card>
-      <Card>
-        <CardContent className="p-3 sm:p-4 text-center">
-          <Activity className="mx-auto text-pink-600 w-6 h-6 sm:w-8 sm:h-8" />
-          <p className="font-semibold mt-2 text-sm sm:text-base">User Quiz Accuracy</p>
-          <p className="text-xl sm:text-2xl">
-            {filling ? <span className="animate-pulse bg-gray-200 rounded px-4">&nbsp;</span> : (userAvgPerformance != null ? `${userAvgPerformance}%` : '-')}
           </p>
         </CardContent>
       </Card>
       <Card>
         <CardContent className="p-3 sm:p-4 text-center">
           <ClipboardList className="mx-auto text-orange-500 w-6 h-6 sm:w-8 sm:h-8" />
-          <p className="font-semibold mt-2 text-sm sm:text-base">User Quiz Questions Attempted</p>
+          <p className="font-semibold mt-2 text-sm sm:text-base">Questions Attempted</p>
           <p className="text-xl sm:text-2xl">
-            {filling ? <span className="animate-pulse bg-gray-200 rounded px-4">&nbsp;</span> : (userQuizStats?.attempted ?? 0)}
+            {filling ? <span className="animate-pulse bg-gray-200 rounded px-4">&nbsp;</span> : (quizStats?.attempted ?? 0)}
           </p>
         </CardContent>
       </Card>
     </div>
-  ), [filling, userQuizAttempts.length, userAvgPerformance, userQuizStats?.attempted]);
+  ), [filling, completedQuizzes.length, rank, avgPerformance, quizStats?.attempted]);
 
   if (loading) {
     return (
@@ -604,10 +427,6 @@ export default function UltraFastStudentDashboard() {
         {/* Stats Section - Admin */}
         {StatsCards}
 
-        {/* Stats Section - User Quiz */}
-        <h2 className="text-lg sm:text-xl font-bold mb-1 text-gray-800">🛠️ Your User-Created Quiz Analytics</h2>
-        {UserStatsCards}
-
         {/* Top 10 Leaderboard */}
         <Card>
           <CardContent className="p-3 sm:p-4">
@@ -633,23 +452,10 @@ export default function UltraFastStudentDashboard() {
           </CardContent>
         </Card>
 
-        {/* Quiz Attempt Stats */}
-        <Card>
-          <CardContent className="p-3 sm:p-4 text-center">
-            <p className="font-semibold text-sm sm:text-base">📝 Admin Quiz Questions Attempted</p>
-            <p className="text-xl sm:text-2xl">
-              {filling ? <span className="animate-pulse bg-gray-100 rounded px-4">&nbsp;</span> : (quizStats?.attempted ?? 0)}
-            </p>
-            <p className="text-green-600 font-bold text-sm sm:text-base">
-              {filling ? <span className="animate-pulse bg-gray-100 rounded px-4">&nbsp;</span> : `${quizStats?.correct ?? 0} Correct`}
-            </p>
-          </CardContent>
-        </Card>
-
-        {/* Admin Quiz Subject Stats Table */}
+        {/* Quiz Subject Stats Table */}
         <Card>
           <CardContent className="p-3 sm:p-4">
-            <h2 className="text-lg sm:text-xl font-bold mb-4 text-gray-800">📝 Admin Quiz Subject Statistics</h2>
+            <h2 className="text-lg sm:text-xl font-bold mb-4 text-gray-800">📝 Quiz Subject Statistics</h2>
             {filling && quizSubjectStats.length === 0 ? (
               <div>
                 {[...Array(3)].map((_, i) => (
@@ -687,9 +493,9 @@ export default function UltraFastStudentDashboard() {
           </CardContent>
         </Card>
 
-        {/* Admin Quiz Subject Accuracy Chart */}
+        {/* Quiz Subject Accuracy Chart */}
         <div className="rounded-lg p-4 sm:p-6 bg-white shadow">
-          <h2 className="text-lg sm:text-xl font-bold mb-4 text-gray-800">📈 Admin Quiz Subject Accuracy</h2>
+          <h2 className="text-lg sm:text-xl font-bold mb-4 text-gray-800">📈 Quiz Subject Accuracy</h2>
           {filling && quizSubjectStats.length === 0 ? (
             <div className="animate-pulse bg-gray-100 h-40 rounded"></div>
           ) : (
@@ -701,66 +507,6 @@ export default function UltraFastStudentDashboard() {
                 <Tooltip />
                 <Legend />
                 <Line type="monotone" dataKey="accuracy" stroke="#6366F1" name="Accuracy (%)" />
-              </LineChart>
-            </ResponsiveContainer>
-          )}
-        </div>
-
-        {/* User Quiz Subject Stats Table */}
-        <Card>
-          <CardContent className="p-3 sm:p-4">
-            <h2 className="text-lg sm:text-xl font-bold mb-4 text-gray-800">📝 User Quiz Subject Statistics</h2>
-            {filling && userQuizSubjectStats.length === 0 ? (
-              <div>
-                {[...Array(3)].map((_, i) => (
-                  <div key={i} className="animate-pulse h-7 bg-gray-100 rounded mb-2"></div>
-                ))}
-              </div>
-            ) : userQuizSubjectStats.length === 0 ? (
-              <p className="text-gray-500 text-center text-sm sm:text-base">No user quiz data available.</p>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm sm:text-base">
-                  <thead>
-                    <tr className="bg-gray-100">
-                      <th className="p-2 text-left">Subject</th>
-                      <th className="p-2 text-center">Total Attempts</th>
-                      <th className="p-2 text-center">Correct</th>
-                      <th className="p-2 text-center">Wrong</th>
-                      <th className="p-2 text-center">Accuracy (%)</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {userQuizSubjectStats.map((stat, index) => (
-                      <tr key={index} className="border-b">
-                        <td className="p-2">{stat.subject}</td>
-                        <td className="p-2 text-center">{stat.attempted}</td>
-                        <td className="p-2 text-center text-green-600">{stat.correct}</td>
-                        <td className="p-2 text-center text-red-600">{stat.wrong}</td>
-                        <td className="p-2 text-center">{stat.accuracy}%</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* User Quiz Subject Accuracy Chart */}
-        <div className="rounded-lg p-4 sm:p-6 bg-white shadow">
-          <h2 className="text-lg sm:text-xl font-bold mb-4 text-gray-800">📈 User Quiz Subject Accuracy</h2>
-          {filling && userQuizSubjectStats.length === 0 ? (
-            <div className="animate-pulse bg-gray-100 h-40 rounded"></div>
-          ) : (
-            <ResponsiveContainer width="100%" height={250} minHeight={200}>
-              <LineChart data={userQuizSubjectStats}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="subject" fontSize={12} />
-                <YAxis domain={[0, 100]} fontSize={12} />
-                <Tooltip />
-                <Legend />
-                <Line type="monotone" dataKey="accuracy" stroke="#F472B6" name="User Quiz Accuracy (%)" />
               </LineChart>
             </ResponsiveContainer>
           )}
