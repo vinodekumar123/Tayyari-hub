@@ -9,8 +9,6 @@ import {
   doc,
   query,
   limit,
-  orderBy,
-  where,
 } from 'firebase/firestore';
 import { getAuth, onAuthStateChanged } from 'firebase/auth';
 import {
@@ -19,9 +17,6 @@ import {
 } from '@/components/ui/card';
 import { Sidebar } from '@/components/ui/sidebar';
 import {
-  PieChart,
-  Pie,
-  Cell,
   LineChart,
   Line,
   XAxis,
@@ -41,11 +36,8 @@ import {
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
-const PIE_COLORS = ['#4CAF50', '#FF9800', '#F44336'];
 const CACHE_KEY = 'student_dashboard_cache';
 const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
-const BATCH_SIZE = 10; // Process results in smaller batches
-const MAX_CONCURRENT = 5; // Limit concurrent Firebase calls
 
 // Debounce utility
 const debounce = (func, delay) => {
@@ -56,50 +48,25 @@ const debounce = (func, delay) => {
   };
 };
 
-// Throttled batch processor
-const processBatch = async (items, processor, batchSize = BATCH_SIZE, maxConcurrent = MAX_CONCURRENT) => {
-  const results = [];
-  const batches = [];
-  
-  for (let i = 0; i < items.length; i += batchSize) {
-    batches.push(items.slice(i, i + batchSize));
-  }
-  
-  for (let i = 0; i < batches.length; i += maxConcurrent) {
-    const currentBatches = batches.slice(i, i + maxConcurrent);
-    const batchPromises = currentBatches.map(batch => 
-      Promise.all(batch.map(item => processor(item).catch(err => {
-        console.warn('Batch item failed:', err);
-        return null;
-      })))
-    );
-    
-    const batchResults = await Promise.all(batchPromises);
-    results.push(...batchResults.flat());
-  }
-  
-  return results.filter(Boolean);
-};
-
 export default function UltraFastStudentDashboard() {
   // UI State
   const [greeting, setGreeting] = useState('');
-  const [uid, setUid] = useState<string | null>(null);
+  const [uid, setUid] = useState(null);
 
   // Dashboard Data State
-  const [studentData, setStudentData] = useState<any | null>(null);
-  const [completedQuizzes, setCompletedQuizzes] = useState<any[]>([]);
-  const [quizSubjectStats, setQuizSubjectStats] = useState<any[]>([]);
-  const [avgPerformance, setAvgPerformance] = useState<number | null>(null);
-  const [quizStats, setQuizStats] = useState<{ attempted: number; correct: number } | null>(null);
-  const [rank, setRank] = useState<number | null>(null);
-  const [topStudents, setTopStudents] = useState<any[]>([]);
+  const [studentData, setStudentData] = useState(null);
+  const [completedQuizzes, setCompletedQuizzes] = useState([]);
+  const [quizSubjectStats, setQuizSubjectStats] = useState([]);
+  const [avgPerformance, setAvgPerformance] = useState(null);
+  const [quizStats, setQuizStats] = useState(null);
+  const [rank, setRank] = useState(null);
+  const [topStudents, setTopStudents] = useState([]);
   const [loading, setLoading] = useState(false); // Start false for instant UI
   const [filling, setFilling] = useState(true);
 
   const isFetching = useRef(false);
-  const abortController = useRef<AbortController | null>(null);
-  const dataCache = useRef<Map<string, { data: any; timestamp: number }>>(new Map());
+  const abortController = useRef(null);
+  const dataCache = useRef(new Map());
 
   // Memoized greeting calculation
   const currentGreeting = useMemo(() => {
@@ -123,10 +90,9 @@ export default function UltraFastStudentDashboard() {
     return () => unsubscribe();
   }, []);
 
-  // Enhanced cache with memory fallback
+  // Cache helpers
   const loadFromCache = useCallback(() => {
     try {
-      // Try memory cache first (fastest)
       const memoryCached = dataCache.current.get(uid || '');
       if (memoryCached && Date.now() - memoryCached.timestamp < CACHE_DURATION) {
         const data = memoryCached.data;
@@ -140,8 +106,6 @@ export default function UltraFastStudentDashboard() {
         setFilling(false);
         return true;
       }
-
-      // Fallback to localStorage
       const cached = localStorage.getItem(CACHE_KEY);
       if (cached) {
         const { data, timestamp } = JSON.parse(cached);
@@ -153,8 +117,6 @@ export default function UltraFastStudentDashboard() {
           setQuizStats(data.quizStats ?? null);
           setRank(data.rank ?? null);
           setTopStudents(data.topStudents || []);
-          
-          // Also store in memory cache for next time
           dataCache.current.set(uid || '', { data, timestamp });
           setFilling(false);
           return true;
@@ -166,12 +128,10 @@ export default function UltraFastStudentDashboard() {
     return false;
   }, [uid]);
 
-  const saveToCache = useCallback((data: any) => {
+  const saveToCache = useCallback((data) => {
     try {
       const timestamp = Date.now();
       const cacheData = { data, timestamp };
-      
-      // Save to both memory and localStorage
       dataCache.current.set(uid || '', cacheData);
       localStorage.setItem(CACHE_KEY, JSON.stringify(cacheData));
     } catch (error) {
@@ -179,206 +139,135 @@ export default function UltraFastStudentDashboard() {
     }
   }, [uid]);
 
-  // Optimized data fetcher with progressive loading and smart batching
+  // FAST Optimized data fetcher: parallel, minimal, no mocks, quick stats, quick leaderboard
   const fetchData = useCallback(async () => {
     if (!uid || isFetching.current) return;
-    
-    // Cancel any existing fetch
-    if (abortController.current) {
-      abortController.current.abort();
-    }
+    if (abortController.current) abortController.current.abort();
     abortController.current = new AbortController();
-    
     isFetching.current = true;
     setFilling(true);
-    
+
     try {
-      // 1. Instant fill from cache if available
+      // 1. Try cache for instant fill
       if (loadFromCache()) {
-        // Still continue with fresh data fetch in background
+        // Continue with fresh fetch in background
       }
 
-      // 2. Priority data fetch - core user info first (fastest queries)
+      // 2. Fetch user and quiz attempts in parallel
       const [userSnap, quizSnap] = await Promise.all([
         getDoc(doc(db, 'users', uid)),
-        getDocs(query(collection(db, 'users', uid, 'quizAttempts'))),
+        getDocs(query(collection(db, 'users', uid, 'quizAttempts')))
       ]);
 
-      // Immediate UI updates
-      const studentData = userSnap.exists() ? userSnap.data() : null;
-      setStudentData(studentData);
-
-      const completedQuizzes = quizSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      setStudentData(userSnap.exists() ? userSnap.data() : null);
+      const completedQuizzes = quizSnap.docs.map(d => ({ id: d.id, ...d.data() }));
       setCompletedQuizzes(completedQuizzes);
 
-      // 3. Smart result processing with progressive updates
-      const processQuizResult = async (quiz) => {
+      // 3. Fast batch fetch quiz results, in parallel
+      const quizResults = await Promise.all(completedQuizzes.map(async quiz => {
         const [resultSnap, quizSnap] = await Promise.all([
           getDoc(doc(db, 'users', uid, 'quizAttempts', quiz.id, 'results', quiz.id)),
           getDoc(doc(db, 'quizzes', quiz.id)),
         ]);
-        
         if (!resultSnap.exists()) return null;
         const resultData = resultSnap.data();
         const selectedQuestions = quizSnap.exists() ? quizSnap.data()?.selectedQuestions || [] : [];
         return { ...resultData, selectedQuestions };
-      };
+      }));
 
-      // Process in batches for better performance and progressive updates
-      const quizResults = await processBatch(completedQuizzes, processQuizResult);
-
-      const allResults = quizResults.filter(Boolean);
-
-      // 4. Ultra-fast stats calculation with memoization
-      const calculateStats = () => {
-        let totalPercent = 0, percentCount = 0;
-        let quizAttempted = 0, quizCorrect = 0;
-        const quizMap = new Map();
-
-        for (const result of allResults) {
-          const answers = result.answers || {};
-          let correct = 0, attempted = 0;
-          
-          for (const q of result.selectedQuestions || []) {
-            if (!q.id) continue;
-            const subject = typeof q.subject === 'string' ? q.subject : q.subject?.name || 'N/A';
-            const userAnswer = answers[q.id];
-            const isCorrect = (userAnswer?.trim().toLowerCase() || '') === (q.correctAnswer?.trim().toLowerCase() || '');
-            
-            attempted++;
-            if (isCorrect) correct++;
-            
-            const stats = quizMap.get(subject) || { attempted: 0, correct: 0, wrong: 0 };
-            stats.attempted++;
-            if (isCorrect) stats.correct++;
-            else if (userAnswer) stats.wrong++;
-            quizMap.set(subject, stats);
-          }
-          
-          quizAttempted += attempted;
-          quizCorrect += correct;
-          if (attempted > 0) {
-            totalPercent += Math.round((correct / attempted) * 100);
-            percentCount++;
-          }
+      // 4. Quick stats in-memory
+      let quizAttempted = 0, quizCorrect = 0, totalPercent = 0, percentCount = 0;
+      const quizMap = new Map();
+      for (const result of quizResults.filter(Boolean)) {
+        const answers = result.answers || {};
+        let correct = 0, attempted = 0;
+        for (const q of result.selectedQuestions || []) {
+          if (!q.id) continue;
+          const subject = typeof q.subject === 'string' ? q.subject : q.subject?.name || 'N/A';
+          const userAnswer = answers[q.id];
+          const isCorrect = (userAnswer?.trim().toLowerCase() || '') === (q.correctAnswer?.trim().toLowerCase() || '');
+          attempted++;
+          if (isCorrect) correct++;
+          const stats = quizMap.get(subject) || { attempted: 0, correct: 0, wrong: 0 };
+          stats.attempted++;
+          if (isCorrect) stats.correct++;
+          else if (userAnswer) stats.wrong++;
+          quizMap.set(subject, stats);
         }
+        quizAttempted += attempted;
+        quizCorrect += correct;
+        if (attempted > 0) {
+          totalPercent += Math.round((correct / attempted) * 100);
+          percentCount++;
+        }
+      }
+      setQuizSubjectStats(Array.from(quizMap.entries()).map(([subject, stats]) => ({
+        subject, accuracy: stats.attempted ? Math.round((stats.correct / stats.attempted) * 100) : 0, ...stats
+      })));
+      setAvgPerformance(percentCount > 0 ? Math.round(totalPercent / percentCount) : 0);
+      setQuizStats({ attempted: quizAttempted, correct: quizCorrect });
 
-        const userAvg = percentCount > 0 ? Math.round(totalPercent / percentCount) : 0;
-        const formatStats = (map) =>
-          Array.from(map.entries()).map(([subject, stats]) => ({
-            subject,
-            accuracy: stats.attempted ? Math.round((stats.correct / stats.attempted) * 100) : 0,
-            ...stats,
-          }));
-
-        return {
-          quizSubjectStats: formatStats(quizMap),
-          avgPerformance: userAvg,
-          quizStats: { attempted: quizAttempted, correct: quizCorrect },
+      // 5. Fast leaderboard: just accuracy, top 10, batch fetch, only quizzes (no mocks)
+      const allUsersSnap = await getDocs(query(collection(db, 'users')));
+      const processUserRank = async (userDoc) => {
+        const attempts = await getDocs(query(
+          collection(db, 'users', userDoc.id, 'quizAttempts'),
+          limit(20)
+        ));
+        let correct = 0, attempted = 0;
+        await Promise.all(attempts.docs.map(async (attemptDoc) => {
+          const [resultDoc, quizDoc] = await Promise.all([
+            getDoc(doc(db, 'users', userDoc.id, 'quizAttempts', attemptDoc.id, 'results', attemptDoc.id)),
+            getDoc(doc(db, 'quizzes', attemptDoc.id)),
+          ]);
+          if (!resultDoc.exists()) return;
+          const resultData = resultDoc.data();
+          const questions = quizDoc.exists() ? quizDoc.data()?.selectedQuestions || [] : [];
+          const answers = resultData.answers || {};
+          for (const q of questions.slice(0, 10)) {
+            if (!q.id) continue;
+            attempted++;
+            const userAns = answers[q.id];
+            const correctAns = q.correctAnswer;
+            if ((userAns?.trim().toLowerCase() || '') === (correctAns?.trim().toLowerCase() || '')) {
+              correct++;
+            }
+          }
+        }));
+        return { 
+          id: userDoc.id, 
+          accuracy: attempted ? (correct / attempted) * 100 : 0,
+          name: userDoc.data().fullName || 'Anonymous'
         };
       };
 
-      const stats = calculateStats();
-      
-      // Update UI progressively
-      setQuizSubjectStats(stats.quizSubjectStats);
-      setAvgPerformance(stats.avgPerformance);
-      setQuizStats(stats.quizStats);
+      // Batch leaderboard for top 10 only
+      const allRanks = await Promise.all(allUsersSnap.docs.map(processUserRank));
+      const sorted = allRanks.sort((a, b) => b.accuracy - a.accuracy);
+      const idx = sorted.findIndex((u) => u && String(u.id) === String(uid));
+      const currentRank = idx >= 0 ? idx + 1 : null;
+      const top10 = sorted.slice(0, 10).map(u => ({
+        name: u.name,
+        accuracy: Math.round(u.accuracy),
+      }));
 
-      // 5. Optimized leaderboard - only fetch top 10 efficiently
-      const fetchLeaderboard = async () => {
-        try {
-          // Get all users (could be optimized further if necessary)
-          const allUsersSnap = await getDocs(query(collection(db, 'users')));
-          
-          const processUserRank = async (userDoc) => {
-            const attempts = await getDocs(query(
-              collection(db, 'users', userDoc.id, 'quizAttempts'),
-              limit(20) // Limit attempts per user
-            ));
-            
-            let correct = 0, attempted = 0;
-            
-            const attemptResults = await processBatch(
-              attempts.docs,
-              async (attemptDoc) => {
-                const [resultDoc, quizDoc] = await Promise.all([
-                  getDoc(doc(db, 'users', userDoc.id, 'quizAttempts', attemptDoc.id, 'results', attemptDoc.id)),
-                  getDoc(doc(db, 'quizzes', attemptDoc.id)),
-                ]);
-                
-                if (!resultDoc.exists()) return null;
-                
-                const resultData = resultDoc.data();
-                const questions = quizDoc.exists() ? quizDoc.data()?.selectedQuestions || [] : [];
-                const answers = resultData.answers || {};
-                
-                let userCorrect = 0, userAttempted = 0;
-                for (const q of questions.slice(0, 10)) { // Limit questions processed per quiz
-                  if (!q.id) continue;
-                  userAttempted++;
-                  const userAns = answers[q.id];
-                  const correctAns = q.correctAnswer;
-                  if ((userAns?.trim().toLowerCase() || '') === (correctAns?.trim().toLowerCase() || '')) {
-                    userCorrect++;
-                  }
-                }
-                
-                return { correct: userCorrect, attempted: userAttempted };
-              }
-            );
-            
-            attemptResults.forEach(result => {
-              if (result) {
-                correct += result.correct;
-                attempted += result.attempted;
-              }
-            });
-            
-            return { 
-              id: userDoc.id, 
-              accuracy: attempted ? (correct / attempted) * 100 : 0,
-              name: userDoc.data().fullName || 'Anonymous'
-            };
-          };
+      setRank(currentRank);
+      setTopStudents(top10);
 
-          const allRanks = await processBatch(allUsersSnap.docs, processUserRank, 5, 3); // Smaller batches for leaderboard
-          
-          const sorted = allRanks.sort((a, b) => b.accuracy - a.accuracy);
-          const idx = sorted.findIndex((u) => u && String(u.id) === String(uid));
-          const currentRank = idx >= 0 ? idx + 1 : null;
-          const top10 = sorted.slice(0, 10).map(u => ({
-            name: u.name,
-            accuracy: Math.round(u.accuracy),
-          }));
-
-          // Set state reliably
-          setRank(currentRank);
-          setTopStudents(top10);
-
-          return { rank: currentRank, topStudents: top10 };
-        } catch (error) {
-          console.warn('Leaderboard fetch failed:', error);
-          // Ensure state cleared on failure
-          setRank(null);
-          setTopStudents([]);
-          return { rank: null, topStudents: [] };
-        }
-      };
-
-      // Await leaderboard so rank is available before we clear the filler state
-      const leaderboardData = await fetchLeaderboard();
-
-      // Cache everything including leaderboard
+      // Save everything to cache
       saveToCache({
         studentData,
         completedQuizzes,
-        ...stats,
-        ...leaderboardData,
+        quizSubjectStats: Array.from(quizMap.entries()).map(([subject, stats]) => ({
+          subject, accuracy: stats.attempted ? Math.round((stats.correct / stats.attempted) * 100) : 0, ...stats
+        })),
+        avgPerformance: percentCount > 0 ? Math.round(totalPercent / percentCount) : 0,
+        quizStats: { attempted: quizAttempted, correct: quizCorrect },
+        rank: currentRank,
+        topStudents: top10,
       });
 
       setFilling(false);
-
     } catch (err) {
       if (err.name !== 'AbortError') {
         console.error('Error loading dashboard:', err);
@@ -389,11 +278,11 @@ export default function UltraFastStudentDashboard() {
       isFetching.current = false;
       abortController.current = null;
     }
-  }, [uid, loadFromCache, saveToCache]);
+  }, [uid, loadFromCache, saveToCache, studentData]);
 
   // Debounced fetch to prevent excessive calls
   const debouncedFetch = useMemo(
-    () => debounce(fetchData, 300),
+    () => debounce(fetchData, 150),
     [fetchData]
   );
 
@@ -401,7 +290,6 @@ export default function UltraFastStudentDashboard() {
     if (uid) debouncedFetch();
   }, [uid, debouncedFetch]);
 
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
       if (abortController.current) {
@@ -410,7 +298,7 @@ export default function UltraFastStudentDashboard() {
     };
   }, []);
 
-  // Memoized components for better performance
+  // Memoized components for performance
   const StatsCards = useMemo(() => (
     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6">
       <Card>
@@ -494,7 +382,7 @@ export default function UltraFastStudentDashboard() {
           </div>
         </div>
 
-        {/* Stats Section - Memoized */}
+        {/* Stats Section */}
         {StatsCards}
 
         {/* Top 10 Leaderboard */}
