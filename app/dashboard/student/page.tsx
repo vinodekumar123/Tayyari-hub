@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { db } from '@/app/firebase';
 import {
   collection,
@@ -9,6 +9,7 @@ import {
   doc,
   query,
   orderBy,
+  limit,
 } from 'firebase/firestore';
 import { getAuth, onAuthStateChanged } from 'firebase/auth';
 import {
@@ -36,9 +37,14 @@ import {
   RefreshCw,
   Activity,
   ClipboardList,
+  BookOpen,
+  CheckCircle,
+  XCircle,
+  Info,
+  Sparkles,
 } from 'lucide-react';
 
-const PIE_COLORS = ['#4CAF50', '#FF9800', '#F44336'];
+const PIE_COLORS = ['#4CAF50', '#FF9800', '#F44336', '#1976D2', '#9C27B0', '#607D8B'];
 
 function percent(val: number, total: number) {
   return total === 0 ? 0 : Math.round((val / total) * 100);
@@ -54,8 +60,12 @@ export default function UltraFastStudentDash() {
   const [adminStats, setAdminStats] = useState<any>(null);
   const [userStats, setUserStats] = useState<any>(null);
 
+  // User quiz bank
+  const [userQuizBank, setUserQuizBank] = useState<any[]>([]);
+  const [userQuizAnalytics, setUserQuizAnalytics] = useState<any>(null);
+
   // Mock question bank
-  const [mockBank, setMockBank] = useState({ total: 0, used: 0, unused: 0 });
+  const [mockBank, setMockBank] = useState({ total: 0, used: 0, unused: 0, bySubject: [] as any[] });
 
   // UI
   const [loading, setLoading] = useState(true);
@@ -69,7 +79,7 @@ export default function UltraFastStudentDash() {
     });
   }, []);
 
-  // Load student info, quiz stats, mock bank
+  // Load student info, quiz stats, user quiz bank, mock bank
   const fetchAll = useCallback(async () => {
     if (!uid) return;
     setRefreshing(true);
@@ -108,15 +118,38 @@ export default function UltraFastStudentDash() {
     }
     setUserResults(userRes);
 
-    // 4. Mock questions bank stats
+    // 4. User quiz bank (quiz creations)
+    const userQuizBankSnap = await getDocs(query(collection(db, 'user-quizzes'), orderBy('createdAt', 'desc'), limit(100)));
+    const bank: any[] = [];
+    userQuizBankSnap.forEach(d => {
+      const data = d.data();
+      if (!data.createdBy || data.createdBy !== uid) return;
+      bank.push({ ...data, id: d.id });
+    });
+    setUserQuizBank(bank);
+
+    // 5. Mock questions bank stats (with subject breakdown)
     const mockSnap = await getDocs(collection(db, 'mock-questions'));
     let used = 0, unused = 0;
+    const bySubject: Record<string, { used: number; unused: number; total: number }> = {};
     mockSnap.forEach(d => {
-      const usedInQuizzes = d.data().usedInQuizzes || 0;
-      if (usedInQuizzes > 0) used++;
-      else unused++;
+      const q = d.data();
+      const subject = (q.subject || 'Uncategorized') as string;
+      if (!bySubject[subject]) bySubject[subject] = { used: 0, unused: 0, total: 0 };
+      const usedInQuizzes = q.usedInQuizzes || 0;
+      usedInQuizzes > 0 ? (used++, bySubject[subject].used++) : (unused++, bySubject[subject].unused++);
+      bySubject[subject].total++;
     });
-    setMockBank({ total: mockSnap.size, used, unused });
+    setMockBank({
+      total: mockSnap.size,
+      used,
+      unused,
+      bySubject: Object.entries(bySubject).map(([subject, stats]) => ({
+        subject,
+        ...stats,
+        percentUsed: percent(stats.used, stats.total),
+      })),
+    });
 
     setRefreshing(false);
     setLoading(false);
@@ -128,19 +161,19 @@ export default function UltraFastStudentDash() {
   useEffect(() => {
     const getStats = (results: any[]) => {
       let attempted = 0, correct = 0, wrong = 0, skipped = 0;
-      let subjectMap: Record<string, { attempted: number; correct: number }> = {};
+      let subjectMap: Record<string, { attempted: number; correct: number; wrong: number; skipped: number }> = {};
       results.forEach(r => {
         if (!r.selectedQuestions || !r.answers) return;
         r.selectedQuestions.forEach((q: any) => {
           const subject = typeof q.subject === 'string' ? q.subject : (q.subject?.name || 'Unknown');
-          subjectMap[subject] = subjectMap[subject] || { attempted: 0, correct: 0 };
+          subjectMap[subject] = subjectMap[subject] || { attempted: 0, correct: 0, wrong: 0, skipped: 0 };
           const ans = r.answers[q.id];
           if (ans === undefined || ans === null || ans === '') {
-            skipped += 1;
+            skipped += 1; subjectMap[subject].skipped++;
           } else if ((ans?.trim?.().toLowerCase?.() ?? '') === (q.correctAnswer?.trim?.().toLowerCase?.() ?? '')) {
             correct++; subjectMap[subject].correct++;
           } else {
-            wrong++;
+            wrong++; subjectMap[subject].wrong++;
           }
           attempted++; subjectMap[subject].attempted++;
         });
@@ -149,6 +182,8 @@ export default function UltraFastStudentDash() {
         subject,
         attempted: v.attempted,
         correct: v.correct,
+        wrong: v.wrong,
+        skipped: v.skipped,
         accuracy: percent(v.correct, v.attempted),
       }));
       return {
@@ -159,6 +194,31 @@ export default function UltraFastStudentDash() {
     setAdminStats(getStats(adminResults));
     setUserStats(getStats(userResults));
   }, [adminResults, userResults]);
+
+  // User quiz bank analytics
+  useEffect(() => {
+    // Aggregate how many students took, avg scores, total questions, breakdown by subject
+    const subjectMap: Record<string, { quizzes: number; totalQuestions: number }> = {};
+    let totalQuizzes = 0, totalQuestions = 0;
+    userQuizBank.forEach(qb => {
+      totalQuizzes++;
+      totalQuestions += qb.questionCount || (qb.selectedQuestions?.length || 0);
+      const subjects: string[] = qb.subjects || (qb.subject ? [qb.subject] : []);
+      subjects.forEach(s => {
+        subjectMap[s] = subjectMap[s] || { quizzes: 0, totalQuestions: 0 };
+        subjectMap[s].quizzes++;
+        subjectMap[s].totalQuestions += qb.questionCount || (qb.selectedQuestions?.length || 0);
+      });
+    });
+    setUserQuizAnalytics({
+      totalQuizzes,
+      totalQuestions,
+      bySubject: Object.entries(subjectMap).map(([subject, v]) => ({
+        subject,
+        ...v,
+      })),
+    });
+  }, [userQuizBank]);
 
   const greeting = useMemo(() => {
     const hour = new Date().getHours();
@@ -185,7 +245,7 @@ export default function UltraFastStudentDash() {
             <h1 className="text-2xl sm:text-3xl md:text-4xl font-extrabold text-gray-900">
               {greeting}, {student?.fullName || 'Student'}! 🌟
             </h1>
-            <p className="text-gray-600 text-xs sm:text-sm mt-1">Keep growing!</p>
+            <p className="text-gray-600 text-xs sm:text-sm mt-1">Keep growing! Review your progress and quiz stats below.</p>
           </div>
           <div className="flex flex-wrap gap-2 sm:gap-4">
             <button
@@ -219,7 +279,7 @@ export default function UltraFastStudentDash() {
           <Card>
             <CardContent className="p-3 sm:p-4 text-center">
               <Medal className="mx-auto text-indigo-500 w-6 h-6 sm:w-8 sm:h-8" />
-              <p className="font-semibold mt-2 text-sm sm:text-base">Your Quizzes Completed</p>
+              <p className="font-semibold mt-2 text-sm sm:text-base">Your Quizzes Attempted</p>
               <p className="text-xl sm:text-2xl">{userResults.length}</p>
               <p className="text-green-600 font-bold text-xs mt-1">Accuracy: {userStats?.accuracy ?? 0}%</p>
             </CardContent>
@@ -244,11 +304,89 @@ export default function UltraFastStudentDash() {
           </Card>
         </div>
 
+        {/* User Quiz Bank (CREATOR/OWNER) */}
+        <Card>
+          <CardContent className="p-3 sm:p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <BookOpen className="w-6 h-6 text-blue-600" />
+              <h2 className="text-lg font-bold">Your Created Quiz Bank</h2>
+            </div>
+            <div className="flex flex-wrap gap-4 mb-4">
+              <div className="bg-blue-100 px-3 py-2 rounded text-blue-800">
+                <span className="font-semibold">Total Created:</span> {userQuizAnalytics?.totalQuizzes ?? 0}
+              </div>
+              <div className="bg-green-100 px-3 py-2 rounded text-green-800">
+                <span className="font-semibold">Questions Banked:</span> {userQuizAnalytics?.totalQuestions ?? 0}
+              </div>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs mb-2">
+                <thead>
+                  <tr className="bg-gray-100">
+                    <th className="p-1 text-left">Subject</th>
+                    <th className="p-1 text-center">Quizzes</th>
+                    <th className="p-1 text-center">Questions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {userQuizAnalytics?.bySubject?.length
+                    ? userQuizAnalytics.bySubject.map((s: any, i: number) => (
+                      <tr key={i} className="border-b">
+                        <td className="p-1">{s.subject}</td>
+                        <td className="p-1 text-center">{s.quizzes}</td>
+                        <td className="p-1 text-center">{s.totalQuestions}</td>
+                      </tr>
+                    ))
+                    : (
+                      <tr>
+                        <td colSpan={3} className="text-center text-gray-500 py-4">No quiz bank data.</td>
+                      </tr>
+                    )}
+                </tbody>
+              </table>
+            </div>
+            <div className="overflow-x-auto mt-6">
+              <h3 className="font-semibold text-sm mb-2">Recent Created Quizzes</h3>
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="bg-gray-100">
+                    <th className="p-1 text-left">Title</th>
+                    <th className="p-1 text-center">Subjects</th>
+                    <th className="p-1 text-center">Questions</th>
+                    <th className="p-1 text-center">Created</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {userQuizBank.length
+                    ? userQuizBank.slice(0, 10).map((q, i) => (
+                      <tr key={i} className="border-b">
+                        <td className="p-1">{q.title || q.name || 'Untitled'}</td>
+                        <td className="p-1 text-center">
+                          {(q.subjects?.length ? q.subjects.join(', ') : q.subject || 'N/A')}
+                        </td>
+                        <td className="p-1 text-center">{q.questionCount || (q.selectedQuestions?.length || 0)}</td>
+                        <td className="p-1 text-center">{q.createdAt?.toDate?.().toLocaleDateString?.() || '-'}</td>
+                      </tr>
+                    ))
+                    : (
+                      <tr>
+                        <td colSpan={4} className="text-center text-gray-400 py-4">No quizzes created yet.</td>
+                      </tr>
+                    )}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+
         {/* Mock Bank */}
         <Card>
-          <CardContent className="p-3 sm:p-4 text-center">
-            <h2 className="text-lg font-bold mb-3 text-gray-800">Mock Questions Bank</h2>
-            <div className="flex flex-wrap gap-4 justify-center">
+          <CardContent className="p-3 sm:p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <ClipboardList className="w-6 h-6 text-green-600" />
+              <h2 className="text-lg font-bold">Mock Questions Bank</h2>
+            </div>
+            <div className="flex flex-wrap gap-4 mb-4">
               <div className="bg-gray-100 px-3 py-2 rounded">
                 <span className="font-semibold">Total:</span> {mockBank.total}
               </div>
@@ -258,6 +396,36 @@ export default function UltraFastStudentDash() {
               <div className="bg-yellow-100 px-3 py-2 rounded text-yellow-800">
                 <span className="font-semibold">Unused:</span> {mockBank.unused}
               </div>
+            </div>
+            <div className="overflow-x-auto mt-2">
+              <table className="w-full text-xs mb-2">
+                <thead>
+                  <tr className="bg-gray-100">
+                    <th className="p-1 text-left">Subject</th>
+                    <th className="p-1 text-center">Total</th>
+                    <th className="p-1 text-center">Used</th>
+                    <th className="p-1 text-center">Unused</th>
+                    <th className="p-1 text-center">Usage %</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {mockBank.bySubject.length
+                    ? mockBank.bySubject.map((s: any, i: number) => (
+                      <tr key={i} className="border-b">
+                        <td className="p-1">{s.subject}</td>
+                        <td className="p-1 text-center">{s.total}</td>
+                        <td className="p-1 text-center">{s.used}</td>
+                        <td className="p-1 text-center">{s.unused}</td>
+                        <td className="p-1 text-center">{s.percentUsed}%</td>
+                      </tr>
+                    ))
+                    : (
+                      <tr>
+                        <td colSpan={5} className="text-center text-gray-500 py-4">No mock question data.</td>
+                      </tr>
+                    )}
+                </tbody>
+              </table>
             </div>
             <div className="mt-4 flex justify-center">
               <PieChart width={240} height={180}>
@@ -312,6 +480,8 @@ export default function UltraFastStudentDash() {
                         <th className="p-1 text-left">Subject</th>
                         <th className="p-1 text-center">Attempted</th>
                         <th className="p-1 text-center">Correct</th>
+                        <th className="p-1 text-center">Wrong</th>
+                        <th className="p-1 text-center">Skipped</th>
                         <th className="p-1 text-center">Accuracy</th>
                       </tr>
                     </thead>
@@ -321,6 +491,8 @@ export default function UltraFastStudentDash() {
                           <td className="p-1">{s.subject}</td>
                           <td className="p-1 text-center">{s.attempted}</td>
                           <td className="p-1 text-center text-green-600">{s.correct}</td>
+                          <td className="p-1 text-center text-red-600">{s.wrong}</td>
+                          <td className="p-1 text-center text-amber-600">{s.skipped}</td>
                           <td className="p-1 text-center">{s.accuracy}%</td>
                         </tr>
                       ))}
@@ -355,6 +527,8 @@ export default function UltraFastStudentDash() {
                         <th className="p-1 text-left">Subject</th>
                         <th className="p-1 text-center">Attempted</th>
                         <th className="p-1 text-center">Correct</th>
+                        <th className="p-1 text-center">Wrong</th>
+                        <th className="p-1 text-center">Skipped</th>
                         <th className="p-1 text-center">Accuracy</th>
                       </tr>
                     </thead>
@@ -364,6 +538,8 @@ export default function UltraFastStudentDash() {
                           <td className="p-1">{s.subject}</td>
                           <td className="p-1 text-center">{s.attempted}</td>
                           <td className="p-1 text-center text-green-600">{s.correct}</td>
+                          <td className="p-1 text-center text-red-600">{s.wrong}</td>
+                          <td className="p-1 text-center text-amber-600">{s.skipped}</td>
                           <td className="p-1 text-center">{s.accuracy}%</td>
                         </tr>
                       ))}
