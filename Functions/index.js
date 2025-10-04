@@ -64,20 +64,10 @@ exports.generateInitialLeaderboard = functions.https.onRequest(async (req, res) 
     }
 
     // Compute accuracy for this batch of users
-    const leaderboard = [];
     await Promise.all(usersSnap.docs.map(async (userDoc) => {
       const userId = userDoc.id;
-      const accuracy = await computeUserAccuracy(userId);
-      leaderboard.push({
-        userId,
-        accuracy,
-        name: userDoc.data().fullName || 'Anonymous'
-      });
+      await computeUserAccuracy(userId);
     }));
-
-    // Update the leaderboard/top with current (partial) leaderboard
-    // Fetch all users' accuracy for a true top N after all batches, but here we update only for immediate batch
-    // Optionally: on last batch, aggregate all users for true top N
 
     // Provide a pointer for next batch
     const lastUserId = usersSnap.docs[usersSnap.docs.length - 1].id;
@@ -110,14 +100,19 @@ exports.finalizeLeaderboard = functions.https.onRequest(async (req, res) => {
       lastUpdated: admin.firestore.FieldValue.serverTimestamp()
     });
 
-    // Update rank for top N users
-    await Promise.all(topN.map((entry, i) => {
-      return admin.firestore().collection('users').doc(entry.userId).update({
-        leaderboardRank: i + 1
+    // Update rank for ALL users in batches of 400
+    const batchSize = 400;
+    for (let i = 0; i < leaderboard.length; i += batchSize) {
+      const batch = admin.firestore().batch();
+      leaderboard.slice(i, i + batchSize).forEach((entry, idx) => {
+        const rank = i + idx + 1;
+        const userRef = admin.firestore().collection('users').doc(entry.userId);
+        batch.update(userRef, { leaderboardRank: rank });
       });
-    }));
+      await batch.commit();
+    }
 
-    res.status(200).send('Leaderboard finalized and ranks assigned.');
+    res.status(200).send('Leaderboard finalized and ranks assigned to all users.');
   } catch (err) {
     console.error('Error finalizing leaderboard:', err);
     res.status(500).send('Error finalizing leaderboard');
@@ -131,9 +126,9 @@ exports.updateLeaderboardOnQuizSubmit = functions.firestore
     const { userId } = context.params;
 
     // Recompute accuracy for this user
-    const accuracy = await computeUserAccuracy(userId);
+    await computeUserAccuracy(userId);
 
-    // Update leaderboard/top
+    // Update leaderboard/top and assign ranks to all users
     const usersSnap = await admin.firestore().collection('users').get();
     const leaderboard = [];
     usersSnap.forEach(doc => {
@@ -146,14 +141,22 @@ exports.updateLeaderboardOnQuizSubmit = functions.firestore
     });
     leaderboard.sort((a, b) => b.accuracy - a.accuracy);
     const topN = leaderboard.slice(0, TOP_N);
+
     await admin.firestore().collection('leaderboard').doc('top').set({
       users: topN,
       lastUpdated: admin.firestore.FieldValue.serverTimestamp()
     });
-    await Promise.all(topN.map((entry, i) => {
-      return admin.firestore().collection('users').doc(entry.userId).update({
-        leaderboardRank: i + 1
+
+    // Update rank for ALL users in batches of 400
+    const batchSize = 400;
+    for (let i = 0; i < leaderboard.length; i += batchSize) {
+      const batch = admin.firestore().batch();
+      leaderboard.slice(i, i + batchSize).forEach((entry, idx) => {
+        const rank = i + idx + 1;
+        const userRef = admin.firestore().collection('users').doc(entry.userId);
+        batch.update(userRef, { leaderboardRank: rank });
       });
-    }));
+      await batch.commit();
+    }
     return null;
   });
