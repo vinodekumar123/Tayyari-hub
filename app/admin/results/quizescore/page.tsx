@@ -44,6 +44,8 @@ interface Score {
   fatherName: string;
   district: string;
   answers: Record<string, string>;
+  // Optionally include rollNumber if your user documents contain it.
+  rollNumber?: string;
 }
 
 export default function QuizStudentScores() {
@@ -145,10 +147,12 @@ export default function QuizStudentScores() {
         const resultData = resultSnap.data();
         return {
           id: userId,
-            name: userData.fullName || 'Unknown',
-            fatherName: userData.fatherName || '-',
-            district: userData.district || '-',
-            answers: resultData.answers || {}
+            // If you store roll number in user docs, adjust key below (e.g., userData.rollNumber)
+          rollNumber: (userData.rollNumber || userData.studentId || userId),
+          name: userData.fullName || 'Unknown',
+          fatherName: userData.fatherName || '-',
+          district: userData.district || '-',
+          answers: resultData.answers || {}
         } as Score;
       });
 
@@ -190,7 +194,7 @@ export default function QuizStudentScores() {
     [scores, districtFilter, searchTerm]
   );
 
-  // CSV unchanged
+  // CSV export (unchanged)
   const exportToCSV = useCallback(() => {
     if (filteredScores.length === 0) {
       alert('No data to export.');
@@ -243,12 +247,17 @@ export default function QuizStudentScores() {
   }, [filteredScores, subjects, calculateSubjectScores, quizTitle]);
 
   /**
-   * Redesigned Professional PDF per new specification.
-   * Layout:
-   * 1. Header (Centered): Logo Text, Subtitle, Pill "Test Series 2025"
-   * 2. Main Card with blue border + top tab "FLP-2 RESULT"
-   * 3. Data table (fixed columns order)
-   * 4. Footer bar with website + contact
+   * NEW PROFESSIONAL / ELEGANT PDF TEMPLATE
+   * Requirements Implemented:
+   * - Modern academic look, generous white space
+   * - Left-aligned institution logo (placeholder base64 string, replace as needed)
+   * - Centered title "Student Results Report"
+   * - Serif (Times) for headings, Sans (Helvetica) for body
+   * - Refined table: Student Name | Roll Number | Subject | Marks | Grade | Remarks
+   * - Alternating row shading, subtle dividers
+   * - Professional palette (navy, charcoal, black, white)
+   * - Slim footer with institution (left), page number (center), disclaimer (right)
+   * - Leverages existing quiz data: subject correct counts become "Marks"
    */
   const exportDataPDF = useCallback(async () => {
     if (generatingPDF) return;
@@ -257,244 +266,313 @@ export default function QuizStudentScores() {
       return;
     }
     setGeneratingPDF(true);
+
     try {
       const { jsPDF } = await import('jspdf');
       await import('jspdf-autotable');
 
-      // Define colors and constants
-      const BLUE = [18, 74, 140];         // Deep academic blue
-      const BLUE_SOFT = [230, 240, 250];  // Very light blue for fills
-      const GRAY_ALT = [246, 248, 250];   // Alternating row background
-      const TEXT_DARK = [20, 30, 40];
-      const WHITE = [255, 255, 255];
+      // Color palette
+      const palette = {
+        navy: [15, 42, 85],
+        charcoal: [51, 51, 51],
+        lightLine: [200, 205, 210],
+        headerFill: [240, 243, 247],
+        altRow: [248, 250, 252],
+        white: [255, 255, 255]
+      };
 
-      // Specific subject order & fallback counts
-      const orderedSubjects = [
-        'Biology',
-        'Physics',
-        'Chemistry',
-        'English',
-        'LR'
-      ];
+      // Placeholder logo (transparent 1x1). Replace with real base64 PNG/JPEG.
+      const institutionLogo =
+        'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR4nGNgYAAAAAMAAWgmWQ0AAAAASUVORK5CYII=';
 
-      // Build subject question counts (e.g., Biology (81))
-      const subjectQuestionCounts: Record<string, number> = {};
-      orderedSubjects.forEach(sub => {
-        subjectQuestionCounts[sub] = quizQuestions.filter(q => q.subject?.toLowerCase() === sub.toLowerCase()).length;
+      const doc = new jsPDF({
+        orientation: 'portrait',
+        unit: 'pt',
+        format: 'a4'
       });
-
-      // Compute global total questions (sum of all quiz questions)
-      const totalQuestions = quizQuestions.length;
-
-      // Orientation decision
-      const orientation = 'landscape'; // 11 columns - landscape for clarity
-      const doc = new jsPDF({ orientation, unit: 'mm', format: 'a4' });
 
       const pageWidth = doc.internal.pageSize.getWidth();
       const pageHeight = doc.internal.pageSize.getHeight();
+      const margin = 54; // generous side margin
+      const topMargin = 60;
+      const lineHeight = 14;
 
-      // Utility
-      const centerX = (x1: number, x2: number) => (x1 + x2) / 2;
-
-      // HEADER SECTION
-      // ---------------------------------
-      let cursorY = 18;
-
-      // "Logo" (text-based placeholder)
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(20);
-      doc.setTextColor(...BLUE);
-      doc.text(platformName, pageWidth / 2, cursorY, { align: 'center' });
-
-      // Subtitle
-      cursorY += 8;
-      doc.setFontSize(12);
-      doc.setFont('helvetica', 'bold');
-      doc.setTextColor(...TEXT_DARK);
-      doc.text('MDCAT SELF ASSESSMENT', pageWidth / 2, cursorY, { align: 'center' });
-
-      // Pill "Test Series 2025"
-      cursorY += 8;
-      const pillText = 'Test Series 2025';
-      doc.setFontSize(10);
-      const pillPaddingX = 6;
-      const pillPaddingY = 3;
-      const pillTextWidth =
-        (doc.getStringUnitWidth(pillText) * doc.getFontSize()) / doc.internal.scaleFactor;
-      const pillWidth = pillTextWidth + pillPaddingX * 2;
-      const pillHeight = 8 + pillPaddingY * 2 - 6;
-      const pillX = pageWidth / 2 - pillWidth / 2;
-      const pillY = cursorY - 6;
-      doc.setDrawColor(...BLUE);
-      doc.setFillColor(...WHITE);
-      doc.roundedRect(pillX, pillY, pillWidth, pillHeight, 4, 4, 'FD');
-      doc.setTextColor(...BLUE);
-      doc.text(pillText, pageWidth / 2, cursorY, { align: 'center' });
-
-      // MAIN RESULT CARD
-      // ---------------------------------
-      // Card bounding box
-      const cardMarginX = 14;
-      const cardTop = cursorY + 10;
-      const cardWidth = pageWidth - cardMarginX * 2;
-      const cardHeightMin = 100; // Will extend automatically with table
-      const cardLeft = cardMarginX;
-
-      // Draw card border (just outline first)
-      doc.setDrawColor(...BLUE);
-      doc.setLineWidth(0.8);
-      doc.roundedRect(cardLeft, cardTop, cardWidth, cardHeightMin, 4, 4, 'S');
-
-      // Tab "FLP-2 RESULT" overlapping top border
-      const tabLabel = 'FLP-2 RESULT';
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(12);
-      const tabPaddingX = 10;
-      const tabPaddingY = 4;
-      const tabTextWidth =
-        (doc.getStringUnitWidth(tabLabel) * doc.getFontSize()) / doc.internal.scaleFactor;
-      const tabWidth = tabTextWidth + tabPaddingX * 2;
-      const tabHeight = 10 + tabPaddingY * 2 - 4;
-      const tabX = pageWidth / 2 - tabWidth / 2;
-      const tabY = cardTop - tabHeight / 2; // Overlap
-
-      doc.setFillColor(...BLUE);
-      doc.setDrawColor(...BLUE);
-      doc.roundedRect(tabX, tabY, tabWidth, tabHeight, 4, 4, 'FD');
-      doc.setTextColor(...WHITE);
-      doc.text(tabLabel, pageWidth / 2, tabY + tabHeight / 2 + 2.2, {
-        align: 'center'
+      // Precompute total questions per subject (for "Marks" denominator)
+      const subjectQuestionTotals: Record<string, number> = {};
+      quizQuestions.forEach(q => {
+        if (!q.subject) return;
+        subjectQuestionTotals[q.subject] = (subjectQuestionTotals[q.subject] || 0) + 1;
       });
 
-      // TABLE
-      // ---------------------------------
-      // Prepare table headers (fixed)
-      // Column headers: S. No | Name | Father’s Name | District | Biology (X) | Physics (X) |
-      // Chemistry (X) | English (X) | LR (X) | Obtained Score | Total Score
-      const tableHeaders = [
-        'S. No',
-        'Name',
-        "Father's Name",
-        'District',
-        ...orderedSubjects.map(
-          sub => `${sub} (${subjectQuestionCounts[sub] || 0})`
-        ),
-        'Obtained Score',
-        'Total Score'
-      ];
-
-      // Build rows
-      const bodyRows = filteredScores.map((s, idx) => {
-        const { subjectScores, totalCorrect } = calculateSubjectScores(s);
-        const row = [
-          String(idx + 1),
-          s.name,
-          s.fatherName,
-          s.district,
-          ...orderedSubjects.map(sub => String(subjectScores[sub] || 0)),
-          String(totalCorrect),
-          String(totalQuestions)
-        ];
-        return row;
-      });
-
-      // Column widths (approx sum must fit page)
-      // We'll allocate flexible widths appropriate for landscape
-      const colStyles: Record<number, any> = {
-        0: { cellWidth: 12, halign: 'center' },
-        1: { cellWidth: 38 }, // Name
-        2: { cellWidth: 38 }, // Father Name
-        3: { cellWidth: 28 }, // District
-        4: { cellWidth: 20, halign: 'center' }, // Biology
-        5: { cellWidth: 20, halign: 'center' }, // Physics
-        6: { cellWidth: 22, halign: 'center' }, // Chemistry
-        7: { cellWidth: 18, halign: 'center' }, // English
-        8: { cellWidth: 16, halign: 'center' }, // LR
-        9: { cellWidth: 28, halign: 'center' }, // Obtained
-        10:{ cellWidth: 24, halign: 'center' }  // Total
+      // Utility: grade calculation
+      const getGrade = (percentage: number) => {
+        if (percentage >= 90) return 'A+';
+        if (percentage >= 80) return 'A';
+        if (percentage >= 70) return 'B';
+        if (percentage >= 60) return 'C';
+        if (percentage >= 50) return 'D';
+        return 'F';
       };
 
-      // Use autoTable starting just below inside card
-      // Adjust startY so header (tab) spacing remains clean
-      const tableStartY = cardTop + 10;
+      const getRemarks = (grade: string) => {
+        switch (grade) {
+          case 'A+':
+          case 'A':
+            return 'Excellent performance';
+          case 'B':
+            return 'Very good';
+          case 'C':
+            return 'Satisfactory';
+          case 'D':
+            return 'Needs improvement';
+          default:
+            return 'At risk – intervention advised';
+        }
+      };
+
+      // Flatten rows: one row per (student x subject)
+      interface Row {
+        studentName: string;
+        rollNumber: string;
+        subject: string;
+        marksText: string; // "X / Y"
+        grade: string;
+        remarks: string;
+      }
+      const tableRows: Row[] = [];
+
+      filteredScores.forEach(s => {
+        const { subjectScores } = calculateSubjectScores(s);
+        subjects.forEach(sub => {
+          const obtained = subjectScores[sub] || 0;
+            // avoid division by zero (subject absent)
+          const totalForSub = subjectQuestionTotals[sub] || 0;
+          if (totalForSub === 0) return;
+          const percentage = (obtained / totalForSub) * 100;
+          const grade = getGrade(percentage);
+          tableRows.push({
+            studentName: s.name,
+            rollNumber: s.rollNumber || s.id,
+            subject: sub,
+            marksText: `${obtained} / ${totalForSub}`,
+            grade,
+            remarks: getRemarks(grade)
+          });
+        });
+      });
+
+      // Sort table rows optionally by student then subject
+      tableRows.sort((a, b) => {
+        if (a.studentName === b.studentName) {
+          return a.subject.localeCompare(b.subject);
+        }
+        return a.studentName.localeCompare(b.studentName);
+      });
+
+      // HEADER
+      const headerHeight = 90;
+      const renderHeader = () => {
+        // Background (optional subtle white, but we keep clean)
+        // Logo
+        const logoSize = 50;
+        try {
+          doc.addImage(
+            institutionLogo,
+            'PNG',
+            margin,
+            topMargin - 10,
+            logoSize,
+            logoSize
+          );
+        } catch {
+          // Ignore if invalid logo
+        }
+
+        // Title
+        doc.setFont('times', 'bold');
+        doc.setFontSize(22);
+        doc.setTextColor(...palette.navy);
+        doc.text('Student Results Report', pageWidth / 2, topMargin + 10, {
+          align: 'center'
+        });
+
+        // Subtitle (quiz title & date)
+        doc.setFont('times', 'normal');
+        doc.setFontSize(12);
+        doc.setTextColor(...palette.charcoal);
+        doc.text(
+          `${quizTitle || 'Assessment'} • ${currentDate}`,
+          pageWidth / 2,
+          topMargin + 30,
+          { align: 'center' }
+        );
+
+        // Thin accent line
+        doc.setDrawColor(...palette.navy);
+        doc.setLineWidth(0.6);
+        doc.line(margin, topMargin + 42, pageWidth - margin, topMargin + 42);
+      };
+
+      // FOOTER
+      const disclaimer =
+        'This is a computer-generated report. No signature is required.';
+      const renderFooter = (pageNum: number, totalPages: number) => {
+        const footerY = pageHeight - 34;
+        // Line
+        doc.setDrawColor(...palette.lightLine);
+        doc.setLineWidth(0.5);
+        doc.line(margin, footerY - 12, pageWidth - margin, footerY - 12);
+
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(9);
+        doc.setTextColor(...palette.navy);
+
+        // Left: institution name
+        doc.text(platformName, margin, footerY);
+
+        // Center: page x of y
+        doc.text(
+          `Page ${pageNum} of ${totalPages}`,
+          pageWidth / 2,
+          footerY,
+          { align: 'center' }
+        );
+
+        // Right: disclaimer
+        doc.setFontSize(8.5);
+        doc.setTextColor(80);
+        const rightTextWidth = doc.getTextWidth(disclaimer);
+        doc.text(
+          disclaimer,
+          pageWidth - margin,
+          footerY,
+          { align: 'right', maxWidth: pageWidth - margin * 2 - 120 }
+        );
+      };
+
+      // First page header
+      renderHeader();
+
+      // Table column definitions
+      const head = [
+        [
+          { content: 'Student Name', styles: { fontStyle: 'bold' } },
+          { content: 'Roll Number', styles: { fontStyle: 'bold' } },
+          { content: 'Subject', styles: { fontStyle: 'bold' } },
+            // Marks in "obtained / total" format
+          { content: 'Marks', styles: { fontStyle: 'bold' } },
+          { content: 'Grade', styles: { fontStyle: 'bold' } },
+          { content: 'Remarks', styles: { fontStyle: 'bold' } }
+        ]
+      ];
+
+      const body = tableRows.map(r => [
+        r.studentName,
+        r.rollNumber,
+        r.subject,
+        r.marksText,
+        r.grade,
+        r.remarks
+      ]);
+
+      // Determine startY for table after header
+      const tableStartY = topMargin + 60;
 
       // @ts-ignore
       doc.autoTable({
-        head: [tableHeaders],
-        body: bodyRows,
+        head,
+        body,
         startY: tableStartY,
+        theme: 'plain',
         styles: {
           font: 'helvetica',
-          fontSize: 8.7,
-          cellPadding: 3,
-          textColor: TEXT_DARK,
-          lineColor: BLUE,
-          lineWidth: 0.15
+          fontSize: 9.5,
+          textColor: palette.charcoal,
+          cellPadding: { top: 6, right: 6, bottom: 6, left: 6 },
+          lineColor: palette.lightLine,
+          lineWidth: 0.4
         },
         headStyles: {
-          fillColor: BLUE,
-          textColor: WHITE,
+          fillColor: palette.headerFill,
+          textColor: palette.navy,
+          font: 'times',
           fontStyle: 'bold',
-          halign: 'center',
-          lineWidth: 0.2
-        },
-        alternateRowStyles: {
-          fillColor: GRAY_ALT
+          lineWidth: 0.6,
+          lineColor: palette.lightLine
         },
         bodyStyles: {
-          valign: 'middle'
+          lineWidth: 0.3,
+          lineColor: palette.lightLine
         },
-        columnStyles: colStyles,
-        didParseCell: data => {
-          // Left align for some textual columns
-          if (data.section === 'body') {
-            if ([1, 2, 3].includes(data.column.index)) {
-              data.cell.styles.halign = 'left';
-            }
-          }
-          if (data.section === 'head') {
-            if ([1, 2, 3].includes(data.column.index)) {
-              data.cell.styles.halign = 'left';
-            }
-          }
+        alternateRowStyles: {
+          fillColor: palette.altRow
         },
-        margin: { left: cardLeft + 4, right: cardLeft + 4 },
-        tableLineColor: BLUE,
-        tableLineWidth: 0.2
+        columnStyles: {
+          0: { cellWidth: 140 },
+          1: { cellWidth: 90 },
+          2: { cellWidth: 100 },
+          3: { cellWidth: 70, halign: 'center' },
+          4: { cellWidth: 60, halign: 'center' },
+          5: { cellWidth: 'auto' }
+        },
+        didDrawPage: (data: any) => {
+          // Header on subsequent pages
+          if (data.pageNumber > 1) {
+            renderHeader();
+          }
+          // Footer
+          const totalPages = doc.getNumberOfPages();
+          renderFooter(data.pageNumber, totalPages);
+        }
       });
 
-      // Extend card border height to cover table
-      const finalTableY = (doc as any).lastAutoTable.finalY;
-      const cardFinalHeight = Math.max(cardHeightMin, finalTableY - cardTop + 8);
-      // Redraw border (cover previous) to ensure proper height
-      doc.setDrawColor(...BLUE);
-      doc.setLineWidth(0.8);
-      doc.roundedRect(cardLeft, cardTop, cardWidth, cardFinalHeight, 4, 4, 'S');
+      // Optional summary (overall) after table if space
+      const finalY = (doc as any).lastAutoTable.finalY;
+      if (finalY < pageHeight - 140) {
+        doc.setFont('times', 'bold');
+        doc.setFontSize(12);
+        doc.setTextColor(...palette.navy);
+        doc.text('Summary Overview', margin, finalY + 36);
 
-      // FOOTER
-      // ---------------------------------
-      // Single blue bar with split content
-      const footerHeight = 14;
-      const footerY = pageHeight - footerHeight;
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(9.5);
+        doc.setTextColor(...palette.charcoal);
 
-      doc.setFillColor(...BLUE);
-      doc.rect(0, footerY, pageWidth, footerHeight, 'F');
+        const totalParticipants = filteredScores.length;
 
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(9);
-      doc.setTextColor(...WHITE);
+        // Average overall (across all subjects, per student)
+        const perStudentAverages = filteredScores.map(s => {
+          const { subjectScores } = calculateSubjectScores(s);
+          let totalObt = 0;
+          let totalMax = 0;
+          subjects.forEach(sub => {
+            const obt = subjectScores[sub] || 0;
+            const max = subjectQuestionTotals[sub] || 0;
+            if (max > 0) {
+              totalObt += obt;
+              totalMax += max;
+            }
+          });
+          return totalMax > 0 ? (totalObt / totalMax) * 100 : 0;
+        });
+        const avgOverall =
+          perStudentAverages.reduce((a, v) => a + v, 0) /
+          (perStudentAverages.length || 1);
 
-      // Left text
-      doc.text('Our Website: TayyariHub.com', 10, footerY + 9);
+        const summaryLines = [
+          `Total Participants: ${totalParticipants}`,
+          `Subjects Assessed: ${subjects.join(', ') || 'N/A'}`,
+          `Average Overall Performance: ${avgOverall.toFixed(1)}%`
+        ];
 
-      // Right text
-      doc.text('Contact Us: +92327507673', pageWidth - 10, footerY + 9, {
-        align: 'right'
-      });
+        let y = finalY + 56;
+        summaryLines.forEach(line => {
+          doc.text(line, margin, y);
+          y += lineHeight;
+        });
+      }
 
-      // Save
-      const safeTitle = quizTitle ? quizTitle.replace(/\s+/g, '_') : 'Quiz';
-      doc.save(`${safeTitle}_Result.pdf`);
+      doc.save(`${quizTitle.replace(/\s+/g, '_')}_Student_Results_Report.pdf`);
     } catch (err) {
       console.error('PDF export failed:', err);
       alert('Failed to generate PDF. See console for details.');
@@ -504,9 +582,12 @@ export default function QuizStudentScores() {
   }, [
     generatingPDF,
     filteredScores,
+    subjects,
     calculateSubjectScores,
+    quizTitle,
     quizQuestions,
-    quizTitle
+    platformName,
+    currentDate
   ]);
 
   return (
@@ -567,7 +648,7 @@ export default function QuizStudentScores() {
                   </select>
                 </div>
                 <div className="p-3 rounded-md bg-blue-50 border text-blue-900">
-                  PDF redesigned with academic layout: centered header, tabbed result card, fixed subject columns & footer.
+                  PDF now uses a polished academic format with per-subject entries.
                 </div>
               </div>
               <DialogFooter className="flex flex-col gap-2">
@@ -578,7 +659,7 @@ export default function QuizStudentScores() {
                     generatingPDF || loading || filteredScores.length === 0
                   }
                 >
-                  {generatingPDF ? 'Generating Result PDF...' : 'Download Result PDF'}
+                  {generatingPDF ? 'Generating Report...' : 'Download Professional PDF'}
                 </Button>
                 <Button
                   onClick={exportToCSV}
