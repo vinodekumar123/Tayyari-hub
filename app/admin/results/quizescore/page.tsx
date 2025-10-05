@@ -9,7 +9,7 @@ import {
   getDoc,
 } from 'firebase/firestore';
 import { db } from '@/app/firebase';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import {
@@ -83,52 +83,11 @@ export default function QuizStudentScores() {
       return typeof raw === 'string' ? [raw] : [];
     };
 
-    setSubjects(extractNames(data.subjects || data.subject));
-    setChapters(extractNames(data.chapters || data.chapter).join(', '));
+    setSubjects(extractNames(data.subjects || (data as any).subject));
+    setChapters(extractNames(data.chapters || (data as any).chapter).join(', '));
     setQuizQuestions(data.selectedQuestions || []);
   };
 
-  const fetchScores = async () => {
-    if (!quizId) return;
-    setLoading(true);
-    try {
-      const usersSnap = await getDocs(collection(db, 'users'));
-      const scorePromises = usersSnap.docs.map(async (userDoc) => {
-        const userId = userDoc.id;
-        const resultRef = doc(db, 'users', userId, 'quizAttempts', quizId, 'results', quizId);
-        const resultSnap = await getDoc(resultRef);
-        if (resultSnap.exists()) {
-          const userData = userDoc.data();
-          const resultData = resultSnap.data();
-          return {
-            id: userId,
-            name: userData.fullName || 'Unknown',
-            fatherName: userData.fatherName || '-',
-            district: userData.district || '-',
-            answers: resultData.answers || {},
-          };
-        }
-        return null;
-      });
-
-      const scoreList = (await Promise.all(scorePromises)).filter((score): score is Score => score !== null);
-
-      // Sort by live-calculated total correct answers
-      const sorted = scoreList.sort((a, b) => {
-        const aCorrect = countCorrectAnswers(a.answers, quizQuestions);
-        const bCorrect = countCorrectAnswers(b.answers, quizQuestions);
-        return sortByScore === 'desc' ? bCorrect - aCorrect : aCorrect - bCorrect;
-      });
-
-      setScores(sorted);
-    } catch (error) {
-      console.error('Error fetching scores:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Helper to count correct answers for a student (live calculation)
   const countCorrectAnswers = (answers: Record<string, string>, questions: Question[]) => {
     return questions.filter(q => answers[q.id] === q.correctAnswer).length;
   };
@@ -150,9 +109,49 @@ export default function QuizStudentScores() {
     return { subjectScores, totalCorrect, totalWrong, totalQuestions };
   };
 
+  const fetchScores = async () => {
+    if (!quizId) return;
+    setLoading(true);
+    try {
+      const usersSnap = await getDocs(collection(db, 'users'));
+      const scorePromises = usersSnap.docs.map(async (userDoc) => {
+        const userId = userDoc.id;
+        const resultRef = doc(db, 'users', userId, 'quizAttempts', quizId, 'results', quizId);
+        const resultSnap = await getDoc(resultRef);
+        if (resultSnap.exists()) {
+          const userData = userDoc.data();
+            // resultData can include answers
+          const resultData = resultSnap.data();
+          return {
+            id: userId,
+            name: userData.fullName || 'Unknown',
+            fatherName: userData.fatherName || '-',
+            district: userData.district || '-',
+            answers: resultData.answers || {},
+          };
+        }
+        return null;
+      });
+
+      const scoreList = (await Promise.all(scorePromises)).filter((score): score is Score => score !== null);
+
+      // Sort using current quizQuestions
+      const sorted = scoreList.sort((a, b) => {
+        const aCorrect = countCorrectAnswers(a.answers, quizQuestions);
+        const bCorrect = countCorrectAnswers(b.answers, quizQuestions);
+        return sortByScore === 'desc' ? bCorrect - aCorrect : aCorrect - bCorrect;
+      });
+
+      setScores(sorted);
+    } catch (error) {
+      console.error('Error fetching scores:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
     fetchMetadata();
-    // Delay fetchScores until questions are loaded
   }, [quizId]);
 
   useEffect(() => {
@@ -160,18 +159,109 @@ export default function QuizStudentScores() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [quizQuestions, sortByScore]);
 
-  const exportToPDF = async () => {
+  // OPTION A: Improved html2pdf visual export (still screenshot-based)
+  const exportVisualPDF = async () => {
     if (!pdfRef.current) return;
-
     const html2pdf = (await import('html2pdf.js')).default;
 
-    html2pdf(pdfRef.current, {
-      margin: [10, 10, 10, 10],
-      filename: `${quizTitle.replace(/\s+/g, '_')}_Results.pdf`,
-      html2canvas: { scale: 2 },
-      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-      pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
+    // Decide orientation by column count
+    const columnCount = 4 + subjects.length + 3; // base columns + subjects + totals
+    const orientation = columnCount > 10 ? 'landscape' : 'portrait';
+
+    // Allow splitting pages by removing 'avoid-all'
+    html2pdf()
+      .set({
+        margin: 10,
+        filename: `${quizTitle.replace(/\s+/g, '_')}_VisualResults.pdf`,
+        html2canvas: {
+          scale: 2,
+          useCORS: true,
+          scrollY: 0
+        },
+        jsPDF: { unit: 'mm', format: 'a4', orientation },
+        // Let html2pdf decide page breaks; you can add CSS classes for precise control
+        pagebreak: {
+          mode: ['css', 'legacy']
+          // You can add: avoid: '.no-break'
+        }
+      })
+      .from(pdfRef.current)
+      .save();
+  };
+
+  // OPTION B: Data-first jsPDF + autoTable export (recommended)
+  const exportDataPDF = async () => {
+    const { jsPDF } = await import('jspdf');
+    await import('jspdf-autotable');
+
+    const columnCount = 4 + subjects.length + 3;
+    const orientation = columnCount > 10 ? 'landscape' : 'portrait';
+    const doc = new jsPDF({ orientation });
+
+    const leftMargin = 14;
+    doc.setFontSize(16);
+    doc.text(`${quizTitle || 'Quiz'} Results`, leftMargin, 16);
+    doc.setFontSize(10);
+    doc.text(`${platformName} - ${currentDate}`, leftMargin, 23);
+
+    // Header row
+    const head = [
+      'S.No',
+      'Name',
+      "Father's Name",
+      'District',
+      ...subjects.map(s => `${s} Correct`),
+      'Total Correct',
+      'Total Wrong',
+      'Total Questions'
+    ];
+
+    // Body rows
+    const body = filtered.map((s, index) => {
+      const { subjectScores, totalCorrect, totalWrong, totalQuestions } = calculateSubjectScores(s);
+      return [
+        index + 1,
+        s.name,
+        s.fatherName,
+        s.district,
+        ...subjects.map(subj => subjectScores[subj] || 0),
+        totalCorrect,
+        totalWrong,
+        totalQuestions
+      ];
     });
+
+    // @ts-ignore - autoTable injected by side effect
+    doc.autoTable({
+      head: [head],
+      body,
+      startY: 30,
+      styles: {
+        fontSize: 8,
+        cellPadding: 2
+      },
+      headStyles: {
+        fillColor: [30, 64, 175], // Tailwind blue-800-ish
+        halign: 'center'
+      },
+      bodyStyles: {
+        valign: 'middle'
+      },
+      didDrawPage: (data: any) => {
+        // Footer with page number
+        const pageCount = doc.getNumberOfPages();
+        const pageSize = doc.internal.pageSize;
+        const pageHeight = pageSize.getHeight();
+        doc.setFontSize(9);
+        doc.text(
+          `Page ${data.pageNumber} of ${pageCount}`,
+          pageSize.getWidth() - 40,
+          pageHeight - 10
+        );
+      }
+    });
+
+    doc.save(`${quizTitle.replace(/\s+/g, '_')}_Results.pdf`);
   };
 
   const exportToCSV = () => {
@@ -220,21 +310,21 @@ export default function QuizStudentScores() {
                 <Download className="mr-2 h-4 w-4" /> Export PDF
               </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[425px]">
+            <DialogContent className="sm:max-w-[450px]">
               <DialogHeader>
                 <DialogTitle className="text-xl font-semibold">Export PDF Options</DialogTitle>
               </DialogHeader>
-              <div className="space-y-4 py-4">
+              <div className="space-y-4 py-4 text-sm">
                 <div className="flex items-center space-x-2">
                   <Checkbox id="subjects" checked={showSubjects} onCheckedChange={setShowSubjects} />
-                  <label htmlFor="subjects" className="text-sm font-medium">Include Subjects</label>
+                  <label htmlFor="subjects" className="font-medium">Include Subjects (visual block)</label>
                 </div>
                 <div className="flex items-center space-x-2">
                   <Checkbox id="chapters" checked={showChapters} onCheckedChange={setShowChapters} />
-                  <label htmlFor="chapters" className="text-sm font-medium">Include Chapters</label>
+                  <label htmlFor="chapters" className="font-medium">Include Chapters (visual block)</label>
                 </div>
                 <div className="flex items-center space-x-2">
-                  <label className="text-sm font-medium">Sort By:</label>
+                  <label className="font-medium">Sort By:</label>
                   <select
                     value={sortByScore}
                     onChange={e => setSortByScore(e.target.value as 'asc' | 'desc')}
@@ -244,10 +334,16 @@ export default function QuizStudentScores() {
                     <option value="asc">Lowest Score</option>
                   </select>
                 </div>
+                <div className="p-3 rounded-md bg-blue-50 border text-blue-900">
+                  Recommended: Data PDF (autoTable) for long tables. Visual PDF keeps styling but may truncate huge pages.
+                </div>
               </div>
-              <DialogFooter>
-                <Button onClick={exportToPDF} className="bg-blue-600 hover:bg-blue-700">
-                  Download PDF
+              <DialogFooter className="flex flex-col sm:flex-row gap-2">
+                <Button onClick={exportDataPDF} className="bg-blue-600 hover:bg-blue-700 w-full">
+                  Download Data PDF
+                </Button>
+                <Button variant="outline" onClick={exportVisualPDF} className="w-full">
+                  Visual (Screenshot) PDF
                 </Button>
               </DialogFooter>
             </DialogContent>
@@ -261,7 +357,7 @@ export default function QuizStudentScores() {
       <div className="flex gap-4 mb-6">
         <Input
           placeholder="Search by student name..."
-          value={searchTerm}
+            value={searchTerm}
           onChange={e => setSearchTerm(e.target.value)}
           className="border-gray-300 focus:border-blue-500"
         />
@@ -269,7 +365,7 @@ export default function QuizStudentScores() {
           placeholder="Filter by district..."
           value={districtFilter}
           onChange={e => setDistrictFilter(e.target.value)}
-          className="border-gray-300296focus:border-blue-500"
+          className="border-gray-300 focus:border-blue-500"
         />
       </div>
 
