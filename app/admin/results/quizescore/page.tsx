@@ -67,9 +67,6 @@ export default function QuizStudentScores() {
   const [districtFilter, setDistrictFilter] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
 
-  // Refs
-  const pdfRef = useRef<HTMLDivElement>(null);
-
   const platformName = 'Tayyari Hub';
   const currentDate = useMemo(
     () =>
@@ -149,7 +146,7 @@ export default function QuizStudentScores() {
         return {
           id: userId,
           name: userData.fullName || 'Unknown',
-            fatherName: userData.fatherName || '-',
+          fatherName: userData.fatherName || '-',
           district: userData.district || '-',
           answers: resultData.answers || {}
         } as Score;
@@ -193,6 +190,7 @@ export default function QuizStudentScores() {
     [scores, districtFilter, searchTerm]
   );
 
+  // CSV (now subjects only; totals after)
   const exportToCSV = useCallback(() => {
     if (filteredScores.length === 0) {
       alert('No data to export.');
@@ -203,7 +201,7 @@ export default function QuizStudentScores() {
       'Name',
       "Father's Name",
       'District',
-      ...subjects.map(s => `${s} Correct`),
+      ...subjects,          // just subject names
       'Total Correct',
       'Total Wrong',
       'Total Questions'
@@ -244,6 +242,7 @@ export default function QuizStudentScores() {
     URL.revokeObjectURL(url);
   }, [filteredScores, subjects, calculateSubjectScores, quizTitle]);
 
+  // PDF with multi-row header (grouped subjects)
   const exportDataPDF = useCallback(async () => {
     if (generatingPDF) return;
     if (filteredScores.length === 0) {
@@ -255,11 +254,9 @@ export default function QuizStudentScores() {
       const { jsPDF } = await import('jspdf');
       await import('jspdf-autotable');
 
-      const baseColumns = 4 + 3; // S.No, Name, Father's, District + 3 totals
-      const totalColumns = baseColumns + subjects.length;
-      const orientation = totalColumns > 10 ? 'landscape' : 'portrait';
+      const totalLeafColumns = 4 + subjects.length + 3; // final columns in body
+      const orientation = totalLeafColumns > 11 ? 'landscape' : 'portrait';
 
-      // Modern object-style initialization to avoid deprecation warning
       const doc = new jsPDF({
         orientation,
         unit: 'mm',
@@ -274,16 +271,27 @@ export default function QuizStudentScores() {
       doc.setFontSize(10);
       doc.text(subtitle, 14, 23);
 
-      const head = [
-        'S.No',
-        'Name',
-        "Father's Name",
-        'District',
-        ...subjects.map(s => `${s} Correct`),
-        'Total Correct',
-        'Total Wrong',
-        'Total Questions'
+      // Multi-level header:
+      // First row groups: S.No / Name / Father's Name / District (rowSpan=2)
+      // "Correct Answers" spans subject count
+      // "Totals" spans 3 (Total Correct / Wrong / Questions)
+      const topRow: any[] = [
+        { content: 'S.No', rowSpan: 2 },
+        { content: 'Name', rowSpan: 2 },
+        { content: "Father's Name", rowSpan: 2 },
+        { content: 'District', rowSpan: 2 },
+        { content: 'Correct Answers', colSpan: subjects.length, styles: { halign: 'center' } },
+        { content: 'Totals', colSpan: 3, styles: { halign: 'center' } }
       ];
+
+      const secondRow: any[] = [
+        ...subjects.map(s => ({ content: s })),
+        { content: 'Correct' },
+        { content: 'Wrong' },
+        { content: 'Questions' }
+      ];
+
+      const head = [topRow, secondRow];
 
       const body = filteredScores.map((s, idx) => {
         const {
@@ -304,31 +312,38 @@ export default function QuizStudentScores() {
         ];
       });
 
+      // Column indices after full expansion:
+      // 0 S.No, 1 Name, 2 Father's, 3 District, 4..(4+subjects-1) subjects, then totals
       const columnStyles: Record<number, any> = {
-        0: { cellWidth: 12, halign: 'center' },
-        1: { cellWidth: 32 },
-        2: { cellWidth: 32 },
-        3: { cellWidth: 26 }
+        0: { cellWidth: 10, halign: 'center' },
+        1: { cellWidth: 30 },
+        2: { cellWidth: 30 },
+        3: { cellWidth: 24 }
       };
-      for (let i = 4; i < head.length; i++) {
-        columnStyles[i] = { halign: 'center', cellWidth: 16 };
+      // Subject columns: narrow & centered
+      for (let i = 0; i < subjects.length; i++) {
+        columnStyles[4 + i] = { cellWidth: 14, halign: 'center' };
       }
+      const totalsStart = 4 + subjects.length;
+      columnStyles[totalsStart] = { cellWidth: 18, halign: 'center' };
+      columnStyles[totalsStart + 1] = { cellWidth: 18, halign: 'center' };
+      columnStyles[totalsStart + 2] = { cellWidth: 22, halign: 'center' };
 
-      // @ts-ignore (augment types if needed)
+      // @ts-ignore
       doc.autoTable({
-        head: [head],
+        head,
         body,
         startY: 30,
         theme: 'grid',
         styles: {
           fontSize: 8,
           cellPadding: 2,
-          overflow: 'lineBreak'
+          overflow: 'linebreak'
         },
         headStyles: {
           fillColor: [30, 64, 175],
           halign: 'center',
-          fontSize: 8,
+          fontStyle: 'bold',
           textColor: 255
         },
         bodyStyles: {
@@ -341,7 +356,7 @@ export default function QuizStudentScores() {
           const pageSize = doc.internal.pageSize;
           const pageWidth = pageSize.getWidth();
           const pageHeight = pageSize.getHeight();
-          doc.setFontSize(9);
+            doc.setFontSize(9);
           doc.text(
             `Page ${data.pageNumber} of ${pageCount}`,
             pageWidth - 40,
@@ -370,10 +385,7 @@ export default function QuizStudentScores() {
   return (
     <div className="p-8 min-h-screen bg-gradient-to-b from-blue-100 to-white">
       <div className="flex justify-between items-center mb-6">
-        <Button
-          variant="outline"
-          onClick={() => router.push('/admin/results')}
-        >
+        <Button variant="outline" onClick={() => router.push('/admin/results')}>
           ← Back to Results
         </Button>
         <div className="flex gap-2">
@@ -384,41 +396,33 @@ export default function QuizStudentScores() {
                 Export PDF
               </Button>
             </DialogTrigger>
-            <DialogContent
-              className="sm:max-w-[460px]"
-              // If you ever want to intentionally suppress description:
-              // aria-describedby={undefined}
-            >
+            <DialogContent className="sm:max-w-[480px]">
               <DialogHeader>
                 <DialogTitle className="text-xl font-semibold">
                   Export Options
                 </DialogTitle>
                 <DialogDescription>
-                  Configure sorting and visible on-screen meta. PDF will always contain the full table (current filters applied).
+                  Configure on-screen meta and sorting. PDF & CSV reflect current filters (district/name).
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-4 py-4 text-sm">
                 <div className="flex items-center space-x-2">
                   <Checkbox
-                    id="subjects"
+                    id="subjectsLine"
                     checked={showSubjects}
-                    onCheckedChange={checked =>
-                      setShowSubjects(Boolean(checked))
-                    }
+                    onCheckedChange={v => setShowSubjects(Boolean(v))}
                   />
-                  <label htmlFor="subjects" className="font-medium">
+                  <label htmlFor="subjectsLine" className="font-medium">
                     Show Subjects line (screen only)
                   </label>
                 </div>
                 <div className="flex items-center space-x-2">
                   <Checkbox
-                    id="chapters"
+                    id="chaptersLine"
                     checked={showChapters}
-                    onCheckedChange={checked =>
-                      setShowChapters(Boolean(checked))
-                    }
+                    onCheckedChange={v => setShowChapters(Boolean(v))}
                   />
-                  <label htmlFor="chapters" className="font-medium">
+                  <label htmlFor="chaptersLine" className="font-medium">
                     Show Chapters line (screen only)
                   </label>
                 </div>
@@ -436,10 +440,10 @@ export default function QuizStudentScores() {
                   </select>
                 </div>
                 <div className="p-3 rounded-md bg-blue-50 border text-blue-900">
-                  PDF export is multi-page and will not truncate wide or tall tables.
+                  The grouped header prevents column overlap and allows wrapping.
                 </div>
               </div>
-              <DialogFooter>
+              <DialogFooter className="flex flex-col gap-2">
                 <Button
                   onClick={exportDataPDF}
                   className="bg-blue-600 hover:bg-blue-700 w-full disabled:opacity-60"
@@ -449,17 +453,18 @@ export default function QuizStudentScores() {
                 >
                   {generatingPDF ? 'Generating...' : 'Download PDF'}
                 </Button>
+                <Button
+                  onClick={exportToCSV}
+                  variant="outline"
+                  className="w-full disabled:opacity-60"
+                  disabled={loading || filteredScores.length === 0}
+                >
+                  <Download className="mr-2 h-4 w-4" />
+                  Export CSV
+                </Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>
-          <Button
-            onClick={exportToCSV}
-            className="bg-green-600 hover:bg-green-700 disabled:opacity-60"
-            disabled={loading || filteredScores.length === 0}
-          >
-            <Download className="mr-2 h-4 w-4" />
-            Export CSV
-          </Button>
         </div>
       </div>
 
@@ -478,10 +483,7 @@ export default function QuizStudentScores() {
         />
       </div>
 
-      <div
-        ref={pdfRef}
-        className="bg-white rounded-2xl p-8 shadow-xl space-y-6"
-      >
+      <div className="bg-white rounded-2xl p-8 shadow-xl space-y-6">
         <div className="flex justify-between items-center text-sm text-gray-600">
           <span className="font-bold text-lg text-blue-800">
             {platformName}
@@ -518,37 +520,65 @@ export default function QuizStudentScores() {
           </p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full mt-6 text-sm border-collapse">
-              <thead className="bg-blue-50">
+            {/* table-fixed + wrapping headers */}
+            <table className="w-full mt-6 text-sm border-collapse table-fixed">
+              <thead className="bg-blue-800 text-white">
                 <tr>
-                  <th className="border border-gray-200 p-3 text-left font-semibold text-blue-900">
+                  <th
+                    rowSpan={2}
+                    className="border border-blue-200 p-3 text-left font-semibold whitespace-normal break-words w-12"
+                  >
                     S.No
                   </th>
-                  <th className="border border-gray-200 p-3 text-left font-semibold text-blue-900">
+                  <th
+                    rowSpan={2}
+                    className="border border-blue-200 p-3 text-left font-semibold whitespace-normal break-words w-40"
+                  >
                     Name
                   </th>
-                  <th className="border border-gray-200 p-3 text-left font-semibold text-blue-900">
+                  <th
+                    rowSpan={2}
+                    className="border border-blue-200 p-3 text-left font-semibold whitespace-normal break-words w-40"
+                  >
                     Father&apos;s Name
                   </th>
-                  <th className="border border-gray-200 p-3 text-left font-semibold text-blue-900">
+                  <th
+                    rowSpan={2}
+                    className="border border-blue-200 p-3 text-left font-semibold whitespace-normal break-words w-32"
+                  >
                     District
                   </th>
+                  <th
+                    colSpan={subjects.length}
+                    className="border border-blue-200 p-3 text-center font-semibold whitespace-normal break-words"
+                  >
+                    Correct Answers
+                  </th>
+                  <th
+                    colSpan={3}
+                    className="border border-blue-200 p-3 text-center font-semibold whitespace-normal break-words"
+                  >
+                    Totals
+                  </th>
+                </tr>
+                <tr>
                   {subjects.map(subj => (
                     <th
                       key={subj}
-                      className="border border-gray-200 p-3 text-center font-semibold text-blue-900"
+                      className="border border-blue-200 p-2 text-center font-semibold whitespace-normal break-words w-16"
+                      title={`${subj} Correct`}
                     >
-                      {subj} Correct
+                      {subj}
                     </th>
                   ))}
-                  <th className="border border-gray-200 p-3 text-center font-semibold text-blue-900">
-                    Total Correct
+                  <th className="border border-blue-200 p-2 text-center font-semibold w-20 whitespace-normal break-words">
+                    Correct
                   </th>
-                  <th className="border border-gray-200 p-3 text-center font-semibold text-blue-900">
-                    Total Wrong
+                  <th className="border border-blue-200 p-2 text-center font-semibold w-20 whitespace-normal break-words">
+                    Wrong
                   </th>
-                  <th className="border border-gray-200 p-3 text-center font-semibold text-blue-900">
-                    Total Questions
+                  <th className="border border-blue-200 p-2 text-center font-semibold w-24 whitespace-normal break-words">
+                    Questions
                   </th>
                 </tr>
               </thead>
@@ -609,16 +639,3 @@ export default function QuizStudentScores() {
     </div>
   );
 }
-
-/*
-If TypeScript complains about doc.autoTable, create: types/jspdf-autotable.d.ts
-
-import 'jspdf';
-declare module 'jspdf' {
-  interface jsPDF {
-    autoTable: (options: any) => jsPDF;
-  }
-}
-
-Ensure it's included by tsconfig "include" or "typeRoots".
-*/
