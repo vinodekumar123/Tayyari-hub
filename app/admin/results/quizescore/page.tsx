@@ -44,8 +44,6 @@ interface Score {
   fatherName: string;
   district: string;
   answers: Record<string, string>;
-  // Optionally include rollNumber if your user documents contain it.
-  rollNumber?: string;
 }
 
 export default function QuizStudentScores() {
@@ -147,8 +145,6 @@ export default function QuizStudentScores() {
         const resultData = resultSnap.data();
         return {
           id: userId,
-            // If you store roll number in user docs, adjust key below (e.g., userData.rollNumber)
-          rollNumber: (userData.rollNumber || userData.studentId || userId),
           name: userData.fullName || 'Unknown',
           fatherName: userData.fatherName || '-',
           district: userData.district || '-',
@@ -194,7 +190,7 @@ export default function QuizStudentScores() {
     [scores, districtFilter, searchTerm]
   );
 
-  // CSV export (unchanged)
+  // CSV (now subjects only; totals after)
   const exportToCSV = useCallback(() => {
     if (filteredScores.length === 0) {
       alert('No data to export.');
@@ -205,7 +201,7 @@ export default function QuizStudentScores() {
       'Name',
       "Father's Name",
       'District',
-      ...subjects,
+      ...subjects,          // just subject names
       'Total Correct',
       'Total Wrong',
       'Total Questions'
@@ -246,19 +242,7 @@ export default function QuizStudentScores() {
     URL.revokeObjectURL(url);
   }, [filteredScores, subjects, calculateSubjectScores, quizTitle]);
 
-  /**
-   * NEW PROFESSIONAL / ELEGANT PDF TEMPLATE
-   * Requirements Implemented:
-   * - Modern academic look, generous white space
-   * - Left-aligned institution logo (placeholder base64 string, replace as needed)
-   * - Centered title "Student Results Report"
-   * - Serif (Times) for headings, Sans (Helvetica) for body
-   * - Refined table: Student Name | Roll Number | Subject | Marks | Grade | Remarks
-   * - Alternating row shading, subtle dividers
-   * - Professional palette (navy, charcoal, black, white)
-   * - Slim footer with institution (left), page number (center), disclaimer (right)
-   * - Leverages existing quiz data: subject correct counts become "Marks"
-   */
+  // PDF with multi-row header (grouped subjects)
   const exportDataPDF = useCallback(async () => {
     if (generatingPDF) return;
     if (filteredScores.length === 0) {
@@ -266,313 +250,122 @@ export default function QuizStudentScores() {
       return;
     }
     setGeneratingPDF(true);
-
     try {
       const { jsPDF } = await import('jspdf');
       await import('jspdf-autotable');
 
-      // Color palette
-      const palette = {
-        navy: [15, 42, 85],
-        charcoal: [51, 51, 51],
-        lightLine: [200, 205, 210],
-        headerFill: [240, 243, 247],
-        altRow: [248, 250, 252],
-        white: [255, 255, 255]
-      };
-
-      // Placeholder logo (transparent 1x1). Replace with real base64 PNG/JPEG.
-      const institutionLogo =
-        'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR4nGNgYAAAAAMAAWgmWQ0AAAAASUVORK5CYII=';
+      const totalLeafColumns = 4 + subjects.length + 3; // final columns in body
+      const orientation = totalLeafColumns > 11 ? 'landscape' : 'portrait';
 
       const doc = new jsPDF({
-        orientation: 'portrait',
-        unit: 'pt',
+        orientation,
+        unit: 'mm',
         format: 'a4'
       });
 
-      const pageWidth = doc.internal.pageSize.getWidth();
-      const pageHeight = doc.internal.pageSize.getHeight();
-      const margin = 54; // generous side margin
-      const topMargin = 60;
-      const lineHeight = 14;
+      const title = `${quizTitle || 'Quiz'} Results`;
+      const subtitle = `${platformName} - ${currentDate}`;
 
-      // Precompute total questions per subject (for "Marks" denominator)
-      const subjectQuestionTotals: Record<string, number> = {};
-      quizQuestions.forEach(q => {
-        if (!q.subject) return;
-        subjectQuestionTotals[q.subject] = (subjectQuestionTotals[q.subject] || 0) + 1;
-      });
+      doc.setFontSize(16);
+      doc.text(title, 14, 16);
+      doc.setFontSize(10);
+      doc.text(subtitle, 14, 23);
 
-      // Utility: grade calculation
-      const getGrade = (percentage: number) => {
-        if (percentage >= 90) return 'A+';
-        if (percentage >= 80) return 'A';
-        if (percentage >= 70) return 'B';
-        if (percentage >= 60) return 'C';
-        if (percentage >= 50) return 'D';
-        return 'F';
-      };
-
-      const getRemarks = (grade: string) => {
-        switch (grade) {
-          case 'A+':
-          case 'A':
-            return 'Excellent performance';
-          case 'B':
-            return 'Very good';
-          case 'C':
-            return 'Satisfactory';
-          case 'D':
-            return 'Needs improvement';
-          default:
-            return 'At risk – intervention advised';
-        }
-      };
-
-      // Flatten rows: one row per (student x subject)
-      interface Row {
-        studentName: string;
-        rollNumber: string;
-        subject: string;
-        marksText: string; // "X / Y"
-        grade: string;
-        remarks: string;
-      }
-      const tableRows: Row[] = [];
-
-      filteredScores.forEach(s => {
-        const { subjectScores } = calculateSubjectScores(s);
-        subjects.forEach(sub => {
-          const obtained = subjectScores[sub] || 0;
-            // avoid division by zero (subject absent)
-          const totalForSub = subjectQuestionTotals[sub] || 0;
-          if (totalForSub === 0) return;
-          const percentage = (obtained / totalForSub) * 100;
-          const grade = getGrade(percentage);
-          tableRows.push({
-            studentName: s.name,
-            rollNumber: s.rollNumber || s.id,
-            subject: sub,
-            marksText: `${obtained} / ${totalForSub}`,
-            grade,
-            remarks: getRemarks(grade)
-          });
-        });
-      });
-
-      // Sort table rows optionally by student then subject
-      tableRows.sort((a, b) => {
-        if (a.studentName === b.studentName) {
-          return a.subject.localeCompare(b.subject);
-        }
-        return a.studentName.localeCompare(b.studentName);
-      });
-
-      // HEADER
-      const headerHeight = 90;
-      const renderHeader = () => {
-        // Background (optional subtle white, but we keep clean)
-        // Logo
-        const logoSize = 50;
-        try {
-          doc.addImage(
-            institutionLogo,
-            'PNG',
-            margin,
-            topMargin - 10,
-            logoSize,
-            logoSize
-          );
-        } catch {
-          // Ignore if invalid logo
-        }
-
-        // Title
-        doc.setFont('times', 'bold');
-        doc.setFontSize(22);
-        doc.setTextColor(...palette.navy);
-        doc.text('Student Results Report', pageWidth / 2, topMargin + 10, {
-          align: 'center'
-        });
-
-        // Subtitle (quiz title & date)
-        doc.setFont('times', 'normal');
-        doc.setFontSize(12);
-        doc.setTextColor(...palette.charcoal);
-        doc.text(
-          `${quizTitle || 'Assessment'} • ${currentDate}`,
-          pageWidth / 2,
-          topMargin + 30,
-          { align: 'center' }
-        );
-
-        // Thin accent line
-        doc.setDrawColor(...palette.navy);
-        doc.setLineWidth(0.6);
-        doc.line(margin, topMargin + 42, pageWidth - margin, topMargin + 42);
-      };
-
-      // FOOTER
-      const disclaimer =
-        'This is a computer-generated report. No signature is required.';
-      const renderFooter = (pageNum: number, totalPages: number) => {
-        const footerY = pageHeight - 34;
-        // Line
-        doc.setDrawColor(...palette.lightLine);
-        doc.setLineWidth(0.5);
-        doc.line(margin, footerY - 12, pageWidth - margin, footerY - 12);
-
-        doc.setFont('helvetica', 'normal');
-        doc.setFontSize(9);
-        doc.setTextColor(...palette.navy);
-
-        // Left: institution name
-        doc.text(platformName, margin, footerY);
-
-        // Center: page x of y
-        doc.text(
-          `Page ${pageNum} of ${totalPages}`,
-          pageWidth / 2,
-          footerY,
-          { align: 'center' }
-        );
-
-        // Right: disclaimer
-        doc.setFontSize(8.5);
-        doc.setTextColor(80);
-        const rightTextWidth = doc.getTextWidth(disclaimer);
-        doc.text(
-          disclaimer,
-          pageWidth - margin,
-          footerY,
-          { align: 'right', maxWidth: pageWidth - margin * 2 - 120 }
-        );
-      };
-
-      // First page header
-      renderHeader();
-
-      // Table column definitions
-      const head = [
-        [
-          { content: 'Student Name', styles: { fontStyle: 'bold' } },
-          { content: 'Roll Number', styles: { fontStyle: 'bold' } },
-          { content: 'Subject', styles: { fontStyle: 'bold' } },
-            // Marks in "obtained / total" format
-          { content: 'Marks', styles: { fontStyle: 'bold' } },
-          { content: 'Grade', styles: { fontStyle: 'bold' } },
-          { content: 'Remarks', styles: { fontStyle: 'bold' } }
-        ]
+      // Multi-level header:
+      // First row groups: S.No / Name / Father's Name / District (rowSpan=2)
+      // "Correct Answers" spans subject count
+      // "Totals" spans 3 (Total Correct / Wrong / Questions)
+      const topRow: any[] = [
+        { content: 'S.No', rowSpan: 2 },
+        { content: 'Name', rowSpan: 2 },
+        { content: "Father's Name", rowSpan: 2 },
+        { content: 'District', rowSpan: 2 },
+        { content: 'Correct Answers', colSpan: subjects.length, styles: { halign: 'center' } },
+        { content: 'Totals', colSpan: 3, styles: { halign: 'center' } }
       ];
 
-      const body = tableRows.map(r => [
-        r.studentName,
-        r.rollNumber,
-        r.subject,
-        r.marksText,
-        r.grade,
-        r.remarks
-      ]);
+      const secondRow: any[] = [
+        ...subjects.map(s => ({ content: s })),
+        { content: 'Correct' },
+        { content: 'Wrong' },
+        { content: 'Questions' }
+      ];
 
-      // Determine startY for table after header
-      const tableStartY = topMargin + 60;
+      const head = [topRow, secondRow];
+
+      const body = filteredScores.map((s, idx) => {
+        const {
+          subjectScores,
+          totalCorrect,
+          totalWrong,
+          totalQuestions
+        } = calculateSubjectScores(s);
+        return [
+          idx + 1,
+          s.name,
+          s.fatherName,
+          s.district,
+          ...subjects.map(subj => subjectScores[subj] || 0),
+          totalCorrect,
+          totalWrong,
+          totalQuestions
+        ];
+      });
+
+      // Column indices after full expansion:
+      // 0 S.No, 1 Name, 2 Father's, 3 District, 4..(4+subjects-1) subjects, then totals
+      const columnStyles: Record<number, any> = {
+        0: { cellWidth: 10, halign: 'center' },
+        1: { cellWidth: 30 },
+        2: { cellWidth: 30 },
+        3: { cellWidth: 24 }
+      };
+      // Subject columns: narrow & centered
+      for (let i = 0; i < subjects.length; i++) {
+        columnStyles[4 + i] = { cellWidth: 14, halign: 'center' };
+      }
+      const totalsStart = 4 + subjects.length;
+      columnStyles[totalsStart] = { cellWidth: 18, halign: 'center' };
+      columnStyles[totalsStart + 1] = { cellWidth: 18, halign: 'center' };
+      columnStyles[totalsStart + 2] = { cellWidth: 22, halign: 'center' };
 
       // @ts-ignore
       doc.autoTable({
         head,
         body,
-        startY: tableStartY,
-        theme: 'plain',
+        startY: 30,
+        theme: 'grid',
         styles: {
-          font: 'helvetica',
-          fontSize: 9.5,
-          textColor: palette.charcoal,
-          cellPadding: { top: 6, right: 6, bottom: 6, left: 6 },
-          lineColor: palette.lightLine,
-          lineWidth: 0.4
+          fontSize: 8,
+          cellPadding: 2,
+          overflow: 'linebreak'
         },
         headStyles: {
-          fillColor: palette.headerFill,
-          textColor: palette.navy,
-          font: 'times',
+          fillColor: [30, 64, 175],
+          halign: 'center',
           fontStyle: 'bold',
-          lineWidth: 0.6,
-          lineColor: palette.lightLine
+          textColor: 255
         },
         bodyStyles: {
-          lineWidth: 0.3,
-          lineColor: palette.lightLine
+          valign: 'middle'
         },
-        alternateRowStyles: {
-          fillColor: palette.altRow
-        },
-        columnStyles: {
-          0: { cellWidth: 140 },
-          1: { cellWidth: 90 },
-          2: { cellWidth: 100 },
-          3: { cellWidth: 70, halign: 'center' },
-          4: { cellWidth: 60, halign: 'center' },
-          5: { cellWidth: 'auto' }
-        },
+        columnStyles,
+        rowPageBreak: 'auto',
         didDrawPage: (data: any) => {
-          // Header on subsequent pages
-          if (data.pageNumber > 1) {
-            renderHeader();
-          }
-          // Footer
-          const totalPages = doc.getNumberOfPages();
-          renderFooter(data.pageNumber, totalPages);
+          const pageCount = doc.getNumberOfPages();
+          const pageSize = doc.internal.pageSize;
+          const pageWidth = pageSize.getWidth();
+          const pageHeight = pageSize.getHeight();
+            doc.setFontSize(9);
+          doc.text(
+            `Page ${data.pageNumber} of ${pageCount}`,
+            pageWidth - 40,
+            pageHeight - 10
+          );
         }
       });
 
-      // Optional summary (overall) after table if space
-      const finalY = (doc as any).lastAutoTable.finalY;
-      if (finalY < pageHeight - 140) {
-        doc.setFont('times', 'bold');
-        doc.setFontSize(12);
-        doc.setTextColor(...palette.navy);
-        doc.text('Summary Overview', margin, finalY + 36);
-
-        doc.setFont('helvetica', 'normal');
-        doc.setFontSize(9.5);
-        doc.setTextColor(...palette.charcoal);
-
-        const totalParticipants = filteredScores.length;
-
-        // Average overall (across all subjects, per student)
-        const perStudentAverages = filteredScores.map(s => {
-          const { subjectScores } = calculateSubjectScores(s);
-          let totalObt = 0;
-          let totalMax = 0;
-          subjects.forEach(sub => {
-            const obt = subjectScores[sub] || 0;
-            const max = subjectQuestionTotals[sub] || 0;
-            if (max > 0) {
-              totalObt += obt;
-              totalMax += max;
-            }
-          });
-          return totalMax > 0 ? (totalObt / totalMax) * 100 : 0;
-        });
-        const avgOverall =
-          perStudentAverages.reduce((a, v) => a + v, 0) /
-          (perStudentAverages.length || 1);
-
-        const summaryLines = [
-          `Total Participants: ${totalParticipants}`,
-          `Subjects Assessed: ${subjects.join(', ') || 'N/A'}`,
-          `Average Overall Performance: ${avgOverall.toFixed(1)}%`
-        ];
-
-        let y = finalY + 56;
-        summaryLines.forEach(line => {
-          doc.text(line, margin, y);
-          y += lineHeight;
-        });
-      }
-
-      doc.save(`${quizTitle.replace(/\s+/g, '_')}_Student_Results_Report.pdf`);
+      doc.save(`${quizTitle.replace(/\s+/g, '_')}_Results.pdf`);
     } catch (err) {
       console.error('PDF export failed:', err);
       alert('Failed to generate PDF. See console for details.');
@@ -585,7 +378,6 @@ export default function QuizStudentScores() {
     subjects,
     calculateSubjectScores,
     quizTitle,
-    quizQuestions,
     platformName,
     currentDate
   ]);
@@ -648,7 +440,7 @@ export default function QuizStudentScores() {
                   </select>
                 </div>
                 <div className="p-3 rounded-md bg-blue-50 border text-blue-900">
-                  PDF now uses a polished academic format with per-subject entries.
+                  The grouped header prevents column overlap and allows wrapping.
                 </div>
               </div>
               <DialogFooter className="flex flex-col gap-2">
@@ -659,7 +451,7 @@ export default function QuizStudentScores() {
                     generatingPDF || loading || filteredScores.length === 0
                   }
                 >
-                  {generatingPDF ? 'Generating Report...' : 'Download Professional PDF'}
+                  {generatingPDF ? 'Generating...' : 'Download PDF'}
                 </Button>
                 <Button
                   onClick={exportToCSV}
@@ -728,6 +520,7 @@ export default function QuizStudentScores() {
           </p>
         ) : (
           <div className="overflow-x-auto">
+            {/* table-fixed + wrapping headers */}
             <table className="w-full mt-6 text-sm border-collapse table-fixed">
               <thead className="bg-blue-800 text-white">
                 <tr>
