@@ -190,7 +190,7 @@ export default function QuizStudentScores() {
     [scores, districtFilter, searchTerm]
   );
 
-  // CSV export
+  // CSV unchanged
   const exportToCSV = useCallback(() => {
     if (filteredScores.length === 0) {
       alert('No data to export.');
@@ -243,7 +243,12 @@ export default function QuizStudentScores() {
   }, [filteredScores, subjects, calculateSubjectScores, quizTitle]);
 
   /**
-   * Enhanced Professional PDF Export
+   * Redesigned Professional PDF per new specification.
+   * Layout:
+   * 1. Header (Centered): Logo Text, Subtitle, Pill "Test Series 2025"
+   * 2. Main Card with blue border + top tab "FLP-2 RESULT"
+   * 3. Data table (fixed columns order)
+   * 4. Footer bar with website + contact
    */
   const exportDataPDF = useCallback(async () => {
     if (generatingPDF) return;
@@ -256,560 +261,240 @@ export default function QuizStudentScores() {
       const { jsPDF } = await import('jspdf');
       await import('jspdf-autotable');
 
-      // Attempt to load custom font (Roboto) dynamically
-      const loadFont = async (doc: any) => {
-        try {
-          const fontUrl = 'https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.1.66/fonts/Roboto-Regular.ttf';
-          const res = await fetch(fontUrl);
-          if (!res.ok) throw new Error('Font fetch failed');
-            const fontBuffer = await res.arrayBuffer();
-            // Convert to base64
-            const bytes = new Uint8Array(fontBuffer);
-            let binary = '';
-            for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
-            const base64 = btoa(binary);
-            doc.addFileToVFS('Roboto-Regular.ttf', base64);
-            doc.addFont('Roboto-Regular.ttf', 'Roboto', 'normal');
-            doc.setFont('Roboto');
-            return true;
-        } catch (err) {
-          console.warn('Custom font load failed, falling back to Helvetica.', err);
-          return false;
-        }
-      };
+      // Define colors and constants
+      const BLUE = [18, 74, 140];         // Deep academic blue
+      const BLUE_SOFT = [230, 240, 250];  // Very light blue for fills
+      const GRAY_ALT = [246, 248, 250];   // Alternating row background
+      const TEXT_DARK = [20, 30, 40];
+      const WHITE = [255, 255, 255];
 
-      // Professional palette (accessible-friendly)
-      const colors = {
-        ink: [34, 40, 49],            // Primary dark text
-        inkSoft: [85, 96, 110],
-        backgroundBand: [245, 247, 252],
-        backgroundAlt: [250, 252, 255],
-        headerDark: [20, 36, 66],
-        headerAccent: [31, 61, 122],
-        accent: [34, 102, 204],
-        accentSoft: [210, 228, 250],
-        accentMid: [140, 176, 223],
-        gold: [219, 181, 64],
-        success: [26, 158, 90],
-        warn: [230, 150, 50],
-        danger: [200, 62, 62],
-        border: [205, 215, 230],
-        watermark: [210, 220, 240]
-      };
+      // Specific subject order & fallback counts
+      const orderedSubjects = [
+        'Biology',
+        'Physics',
+        'Chemistry',
+        'English',
+        'LR'
+      ];
 
-      const doc = new jsPDF({
-        orientation: 'landscape',
-        unit: 'mm',
-        format: 'a4'
+      // Build subject question counts (e.g., Biology (81))
+      const subjectQuestionCounts: Record<string, number> = {};
+      orderedSubjects.forEach(sub => {
+        subjectQuestionCounts[sub] = quizQuestions.filter(q => q.subject?.toLowerCase() === sub.toLowerCase()).length;
       });
 
-      const fontLoaded = await loadFont(doc);
-      if (!fontLoaded) {
-        doc.setFont('helvetica', 'normal');
-      }
+      // Compute global total questions (sum of all quiz questions)
+      const totalQuestions = quizQuestions.length;
+
+      // Orientation decision
+      const orientation = 'landscape'; // 11 columns - landscape for clarity
+      const doc = new jsPDF({ orientation, unit: 'mm', format: 'a4' });
 
       const pageWidth = doc.internal.pageSize.getWidth();
       const pageHeight = doc.internal.pageSize.getHeight();
 
-      // Derived stats
-      const participantCount = filteredScores.length;
-      const totalQuestions = quizQuestions.length;
-      const scoreList = filteredScores.map(s => calculateSubjectScores(s).totalCorrect);
-      const highestScore = Math.max(...scoreList);
-      const avgScore = scoreList.reduce((a, b) => a + b, 0) / participantCount;
+      // Utility
+      const centerX = (x1: number, x2: number) => (x1 + x2) / 2;
 
-      // Subject average calculations
-      const subjectAverages: { subject: string; average: number; max: number }[] = subjects.map(subj => {
-        let total = 0;
-        filteredScores.forEach(s => {
-          const { subjectScores } = calculateSubjectScores(s);
-          total += subjectScores[subj] || 0;
-        });
-        return {
-          subject: subj,
-          average: participantCount ? total / participantCount : 0,
-          max: quizQuestions.filter(q => q.subject === subj).length || 0
-        };
+      // HEADER SECTION
+      // ---------------------------------
+      let cursorY = 18;
+
+      // "Logo" (text-based placeholder)
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(20);
+      doc.setTextColor(...BLUE);
+      doc.text(platformName, pageWidth / 2, cursorY, { align: 'center' });
+
+      // Subtitle
+      cursorY += 8;
+      doc.setFontSize(12);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(...TEXT_DARK);
+      doc.text('MDCAT SELF ASSESSMENT', pageWidth / 2, cursorY, { align: 'center' });
+
+      // Pill "Test Series 2025"
+      cursorY += 8;
+      const pillText = 'Test Series 2025';
+      doc.setFontSize(10);
+      const pillPaddingX = 6;
+      const pillPaddingY = 3;
+      const pillTextWidth =
+        (doc.getStringUnitWidth(pillText) * doc.getFontSize()) / doc.internal.scaleFactor;
+      const pillWidth = pillTextWidth + pillPaddingX * 2;
+      const pillHeight = 8 + pillPaddingY * 2 - 6;
+      const pillX = pageWidth / 2 - pillWidth / 2;
+      const pillY = cursorY - 6;
+      doc.setDrawColor(...BLUE);
+      doc.setFillColor(...WHITE);
+      doc.roundedRect(pillX, pillY, pillWidth, pillHeight, 4, 4, 'FD');
+      doc.setTextColor(...BLUE);
+      doc.text(pillText, pageWidth / 2, cursorY, { align: 'center' });
+
+      // MAIN RESULT CARD
+      // ---------------------------------
+      // Card bounding box
+      const cardMarginX = 14;
+      const cardTop = cursorY + 10;
+      const cardWidth = pageWidth - cardMarginX * 2;
+      const cardHeightMin = 100; // Will extend automatically with table
+      const cardLeft = cardMarginX;
+
+      // Draw card border (just outline first)
+      doc.setDrawColor(...BLUE);
+      doc.setLineWidth(0.8);
+      doc.roundedRect(cardLeft, cardTop, cardWidth, cardHeightMin, 4, 4, 'S');
+
+      // Tab "FLP-2 RESULT" overlapping top border
+      const tabLabel = 'FLP-2 RESULT';
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(12);
+      const tabPaddingX = 10;
+      const tabPaddingY = 4;
+      const tabTextWidth =
+        (doc.getStringUnitWidth(tabLabel) * doc.getFontSize()) / doc.internal.scaleFactor;
+      const tabWidth = tabTextWidth + tabPaddingX * 2;
+      const tabHeight = 10 + tabPaddingY * 2 - 4;
+      const tabX = pageWidth / 2 - tabWidth / 2;
+      const tabY = cardTop - tabHeight / 2; // Overlap
+
+      doc.setFillColor(...BLUE);
+      doc.setDrawColor(...BLUE);
+      doc.roundedRect(tabX, tabY, tabWidth, tabHeight, 4, 4, 'FD');
+      doc.setTextColor(...WHITE);
+      doc.text(tabLabel, pageWidth / 2, tabY + tabHeight / 2 + 2.2, {
+        align: 'center'
       });
 
-      // Decide orientation if many subjects
-      const totalLeafColumns = 4 + subjects.length + 3;
-      if (totalLeafColumns > 18) {
-        // Already landscape; if still too many columns, reduce font size in table later.
-      }
-
-      // Gradient-like header effect
-      const headerHeight = 34;
-      const headerSegments = 50;
-      for (let i = 0; i < headerSegments; i++) {
-        const ratio = i / headerSegments;
-        const r = colors.headerDark[0] + ratio * (colors.headerAccent[0] - colors.headerDark[0]);
-        const g = colors.headerDark[1] + ratio * (colors.headerAccent[1] - colors.headerDark[1]);
-        const b = colors.headerDark[2] + ratio * (colors.headerAccent[2] - colors.headerDark[2]);
-        doc.setFillColor(r, g, b);
-        doc.rect((pageWidth / headerSegments) * i, 0, pageWidth / headerSegments + 0.5, headerHeight, 'F');
-      }
-
-      // Title block
-      doc.setTextColor(255, 255, 255);
-      doc.setFontSize(18);
-      doc.setFont(undefined, 'bold');
-      doc.text(platformName, 12, 14);
-
-      doc.setFontSize(13);
-      doc.setFont(undefined, 'normal');
-      doc.text(quizTitle || 'Assessment Results', 12, 23);
-
-      doc.setFontSize(9);
-      doc.setTextColor(230);
-      doc.text(`Generated: ${new Date().toLocaleString('en-US', {
-        dateStyle: 'medium',
-        timeStyle: 'short'
-      })}`, 12, 29);
-
-      doc.setFont(undefined, 'bold');
-      doc.setFontSize(11);
-      doc.setTextColor(255, 255, 255);
-      doc.text(currentDate, pageWidth - 12, 14, { align: 'right' });
-      doc.setFontSize(9);
-      doc.setFont(undefined, 'normal');
-      doc.text(`Report Ref: QZ-${(quizId || 'NA').slice(0, 8).toUpperCase()}`, pageWidth - 12, 21, { align: 'right' });
-
-      // Executive Summary Container
-      let y = headerHeight + 6;
-      const summaryWidth = pageWidth - 24;
-      doc.setFillColor(...colors.backgroundAlt);
-      doc.setDrawColor(...colors.border);
-      doc.setLineWidth(0.25);
-      doc.roundedRect(12, y, summaryWidth, 30, 2, 2, 'FD');
-
-      // KPI badges
-      const badgeBaseX = 18;
-      const badgeBaseY = y + 8;
-      const badgeGap = 42;
-
-      const drawBadge = (x: number, title: string, val: string, color: number[]) => {
-        doc.setFillColor(...color);
-        doc.roundedRect(x, badgeBaseY - 6, 38, 16, 3, 3, 'F');
-        doc.setFontSize(6.3);
-        doc.setTextColor(255, 255, 255);
-        doc.setFont(undefined, 'bold');
-        doc.text(title.toUpperCase(), x + 19, badgeBaseY - 1.5, { align: 'center' });
-        doc.setFontSize(10);
-        doc.setFont(undefined, 'normal');
-        doc.text(val, x + 19, badgeBaseY + 5, { align: 'center' });
-      };
-
-      drawBadge(badgeBaseX, 'Participants', String(participantCount), colors.accent);
-      drawBadge(badgeBaseX + badgeGap, 'Avg Score', `${avgScore.toFixed(1)}/${totalQuestions}`, colors.success);
-      drawBadge(badgeBaseX + badgeGap * 2, 'Top Score', `${highestScore}/${totalQuestions}`, colors.gold);
-      drawBadge(badgeBaseX + badgeGap * 3, 'Questions', String(totalQuestions), colors.warn);
-
-      // Additional summary text
-      doc.setFontSize(9);
-      doc.setFont(undefined, 'bold');
-      doc.setTextColor(...colors.ink);
-      doc.text('Executive Summary', 18, y + 25);
-      doc.setFont(undefined, 'normal');
-      doc.setTextColor(...colors.inkSoft);
-
-      const summaryLines: string[] = [];
-      summaryLines.push(
-        `This report presents an official record of performance for the assessment "${quizTitle}". `
-        + `It includes per-subject accuracy, aggregate statistics, and ranked participant outcomes.`
-      );
-      summaryLines.push(
-        'Analysis sections provide insights into strengths and potential areas for improvement based on question distribution.'
-      );
-
-      const wrapText = (text: string, maxChars = 120) => {
-        const words = text.split(' ');
-        const lines: string[] = [];
-        let line = '';
-        words.forEach(w => {
-          if ((line + w).length > maxChars) {
-            lines.push(line.trim());
-            line = '';
-          }
-          line += w + ' ';
-        });
-        if (line.trim()) lines.push(line.trim());
-        return lines;
-      };
-
-      let txtY = y + 12;
-      summaryLines.forEach(block => {
-        const lines = wrapText(block);
-        lines.forEach(l => {
-          doc.text(l, badgeBaseX + badgeGap * 4 + 10, txtY);
-          txtY += 4;
-        });
-      });
-
-      // SUBJECT AVERAGE MINI-TABLE + BAR CHART
-      const subjectBoxY = y + 34 + 4;
-      const subjectBoxHeight = 38;
-      doc.setFillColor(...colors.backgroundAlt);
-      doc.setDrawColor(...colors.border);
-      doc.roundedRect(12, subjectBoxY, (pageWidth / 2) - 18, subjectBoxHeight, 2, 2, 'FD');
-      doc.setFontSize(9);
-      doc.setFont(undefined, 'bold');
-      doc.setTextColor(...colors.ink);
-      doc.text('Subject Performance Averages', 18, subjectBoxY + 6);
-      doc.setFontSize(7.5);
-      doc.setFont(undefined, 'normal');
-      doc.setTextColor(...colors.inkSoft);
-      doc.text('Average correct answers per subject (with max possible).', 18, subjectBoxY + 11);
-
-      // Table-like rendering
-      let subjTableY = subjectBoxY + 16;
-      doc.setFontSize(7.5);
-      doc.setFont(undefined, 'bold');
-      doc.setTextColor(...colors.ink);
-      doc.text('Subject', 18, subjTableY);
-      doc.text('Avg', 60, subjTableY);
-      doc.text('Max', 72, subjTableY);
-      doc.text('%', 84, subjTableY);
-      doc.setDrawColor(...colors.border);
-      doc.line(16, subjTableY + 2, 90, subjTableY + 2);
-      doc.setFont(undefined, 'normal');
-
-      subjTableY += 5;
-      subjectAverages.forEach(sa => {
-        const perc = sa.max ? (sa.average / sa.max) * 100 : 0;
-        doc.setTextColor(...colors.ink);
-        doc.text(sa.subject, 18, subjTableY);
-        doc.text(sa.average.toFixed(1), 60, subjTableY, { align: 'right' });
-        doc.text(String(sa.max), 74, subjTableY, { align: 'right' });
-        doc.text(`${perc.toFixed(0)}%`, 88, subjTableY, { align: 'right' });
-        subjTableY += 4;
-      });
-
-      // Bar chart on right side of subject averages box
-      const chartX = (pageWidth / 2) - 18 + 8;
-      doc.setFillColor(...colors.backgroundAlt);
-      doc.setDrawColor(...colors.border);
-      doc.roundedRect((pageWidth / 2) - 6, subjectBoxY, (pageWidth / 2) - 18, subjectBoxHeight, 2, 2, 'FD');
-      doc.setFont(undefined, 'bold');
-      doc.setFontSize(9);
-      doc.setTextColor(...colors.ink);
-      doc.text('Subject Accuracy Chart', chartX, subjectBoxY + 6);
-
-      const barStartY = subjectBoxY + 14;
-      const barHeight = 5;
-      const barGap = 6;
-      const barMaxWidth = (pageWidth / 2) - 40;
-      doc.setFontSize(7);
-      doc.setFont(undefined, 'normal');
-
-      subjectAverages.forEach((sa, i) => {
-        const perc = sa.max ? sa.average / sa.max : 0;
-        const barY = barStartY + i * barGap;
-        // Background bar
-        doc.setFillColor(...colors.accentSoft);
-        doc.rect(chartX, barY - barHeight + 2, barMaxWidth, barHeight, 'F');
-        // Value bar
-        const w = Math.max(0.5, perc * barMaxWidth);
-        const gradRatio = perc;
-        const r = colors.accent[0] + gradRatio * (colors.accentMid[0] - colors.accent[0]);
-        const g = colors.accent[1] + gradRatio * (colors.accentMid[1] - colors.accent[1]);
-        const b = colors.accent[2] + gradRatio * (colors.accentMid[2] - colors.accent[2]);
-        doc.setFillColor(r, g, b);
-        doc.rect(chartX, barY - barHeight + 2, w, barHeight, 'F');
-        // Labels
-        doc.setTextColor(...colors.ink);
-        doc.text(sa.subject.length > 10 ? sa.subject.slice(0, 10) + '…' : sa.subject, chartX - 2, barY + 1, { align: 'right' });
-        doc.setTextColor(...colors.inkSoft);
-        doc.text(`${((perc)*100).toFixed(0)}%`, chartX + barMaxWidth + 4, barY + 1);
-      });
-
-      // MAIN RESULTS TABLE
-      let tableStartY = subjectBoxY + subjectBoxHeight + 8;
-
-      // Multi-level header for table
-      const topRow: any[] = [
-        {
-          content: 'S.No',
-          rowSpan: 2,
-          styles: {
-            fillColor: colors.headerDark,
-            textColor: [255, 255, 255],
-            fontStyle: 'bold',
-            fontSize: 8,
-            halign: 'center',
-            valign: 'middle'
-          }
-        },
-        {
-          content: 'Student Name',
-          rowSpan: 2,
-          styles: {
-            fillColor: colors.headerDark,
-            textColor: [255, 255, 255],
-            fontStyle: 'bold',
-            fontSize: 8,
-            valign: 'middle'
-          }
-        },
-        {
-          content: "Father's Name",
-          rowSpan: 2,
-          styles: {
-            fillColor: colors.headerDark,
-            textColor: [255, 255, 255],
-            fontStyle: 'bold',
-            fontSize: 8,
-            valign: 'middle'
-          }
-        },
-        {
-          content: 'District',
-          rowSpan: 2,
-          styles: {
-            fillColor: colors.headerDark,
-            textColor: [255, 255, 255],
-            fontStyle: 'bold',
-            fontSize: 8,
-            valign: 'middle'
-          }
-        },
-        {
-          content: 'Subject-wise Performance',
-          colSpan: subjects.length,
-          styles: {
-            halign: 'center',
-            fillColor: colors.headerAccent,
-            textColor: [255, 255, 255],
-            fontStyle: 'bold',
-            fontSize: 9
-          }
-        },
-        {
-          content: 'Overall',
-          colSpan: 3,
-          styles: {
-            halign: 'center',
-            fillColor: colors.headerAccent,
-            textColor: [255, 255, 255],
-            fontStyle: 'bold',
-            fontSize: 9
-          }
-        }
+      // TABLE
+      // ---------------------------------
+      // Prepare table headers (fixed)
+      // Column headers: S. No | Name | Father’s Name | District | Biology (X) | Physics (X) |
+      // Chemistry (X) | English (X) | LR (X) | Obtained Score | Total Score
+      const tableHeaders = [
+        'S. No',
+        'Name',
+        "Father's Name",
+        'District',
+        ...orderedSubjects.map(
+          sub => `${sub} (${subjectQuestionCounts[sub] || 0})`
+        ),
+        'Obtained Score',
+        'Total Score'
       ];
 
-      const secondRow: any[] = [
-        ...subjects.map(s => ({
-          content: s,
-          styles: {
-            fillColor: colors.headerAccent,
-            textColor: [255, 255, 255],
-            fontSize: 7,
-            fontStyle: 'bold',
-            halign: 'center',
-            cellPadding: 2
-          }
-        })),
-        {
-          content: 'Correct',
-          styles: {
-            fillColor: colors.headerAccent,
-            textColor: [255, 255, 255],
-            fontSize: 7,
-            fontStyle: 'bold',
-            halign: 'center'
-          }
-        },
-        {
-          content: 'Wrong',
-            styles: {
-            fillColor: colors.headerAccent,
-            textColor: [255, 255, 255],
-            fontSize: 7,
-            fontStyle: 'bold',
-            halign: 'center'
-          }
-        },
-        {
-          content: 'Total',
-          styles: {
-            fillColor: colors.headerAccent,
-            textColor: [255, 255, 255],
-            fontSize: 7,
-            fontStyle: 'bold',
-            halign: 'center'
-          }
-        }
-      ];
-
-      const head = [topRow, secondRow];
-
-      const body = filteredScores.map((s, idx) => {
-        const {
-          subjectScores,
-          totalCorrect,
-          totalWrong,
-          totalQuestions
-        } = calculateSubjectScores(s);
-
-        const perc = totalQuestions ? (totalCorrect / totalQuestions) * 100 : 0;
-        let perfColor: number[];
-        if (perc >= 80) perfColor = colors.success;
-        else if (perc >= 60) perfColor = colors.warn;
-        else perfColor = colors.danger;
-
-        return [
-          { content: idx + 1, styles: { halign: 'center', fontStyle: 'bold' } },
+      // Build rows
+      const bodyRows = filteredScores.map((s, idx) => {
+        const { subjectScores, totalCorrect } = calculateSubjectScores(s);
+        const row = [
+          String(idx + 1),
           s.name,
           s.fatherName,
           s.district,
-          ...subjects.map(subj => ({
-            content: subjectScores[subj] || 0,
-            styles: { halign: 'center' }
-          })),
-          {
-            content: totalCorrect,
-            styles: {
-              halign: 'center',
-              textColor: perfColor,
-              fontStyle: 'bold'
-            }
-          },
-          {
-            content: totalWrong,
-            styles: { halign: 'center' }
-          },
-          {
-            content: totalQuestions,
-            styles: { halign: 'center', fontStyle: 'bold' }
-          }
+          ...orderedSubjects.map(sub => String(subjectScores[sub] || 0)),
+          String(totalCorrect),
+          String(totalQuestions)
         ];
+        return row;
       });
 
-      // Column sizing
-      const columnStyles: Record<number, any> = {
-        0: { cellWidth: 10, halign: 'center' },
-        1: { cellWidth: 34 },
-        2: { cellWidth: 34 },
-        3: { cellWidth: 26 }
+      // Column widths (approx sum must fit page)
+      // We'll allocate flexible widths appropriate for landscape
+      const colStyles: Record<number, any> = {
+        0: { cellWidth: 12, halign: 'center' },
+        1: { cellWidth: 38 }, // Name
+        2: { cellWidth: 38 }, // Father Name
+        3: { cellWidth: 28 }, // District
+        4: { cellWidth: 20, halign: 'center' }, // Biology
+        5: { cellWidth: 20, halign: 'center' }, // Physics
+        6: { cellWidth: 22, halign: 'center' }, // Chemistry
+        7: { cellWidth: 18, halign: 'center' }, // English
+        8: { cellWidth: 16, halign: 'center' }, // LR
+        9: { cellWidth: 28, halign: 'center' }, // Obtained
+        10:{ cellWidth: 24, halign: 'center' }  // Total
       };
-      for (let i = 0; i < subjects.length; i++) {
-        columnStyles[4 + i] = { cellWidth: 14, halign: 'center' };
-      }
-      const totalsStart = 4 + subjects.length;
-      columnStyles[totalsStart] = { cellWidth: 16, halign: 'center' };
-      columnStyles[totalsStart + 1] = { cellWidth: 16, halign: 'center' };
-      columnStyles[totalsStart + 2] = { cellWidth: 16, halign: 'center' };
+
+      // Use autoTable starting just below inside card
+      // Adjust startY so header (tab) spacing remains clean
+      const tableStartY = cardTop + 10;
 
       // @ts-ignore
       doc.autoTable({
-        head,
-        body,
+        head: [tableHeaders],
+        body: bodyRows,
         startY: tableStartY,
-        theme: 'grid',
         styles: {
-          font: fontLoaded ? 'Roboto' : 'helvetica',
-          fontSize: 7.2,
-          cellPadding: 2.2,
-          overflow: 'linebreak',
-          lineColor: colors.border,
-          lineWidth: 0.15,
-          textColor: colors.ink
+          font: 'helvetica',
+          fontSize: 8.7,
+          cellPadding: 3,
+          textColor: TEXT_DARK,
+          lineColor: BLUE,
+          lineWidth: 0.15
         },
         headStyles: {
-          lineWidth: 0.15,
-          lineColor: colors.gold,
-          valign: 'middle'
-        },
-        bodyStyles: {
-          textColor: colors.ink,
-          fillColor: [255, 255, 255]
+          fillColor: BLUE,
+          textColor: WHITE,
+          fontStyle: 'bold',
+          halign: 'center',
+          lineWidth: 0.2
         },
         alternateRowStyles: {
-          fillColor: colors.backgroundBand
+          fillColor: GRAY_ALT
         },
-        columnStyles,
-        rowPageBreak: 'auto',
-        margin: { top: 10, right: 10, bottom: 20, left: 10 },
-        didDrawPage: (data: any) => {
-          const pageCount = doc.getNumberOfPages();
-
-            // Footer background strip
-            doc.setFillColor(colors.headerDark[0], colors.headerDark[1], colors.headerDark[2]);
-            doc.rect(0, pageHeight - 14, pageWidth, 14, 'F');
-            doc.setFontSize(7.5);
-            doc.setTextColor(255, 255, 255);
-            doc.setFont(undefined, 'normal');
-            doc.text(`${platformName} • Official Performance Report`, 10, pageHeight - 6);
-            doc.setFont(undefined, 'italic');
-            doc.text('Confidential – Distribution Restricted', pageWidth / 2, pageHeight - 6, { align: 'center' });
-            doc.setFont(undefined, 'normal');
-            doc.text(`Page ${data.pageNumber} of ${pageCount}`, pageWidth - 10, pageHeight - 6, { align: 'right' });
-
-            // Header replication for continuing pages (compact header)
-            if (data.pageNumber > 1) {
-              doc.setFillColor(colors.headerDark[0], colors.headerDark[1], colors.headerDark[2]);
-              doc.rect(0, 0, pageWidth, 14, 'F');
-              doc.setFontSize(10);
-              doc.setTextColor(255, 255, 255);
-              doc.setFont(undefined, 'bold');
-              doc.text(quizTitle.slice(0, 80), 10, 9);
-              doc.setFontSize(8);
-              doc.setFont(undefined, 'normal');
-              doc.text(`Continued • ${platformName}`, pageWidth - 10, 9, { align: 'right' });
+        bodyStyles: {
+          valign: 'middle'
+        },
+        columnStyles: colStyles,
+        didParseCell: data => {
+          // Left align for some textual columns
+          if (data.section === 'body') {
+            if ([1, 2, 3].includes(data.column.index)) {
+              data.cell.styles.halign = 'left';
             }
-        },
-        didDrawCell: (data: any) => {
-          if (data.section === 'head') {
-            doc.setDrawColor(...colors.gold);
-            doc.setLineWidth(0.15);
-            doc.rect(data.cell.x, data.cell.y, data.cell.width, data.cell.height, 'S');
           }
-        }
+          if (data.section === 'head') {
+            if ([1, 2, 3].includes(data.column.index)) {
+              data.cell.styles.halign = 'left';
+            }
+          }
+        },
+        margin: { left: cardLeft + 4, right: cardLeft + 4 },
+        tableLineColor: BLUE,
+        tableLineWidth: 0.2
       });
 
-      const finalY = (doc as any).lastAutoTable.finalY || (pageHeight - 50);
+      // Extend card border height to cover table
+      const finalTableY = (doc as any).lastAutoTable.finalY;
+      const cardFinalHeight = Math.max(cardHeightMin, finalTableY - cardTop + 8);
+      // Redraw border (cover previous) to ensure proper height
+      doc.setDrawColor(...BLUE);
+      doc.setLineWidth(0.8);
+      doc.roundedRect(cardLeft, cardTop, cardWidth, cardFinalHeight, 4, 4, 'S');
 
-      // WATERMARK (subtle)
-      doc.setGState(new (doc as any).GState({ opacity: 0.06 }));
-      doc.setFontSize(72);
-      doc.setFont(undefined, 'bold');
-      doc.setTextColor(...colors.watermark);
-      doc.text('OFFICIAL', pageWidth / 2, pageHeight / 2, {
-        align: 'center',
-        angle: 45
+      // FOOTER
+      // ---------------------------------
+      // Single blue bar with split content
+      const footerHeight = 14;
+      const footerY = pageHeight - footerHeight;
+
+      doc.setFillColor(...BLUE);
+      doc.rect(0, footerY, pageWidth, footerHeight, 'F');
+
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9);
+      doc.setTextColor(...WHITE);
+
+      // Left text
+      doc.text('Our Website: TayyariHub.com', 10, footerY + 9);
+
+      // Right text
+      doc.text('Contact Us: +92327507673', pageWidth - 10, footerY + 9, {
+        align: 'right'
       });
-      doc.setGState(new (doc as any).GState({ opacity: 1 }));
 
-      // SIGNATURE & COMPLIANCE if space on last page
-      if (finalY < pageHeight - 45) {
-        const sigY = finalY + 12;
-        doc.setDrawColor(...colors.border);
-        doc.setLineWidth(0.25);
-        // Left signature
-        doc.line(20, sigY + 20, 80, sigY + 20);
-        doc.setFontSize(8);
-        doc.setTextColor(...colors.inkSoft);
-        doc.text('Authorized Signature', 50, sigY + 25, { align: 'center' });
-
-        // Right signature
-        doc.line(pageWidth - 80, sigY + 20, pageWidth - 20, sigY + 20);
-        doc.text('Date & Stamp', pageWidth - 50, sigY + 25, { align: 'center' });
-
-        // Disclaimer
-        doc.setFontSize(6.7);
-        doc.setTextColor(...colors.inkSoft);
-        const disclaimer =
-          'This document is system-generated and intended solely for authorized academic evaluation. ' +
-          'Any unauthorized alteration, duplication, or distribution is strictly prohibited.';
-        const disclaimerLines = wrapText(disclaimer, 140);
-        let dY = sigY + 34;
-        disclaimerLines.forEach(line => {
-          doc.text(line, 20, dY);
-          dY += 3.2;
-        });
-      }
-
-      doc.save(`${quizTitle.replace(/\s+/g, '_')}_Professional_Report.pdf`);
+      // Save
+      const safeTitle = quizTitle ? quizTitle.replace(/\s+/g, '_') : 'Quiz';
+      doc.save(`${safeTitle}_Result.pdf`);
     } catch (err) {
       console.error('PDF export failed:', err);
       alert('Failed to generate PDF. See console for details.');
@@ -819,13 +504,9 @@ export default function QuizStudentScores() {
   }, [
     generatingPDF,
     filteredScores,
-    subjects,
     calculateSubjectScores,
-    quizTitle,
     quizQuestions,
-    platformName,
-    currentDate,
-    quizId
+    quizTitle
   ]);
 
   return (
@@ -842,7 +523,7 @@ export default function QuizStudentScores() {
                 Export PDF
               </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[520px]">
+            <DialogContent className="sm:max-w-[480px]">
               <DialogHeader>
                 <DialogTitle className="text-xl font-semibold">
                   Export Options
@@ -885,8 +566,8 @@ export default function QuizStudentScores() {
                     <option value="asc">Lowest Score</option>
                   </select>
                 </div>
-                <div className="p-3 rounded-md bg-blue-50 border text-blue-900 text-xs leading-snug">
-                  Professional PDF now includes KPI badges, subject averages table, subject performance bar chart, refined styling, and official footer & watermark.
+                <div className="p-3 rounded-md bg-blue-50 border text-blue-900">
+                  PDF redesigned with academic layout: centered header, tabbed result card, fixed subject columns & footer.
                 </div>
               </div>
               <DialogFooter className="flex flex-col gap-2">
@@ -897,7 +578,7 @@ export default function QuizStudentScores() {
                     generatingPDF || loading || filteredScores.length === 0
                   }
                 >
-                  {generatingPDF ? 'Generating Professional Report...' : 'Download Professional PDF'}
+                  {generatingPDF ? 'Generating Result PDF...' : 'Download Result PDF'}
                 </Button>
                 <Button
                   onClick={exportToCSV}
@@ -934,7 +615,7 @@ export default function QuizStudentScores() {
           <span className="font-bold text-lg text-blue-800">
             {platformName}
           </span>
-            <span className="text-gray-500">{currentDate}</span>
+          <span className="text-gray-500">{currentDate}</span>
         </div>
         <h1 className="text-3xl font-extrabold text-center text-blue-900">
           {quizTitle || 'Quiz'} Results
