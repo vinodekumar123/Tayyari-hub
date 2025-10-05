@@ -18,7 +18,8 @@ import {
   DialogTrigger,
   DialogHeader,
   DialogTitle,
-  DialogFooter
+  DialogFooter,
+  DialogDescription
 } from '@/components/ui/dialog';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
@@ -69,7 +70,6 @@ export default function QuizStudentScores() {
   // Refs
   const pdfRef = useRef<HTMLDivElement>(null);
 
-  // Meta
   const platformName = 'Tayyari Hub';
   const currentDate = useMemo(
     () =>
@@ -81,7 +81,6 @@ export default function QuizStudentScores() {
     []
   );
 
-  // Helpers
   const extractNames = (raw: any): string[] => {
     if (Array.isArray(raw)) {
       return raw
@@ -92,6 +91,17 @@ export default function QuizStudentScores() {
     if (typeof raw === 'string') return [raw];
     return [];
   };
+
+  const fetchMetadata = useCallback(async () => {
+    if (!quizId) return;
+    const quizDoc = await getDoc(doc(db, 'quizzes', quizId));
+    if (!quizDoc.exists()) return;
+    const data = quizDoc.data() as QuizData;
+    setQuizTitle(data.title || 'Untitled');
+    setSubjects(extractNames(data.subjects || (data as any).subject));
+    setChapters(extractNames(data.chapters || (data as any).chapter).join(', '));
+    setQuizQuestions(data.selectedQuestions || []);
+  }, [quizId]);
 
   const countCorrectAnswers = useCallback(
     (answers: Record<string, string>) =>
@@ -116,20 +126,6 @@ export default function QuizStudentScores() {
     [subjects, quizQuestions, countCorrectAnswers]
   );
 
-  // Data fetchers
-  const fetchMetadata = useCallback(async () => {
-    if (!quizId) return;
-    const quizDoc = await getDoc(doc(db, 'quizzes', quizId));
-    if (!quizDoc.exists()) return;
-    const data = quizDoc.data() as QuizData;
-    setQuizTitle(data.title || 'Untitled');
-    const subs = extractNames(data.subjects || (data as any).subject);
-    const chaps = extractNames(data.chapters || (data as any).chapter);
-    setSubjects(subs);
-    setChapters(chaps.join(', '));
-    setQuizQuestions(data.selectedQuestions || []);
-  }, [quizId]);
-
   const fetchScores = useCallback(async () => {
     if (!quizId || quizQuestions.length === 0) return;
     setLoading(true);
@@ -139,7 +135,7 @@ export default function QuizStudentScores() {
         const userId = userDoc.id;
         const resultRef = doc(
           db,
-            'users',
+          'users',
           userId,
           'quizAttempts',
           quizId,
@@ -153,7 +149,7 @@ export default function QuizStudentScores() {
         return {
           id: userId,
           name: userData.fullName || 'Unknown',
-          fatherName: userData.fatherName || '-',
+            fatherName: userData.fatherName || '-',
           district: userData.district || '-',
           answers: resultData.answers || {}
         } as Score;
@@ -163,7 +159,6 @@ export default function QuizStudentScores() {
         (s): s is Score => s !== null
       );
 
-      // Sort after collection
       list.sort((a, b) => {
         const aC = countCorrectAnswers(a.answers);
         const bC = countCorrectAnswers(b.answers);
@@ -178,7 +173,6 @@ export default function QuizStudentScores() {
     }
   }, [quizId, quizQuestions, sortByScore, countCorrectAnswers]);
 
-  // Effects
   useEffect(() => {
     fetchMetadata();
   }, [fetchMetadata]);
@@ -187,7 +181,6 @@ export default function QuizStudentScores() {
     fetchScores();
   }, [fetchScores]);
 
-  // Derived filtered list
   const filteredScores = useMemo(
     () =>
       scores.filter(
@@ -200,8 +193,11 @@ export default function QuizStudentScores() {
     [scores, districtFilter, searchTerm]
   );
 
-  // CSV Export
   const exportToCSV = useCallback(() => {
+    if (filteredScores.length === 0) {
+      alert('No data to export.');
+      return;
+    }
     const headers = [
       'S.No',
       'Name',
@@ -248,20 +244,27 @@ export default function QuizStudentScores() {
     URL.revokeObjectURL(url);
   }, [filteredScores, subjects, calculateSubjectScores, quizTitle]);
 
-  // PDF Export (Data-driven)
   const exportDataPDF = useCallback(async () => {
     if (generatingPDF) return;
+    if (filteredScores.length === 0) {
+      alert('No data to export.');
+      return;
+    }
     setGeneratingPDF(true);
     try {
       const { jsPDF } = await import('jspdf');
-      await import('jspdf-autotable'); // side-effect registration
+      await import('jspdf-autotable');
 
-      // Determine orientation
-      const baseColumns = 4 + 3; // S.No, Name, Father's, District + totals
+      const baseColumns = 4 + 3; // S.No, Name, Father's, District + 3 totals
       const totalColumns = baseColumns + subjects.length;
       const orientation = totalColumns > 10 ? 'landscape' : 'portrait';
 
-      const doc = new jsPDF({ orientation });
+      // Modern object-style initialization to avoid deprecation warning
+      const doc = new jsPDF({
+        orientation,
+        unit: 'mm',
+        format: 'a4'
+      });
 
       const title = `${quizTitle || 'Quiz'} Results`;
       const subtitle = `${platformName} - ${currentDate}`;
@@ -301,7 +304,6 @@ export default function QuizStudentScores() {
         ];
       });
 
-      // Column styling
       const columnStyles: Record<number, any> = {
         0: { cellWidth: 12, halign: 'center' },
         1: { cellWidth: 32 },
@@ -356,13 +358,13 @@ export default function QuizStudentScores() {
       setGeneratingPDF(false);
     }
   }, [
-    subjects,
+    generatingPDF,
     filteredScores,
+    subjects,
     calculateSubjectScores,
-    platformName,
-    currentDate,
     quizTitle,
-    generatingPDF
+    platformName,
+    currentDate
   ]);
 
   return (
@@ -382,11 +384,18 @@ export default function QuizStudentScores() {
                 Export PDF
               </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[460px]">
+            <DialogContent
+              className="sm:max-w-[460px]"
+              // If you ever want to intentionally suppress description:
+              // aria-describedby={undefined}
+            >
               <DialogHeader>
                 <DialogTitle className="text-xl font-semibold">
                   Export Options
                 </DialogTitle>
+                <DialogDescription>
+                  Configure sorting and visible on-screen meta. PDF will always contain the full table (current filters applied).
+                </DialogDescription>
               </DialogHeader>
               <div className="space-y-4 py-4 text-sm">
                 <div className="flex items-center space-x-2">
@@ -398,7 +407,7 @@ export default function QuizStudentScores() {
                     }
                   />
                   <label htmlFor="subjects" className="font-medium">
-                    Show Subjects line (on-screen only)
+                    Show Subjects line (screen only)
                   </label>
                 </div>
                 <div className="flex items-center space-x-2">
@@ -410,7 +419,7 @@ export default function QuizStudentScores() {
                     }
                   />
                   <label htmlFor="chapters" className="font-medium">
-                    Show Chapters line (on-screen only)
+                    Show Chapters line (screen only)
                   </label>
                 </div>
                 <div className="flex items-center space-x-2">
@@ -427,15 +436,16 @@ export default function QuizStudentScores() {
                   </select>
                 </div>
                 <div className="p-3 rounded-md bg-blue-50 border text-blue-900">
-                  PDF export builds a multi‑page tabular report (no layout
-                  truncation).
+                  PDF export is multi-page and will not truncate wide or tall tables.
                 </div>
               </div>
               <DialogFooter>
                 <Button
                   onClick={exportDataPDF}
                   className="bg-blue-600 hover:bg-blue-700 w-full disabled:opacity-60"
-                  disabled={generatingPDF || loading || filteredScores.length === 0}
+                  disabled={
+                    generatingPDF || loading || filteredScores.length === 0
+                  }
                 >
                   {generatingPDF ? 'Generating...' : 'Download PDF'}
                 </Button>
@@ -601,18 +611,14 @@ export default function QuizStudentScores() {
 }
 
 /*
-OPTIONAL: If TypeScript complains about doc.autoTable, create a file:
-types/jspdf-autotable.d.ts
+If TypeScript complains about doc.autoTable, create: types/jspdf-autotable.d.ts
 
---------------------------------
 import 'jspdf';
-
 declare module 'jspdf' {
   interface jsPDF {
     autoTable: (options: any) => jsPDF;
   }
 }
---------------------------------
 
-And ensure tsconfig.json includes "types" or the file in "include".
+Ensure it's included by tsconfig "include" or "typeRoots".
 */
