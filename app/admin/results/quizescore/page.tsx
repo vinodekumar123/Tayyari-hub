@@ -23,7 +23,7 @@ import {
 } from '@/components/ui/dialog';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
-import { Download } from 'lucide-react';
+import { Download, Printer } from 'lucide-react';
 
 interface Question {
   id: string;
@@ -50,6 +50,9 @@ export default function QuizStudentScores() {
   const router = useRouter();
   const params = useSearchParams();
   const quizId = params.get('id');
+
+  // Refs
+  const printRef = useRef<HTMLDivElement | null>(null);
 
   // Data state
   const [quizTitle, setQuizTitle] = useState('');
@@ -145,7 +148,7 @@ export default function QuizStudentScores() {
         const resultData = resultSnap.data();
         return {
           id: userId,
-          name: userData.fullName || 'Unknown',
+            name: userData.fullName || 'Unknown',
           fatherName: userData.fatherName || '-',
           district: userData.district || '-',
           answers: resultData.answers || {}
@@ -190,7 +193,6 @@ export default function QuizStudentScores() {
     [scores, districtFilter, searchTerm]
   );
 
-  // CSV (now subjects only; totals after)
   const exportToCSV = useCallback(() => {
     if (filteredScores.length === 0) {
       alert('No data to export.');
@@ -201,7 +203,7 @@ export default function QuizStudentScores() {
       'Name',
       "Father's Name",
       'District',
-      ...subjects,          // just subject names
+      ...subjects,
       'Total Correct',
       'Total Wrong',
       'Total Questions'
@@ -242,7 +244,6 @@ export default function QuizStudentScores() {
     URL.revokeObjectURL(url);
   }, [filteredScores, subjects, calculateSubjectScores, quizTitle]);
 
-  // PDF with multi-row header (grouped subjects)
   const exportDataPDF = useCallback(async () => {
     if (generatingPDF) return;
     if (filteredScores.length === 0) {
@@ -254,7 +255,7 @@ export default function QuizStudentScores() {
       const { jsPDF } = await import('jspdf');
       await import('jspdf-autotable');
 
-      const totalLeafColumns = 4 + subjects.length + 3; // final columns in body
+      const totalLeafColumns = 4 + subjects.length + 3;
       const orientation = totalLeafColumns > 11 ? 'landscape' : 'portrait';
 
       const doc = new jsPDF({
@@ -271,10 +272,6 @@ export default function QuizStudentScores() {
       doc.setFontSize(10);
       doc.text(subtitle, 14, 23);
 
-      // Multi-level header:
-      // First row groups: S.No / Name / Father's Name / District (rowSpan=2)
-      // "Correct Answers" spans subject count
-      // "Totals" spans 3 (Total Correct / Wrong / Questions)
       const topRow: any[] = [
         { content: 'S.No', rowSpan: 2 },
         { content: 'Name', rowSpan: 2 },
@@ -312,15 +309,12 @@ export default function QuizStudentScores() {
         ];
       });
 
-      // Column indices after full expansion:
-      // 0 S.No, 1 Name, 2 Father's, 3 District, 4..(4+subjects-1) subjects, then totals
       const columnStyles: Record<number, any> = {
         0: { cellWidth: 10, halign: 'center' },
         1: { cellWidth: 30 },
         2: { cellWidth: 30 },
         3: { cellWidth: 24 }
       };
-      // Subject columns: narrow & centered
       for (let i = 0; i < subjects.length; i++) {
         columnStyles[4 + i] = { cellWidth: 14, halign: 'center' };
       }
@@ -356,7 +350,7 @@ export default function QuizStudentScores() {
           const pageSize = doc.internal.pageSize;
           const pageWidth = pageSize.getWidth();
           const pageHeight = pageSize.getHeight();
-            doc.setFontSize(9);
+          doc.setFontSize(9);
           doc.text(
             `Page ${data.pageNumber} of ${pageCount}`,
             pageWidth - 40,
@@ -382,13 +376,45 @@ export default function QuizStudentScores() {
     currentDate
   ]);
 
+  // OPTIONAL: High-fidelity visual PDF capture (commented out)
+  // const exportVisualPDF = useCallback(async () => {
+  //   if (!printRef.current) return;
+  //   const { jsPDF } = await import('jspdf');
+  //   const html2canvas = (await import('html2canvas')).default;
+  //   const canvas = await html2canvas(printRef.current, {
+  //     scale: 2,
+  //     useCORS: true,
+  //     backgroundColor: '#ffffff'
+  //   });
+  //   const imgData = canvas.toDataURL('image/png');
+  //   const pdf = new jsPDF('p', 'mm', 'a4');
+  //   const pdfWidth = pdf.internal.pageSize.getWidth();
+  //   const imgProps = pdf.getImageProperties(imgData);
+  //   const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+  //   pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+  //   pdf.save(`${quizTitle.replace(/\s+/g, '_')}_Visual.pdf`);
+  // }, [quizTitle]);
+
+  const handlePrint = () => {
+    window.print();
+  };
+
   return (
-    <div className="p-8 min-h-screen bg-gradient-to-b from-blue-100 to-white">
-      <div className="flex justify-between items-center mb-6">
+    <div className="p-8 min-h-screen bg-gradient-to-b from-blue-100 to-white print:p-0 print:bg-white">
+      {/* Top Bar (hidden in print) */}
+      <div className="flex justify-between items-center mb-6 no-print">
         <Button variant="outline" onClick={() => router.push('/admin/results')}>
           ← Back to Results
         </Button>
         <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={handlePrint}
+            className="flex items-center gap-2"
+          >
+            <Printer className="h-4 w-4" />
+            Print
+          </Button>
           <Dialog>
             <DialogTrigger asChild>
               <Button className="bg-blue-600 hover:bg-blue-700">
@@ -413,7 +439,7 @@ export default function QuizStudentScores() {
                     onCheckedChange={v => setShowSubjects(Boolean(v))}
                   />
                   <label htmlFor="subjectsLine" className="font-medium">
-                    Show Subjects line (screen only)
+                    Show Subjects line (screen & print)
                   </label>
                 </div>
                 <div className="flex items-center space-x-2">
@@ -423,7 +449,7 @@ export default function QuizStudentScores() {
                     onCheckedChange={v => setShowChapters(Boolean(v))}
                   />
                   <label htmlFor="chaptersLine" className="font-medium">
-                    Show Chapters line (screen only)
+                    Show Chapters line (screen & print)
                   </label>
                 </div>
                 <div className="flex items-center space-x-2">
@@ -451,7 +477,7 @@ export default function QuizStudentScores() {
                     generatingPDF || loading || filteredScores.length === 0
                   }
                 >
-                  {generatingPDF ? 'Generating...' : 'Download PDF'}
+                  {generatingPDF ? 'Generating...' : 'Download Data PDF'}
                 </Button>
                 <Button
                   onClick={exportToCSV}
@@ -462,13 +488,21 @@ export default function QuizStudentScores() {
                   <Download className="mr-2 h-4 w-4" />
                   Export CSV
                 </Button>
+                {/* <Button
+                  onClick={exportVisualPDF}
+                  variant="secondary"
+                  className="w-full"
+                >
+                  Visual PDF (Exact Design)
+                </Button> */}
               </DialogFooter>
             </DialogContent>
           </Dialog>
         </div>
       </div>
 
-      <div className="flex gap-4 mb-6">
+      {/* Filters (hidden in print) */}
+      <div className="flex gap-4 mb-6 no-print">
         <Input
           placeholder="Search by student name..."
           value={searchTerm}
@@ -483,7 +517,10 @@ export default function QuizStudentScores() {
         />
       </div>
 
-      <div className="bg-white rounded-2xl p-8 shadow-xl space-y-6">
+      <div
+        ref={printRef}
+        className="bg-white rounded-2xl p-8 shadow-xl space-y-6 print:shadow-none print:border print:border-gray-200 print:rounded-xl print-card"
+      >
         <div className="flex justify-between items-center text-sm text-gray-600">
           <span className="font-bold text-lg text-blue-800">
             {platformName}
@@ -519,9 +556,8 @@ export default function QuizStudentScores() {
             No results submitted for this quiz yet.
           </p>
         ) : (
-          <div className="overflow-x-auto">
-            {/* table-fixed + wrapping headers */}
-            <table className="w-full mt-6 text-sm border-collapse table-fixed">
+          <div className="overflow-x-auto print:overflow-visible">
+            <table className="w-full mt-6 text-sm border-collapse table-fixed print-table">
               <thead className="bg-blue-800 text-white">
                 <tr>
                   <th
@@ -593,7 +629,7 @@ export default function QuizStudentScores() {
                   return (
                     <tr
                       key={s.id}
-                      className="hover:bg-blue-50 transition-colors"
+                      className="hover:bg-blue-50 transition-colors print:hover:bg-transparent"
                     >
                       <td className="border border-gray-200 p-3">
                         {index + 1}
@@ -634,8 +670,59 @@ export default function QuizStudentScores() {
       </div>
 
       {loading && (
-        <p className="text-center text-gray-500 mt-3">Loading...</p>
+        <p className="text-center text-gray-500 mt-3 no-print">Loading...</p>
       )}
+
+      {/* Global Print Styles */}
+      <style jsx global>{`
+        @page {
+          size: A4 portrait;
+          margin: 12mm;
+        }
+
+        @media print {
+          html,
+          body {
+            background: #ffffff !important;
+          }
+          body {
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+          }
+          .no-print {
+            display: none !important;
+          }
+          /* Ensure gradient doesn't show as banded or washed out */
+          .bg-gradient-to-b {
+            background: #ffffff !important;
+          }
+          /* Preserve heading / brand colors */
+          .print-card h1,
+          .print-card .text-blue-900,
+          .print-card .text-blue-800 {
+            color: #1e3a8a !important;
+          }
+          /* Table header color */
+          .print-table thead tr:first-child th,
+          .print-table thead tr:nth-child(2) th {
+            background-color: #1e40af !important;
+            color: #ffffff !important;
+            -webkit-print-color-adjust: exact;
+          }
+          /* Optional zebra striping */
+          .print-table tbody tr:nth-child(even) td {
+            background-color: #f1f5f9 !important;
+          }
+          /* Remove hover background in print */
+          .print-table tbody tr:hover td {
+            background: transparent !important;
+          }
+          /* Card shadow off, border on (already handled by classes) */
+          .print-card {
+            box-shadow: none !important;
+          }
+        }
+      `}</style>
     </div>
   );
 }
