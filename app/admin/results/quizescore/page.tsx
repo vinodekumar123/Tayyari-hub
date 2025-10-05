@@ -242,7 +242,7 @@ export default function QuizStudentScores() {
     URL.revokeObjectURL(url);
   }, [filteredScores, subjects, calculateSubjectScores, quizTitle]);
 
-  // Enhanced Professional PDF with elegant design
+  // PDF with multi-row header (grouped subjects)
   const exportDataPDF = useCallback(async () => {
     if (generatingPDF) return;
     if (filteredScores.length === 0) {
@@ -254,7 +254,7 @@ export default function QuizStudentScores() {
       const { jsPDF } = await import('jspdf');
       await import('jspdf-autotable');
 
-      const totalLeafColumns = 4 + subjects.length + 3;
+      const totalLeafColumns = 4 + subjects.length + 3; // final columns in body
       const orientation = totalLeafColumns > 11 ? 'landscape' : 'portrait';
 
       const doc = new jsPDF({
@@ -263,217 +263,36 @@ export default function QuizStudentScores() {
         format: 'a4'
       });
 
-      const pageWidth = doc.internal.pageSize.getWidth();
-      const pageHeight = doc.internal.pageSize.getHeight();
+      const title = `${quizTitle || 'Quiz'} Results`;
+      const subtitle = `${platformName} - ${currentDate}`;
 
-      // Professional color scheme
-      const colors = {
-        primary: [25, 45, 85],        // Deep navy blue
-        secondary: [45, 65, 105],     // Medium blue
-        accent: [235, 240, 250],      // Light blue-gray
-        gold: [218, 165, 32],         // Gold accent
-        text: [30, 30, 30],           // Dark gray text
-        lightText: [90, 90, 90],      // Light gray text
-        white: [255, 255, 255],
-        border: [200, 210, 225]       // Soft border color
-      };
+      doc.setFontSize(16);
+      doc.text(title, 14, 16);
+      doc.setFontSize(10);
+      doc.text(subtitle, 14, 23);
 
-      // Add elegant header with gradient effect simulation
-      doc.setFillColor(...colors.primary);
-      doc.rect(0, 0, pageWidth, 35, 'F');
-      
-      // Add thin gold accent line
-      doc.setDrawColor(...colors.gold);
-      doc.setLineWidth(0.5);
-      doc.line(0, 35, pageWidth, 35);
-
-      // Platform name with elegant typography
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(22);
-      doc.setTextColor(...colors.white);
-      doc.text(platformName.toUpperCase(), pageWidth / 2, 15, { align: 'center' });
-
-      // Quiz title
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(14);
-      doc.setTextColor(...colors.accent);
-      doc.text(quizTitle || 'Assessment Results', pageWidth / 2, 25, { align: 'center' });
-
-      // Date in corner
-      doc.setFontSize(9);
-      doc.setTextColor(...colors.accent);
-      doc.text(currentDate, pageWidth - 14, 30, { align: 'right' });
-
-      // Executive summary section
-      let yPosition = 45;
-      
-      // Summary box with shadow effect
-      doc.setFillColor(...colors.accent);
-      doc.setDrawColor(...colors.border);
-      doc.setLineWidth(0.2);
-      doc.roundedRect(14, yPosition, pageWidth - 28, 25, 2, 2, 'FD');
-
-      // Summary content
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(11);
-      doc.setTextColor(...colors.primary);
-      doc.text('EXECUTIVE SUMMARY', 20, yPosition + 7);
-
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(9);
-      doc.setTextColor(...colors.text);
-      
-      const summaryStats = {
-        'Total Participants': filteredScores.length,
-        'Assessment Subjects': subjects.join(', '),
-        'Total Questions': quizQuestions.length,
-        'Report Generated': new Date().toLocaleString('en-US', {
-          dateStyle: 'medium',
-          timeStyle: 'short'
-        })
-      };
-
-      let summaryY = yPosition + 13;
-      Object.entries(summaryStats).forEach(([key, value], index) => {
-        if (index < 2) {
-          doc.setFont('helvetica', 'bold');
-          doc.text(`${key}:`, 20, summaryY);
-          doc.setFont('helvetica', 'normal');
-          doc.text(String(value), 55, summaryY);
-          summaryY += 5;
-        }
-      });
-
-      // Performance statistics
-      const avgCorrect = filteredScores.reduce((acc, s) => {
-        const { totalCorrect } = calculateSubjectScores(s);
-        return acc + totalCorrect;
-      }, 0) / filteredScores.length;
-
-      const topScore = Math.max(...filteredScores.map(s => {
-        const { totalCorrect } = calculateSubjectScores(s);
-        return totalCorrect;
-      }));
-
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(9);
-      doc.setTextColor(...colors.secondary);
-      doc.text(`Average Score: ${avgCorrect.toFixed(1)}/${quizQuestions.length}`, pageWidth - 80, yPosition + 13);
-      doc.text(`Highest Score: ${topScore}/${quizQuestions.length}`, pageWidth - 80, yPosition + 18);
-
-      // Multi-level header for table
+      // Multi-level header:
+      // First row groups: S.No / Name / Father's Name / District (rowSpan=2)
+      // "Correct Answers" spans subject count
+      // "Totals" spans 3 (Total Correct / Wrong / Questions)
       const topRow: any[] = [
-        { 
-          content: 'S.No', 
-          rowSpan: 2,
-          styles: { 
-            fillColor: colors.primary,
-            textColor: colors.white,
-            fontStyle: 'bold',
-            fontSize: 9,
-            halign: 'center'
-          }
-        },
-        { 
-          content: 'Student Name', 
-          rowSpan: 2,
-          styles: { 
-            fillColor: colors.primary,
-            textColor: colors.white,
-            fontStyle: 'bold',
-            fontSize: 9
-          }
-        },
-        { 
-          content: "Father's Name", 
-          rowSpan: 2,
-          styles: { 
-            fillColor: colors.primary,
-            textColor: colors.white,
-            fontStyle: 'bold',
-            fontSize: 9
-          }
-        },
-        { 
-          content: 'District', 
-          rowSpan: 2,
-          styles: { 
-            fillColor: colors.primary,
-            textColor: colors.white,
-            fontStyle: 'bold',
-            fontSize: 9
-          }
-        },
-        { 
-          content: 'Subject-wise Performance', 
-          colSpan: subjects.length, 
-          styles: { 
-            halign: 'center',
-            fillColor: colors.secondary,
-            textColor: colors.white,
-            fontStyle: 'bold',
-            fontSize: 10
-          }
-        },
-        { 
-          content: 'Overall Results', 
-          colSpan: 3, 
-          styles: { 
-            halign: 'center',
-            fillColor: colors.secondary,
-            textColor: colors.white,
-            fontStyle: 'bold',
-            fontSize: 10
-          }
-        }
+        { content: 'S.No', rowSpan: 2 },
+        { content: 'Name', rowSpan: 2 },
+        { content: "Father's Name", rowSpan: 2 },
+        { content: 'District', rowSpan: 2 },
+        { content: 'Correct Answers', colSpan: subjects.length, styles: { halign: 'center' } },
+        { content: 'Totals', colSpan: 3, styles: { halign: 'center' } }
       ];
 
       const secondRow: any[] = [
-        ...subjects.map(s => ({ 
-          content: s,
-          styles: {
-            fillColor: colors.secondary,
-            textColor: colors.white,
-            fontSize: 8,
-            fontStyle: 'bold',
-            halign: 'center'
-          }
-        })),
-        { 
-          content: 'Correct',
-          styles: {
-            fillColor: colors.secondary,
-            textColor: colors.white,
-            fontSize: 8,
-            fontStyle: 'bold',
-            halign: 'center'
-          }
-        },
-        { 
-          content: 'Wrong',
-          styles: {
-            fillColor: colors.secondary,
-            textColor: colors.white,
-            fontSize: 8,
-            fontStyle: 'bold',
-            halign: 'center'
-          }
-        },
-        { 
-          content: 'Total',
-          styles: {
-            fillColor: colors.secondary,
-            textColor: colors.white,
-            fontSize: 8,
-            fontStyle: 'bold',
-            halign: 'center'
-          }
-        }
+        ...subjects.map(s => ({ content: s })),
+        { content: 'Correct' },
+        { content: 'Wrong' },
+        { content: 'Questions' }
       ];
 
       const head = [topRow, secondRow];
 
-      // Prepare body with alternating colors and performance indicators
       const body = filteredScores.map((s, idx) => {
         const {
           subjectScores,
@@ -481,173 +300,72 @@ export default function QuizStudentScores() {
           totalWrong,
           totalQuestions
         } = calculateSubjectScores(s);
-        
-        const percentage = (totalCorrect / totalQuestions) * 100;
-        const performanceColor = percentage >= 80 ? colors.text : 
-                                percentage >= 60 ? colors.text : 
-                                [180, 50, 50]; // Red for low scores
-
         return [
-          {
-            content: idx + 1,
-            styles: { halign: 'center', fontStyle: 'bold' }
-          },
+          idx + 1,
           s.name,
           s.fatherName,
           s.district,
-          ...subjects.map(subj => ({
-            content: subjectScores[subj] || 0,
-            styles: { halign: 'center' }
-          })),
-          {
-            content: totalCorrect,
-            styles: { 
-              halign: 'center',
-              fontStyle: 'bold',
-              textColor: performanceColor
-            }
-          },
-          {
-            content: totalWrong,
-            styles: { halign: 'center' }
-          },
-          {
-            content: totalQuestions,
-            styles: { halign: 'center', fontStyle: 'bold' }
-          }
+          ...subjects.map(subj => subjectScores[subj] || 0),
+          totalCorrect,
+          totalWrong,
+          totalQuestions
         ];
       });
 
-      // Column styles with elegant proportions
+      // Column indices after full expansion:
+      // 0 S.No, 1 Name, 2 Father's, 3 District, 4..(4+subjects-1) subjects, then totals
       const columnStyles: Record<number, any> = {
-        0: { cellWidth: 12, halign: 'center' },
-        1: { cellWidth: 35 },
-        2: { cellWidth: 35 },
-        3: { cellWidth: 25 }
+        0: { cellWidth: 10, halign: 'center' },
+        1: { cellWidth: 30 },
+        2: { cellWidth: 30 },
+        3: { cellWidth: 24 }
       };
-      
-      // Subject columns
+      // Subject columns: narrow & centered
       for (let i = 0; i < subjects.length; i++) {
-        columnStyles[4 + i] = { cellWidth: 15, halign: 'center' };
+        columnStyles[4 + i] = { cellWidth: 14, halign: 'center' };
       }
-      
       const totalsStart = 4 + subjects.length;
       columnStyles[totalsStart] = { cellWidth: 18, halign: 'center' };
       columnStyles[totalsStart + 1] = { cellWidth: 18, halign: 'center' };
-      columnStyles[totalsStart + 2] = { cellWidth: 18, halign: 'center' };
+      columnStyles[totalsStart + 2] = { cellWidth: 22, halign: 'center' };
 
       // @ts-ignore
       doc.autoTable({
         head,
         body,
-        startY: yPosition + 30,
+        startY: 30,
         theme: 'grid',
         styles: {
           fontSize: 8,
-          cellPadding: 3,
-          overflow: 'linebreak',
-          lineColor: colors.border,
-          lineWidth: 0.1,
-          font: 'helvetica'
+          cellPadding: 2,
+          overflow: 'linebreak'
         },
         headStyles: {
-          fillColor: colors.primary,
-          textColor: colors.white,
+          fillColor: [30, 64, 175],
+          halign: 'center',
           fontStyle: 'bold',
-          halign: 'center'
+          textColor: 255
         },
         bodyStyles: {
-          valign: 'middle',
-          textColor: colors.text
-        },
-        alternateRowStyles: {
-          fillColor: colors.accent
+          valign: 'middle'
         },
         columnStyles,
         rowPageBreak: 'auto',
-        margin: { top: 10, right: 14, bottom: 20, left: 14 },
         didDrawPage: (data: any) => {
-          // Footer on each page
           const pageCount = doc.getNumberOfPages();
-          
-          // Footer background
-          doc.setFillColor(...colors.primary);
-          doc.rect(0, pageHeight - 15, pageWidth, 15, 'F');
-          
-          // Footer text
-          doc.setFont('helvetica', 'normal');
-          doc.setFontSize(8);
-          doc.setTextColor(...colors.white);
-          
-          // Left side - Platform info
-          doc.text(`${platformName} | Assessment Report`, 14, pageHeight - 7);
-          
-          // Center - Confidential notice
-          doc.setFont('helvetica', 'italic');
-          doc.text('Confidential Document', pageWidth / 2, pageHeight - 7, { align: 'center' });
-          
-          // Right side - Page number
-          doc.setFont('helvetica', 'normal');
+          const pageSize = doc.internal.pageSize;
+          const pageWidth = pageSize.getWidth();
+          const pageHeight = pageSize.getHeight();
+            doc.setFontSize(9);
           doc.text(
             `Page ${data.pageNumber} of ${pageCount}`,
-            pageWidth - 14,
-            pageHeight - 7,
-            { align: 'right' }
+            pageWidth - 40,
+            pageHeight - 10
           );
-
-          // Add header on subsequent pages
-          if (data.pageNumber > 1) {
-            doc.setFillColor(...colors.primary);
-            doc.rect(0, 0, pageWidth, 20, 'F');
-            
-            doc.setFont('helvetica', 'bold');
-            doc.setFontSize(12);
-            doc.setTextColor(...colors.white);
-            doc.text(`${quizTitle} - Continued`, pageWidth / 2, 12, { align: 'center' });
-          }
-        },
-        didDrawCell: (data: any) => {
-          // Add subtle borders for header cells
-          if (data.section === 'head') {
-            doc.setDrawColor(...colors.gold);
-            doc.setLineWidth(0.1);
-            doc.rect(data.cell.x, data.cell.y, data.cell.width, data.cell.height, 'S');
-          }
         }
       });
 
-      // Add signature section on last page if space permits
-      const finalY = (doc as any).lastAutoTable.finalY || pageHeight - 50;
-      
-      if (finalY < pageHeight - 60) {
-        // Signature section
-        doc.setDrawColor(...colors.border);
-        doc.setLineWidth(0.2);
-        
-        // Left signature box
-        doc.line(20, finalY + 30, 80, finalY + 30);
-        doc.setFont('helvetica', 'normal');
-        doc.setFontSize(8);
-        doc.setTextColor(...colors.lightText);
-        doc.text('Authorized Signature', 50, finalY + 35, { align: 'center' });
-        
-        // Right signature box
-        doc.line(pageWidth - 80, finalY + 30, pageWidth - 20, finalY + 30);
-        doc.text('Date & Stamp', pageWidth - 50, finalY + 35, { align: 'center' });
-      }
-
-      // Add watermark effect (subtle)
-      doc.setGState(new doc.GState({ opacity: 0.1 }));
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(60);
-      doc.setTextColor(...colors.border);
-      doc.text('OFFICIAL', pageWidth / 2, pageHeight / 2, { 
-        align: 'center',
-        angle: 45
-      });
-      doc.setGState(new doc.GState({ opacity: 1 }));
-
-      doc.save(`${quizTitle.replace(/\s+/g, '_')}_Professional_Report.pdf`);
+      doc.save(`${quizTitle.replace(/\s+/g, '_')}_Results.pdf`);
     } catch (err) {
       console.error('PDF export failed:', err);
       alert('Failed to generate PDF. See console for details.');
@@ -660,7 +378,6 @@ export default function QuizStudentScores() {
     subjects,
     calculateSubjectScores,
     quizTitle,
-    quizQuestions,
     platformName,
     currentDate
   ]);
@@ -723,7 +440,7 @@ export default function QuizStudentScores() {
                   </select>
                 </div>
                 <div className="p-3 rounded-md bg-blue-50 border text-blue-900">
-                  Professional PDF includes executive summary, performance analytics, and official formatting.
+                  The grouped header prevents column overlap and allows wrapping.
                 </div>
               </div>
               <DialogFooter className="flex flex-col gap-2">
@@ -734,7 +451,7 @@ export default function QuizStudentScores() {
                     generatingPDF || loading || filteredScores.length === 0
                   }
                 >
-                  {generatingPDF ? 'Generating Professional Report...' : 'Download Professional PDF'}
+                  {generatingPDF ? 'Generating...' : 'Download PDF'}
                 </Button>
                 <Button
                   onClick={exportToCSV}
