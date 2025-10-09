@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState, useMemo, useCallback } from 'react';
+import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import {
   collection,
   getDocs,
@@ -8,7 +8,15 @@ import {
   deleteDoc,
   query,
   where,
-  DocumentData
+  orderBy,
+  limit,
+  startAfter,
+  writeBatch,
+  addDoc,
+  serverTimestamp,
+  DocumentData,
+  QueryDocumentSnapshot,
+  updateDoc
 } from 'firebase/firestore';
 import { db } from '../../../firebase';
 import { useRouter } from 'next/navigation';
@@ -16,7 +24,6 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { Label } from 'recharts';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
   Dialog,
@@ -27,10 +34,12 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Pencil, Trash, Plus, Loader2, Download } from 'lucide-react';
+import { Pencil, Trash, Plus, Loader2, Download, Eye, Edit2, Upload, Filter, Tag, Users } from 'lucide-react';
+import { FixedSizeList as VirtualList } from 'react-window'; // Virtualization
+import Papa from 'papaparse'; // CSV parsing
+import { useDropzone } from 'react-dropzone';
 
-// Debounce hook
-function useDebounce(value: string, delay: number) {
+function useDebounce<T>(value: T, delay: number) {
   const [debounced, setDebounced] = useState(value);
   useEffect(() => {
     const handler = setTimeout(() => setDebounced(value), delay);
@@ -55,9 +64,11 @@ type Question = {
   teacher?: string;
   enableExplanation?: boolean;
   createdAt?: Date;
+  tags?: string[];
 };
 
-// Helper: robust Firestore date handling
+type UserRole = 'admin' | 'teacher' | 'viewer';
+
 function parseCreatedAt(data: DocumentData): Date {
   if (data.createdAt instanceof Date) return data.createdAt;
   if (data.createdAt?.toDate) return data.createdAt.toDate();
@@ -65,69 +76,125 @@ function parseCreatedAt(data: DocumentData): Date {
   return new Date();
 }
 
+const PAGE_SIZE = 20;
+
 const QuestionBankPage = () => {
   const router = useRouter();
+  // Data and UI state
   const [questions, setQuestions] = useState<Question[]>([]);
+  const [lastVisible, setLastVisible] = useState<QueryDocumentSnapshot | null>(null);
+  const [hasMore, setHasMore] = useState(true);
+  const [loading, setLoading] = useState(true);
+  const [fetchingMore, setFetchingMore] = useState(false);
+
+  // Filters and search
   const [search, setSearch] = useState('');
   const debouncedSearch = useDebounce(search, 300);
-  const [loading, setLoading] = useState(true);
+  const [selectedSubject, setSelectedSubject] = useState('');
+  const [filterDifficulty, setFilterDifficulty] = useState('');
+  const [filterYear, setFilterYear] = useState('');
+  const [filterTags, setFilterTags] = useState<string[]>([]);
+  const [sortOrder, setSortOrder] = useState<'latest' | 'oldest'>('latest');
+
+  // Selection and bulk ops
   const [selectedQuestions, setSelectedQuestions] = useState<string[]>([]);
   const [isBulkDeleteDialogOpen, setIsBulkDeleteDialogOpen] = useState(false);
   const [deleteMode, setDeleteMode] = useState<'selected' | 'subject' | 'all'>('selected');
-  const [selectedSubject, setSelectedSubject] = useState('');
   const [isDeleting, setIsDeleting] = useState(false);
-  const [sortOrder, setSortOrder] = useState<'latest' | 'oldest'>('latest');
-  const [exportMode, setExportMode] = useState<'all' | 'subject'>('all'); // For CSV dialog
 
+  // CSV Export/Import
+  const [exportMode, setExportMode] = useState<'all' | 'subject'>('all');
+  const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
+  const [importing, setImporting] = useState(false);
+
+  // Preview/Editing
+  const [previewQuestion, setPreviewQuestion] = useState<Question | null>(null);
+  const [bulkEditDialogOpen, setBulkEditDialogOpen] = useState(false);
+  const [bulkEditField, setBulkEditField] = useState<'subject' | 'difficulty' | 'chapter' | 'addTag' | 'removeTag'>('subject');
+  const [bulkEditValue, setBulkEditValue] = useState('');
+  const [tagInput, setTagInput] = useState('');
+
+  // Statistics
+  const [stats, setStats] = useState<{ [key: string]: number }>({});
+
+  // Role (simulate; in production, fetch from user context)
+  const [role] = useState<UserRole>('admin'); // Set this according to your auth logic
+
+  // Tag set
+  const uniqueTags = useMemo(() => {
+    const tags = new Set<string>();
+    questions.forEach(q => q.tags?.forEach(t => tags.add(t)));
+    return Array.from(tags);
+  }, [questions]);
+
+  // Fetch paginated and filtered questions (server-side filtering)
+  const fetchQuestions = async (reset = false) => {
+    setLoading(reset);
+    setFetchingMore(!reset);
+    try {
+      let q = collection(db, 'questions');
+      let qArr = [orderBy('createdAt', sortOrder === 'latest' ? 'desc' : 'asc'), limit(PAGE_SIZE)];
+      if (selectedSubject) qArr.push(where('subject', '==', selectedSubject));
+      if (filterDifficulty) qArr.push(where('difficulty', '==', filterDifficulty));
+      // Firestore can't do full-text, so only strict filters here
+      let ref = query(q, ...qArr);
+      if (!reset && lastVisible) ref = query(q, ...qArr, startAfter(lastVisible));
+      const snapshot = await getDocs(ref);
+      const fetched: Question[] = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...(doc.data() as Omit<Question, 'id'>),
+        createdAt: parseCreatedAt(doc.data()),
+      }));
+      setQuestions(reset ? fetched : prev => [...prev, ...fetched]);
+      setLastVisible(snapshot.docs[snapshot.docs.length - 1]);
+      setHasMore(snapshot.size === PAGE_SIZE);
+    } catch (error) {
+      console.error('Error fetching questions:', error);
+    } finally {
+      setLoading(false);
+      setFetchingMore(false);
+    }
+  };
+
+  // Initial/filtered load
   useEffect(() => {
-    const fetchQuestions = async () => {
-      setLoading(true);
-      try {
-        const snapshot = await getDocs(collection(db, 'questions'));
-        const fetched: Question[] = snapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...(doc.data() as Omit<Question, 'id'>),
-          createdAt: parseCreatedAt(doc.data()),
-        }));
-        setQuestions(fetched);
-      } catch (error) {
-        console.error('Error fetching questions:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchQuestions();
-  }, []);
+    fetchQuestions(true);
+    // Update stats
+  }, [selectedSubject, filterDifficulty, sortOrder]);
 
-  // Derived filter/sort
+  // Search (client-side, since Firestore doesn't support full-text)
   const filteredQuestions = useMemo(() => {
-    let sortedQuestions = [...questions];
-    sortedQuestions.sort((a, b) => {
-      const timeA = a.createdAt?.getTime?.() || 0;
-      const timeB = b.createdAt?.getTime?.() || 0;
-      return sortOrder === 'latest' ? timeB - timeA : timeA - timeB;
-    });
-    if (!debouncedSearch) return sortedQuestions;
-    const searchLower = debouncedSearch.toLowerCase();
-    return sortedQuestions.filter(
-      (q) =>
-        q.course?.toLowerCase().includes(searchLower) ||
-        q.subject?.toLowerCase().includes(searchLower) ||
-        q.chapter?.toLowerCase().includes(searchLower) ||
-        q.questionText?.toLowerCase().includes(searchLower)
-    );
-  }, [questions, debouncedSearch, sortOrder]);
+    let qlist = [...questions];
+    if (debouncedSearch) {
+      const s = debouncedSearch.toLowerCase();
+      qlist = qlist.filter(q =>
+        q.course?.toLowerCase().includes(s) ||
+        q.subject?.toLowerCase().includes(s) ||
+        q.chapter?.toLowerCase().includes(s) ||
+        q.questionText?.toLowerCase().includes(s)
+      );
+    }
+    if (filterYear) qlist = qlist.filter(q => q.year === filterYear);
+    if (filterTags.length > 0) qlist = qlist.filter(q => q.tags?.some(t => filterTags.includes(t)));
+    return qlist;
+  }, [questions, debouncedSearch, filterYear, filterTags]);
 
-  // Clear selection when filter changes
+  // Stats calculation
   useEffect(() => {
-    setSelectedQuestions([]);
-  }, [debouncedSearch, sortOrder, questions]);
+    const subjectCounts: { [key: string]: number } = {};
+    questions.forEach(q => {
+      const subject = q.subject || 'Unknown';
+      subjectCounts[subject] = (subjectCounts[subject] || 0) + 1;
+    });
+    setStats(subjectCounts);
+  }, [questions]);
 
-  const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => setSearch(e.target.value);
+  // Selection
+  useEffect(() => setSelectedQuestions([]), [filteredQuestions]);
 
   const handleSelectQuestion = useCallback((id: string) => {
-    setSelectedQuestions((prev) =>
-      prev.includes(id) ? prev.filter((qid) => qid !== id) : [...prev, id]
+    setSelectedQuestions(prev =>
+      prev.includes(id) ? prev.filter(qid => qid !== id) : [...prev, id]
     );
   }, []);
 
@@ -135,21 +202,13 @@ const QuestionBankPage = () => {
     if (selectedQuestions.length === filteredQuestions.length) {
       setSelectedQuestions([]);
     } else {
-      setSelectedQuestions(filteredQuestions.map((q) => q.id));
+      setSelectedQuestions(filteredQuestions.map(q => q.id));
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!window.confirm('Are you sure you want to delete this question?')) return;
-    try {
-      await deleteDoc(doc(db, 'questions', id));
-      setQuestions((prev) => prev.filter((q) => q.id !== id));
-    } catch (error) {
-      console.error('Error deleting question:', error);
-    }
-  };
-
+  // Batched delete
   const handleBulkDelete = async () => {
+    if (role !== 'admin') return alert('Only admins can perform this operation.');
     if (deleteMode === 'selected' && selectedQuestions.length === 0) {
       alert('Please select at least one question to delete.');
       return;
@@ -167,21 +226,41 @@ const QuestionBankPage = () => {
     setIsDeleting(true);
     try {
       if (deleteMode === 'selected') {
-        await Promise.all(selectedQuestions.map(id => deleteDoc(doc(db, 'questions', id))));
+        for (let i = 0; i < selectedQuestions.length; i += 500) {
+          const batch = writeBatch(db);
+          selectedQuestions.slice(i, i + 500).forEach(id => {
+            batch.delete(doc(db, 'questions', id));
+          });
+          await batch.commit();
+        }
         setQuestions(prev => prev.filter(q => !selectedQuestions.includes(q.id)));
-        setSelectedQuestions([]);
       } else if (deleteMode === 'subject') {
+        // Fetch all questions for subject, batch delete
         const qRef = query(collection(db, 'questions'), where('subject', '==', selectedSubject));
         const snapshot = await getDocs(qRef);
-        await Promise.all(snapshot.docs.map(docSnap => deleteDoc(docSnap.ref)));
+        const ids = snapshot.docs.map(d => d.id);
+        for (let i = 0; i < ids.length; i += 500) {
+          const batch = writeBatch(db);
+          ids.slice(i, i + 500).forEach(id => {
+            batch.delete(doc(db, 'questions', id));
+          });
+          await batch.commit();
+        }
         setQuestions(prev => prev.filter(q => q.subject !== selectedSubject));
-        setSelectedQuestions([]);
       } else if (deleteMode === 'all') {
+        // Fetch all, batch delete
         const snapshot = await getDocs(collection(db, 'questions'));
-        await Promise.all(snapshot.docs.map(docSnap => deleteDoc(docSnap.ref)));
+        const ids = snapshot.docs.map(d => d.id);
+        for (let i = 0; i < ids.length; i += 500) {
+          const batch = writeBatch(db);
+          ids.slice(i, i + 500).forEach(id => {
+            batch.delete(doc(db, 'questions', id));
+          });
+          await batch.commit();
+        }
         setQuestions([]);
-        setSelectedQuestions([]);
       }
+      setSelectedQuestions([]);
       setIsBulkDeleteDialogOpen(false);
       setSelectedSubject('');
     } catch (error) {
@@ -192,22 +271,38 @@ const QuestionBankPage = () => {
     }
   };
 
-  // CSV Export (robust, but for larger sets consider a library)
+  // Bulk Edit
+  const handleBulkEdit = async () => {
+    if (selectedQuestions.length === 0) return alert('Select questions to bulk edit.');
+    setIsDeleting(true);
+    try {
+      for (let i = 0; i < selectedQuestions.length; i += 500) {
+        const batch = writeBatch(db);
+        selectedQuestions.slice(i, i + 500).forEach(id => {
+          const qRef = doc(db, 'questions', id);
+          if (bulkEditField === 'subject') batch.update(qRef, { subject: bulkEditValue });
+          if (bulkEditField === 'difficulty') batch.update(qRef, { difficulty: bulkEditValue });
+          if (bulkEditField === 'chapter') batch.update(qRef, { chapter: bulkEditValue });
+          if (bulkEditField === 'addTag') batch.update(qRef, { tags: Array.from(new Set([...(questions.find(q => q.id === id)?.tags || []), bulkEditValue])) });
+          if (bulkEditField === 'removeTag') batch.update(qRef, { tags: (questions.find(q => q.id === id)?.tags || []).filter(t => t !== bulkEditValue) });
+        });
+        await batch.commit();
+      }
+      setBulkEditDialogOpen(false);
+      fetchQuestions(true);
+    } catch (e) {
+      alert('Bulk edit failed.');
+      console.error(e);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  // CSV Export
   const exportToCSV = (exportQuestions: Question[], filename: string) => {
     const headers = [
-      'questionText',
-      'options',
-      'correctAnswer',
-      'course',
-      'subject',
-      'chapter',
-      'difficulty',
-      'explanation',
-      'topic',
-      'year',
-      'book',
-      'teacher',
-      'enableExplanation',
+      'questionText', 'options', 'correctAnswer', 'course', 'subject', 'chapter', 'difficulty',
+      'explanation', 'topic', 'year', 'book', 'teacher', 'enableExplanation', 'tags'
     ];
     const escape = (text?: string) =>
       `"${(text ?? '').replace(/"/g, '""').replace(/\n/g, ' ')}"`;
@@ -226,6 +321,7 @@ const QuestionBankPage = () => {
         escape(q.book),
         escape(q.teacher),
         q.enableExplanation ? 'true' : 'false',
+        escape((q.tags || []).join('|'))
       ].join(',')
     );
     const csvContent = [headers.join(','), ...rows].join('\n');
@@ -251,25 +347,180 @@ const QuestionBankPage = () => {
     exportToCSV(exportQuestions, filename);
   };
 
+  // CSV Import
+  const onDrop = useCallback((acceptedFiles: File[]) => {
+    if (acceptedFiles.length === 0) return;
+    setImporting(true);
+    Papa.parse(acceptedFiles[0], {
+      header: true,
+      skipEmptyLines: true,
+      complete: async (results) => {
+        try {
+          const batch = writeBatch(db);
+          (results.data as any[]).slice(0, 500).forEach((row) => {
+            // Map row to Question; you may want to clean/validate here
+            const q: any = {
+              ...row,
+              options: row.options?.split('|'),
+              tags: row.tags?.split('|').filter((t: string) => t),
+              createdAt: serverTimestamp(),
+            };
+            batch.set(doc(collection(db, 'questions')), q);
+          });
+          await batch.commit();
+          setIsImportDialogOpen(false);
+          fetchQuestions(true);
+        } catch (e) {
+          alert('Import failed.');
+        } finally {
+          setImporting(false);
+        }
+      }
+    });
+  }, []);
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({ onDrop, accept: '.csv' });
+
+  // Infinitely load more
+  const handleLoadMore = () => {
+    if (hasMore && !loading && !fetchingMore) fetchQuestions(false);
+  };
+
+  // Unique values for filters
   const uniqueSubjects = Array.from(new Set(questions.map(q => q.subject).filter((s): s is string => !!s)));
-  const subjectSelectDisabled = uniqueSubjects.length === 0 || (exportMode !== 'subject' && deleteMode !== 'subject');
+  const uniqueDifficulties = Array.from(new Set(questions.map(q => q.difficulty).filter((d): d is string => !!d)));
+  const uniqueYears = Array.from(new Set(questions.map(q => q.year).filter((y): y is string => !!y)));
+
+  // Virtualized list item
+  const Row = ({ index, style }: { index: number, style: React.CSSProperties }) => {
+    const question = filteredQuestions[index];
+    const {
+      id, questionText, options = [], correctAnswer, course, subject, chapter, difficulty, tags
+    } = question;
+    return (
+      <div style={style}>
+        <Card
+          key={id}
+          className="p-4 bg-white shadow-md hover:shadow-lg transition-shadow duration-300 rounded-xl mb-4"
+        >
+          <div className="flex items-start gap-3 mb-2">
+            <Checkbox
+              checked={selectedQuestions.includes(id)}
+              onCheckedChange={() => handleSelectQuestion(id)}
+              className="mt-1"
+            />
+            <div className="flex-1">
+              <h2 className="text-base sm:text-lg font-semibold text-gray-800 flex items-start gap-1">
+                {index + 1}.{' '}
+                <span
+                  className="prose max-w-prose inline"
+                  dangerouslySetInnerHTML={{ __html: questionText }}
+                />
+              </h2>
+              <div className="flex flex-wrap gap-2 mt-2">
+                {course && <Badge className="bg-blue-100 text-blue-800">{course}</Badge>}
+                {subject && (
+                  <Badge variant="outline" className="border-blue-200 text-gray-700">{subject}</Badge>
+                )}
+                {chapter && (
+                  <Badge variant="secondary" className="bg-gray-100 text-gray-700">{chapter}</Badge>
+                )}
+                {difficulty && (
+                  <Badge className="bg-green-100 text-green-800">{difficulty}</Badge>
+                )}
+                {tags?.map(tag => (
+                  <Badge key={tag} className="bg-yellow-100 text-yellow-900"><Tag size={12} /> {tag}</Badge>
+                ))}
+              </div>
+            </div>
+            <Button variant="ghost" size="icon" onClick={() => setPreviewQuestion(question)}>
+              <Eye className="h-4 w-4" />
+            </Button>
+          </div>
+          <div className="grid grid-cols-1 gap-2 mt-2">
+            {options.map((opt, i) => (
+              <div
+                key={i}
+                className={`p-2 rounded-md border text-sm ${
+                  opt === correctAnswer
+                    ? 'bg-green-100 border-green-400 text-green-900'
+                    : 'bg-gray-50 border-gray-200 text-gray-700'
+                }`}
+              >
+                {String.fromCharCode(65 + i)}. {opt}
+              </div>
+            ))}
+          </div>
+          <div className="flex justify-end gap-2 mt-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="border-gray-300 hover:bg-gray-100 text-gray-700"
+              onClick={() => router.push(`/admin/questions/create?id=${id}`)}
+              disabled={role === 'viewer'}
+            >
+              <Pencil className="h-4 w-4 mr-1" /> Edit
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              className="hover:bg-red-700 text-white"
+              onClick={() => handleBulkDelete()}
+              disabled={role !== 'admin'}
+            >
+              <Trash className="h-4 w-4 mr-1" /> Delete
+            </Button>
+          </div>
+          {question.createdAt && (
+            <p className="text-sm text-gray-500 mt-1">
+              Created on:{' '}
+              {question.createdAt instanceof Date
+                ? question.createdAt.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
+                : new Date(question.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
+            </p>
+          )}
+        </Card>
+      </div>
+    );
+  };
+
+  // Dark mode toggle (basic)
+  const [darkMode, setDarkMode] = useState(false);
+  useEffect(() => {
+    document.body.classList.toggle('dark', darkMode);
+  }, [darkMode]);
+
+  // Audit log (placeholder)
+  const handleAuditLogAction = (action: string, questionId?: string) => {
+    // Send event to your backend/audit-logging service if desired
+    // e.g., logAction(user, action, questionId)
+    // For now, console log only
+    console.log(`[AUDIT] ${action}`, questionId);
+  };
 
   return (
-    <div className="min-h-screen bg-white rounded-xl p-4 sm:p-6 lg:p-8">
-      {/* Header */}
+    <div className={`min-h-screen ${darkMode ? 'bg-gray-900 text-white' : 'bg-white'} rounded-xl p-4 sm:p-6 lg:p-8`}>
+      {/* Header and Actions */}
       <div className="flex flex-col sm:flex-row justify-between items-center mb-6 gap-4">
         <div className="flex items-center gap-2">
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-800">
+          <h1 className="text-2xl sm:text-3xl font-bold">
             📘 Question Bank
           </h1>
-          <span className="text-sm sm:text-base text-gray-600">
+          <span className="text-sm sm:text-base text-gray-600 dark:text-gray-300">
             (Total Questions: {questions.length})
           </span>
         </div>
-        <div className="flex gap-3">
+        <div className="flex gap-3 flex-wrap">
           <Button
-            className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white transition-colors"
+            className="bg-indigo-600 hover:bg-indigo-700 text-white"
+            onClick={() => setDarkMode(dm => !dm)}
+            variant="ghost"
+          >
+            {darkMode ? '☀️ Light' : '🌙 Dark'}
+          </Button>
+          <Button
+            className="bg-blue-600 hover:bg-blue-700 text-white"
             onClick={() => router.push('/admin/questions/create')}
+            disabled={role === 'viewer'}
           >
             <Plus className="h-5 w-5 mr-2" />
             New Question
@@ -278,20 +529,20 @@ const QuestionBankPage = () => {
             <DialogTrigger asChild>
               <Button
                 variant="destructive"
-                className="w-full sm:w-auto hover:bg-red-700 text-white"
+                className="hover:bg-red-700 text-white"
+                disabled={role !== 'admin'}
               >
                 <Trash className="h-5 w-5 mr-2" />
                 Bulk Delete
               </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[500px]">
+            <DialogContent>
               <DialogHeader>
-                <DialogTitle className="text-xl font-semibold">Bulk Delete Questions</DialogTitle>
+                <DialogTitle>Bulk Delete Questions</DialogTitle>
               </DialogHeader>
               <div className="space-y-4 py-4">
                 <div>
-                  <Label className="text-sm font-medium text-gray-700">Delete Mode</Label>
-                  <Select value={deleteMode} onValueChange={(val) => setDeleteMode(val as 'selected' | 'subject' | 'all')}>
+                  <Select value={deleteMode} onValueChange={val => setDeleteMode(val as any)}>
                     <SelectTrigger className="mt-1">
                       <SelectValue placeholder="Select delete mode" />
                     </SelectTrigger>
@@ -304,7 +555,6 @@ const QuestionBankPage = () => {
                 </div>
                 {deleteMode === 'subject' && (
                   <div>
-                    <Label className="text-sm font-medium text-gray-700">Subject</Label>
                     <Select
                       value={selectedSubject}
                       onValueChange={setSelectedSubject}
@@ -324,9 +574,7 @@ const QuestionBankPage = () => {
                   </div>
                 )}
                 {deleteMode === 'selected' && (
-                  <p className="text-sm text-gray-600">
-                    {selectedQuestions.length} question(s) selected
-                  </p>
+                  <p className="text-sm text-gray-600">{selectedQuestions.length} question(s) selected</p>
                 )}
               </div>
               <DialogFooter>
@@ -339,80 +587,120 @@ const QuestionBankPage = () => {
                 <Button
                   variant="destructive"
                   onClick={handleBulkDelete}
-                  disabled={isDeleting || 
+                  disabled={isDeleting ||
                     (deleteMode === 'selected' && selectedQuestions.length === 0) ||
                     (deleteMode === 'subject' && !selectedSubject)
                   }
                 >
-                  {isDeleting ? (
-                    <>
-                      <Loader2 className="h-5 w-5 mr-2 animate-spin" />
-                      Deleting...
-                    </>
-                  ) : (
-                    'Delete'
-                  )}
+                  {isDeleting ? (<><Loader2 className="h-5 w-5 mr-2 animate-spin" />Deleting...</>) : 'Delete'}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+          <Dialog open={bulkEditDialogOpen} onOpenChange={setBulkEditDialogOpen}>
+            <DialogTrigger asChild>
+              <Button
+                className="bg-yellow-600 hover:bg-yellow-700 text-white"
+                disabled={selectedQuestions.length === 0}
+              >
+                <Edit2 className="h-5 w-5 mr-2" />
+                Bulk Edit
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Bulk Edit Selected Questions</DialogTitle>
+              </DialogHeader>
+              <div className="py-4 space-y-4">
+                <Select value={bulkEditField} onValueChange={val => setBulkEditField(val as any)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Edit Field" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="subject">Subject</SelectItem>
+                    <SelectItem value="difficulty">Difficulty</SelectItem>
+                    <SelectItem value="chapter">Chapter</SelectItem>
+                    <SelectItem value="addTag">Add Tag</SelectItem>
+                    <SelectItem value="removeTag">Remove Tag</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Input
+                  placeholder={`Set ${bulkEditField}`}
+                  value={bulkEditValue}
+                  onChange={e => setBulkEditValue(e.target.value)}
+                  list={bulkEditField === 'addTag' || bulkEditField === 'removeTag' ? 'tag-list' : undefined}
+                />
+                <datalist id="tag-list">
+                  {uniqueTags.map(tag => <option key={tag} value={tag} />)}
+                </datalist>
+              </div>
+              <DialogFooter>
+                <Button
+                  variant="outline"
+                  onClick={() => setBulkEditDialogOpen(false)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleBulkEdit}
+                  disabled={isDeleting || !bulkEditValue}
+                >
+                  {isDeleting ? (<Loader2 className="h-5 w-5 mr-2 animate-spin" />) : null}
+                  Save
                 </Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>
           <Dialog>
             <DialogTrigger asChild>
-              <Button className="w-full sm:w-auto bg-green-600 hover:bg-green-700 text-white">
+              <Button className="bg-green-600 hover:bg-green-700 text-white">
                 <Download className="h-5 w-5 mr-2" />
                 Export CSV
               </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[500px]">
+            <DialogContent>
               <DialogHeader>
-                <DialogTitle className="text-xl font-semibold">Export Questions to CSV</DialogTitle>
+                <DialogTitle>Export Questions to CSV</DialogTitle>
               </DialogHeader>
               <div className="space-y-4 py-4">
-                <div>
-                  <Label className="text-sm font-medium text-gray-700">Export Mode</Label>
-                  <Select
-                    value={exportMode}
-                    onValueChange={(val) => setExportMode(val as 'all' | 'subject')}
-                  >
-                    <SelectTrigger className="mt-1">
-                      <SelectValue placeholder="Select export mode" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Questions</SelectItem>
-                      <SelectItem value="subject">By Subject</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label className="text-sm font-medium text-gray-700">Subject</Label>
+                <Select
+                  value={exportMode}
+                  onValueChange={val => setExportMode(val as 'all' | 'subject')}
+                >
+                  <SelectTrigger className="mt-1">
+                    <SelectValue placeholder="Select export mode" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Questions</SelectItem>
+                    <SelectItem value="subject">By Subject</SelectItem>
+                  </SelectContent>
+                </Select>
+                {exportMode === 'subject' && (
                   <Select
                     value={selectedSubject}
-                    onValueChange={(val) => {
+                    onValueChange={val => {
                       setSelectedSubject(val);
-                      if (exportMode === 'subject' && val) handleExportCSV('subject', val);
+                      if (val) handleExportCSV('subject', val);
                     }}
-                    disabled={subjectSelectDisabled}
                   >
                     <SelectTrigger className="mt-1">
                       <SelectValue placeholder="Select subject" />
                     </SelectTrigger>
                     <SelectContent>
-                      {uniqueSubjects.map((subject) => (
+                      {uniqueSubjects.map(subject => (
                         <SelectItem key={subject} value={subject}>
                           {subject}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
-                </div>
-                {exportMode === 'all' && (
-                  <Button
-                    className="w-full bg-green-600 mt-4"
-                    onClick={() => handleExportCSV('all')}
-                  >
-                    Download All
-                  </Button>
                 )}
+                <Button
+                  className="bg-green-600 mt-4"
+                  onClick={() => handleExportCSV('all')}
+                >
+                  Download All
+                </Button>
               </div>
               <DialogFooter>
                 <Button
@@ -424,43 +712,117 @@ const QuestionBankPage = () => {
               </DialogFooter>
             </DialogContent>
           </Dialog>
+          <Dialog open={isImportDialogOpen} onOpenChange={setIsImportDialogOpen}>
+            <DialogTrigger asChild>
+              <Button className="bg-blue-500 hover:bg-blue-600 text-white">
+                <Upload className="h-5 w-5 mr-2" />
+                Import CSV
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Import Questions from CSV</DialogTitle>
+              </DialogHeader>
+              <div className="py-4">
+                <div {...getRootProps()} className={`border-2 border-dashed rounded p-6 text-center cursor-pointer ${isDragActive ? 'border-blue-500' : 'border-gray-300'}`}>
+                  <input {...getInputProps()} />
+                  {isDragActive
+                    ? <p>Drop the file here ...</p>
+                    : <p>Drag and drop a CSV file here, or click to select file</p>
+                  }
+                </div>
+                {importing && <p className="text-blue-500 mt-2">Importing...</p>}
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setIsImportDialogOpen(false)}>
+                  Cancel
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </div>
       </div>
 
-      {/* Search and Sort */}
-      <div className="mb-6 flex flex-col sm:flex-row gap-4">
-        <div className="flex max-w-full sm:max-w-xl w-full gap-2">
+      {/* Advanced Filtering */}
+      <div className="mb-6 flex flex-col md:flex-row gap-4 items-center">
+        <div className="flex gap-2 w-full md:w-2/5">
           <Input
-            placeholder="Search by course, subject, chapter, or question..."
+            placeholder="Search..."
             value={search}
-            onChange={handleSearch}
-            className="w-full py-6 px-4 border-gray-300 focus:border-blue-500 focus:ring-blue-500 rounded-md"
+            onChange={e => setSearch(e.target.value)}
+            className="w-full"
           />
           {search && (
-            <Button
-              variant="outline"
-              onClick={() => setSearch('')}
-              className="border-gray-300 hover:bg-gray-100 text-gray-700"
-            >
-              Clear
-            </Button>
+            <Button variant="outline" onClick={() => setSearch('')}>Clear</Button>
           )}
         </div>
-        <Select value={sortOrder} onValueChange={(val) => setSortOrder(val as 'latest' | 'oldest')}>
-          <SelectTrigger className="w-full sm:w-40">
-            <SelectValue placeholder="Sort by" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="latest">Latest</SelectItem>
-            <SelectItem value="oldest">Oldest</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-      <div className="mb-4 text-sm font-medium text-gray-700">
-        Showing {filteredQuestions.length} of {questions.length} total questions
+        <div className="flex gap-2 w-full md:w-3/5">
+          <Select value={selectedSubject} onValueChange={setSelectedSubject}>
+            <SelectTrigger className="w-32">
+              <SelectValue placeholder="Subject" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="">All</SelectItem>
+              {uniqueSubjects.map(subject => (
+                <SelectItem key={subject} value={subject}>{subject}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={filterDifficulty} onValueChange={setFilterDifficulty}>
+            <SelectTrigger className="w-32">
+              <SelectValue placeholder="Difficulty" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="">All</SelectItem>
+              {uniqueDifficulties.map(diff => (
+                <SelectItem key={diff} value={diff}>{diff}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={filterYear} onValueChange={setFilterYear}>
+            <SelectTrigger className="w-24">
+              <SelectValue placeholder="Year" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="">All</SelectItem>
+              {uniqueYears.map(year => (
+                <SelectItem key={year} value={year}>{year}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select multiple value={filterTags} onValueChange={vals => setFilterTags(vals as string[])}>
+            <SelectTrigger className="w-32">
+              <SelectValue placeholder="Tags" />
+            </SelectTrigger>
+            <SelectContent>
+              {uniqueTags.map(tag => (
+                <SelectItem key={tag} value={tag}>
+                  {tag}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={sortOrder} onValueChange={val => setSortOrder(val as 'latest' | 'oldest')}>
+            <SelectTrigger className="w-24">
+              <SelectValue placeholder="Sort" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="latest">Latest</SelectItem>
+              <SelectItem value="oldest">Oldest</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
-      {/* Content */}
+      {/* Statistics */}
+      <div className="mb-4 text-xs md:text-sm text-gray-700 dark:text-gray-300 flex flex-wrap gap-3">
+        {Object.entries(stats).map(([subj, count]) => (
+          <span key={subj} className="bg-gray-200 dark:bg-gray-700 px-2 py-1 rounded">{subj}: {count}</span>
+        ))}
+        <span>Total: {questions.length}</span>
+      </div>
+
+      {/* Content - Virtualized List */}
       {loading ? (
         <div className="grid grid-cols-1 gap-6">
           {[...Array(6)].map((_, i) => (
@@ -480,117 +842,76 @@ const QuestionBankPage = () => {
       ) : filteredQuestions.length === 0 ? (
         <p className="text-center text-gray-500 text-lg mt-10">No questions found.</p>
       ) : (
-        <div className="grid grid-cols-1 gap-6">
+        <>
           <div className="flex items-center gap-2 mb-4">
             <Checkbox
               checked={filteredQuestions.length > 0 && selectedQuestions.length === filteredQuestions.length}
               onCheckedChange={handleSelectAll}
             />
-            <span className="text-sm text-gray-600">
+            <span className="text-sm text-gray-600 dark:text-gray-400">
               Select All ({selectedQuestions.length}/{filteredQuestions.length})
             </span>
+            <Button
+              variant="outline"
+              className="ml-3"
+              size="sm"
+              onClick={handleLoadMore}
+              disabled={!hasMore || loading || fetchingMore}
+            >
+              {fetchingMore ? <Loader2 className="h-5 w-5 animate-spin" /> : 'Load More'}
+            </Button>
           </div>
-          {filteredQuestions.map((question, idx) => {
-            const {
-              id,
-              questionText,
-              options = [],
-              correctAnswer,
-              course,
-              subject,
-              chapter,
-              difficulty,
-            } = question;
-            return (
-              <Card
-                key={id}
-                className="p-4 bg-white shadow-md hover:shadow-lg transition-shadow duration-300 rounded-xl"
-              >
-                <div className="flex items-start gap-3 mb-4">
-                  <Checkbox
-                    checked={selectedQuestions.includes(id)}
-                    onCheckedChange={() => handleSelectQuestion(id)}
-                    className="mt-1"
-                  />
-                  <div className="flex-1">
-                    <h2 className="text-base sm:text-lg font-semibold text-gray-800 flex items-start gap-1">
-                      {idx + 1}.{' '}
-                      <span
-                        className="prose max-w-prose inline"
-                        dangerouslySetInnerHTML={{ __html: questionText }}
-                      />
-                    </h2>
-                    <div className="flex flex-wrap gap-2 mt-2">
-                      {course && <Badge className="bg-blue-100 text-blue-800">{course}</Badge>}
-                      {subject && (
-                        <Badge variant="outline" className="border-blue-200 text-gray-700">
-                          {subject}
-                        </Badge>
-                      )}
-                      {chapter && (
-                        <Badge variant="secondary" className="bg-gray-100 text-gray-700">
-                          {chapter}
-                        </Badge>
-                      )}
-                      {difficulty && (
-                        <Badge className="bg-green-100 text-green-800">{difficulty}</Badge>
-                      )}
-                    </div>
-                  </div>
-                </div>
-                <div className="grid grid-cols-1 gap-2 mt-4">
-                  {options.map((opt, i) => (
-                    <div
-                      key={i}
-                      className={`p-2 rounded-md border text-sm ${
-                        opt === correctAnswer
-                          ? 'bg-green-100 border-green-400 text-green-900'
-                          : 'bg-gray-50 border-gray-200 text-gray-700'
-                      }`}
-                    >
-                      {String.fromCharCode(65 + i)}. {opt}
-                    </div>
-                  ))}
-                </div>
-                <div className="flex justify-end gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="border-gray-300 hover:bg-gray-100 text-gray-700"
-                    onClick={() => router.push(`/admin/questions/create?id=${id}`)}
-                  >
-                    <Pencil className="h-4 w-4 mr-1" /> Edit
-                  </Button>
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    className="hover:bg-red-700 text-white"
-                    onClick={() => handleDelete(id)}
-                  >
-                    <Trash className="h-4 w-4 mr-1" /> Delete
-                  </Button>
-                </div>
-                {question.createdAt && (
-                  <p className="text-sm text-gray-500 mt-1">
-                    Created on:{' '}
-                    {question.createdAt instanceof Date
-                      ? question.createdAt.toLocaleDateString(undefined, {
-                          year: 'numeric',
-                          month: 'short',
-                          day: 'numeric',
-                        })
-                      : new Date(question.createdAt).toLocaleDateString(undefined, {
-                          year: 'numeric',
-                          month: 'short',
-                          day: 'numeric',
-                        })}
-                  </p>
-                )}
-              </Card>
-            );
-          })}
-        </div>
+          <VirtualList
+            height={700}
+            width={'100%'}
+            itemCount={filteredQuestions.length}
+            itemSize={285}
+          >
+            {Row}
+          </VirtualList>
+        </>
       )}
+
+      {/* Preview Modal */}
+      <Dialog open={!!previewQuestion} onOpenChange={(open) => !open && setPreviewQuestion(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Question Preview</DialogTitle>
+          </DialogHeader>
+          {previewQuestion && (
+            <div>
+              <h2 className="font-bold mb-2">{previewQuestion.questionText}</h2>
+              <div>
+                <b>Options:</b>
+                <ul>
+                  {previewQuestion.options.map((o, i) => (
+                    <li key={i} className={o === previewQuestion.correctAnswer ? 'font-bold text-green-700' : ''}>
+                      {String.fromCharCode(65 + i)}. {o}
+                    </li>
+                  ))}
+                </ul>
+                <div className="mt-2">
+                  <b>Correct:</b> {previewQuestion.correctAnswer}
+                </div>
+                <div><b>Explanation:</b> {previewQuestion.explanation}</div>
+                <div><b>Course:</b> {previewQuestion.course}</div>
+                <div><b>Subject:</b> {previewQuestion.subject}</div>
+                <div><b>Chapter:</b> {previewQuestion.chapter}</div>
+                <div><b>Difficulty:</b> {previewQuestion.difficulty}</div>
+                <div><b>Tags:</b> {(previewQuestion.tags || []).join(', ')}</div>
+                <div><b>Year:</b> {previewQuestion.year}</div>
+                <div><b>Book:</b> {previewQuestion.book}</div>
+                <div><b>Teacher:</b> {previewQuestion.teacher}</div>
+                <div><b>Enable Explanation:</b> {previewQuestion.enableExplanation ? 'Yes' : 'No'}</div>
+                <div><b>Created At:</b> {previewQuestion.createdAt?.toLocaleString()}</div>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button onClick={() => setPreviewQuestion(null)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
