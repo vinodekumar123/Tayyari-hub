@@ -22,6 +22,7 @@ import {
 } from '@/components/ui/dialog';
 import { ArrowLeft, ArrowRight, Info, BookOpen, Clock, Send, Download, CheckCircle, Flag, ArrowUp, ArrowDown } from 'lucide-react';
 import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
 
 interface Question {
   id: string;
@@ -315,25 +316,38 @@ const StartQuizPage: React.FC = () => {
     return `${m}:${s}`;
   };
 
-  const generatePDF = (includeAnswers: boolean) => {
-    if (!quiz) return;
+  // Helper: build the export HTML (used for Word and PDF canvas rendering)
+  const buildExportHtmlString = (includeAnswers: boolean) => {
+    const escapeHtml = (str: string) => str
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
 
-    const doc = new jsPDF();
-    const pageWidth = doc.internal.pageSize.getWidth();
-    const margin = 20;
-    const maxWidth = pageWidth - 2 * margin;
-    let y = margin;
+    if (!quiz) return '';
 
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(20);
-    doc.setTextColor(0, 51, 102);
-    doc.text(quiz.title, pageWidth / 2, y, { align: 'center' });
-    y += 10;
-
-    doc.setFontSize(12);
-    doc.setTextColor(100);
-    doc.text(`Date: August 04, 2025`, pageWidth / 2, y, { align: 'center' });
-    y += 20;
+    let html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <title>${escapeHtml(quiz.title)}</title>
+        <style>
+          body { font-family: Arial, Helvetica, sans-serif; color: #222; padding: 20px; background: #fff; }
+          h1 { color: #003366; text-align: center; margin-bottom: 4px; }
+          h2 { color: #003366; margin-top: 20px; border-bottom: 2px solid #cce0ff; padding-bottom: 6px; }
+          .question { margin: 12px 0 8px 0; }
+          .options { margin-left: 18px; }
+          .answer { color: #006600; margin-top: 6px; font-weight: bold; }
+          .meta { text-align: center; color: #666; margin-bottom: 8px; font-size: 12px; }
+          .qnum { font-weight: bold; margin-right: 6px; }
+          /* ensure pretty print when rendered to canvas */
+          * { box-sizing: border-box; }
+        </style>
+      </head>
+      <body>
+        <h1>${escapeHtml(quiz.title)}</h1>
+        <div class="meta">Date: ${new Date().toLocaleDateString()}</div>
+    `;
 
     const groupedQuestions = quiz.selectedQuestions.reduce((acc, question) => {
       const subjectName = typeof question.subject === 'object' ? question.subject?.name : question.subject || 'Uncategorized';
@@ -344,56 +358,122 @@ const StartQuizPage: React.FC = () => {
       return acc;
     }, {} as Record<string, Question[]>);
 
-    Object.entries(groupedQuestions).sort(([a], [b]) => a.localeCompare(b)).forEach(([subject, questions], subjectIndex) => {
-      if (y > doc.internal.pageSize.getHeight() - 30) {
-        doc.addPage();
-        y = margin;
-      }
+    const orderedSubjects = Object.entries(groupedQuestions).sort(([a], [b]) => a.localeCompare(b));
 
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(16);
-      doc.setTextColor(0, 51, 102);
-      doc.text(subject, margin, y);
-      y += 10;
-
-      questions.forEach((q, qIndex) => {
-        if (y > doc.internal.pageSize.getHeight() - 50) {
-          doc.addPage();
-          y = margin;
-        }
-
-        doc.setFont('helvetica', 'normal');
-        doc.setFontSize(12);
-        doc.setTextColor(0);
-        const questionText = `Q${subjectIndex * questions.length + qIndex + 1}. ${stripHtml(q.questionText)}`;
-        const questionLines = doc.splitTextToSize(questionText, maxWidth);
-        doc.text(questionLines, margin, y);
-        y += questionLines.length * 7 + 5;
-
+    let globalIndex = 0;
+    orderedSubjects.forEach(([subject, questions]) => {
+      html += `<h2>${escapeHtml(subject)}</h2>`;
+      questions.forEach((q) => {
+        globalIndex += 1;
+        // questionText may contain HTML — we want the rendered HTML for PDF capture,
+        // but when building a string we will include it as-is so the canvas render includes formatting.
+        html += `<div class="question"><span class="qnum">Q${globalIndex}.</span> ${q.questionText}</div>`;
+        html += `<div class="options">`;
         q.options.forEach((opt, i) => {
-          const optionText = `${String.fromCharCode(65 + i)}. ${stripHtml(opt)}`;
-          const optionLines = doc.splitTextToSize(optionText, maxWidth - 10);
-          doc.text(optionLines, margin + 10, y);
-          y += optionLines.length * 7 + 3;
+          html += `<div>${String.fromCharCode(65 + i)}. ${opt}</div>`;
         });
-
+        html += `</div>`;
         if (includeAnswers && q.correctAnswer) {
-          doc.setFont('helvetica', 'bold');
-          doc.setTextColor(0, 128, 0);
-          const answerText = `Correct Answer: ${stripHtml(q.correctAnswer)}`;
-          const answerLines = doc.splitTextToSize(answerText, maxWidth);
-          doc.text(answerLines, margin, y);
-          y += answerLines.length * 7 + 5;
-          doc.setFont('helvetica', 'normal');
-          doc.setTextColor(0);
+          html += `<div class="answer">Correct Answer: ${escapeHtml(stripHtml(q.correctAnswer))}</div>`;
         }
       });
-
-      y += 10;
     });
 
-    const fileName = `${quiz.title}${includeAnswers ? '_with_answers' : ''}.pdf`;
-    doc.save(fileName);
+    html += `
+      </body>
+      </html>
+    `;
+    return html;
+  };
+
+  // New PDF generation: render the HTML using html2canvas and then write image(s) into jsPDF.
+  // This preserves web fonts and special symbols because we capture the rendered DOM.
+  const generatePDF = async (includeAnswers: boolean) => {
+    if (!quiz || typeof window === 'undefined') return;
+
+    // Build HTML and insert hidden container in DOM for rendering
+    const htmlString = buildExportHtmlString(includeAnswers);
+    const container = document.createElement('div');
+    container.style.position = 'fixed';
+    container.style.left = '-9999px'; // off-screen
+    container.style.top = '0';
+    container.style.width = '800px'; // set a width that matches a reasonable page width; higher gives better fidelity
+    container.style.background = '#ffffff';
+    container.innerHTML = htmlString;
+    document.body.appendChild(container);
+
+    try {
+      // Use a higher scale for better resolution of text/symbols
+      const canvas = await html2canvas(container, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: '#ffffff',
+        logging: false,
+      });
+
+      const imgData = canvas.toDataURL('image/png');
+
+      // Create PDF in mm A4
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = pdf.internal.pageSize.getHeight();
+
+      // Convert canvas px to PDF size in mm by matching widths
+      // imgWidth in pdf units (mm)
+      const imgWidth = pdfWidth;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+      let heightLeft = imgHeight;
+      let position = 0;
+
+      // First page
+      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+      heightLeft -= pdfHeight;
+
+      // Add extra pages if needed
+      while (heightLeft > 0) {
+        position = heightLeft - imgHeight; // negative offset to show next slice
+        pdf.addPage();
+        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+        heightLeft -= pdfHeight;
+      }
+
+      const fileNameSafe = quiz.title.replace(/[\\/:"*?<>|]+/g, '');
+      const fileName = `${fileNameSafe}${includeAnswers ? '_with_answers' : ''}.pdf`;
+      pdf.save(fileName);
+    } catch (err) {
+      // Fallback: if canvas rendering fails, fall back to previous text-based PDF (less accurate for symbols)
+      console.error('PDF generation via html2canvas failed:', err);
+      // Optionally implement a fallback here (not done to keep behavior explicit)
+      alert('PDF export failed. Check console for details.');
+    } finally {
+      // Clean up DOM
+      document.body.removeChild(container);
+    }
+  };
+
+  // Word export - using HTML blob that Word can open (.doc)
+  const generateWord = (includeAnswers: boolean) => {
+    if (!quiz) return;
+
+    const escapeHtml = (str: string) => str
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+
+    // Build HTML content
+    const html = buildExportHtmlString(includeAnswers);
+
+    const blob = new Blob([html], { type: 'application/msword' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const fileNameSafe = quiz.title.replace(/[\\/:"*?<>|]+/g, '');
+    a.download = `${fileNameSafe}${includeAnswers ? '_with_answers' : ''}.doc`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
 
   // Scroll helpers
@@ -532,7 +612,7 @@ const StartQuizPage: React.FC = () => {
         <Dialog open={showDownloadModal} onOpenChange={setShowDownloadModal}>
           <DialogContent className="w-[90vw] max-w-md sm:max-w-lg">
             <DialogHeader>
-              <DialogTitle>Download Quiz as PDF</DialogTitle>
+              <DialogTitle>Download Quiz</DialogTitle>
               <DialogDescription>Choose an option for downloading the quiz:</DialogDescription>
             </DialogHeader>
             <div className="mt-4 flex flex-col gap-2">
@@ -544,7 +624,7 @@ const StartQuizPage: React.FC = () => {
                 className="bg-blue-600 text-white hover:bg-blue-700"
               >
                 <Download className="mr-2 h-5 w-5" />
-                Download Questions Only
+                Download PDF (Questions Only)
               </Button>
               <Button
                 onClick={() => {
@@ -554,7 +634,28 @@ const StartQuizPage: React.FC = () => {
                 className="bg-green-600 text-white hover:bg-green-700"
               >
                 <Download className="mr-2 h-5 w-5" />
-                Download with Answers
+                Download PDF (With Answers)
+              </Button>
+
+              <Button
+                onClick={() => {
+                  generateWord(false);
+                  setShowDownloadModal(false);
+                }}
+                className="bg-indigo-600 text-white hover:bg-indigo-700"
+              >
+                <Download className="mr-2 h-5 w-5" />
+                Download Word (Questions Only)
+              </Button>
+              <Button
+                onClick={() => {
+                  generateWord(true);
+                  setShowDownloadModal(false);
+                }}
+                className="bg-emerald-600 text-white hover:bg-emerald-700"
+              >
+                <Download className="mr-2 h-5 w-5" />
+                Download Word (With Answers)
               </Button>
             </div>
           </DialogContent>
@@ -656,7 +757,7 @@ const StartQuizPage: React.FC = () => {
                 className="flex items-center gap-2"
               >
                 <Download className="h-5 w-5" />
-                Download PDF
+                Download PDF / Word
               </Button>
             </div>
           </div>
