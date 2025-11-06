@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { collection, getDocs, query, where, orderBy } from 'firebase/firestore';
+import { collection, getDocs, query, where } from 'firebase/firestore';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { db, auth } from 'app/firebase';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
@@ -28,35 +28,42 @@ const UserCreatedQuizzesPage = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Listen for auth state changes
     const unsub = onAuthStateChanged(auth, async (u) => {
       setUser(u);
       if (!u) {
+        setLoading(false);
         router.push('/login');
         return;
       }
-      // Fetch quizzes created by user
-      const q = query(
-        collection(db, 'user-created-tests'),
-        where('createdBy', '==', u.uid),
-        orderBy('createdAt', 'desc')
-      );
-      const snap = await getDocs(q);
-      const list: UserCreatedQuiz[] = [];
-      snap.forEach(docSnap => {
-        const d = docSnap.data();
-        list.push({
-          id: docSnap.id,
-          name: d.name,
-          subject: d.subject,
-          chapters: d.chapters || [],
-          createdBy: d.createdBy,
-          duration: d.duration,
-          questionCount: d.questionCount,
-          createdAt: d.createdAt,
+      try {
+        // query quizzes created by this user
+        const q = query(
+          collection(db, 'user-quizzes'),
+          where('createdBy', '==', u.uid)
+        );
+        const snap = await getDocs(q);
+        const list: UserCreatedQuiz[] = [];
+        snap.forEach((docSnap) => {
+          const d = docSnap.data();
+          list.push({
+            id: docSnap.id,
+            name: d.name,
+            subject: d.subject,
+            chapters: d.chapters || [],
+            createdBy: d.createdBy,
+            duration: d.duration,
+            questionCount: d.questionCount,
+            createdAt: d.createdAt,
+          });
         });
-      });
-      setQuizzes(list);
-      setLoading(false);
+        setQuizzes(list);
+        console.log('Loaded quizzes:', list);
+      } catch (e) {
+        console.error('Error loading user quizzes:', e);
+      } finally {
+        setLoading(false);
+      }
     });
     return () => unsub();
   }, [router]);
@@ -79,7 +86,7 @@ const UserCreatedQuizzesPage = () => {
           <CardContent>
             <p className="text-lg">You have not created any quizzes yet.</p>
             <Button
-              onClick={() => router.push('/create-your-own-test')}
+              onClick={() => router.push('/quiz/create-mock')}
               className="mt-4 bg-blue-600 text-white hover:bg-blue-700"
             >
               <Plus className="mr-2 h-5 w-5" /> Create First Test
@@ -96,7 +103,7 @@ const UserCreatedQuizzesPage = () => {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => router.push(`/user-created-tests/${q.id}/start?id=${q.id}`)}
+                    onClick={() => router.push(`/quiz/start-user-quiz?id=${q.id}`)}
                   >
                     <Eye className="h-4 w-4 mr-1" /> Start
                   </Button>
@@ -122,7 +129,8 @@ const UserCreatedQuizzesPage = () => {
                   </div>
                 </div>
                 <div className="text-xs text-gray-400">
-                  Created {q.createdAt?.toDate
+                  Created{' '}
+                  {q.createdAt?.toDate
                     ? q.createdAt.toDate().toLocaleString()
                     : new Date(q.createdAt).toLocaleString()}
                 </div>
