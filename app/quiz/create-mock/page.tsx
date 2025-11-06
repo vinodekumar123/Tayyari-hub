@@ -58,7 +58,6 @@ export default function CreateUserQuizPage() {
 
   const [subjectAnalytics, setSubjectAnalytics] = useState<Record<string, SubjectUsageDoc>>({});
 
-  // Auth listener
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (u) => {
       setUser(u);
@@ -66,7 +65,6 @@ export default function CreateUserQuizPage() {
     return () => unsub();
   }, []);
 
-  // Load subjects & chapters once
   useEffect(() => {
     let mounted = true;
     const loadMeta = async () => {
@@ -112,10 +110,8 @@ export default function CreateUserQuizPage() {
     };
     loadMeta();
     return () => { mounted = false; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Update selected chapters when selectedSubjects changes
   useEffect(() => {
     if (selectedSubjects.length > 0) {
       setSelectedChapters((prev) => {
@@ -134,15 +130,13 @@ export default function CreateUserQuizPage() {
     } else {
       setSelectedChapters([]);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedSubjects, chaptersBySubject]);
 
-  // Per-subject question count state: initialize or clean up as subjects change
   useEffect(() => {
     setQuestionsPerSubject((prev) => {
       const updated: Record<string, number> = { ...prev };
       selectedSubjects.forEach(subj => {
-        if (!updated[subj]) updated[subj] = 5; // default value per subject
+        if (!updated[subj]) updated[subj] = 5;
       });
       Object.keys(updated).forEach(subj => {
         if (!selectedSubjects.includes(subj)) delete updated[subj];
@@ -151,7 +145,6 @@ export default function CreateUserQuizPage() {
     });
   }, [selectedSubjects]);
 
-  // Load subject usage analytics for dashboard speed (from user's question-usage subject docs)
   useEffect(() => {
     const fetchAnalytics = async () => {
       if (!user) return;
@@ -185,7 +178,6 @@ export default function CreateUserQuizPage() {
       setSubjectAnalytics(analytics);
     };
     if (subjects.length > 0 && user) fetchAnalytics();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [subjects, user]);
 
   const toggleChapter = (c: string) => {
@@ -268,12 +260,10 @@ export default function CreateUserQuizPage() {
         subjectPools[subj] = pool;
       }
 
-      // For each subject, filter chapters and select N questions (prefer unused)
       for (const subj of selectedSubjects) {
         const pool = subjectPools[subj].filter((p) => selectedChapters.includes(p.chapter || ''));
         const numThisSubject = questionsPerSubject[subj] || 0;
 
-        // Get user's used questions for this subject
         const usedSet = new Set(
           subjectAnalytics[subj]?.usedQuestions || []
         );
@@ -314,7 +304,6 @@ export default function CreateUserQuizPage() {
         createdAt: serverTimestamp(),
       });
 
-      // Update user's usedQuestions per subject (and analytics) in batch
       const batch = writeBatch(db);
       const subjectToIds: Record<string, string[]> = {};
       for (const q of allSelectedQuestions) {
@@ -324,9 +313,7 @@ export default function CreateUserQuizPage() {
       }
 
       for (const subj of Object.keys(subjectToIds)) {
-        // Get pool for this subject
         const pool = subjectPools[subj] || [];
-        // Get old used set and add newly used
         const oldUsedSet = new Set(subjectAnalytics[subj]?.usedQuestions || []);
         subjectToIds[subj].forEach((id) => oldUsedSet.add(id));
         const usedArr = Array.from(oldUsedSet);
@@ -334,7 +321,6 @@ export default function CreateUserQuizPage() {
         const total = pool.length;
         const unusedCount = total - usedCount;
 
-        // Update question-usage doc, including analytics fields
         const usageDocRef = doc(db, 'users', user.uid, 'question-usage', subj);
         batch.set(usageDocRef, {
           usedQuestions: usedArr,
@@ -362,118 +348,257 @@ export default function CreateUserQuizPage() {
     }
   };
 
-  if (loading)
-    return <div className="p-6">Loading...</div>;
+  const totalQuestions = Object.values(questionsPerSubject).reduce((a, b) => a + b, 0);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-purple-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-white text-lg font-light">Loading your workspace...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="max-w-3xl mx-auto p-6 bg-white rounded shadow">
-      <h2 className="text-2xl font-semibold mb-4">Create Your Own Test</h2>
-      {error && <div className="mb-4 text-sm text-red-700 bg-red-100 p-2 rounded">{error}</div>}
-      <form onSubmit={handleCreate} className="space-y-4">
-        <div>
-          <label className="block text-sm font-medium">Title (optional)</label>
-          <input
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="My Chemistry Practice Test"
-            className="mt-1 block w-full border rounded p-2"
-          />
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 py-12 px-4 sm:px-6 lg:px-8">
+      <style jsx>{`
+        @keyframes float {
+          0%, 100% { transform: translateY(0px); }
+          50% { transform: translateY(-20px); }
+        }
+        @keyframes fadeIn {
+          from { opacity: 0; transform: translateY(20px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .glass {
+          background: rgba(255, 255, 255, 0.05);
+          backdrop-filter: blur(10px);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .glass-card {
+          background: rgba(255, 255, 255, 0.08);
+          backdrop-filter: blur(16px);
+          border: 1px solid rgba(255, 255, 255, 0.15);
+          transition: all 0.3s ease;
+        }
+        .glass-card:hover {
+          background: rgba(255, 255, 255, 0.12);
+          border-color: rgba(255, 255, 255, 0.25);
+          transform: translateY(-2px);
+        }
+        .btn-primary {
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          transition: all 0.3s ease;
+        }
+        .btn-primary:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4);
+        }
+        .chip {
+          transition: all 0.3s ease;
+        }
+        .chip:hover {
+          transform: scale(1.05);
+        }
+        .animate-fade-in {
+          animation: fadeIn 0.5s ease-out forwards;
+        }
+      `}</style>
+
+      <div className="max-w-6xl mx-auto">
+        {/* Header */}
+        <div className="text-center mb-12 animate-fade-in">
+          <h1 className="text-5xl md:text-6xl font-bold text-white mb-4 bg-clip-text text-transparent bg-gradient-to-r from-purple-400 to-pink-400">
+            Craft Your Test
+          </h1>
+          <p className="text-gray-300 text-lg font-light">Design a personalized quiz tailored to your learning goals</p>
         </div>
-        <div>
-          <label className="block text-sm font-medium">Subjects (select one or more)</label>
-          <div className="mt-2 flex flex-wrap gap-2">
-            {subjects.map((s) => (
-              <button
-                type="button"
-                key={s}
-                onClick={() => toggleSubject(s)}
-                className={`px-3 py-1 rounded border ${
-                  selectedSubjects.includes(s)
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-white text-gray-700'
-                }`}
-              >
-                {s}
-                {subjectAnalytics[s] &&
-                  <span className="ml-2 text-xs text-gray-500">
-                    T:{subjectAnalytics[s].totalQuestions} U:{subjectAnalytics[s].unusedQuestionsCount} Used:{subjectAnalytics[s].usedQuestionsCount}
-                  </span>
-                }
-              </button>
-            ))}
+
+        {/* Error Alert */}
+        {error && (
+          <div className="mb-8 glass-card rounded-2xl p-4 border-red-500/30 animate-fade-in">
+            <div className="flex items-start gap-3">
+              <div className="w-6 h-6 rounded-full bg-red-500/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                <span className="text-red-400 text-sm">!</span>
+              </div>
+              <p className="text-red-300 flex-1">{error}</p>
+            </div>
           </div>
-          {/* Per-subject question count inputs */}
-          <div className="mt-4 grid grid-cols-2 gap-2">
-            {selectedSubjects.map(subj => (
-              <div key={subj}>
-                <label className="block text-xs font-medium">{subj} - No. of Questions</label>
+        )}
+
+        <div className="space-y-8">
+          {/* Title Input */}
+          <div className="glass-card rounded-3xl p-8 animate-fade-in">
+            <label className="block text-white text-sm font-medium mb-3 uppercase tracking-wider">Test Title</label>
+            <input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="My Chemistry Practice Test"
+              className="w-full bg-white/10 border border-white/20 rounded-xl px-6 py-4 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
+            />
+          </div>
+
+          {/* Subjects Selection */}
+          <div className="glass-card rounded-3xl p-8 animate-fade-in">
+            <div className="flex items-center justify-between mb-6">
+              <label className="text-white text-sm font-medium uppercase tracking-wider">Select Subjects</label>
+              <span className="text-purple-300 text-sm">{selectedSubjects.length} selected</span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
+              {subjects.map((s) => {
+                const analytics = subjectAnalytics[s];
+                const isSelected = selectedSubjects.includes(s);
+                return (
+                  <button
+                    type="button"
+                    key={s}
+                    onClick={() => toggleSubject(s)}
+                    className={`chip rounded-2xl p-4 text-left transition-all ${
+                      isSelected
+                        ? 'bg-gradient-to-br from-purple-500/30 to-pink-500/30 border-2 border-purple-400/50'
+                        : 'glass border-2 border-white/10'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-white font-medium">{s}</span>
+                      <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+                        isSelected ? 'bg-purple-500 border-purple-400' : 'border-white/30'
+                      }`}>
+                        {isSelected && <span className="text-white text-xs">✓</span>}
+                      </div>
+                    </div>
+                    {analytics && (
+                      <div className="flex gap-3 text-xs">
+                        <span className="text-gray-300">Total: {analytics.totalQuestions}</span>
+                        <span className="text-green-300">Fresh: {analytics.unusedQuestionsCount}</span>
+                        <span className="text-yellow-300">Used: {analytics.usedQuestionsCount}</span>
+                      </div>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Questions per subject */}
+            {selectedSubjects.length > 0 && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {selectedSubjects.map(subj => (
+                  <div key={subj} className="glass rounded-xl p-4">
+                    <label className="block text-gray-300 text-xs mb-2 uppercase tracking-wider">{subj}</label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={subjectAnalytics[subj]?.totalQuestions || 100}
+                      value={questionsPerSubject[subj] || 1}
+                      onChange={e =>
+                        setQuestionsPerSubject(ps => ({
+                          ...ps,
+                          [subj]: Math.max(1, Number(e.target.value))
+                        }))
+                      }
+                      className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Chapters Selection */}
+          {selectedSubjects.length > 0 && (
+            <div className="glass-card rounded-3xl p-8 animate-fade-in">
+              <div className="flex items-center justify-between mb-6">
+                <label className="text-white text-sm font-medium uppercase tracking-wider">Select Chapters</label>
+                <span className="text-purple-300 text-sm">{selectedChapters.length} selected</span>
+              </div>
+              <div className="flex flex-wrap gap-3">
+                {selectedSubjects.flatMap((subject) =>
+                  (chaptersBySubject[subject] || []).map((c) => {
+                    const isSelected = selectedChapters.includes(c);
+                    return (
+                      <button
+                        type="button"
+                        key={subject + '::' + c}
+                        onClick={() => toggleChapter(c)}
+                        className={`chip px-5 py-2.5 rounded-full text-sm font-medium transition-all ${
+                          isSelected
+                            ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white'
+                            : 'glass text-gray-300 border border-white/20'
+                        }`}
+                      >
+                        {c} <span className="text-xs opacity-70">({subject})</span>
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Configuration */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-fade-in">
+            <div className="glass-card rounded-3xl p-6">
+              <label className="block text-white text-sm font-medium mb-3 uppercase tracking-wider">Duration</label>
+              <div className="flex items-center gap-2">
                 <input
                   type="number"
                   min={1}
-                  max={subjectAnalytics[subj]?.totalQuestions || 100}
-                  value={questionsPerSubject[subj] || 1}
-                  onChange={e =>
-                    setQuestionsPerSubject(ps => ({
-                      ...ps,
-                      [subj]: Math.max(1, Number(e.target.value))
-                    }))
-                  }
-                  className="mt-1 block w-full border rounded p-2"
+                  value={duration}
+                  onChange={(e) => setDuration(Number(e.target.value))}
+                  className="flex-1 bg-white/10 border border-white/20 rounded-xl px-4 py-3 text-white text-center text-xl font-semibold focus:outline-none focus:ring-2 focus:ring-purple-500"
                 />
+                <span className="text-gray-300 text-sm">min</span>
               </div>
-            ))}
+            </div>
+
+            <div className="glass-card rounded-3xl p-6">
+              <label className="block text-white text-sm font-medium mb-3 uppercase tracking-wider">Per Page</label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  min={1}
+                  max={totalQuestions || 1}
+                  value={questionsPerPage}
+                  onChange={(e) => setQuestionsPerPage(Number(e.target.value))}
+                  className="flex-1 bg-white/10 border border-white/20 rounded-xl px-4 py-3 text-white text-center text-xl font-semibold focus:outline-none focus:ring-2 focus:ring-purple-500"
+                />
+                <span className="text-gray-300 text-sm">Q's</span>
+              </div>
+            </div>
+
+            <div className="glass-card rounded-3xl p-6 flex flex-col justify-between">
+              <label className="block text-white text-sm font-medium mb-3 uppercase tracking-wider">Total Questions</label>
+              <div className="text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-400">
+                {totalQuestions}
+              </div>
+            </div>
+          </div>
+
+          {/* Submit Button */}
+          <div className="flex justify-center pt-6 animate-fade-in">
+            <button
+              type="button"
+              onClick={handleCreate}
+              disabled={creating}
+              className="btn-primary px-12 py-5 rounded-2xl text-white font-semibold text-lg shadow-2xl disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-3"
+            >
+              {creating ? (
+                <>
+                  <div className="w-5 h-5 border-3 border-white border-t-transparent rounded-full animate-spin"></div>
+                  Creating Your Test...
+                </>
+              ) : (
+                <>
+                  <span>Create Test & Launch</span>
+                  <span className="text-2xl">→</span>
+                </>
+              )}
+            </button>
           </div>
         </div>
-        <div>
-          <label className="block text-sm font-medium">Chapters (select one or more)</label>
-          <div className="mt-2 flex flex-wrap gap-2">
-            {selectedSubjects.flatMap((subject) =>
-              (chaptersBySubject[subject] || []).map((c) => (
-                <button
-                  type="button"
-                  key={subject + '::' + c}
-                  onClick={() => toggleChapter(c)}
-                  className={`px-3 py-1 rounded border ${
-                    selectedChapters.includes(c)
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-white text-gray-700'
-                  }`}
-                >
-                  {c} <span className="text-xs text-gray-400">({subject})</span>
-                </button>
-              ))
-            )}
-          </div>
-        </div>
-        <div className="grid grid-cols-3 gap-4">
-          <div>
-            <label className="block text-sm font-medium">Duration (minutes)</label>
-            <input
-              type="number"
-              min={1}
-              value={duration}
-              onChange={(e) => setDuration(Number(e.target.value))}
-              className="mt-1 block w-full border rounded p-2"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium">Questions per Page</label>
-            <input
-              type="number"
-              min={1}
-              max={Object.values(questionsPerSubject).reduce((a, b) => a + b, 0) || 1}
-              value={questionsPerPage}
-              onChange={(e) => setQuestionsPerPage(Number(e.target.value))}
-              className="mt-1 block w-full border rounded p-2"
-            />
-          </div>
-        </div>
-        <div className="flex justify-end">
-          <Button type="submit" disabled={creating} className="bg-blue-600 text-white">
-            {creating ? 'Creating...' : 'Create Test & Start'}
-          </Button>
-        </div>
-      </form>
+      </div>
     </div>
   );
 }
