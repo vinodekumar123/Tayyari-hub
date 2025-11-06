@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { collection, getDocs, query, where } from 'firebase/firestore';
+import { collection, getDocs, query, where, doc, getDoc } from 'firebase/firestore';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { db, auth } from 'app/firebase';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
@@ -19,39 +19,30 @@ interface UserCreatedQuiz {
   duration: number;
   questionCount: number;
   createdAt: any;
-  attempts?: { userId: string; status: 'started' | 'completed' }[]; // change as needed
 }
 
-const getStatus = (
-  quiz: UserCreatedQuiz,
-  userId: string
-): { label: string; color: string; icon: JSX.Element; action?: string } => {
-  if (!quiz.attempts) {
+// status helper
+const getQuizAttemptStatus = (attempt?: { startedAt?: any, completed?: boolean }) => {
+  if (!attempt)
     return {
       label: 'Start',
       color: 'primary',
       icon: <PlayCircle className="h-4 w-4 mr-1" />,
       action: 'start',
     };
-  }
-  const userAttempt = quiz.attempts.find((a) => a.userId === userId);
-  if (userAttempt) {
-    if (userAttempt.status === 'started') {
-      return {
-        label: 'Resume',
-        color: 'yellow',
-        icon: <RotateCw className="h-4 w-4 mr-1" />,
-        action: 'resume',
-      };
-    }
-    if (userAttempt.status === 'completed') {
-      return {
-        label: 'Completed',
-        color: 'emerald',
-        icon: <CheckCircle2 className="h-4 w-4 mr-1" />,
-      };
-    }
-  }
+  if (attempt.completed)
+    return {
+      label: 'Completed',
+      color: 'emerald',
+      icon: <CheckCircle2 className="h-4 w-4 mr-1" />,
+    };
+  if (attempt.startedAt)
+    return {
+      label: 'Resume',
+      color: 'yellow',
+      icon: <RotateCw className="h-4 w-4 mr-1" />,
+      action: 'resume',
+    };
   return {
     label: 'Start',
     color: 'primary',
@@ -64,10 +55,11 @@ const UserCreatedQuizzesPage = () => {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [quizzes, setQuizzes] = useState<UserCreatedQuiz[]>([]);
+  // Map of quizId -> attempt info
+  const [attempts, setAttempts] = useState<Record<string, { startedAt?: any, completed?: boolean }>>({});
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Listen for auth state changes
     const unsub = onAuthStateChanged(auth, async (u) => {
       setUser(u);
       if (!u) {
@@ -76,13 +68,15 @@ const UserCreatedQuizzesPage = () => {
         return;
       }
       try {
-        // query quizzes created by this user
+        // Load user's created quizzes
         const q = query(
           collection(db, 'user-quizzes'),
           where('createdBy', '==', u.uid)
         );
         const snap = await getDocs(q);
         const list: UserCreatedQuiz[] = [];
+        const quizAttemptPromises: Promise<any>[] = [];
+
         snap.forEach((docSnap) => {
           const d = docSnap.data();
           list.push({
@@ -94,10 +88,27 @@ const UserCreatedQuizzesPage = () => {
             duration: d.duration,
             questionCount: d.questionCount,
             createdAt: d.createdAt,
-            attempts: d.attempts || [],
           });
+          // Prepare to fetch user's attempt per quiz
+          if (u) {
+            const attemptRef = doc(db, 'users', u.uid, 'user-quizattempts', docSnap.id);
+            quizAttemptPromises.push(getDoc(attemptRef).then(attemptSnap => ({
+              quizId: docSnap.id,
+              attempt: attemptSnap.exists() ? attemptSnap.data() : null,
+            })));
+          }
         });
+
         setQuizzes(list);
+
+        // load attempt status for each quiz
+        const attemptResults = await Promise.all(quizAttemptPromises);
+        const attemptMap: Record<string, { startedAt?: any, completed?: boolean }> = {};
+        attemptResults.forEach(({ quizId, attempt }) => {
+          attemptMap[quizId] = attempt || {}; // empty if no attempt
+        });
+        setAttempts(attemptMap);
+
       } catch (e) {
         console.error('Error loading user quizzes:', e);
       } finally {
@@ -146,14 +157,8 @@ const UserCreatedQuizzesPage = () => {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
           {quizzes.map((q) => {
-            const status = user
-              ? getStatus(q, user.uid)
-              : {
-                  label: 'Start',
-                  color: 'primary',
-                  icon: <PlayCircle className="h-4 w-4 mr-1" />,
-                  action: 'start',
-                };
+            const attempt = attempts[q.id];
+            const status = getQuizAttemptStatus(attempt);
 
             return (
               <Card
