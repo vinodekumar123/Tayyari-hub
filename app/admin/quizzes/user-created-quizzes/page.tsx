@@ -159,7 +159,7 @@ const UserCreatedQuizzesPage = () => {
               <p className="text-gray-600 text-lg ml-16 font-medium">Manage and track your custom test collection</p>
             </div>
             <Button
-              onClick={() => router.push('/create-your-own-test')}
+              onClick={() => router.push('/quiz/create-mock')}
               className="group relative bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white px-8 py-6 rounded-2xl shadow-xl shadow-blue-500/30 transition-all duration-300 hover:scale-105 hover:shadow-2xl hover:shadow-blue-500/40 border-0"
             >
               <div className="absolute inset-0 bg-white/20 rounded-2xl blur opacity-0 group-hover:opacity-100 transition-opacity"></div>
