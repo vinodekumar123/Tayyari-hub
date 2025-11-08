@@ -93,7 +93,7 @@ export function Sidebar() {
         { icon: Home, label: 'Dashboard', href: '/dashboard/student' },
         { icon: Trophy, label: 'Quizzes', href: '/admin/quizzes/quizebank' },
         // New student-only items requested:
-        { icon: Plus, label: 'Create Your Own Test', href: '/Quiz/Create-mock' },
+        { icon: Plus, label: 'Create Your Own Test', href: '/quiz/create-mock' },
         { icon: Trophy, label: 'Your Created Tests', href: '/admin/quizzes/user-created-quizzes' },
         { icon: ClipboardList, label: 'Results', href: '/admin/students/results' },
         { icon: UserCircle, label: 'Profile Settings', href: '/admin/student-profile' },
