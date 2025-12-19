@@ -167,28 +167,25 @@ export default function UltraFastStudentDashboard() {
     if (uid) fetchData();
   }, [uid, fetchData]);
 
-  // Memoized components for performance
+  // Memoized components for better performance
   const StatsCards = useMemo(() => (
     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6">
-      {/* Admin Quizzes */}
       <Card>
         <CardContent className="p-3 sm:p-4 text-center">
           <Trophy className="mx-auto text-purple-500 w-6 h-6 sm:w-8 sm:h-8" />
-          <p className="font-semibold mt-2 text-sm sm:text-base">Admin Quizzes Completed</p>
+          <p className="font-semibold mt-2 text-sm sm:text-base">Quizzes Completed</p>
           <p className="text-xl sm:text-2xl">
             {filling ? <span className="animate-pulse bg-gray-200 rounded px-4">&nbsp;</span> : completedQuizzes.length}
           </p>
         </CardContent>
       </Card>
-      {/* User Quizzes */}
       <Card>
         <CardContent className="p-3 sm:p-4 text-center">
-          <Medal className="mx-auto text-pink-500 w-6 h-6 sm:w-8 sm:h-8" />
-          <p className="font-semibold mt-2 text-sm sm:text-base">User Quizzes Created</p>
+          <Medal className="mx-auto text-green-500 w-6 h-6 sm:w-8 sm:h-8" />
+          <p className="font-semibold mt-2 text-sm sm:text-base">Your Created Tests</p>
           <p className="text-xl sm:text-2xl">
-            {filling ? <span className="animate-pulse bg-gray-100 rounded px-4">&nbsp;</span> : userCreatedQuizzes.length}
+            <span className="animate-pulse bg-gray-100 rounded px-4">&nbsp;</span>
           </p>
-          <p className="text-xs mt-1 text-gray-600">Completed: {filling ? '-' : completedUserQuizzes.length}</p>
         </CardContent>
       </Card>
       <Card>
@@ -203,11 +200,10 @@ export default function UltraFastStudentDashboard() {
       <Card>
         <CardContent className="p-3 sm:p-4 text-center">
           <Activity className="mx-auto text-indigo-600 w-6 h-6 sm:w-8 sm:h-8" />
-          <p className="font-semibold mt-2 text-sm sm:text-base">Admin Quiz Accuracy</p>
+          <p className="font-semibold mt-2 text-sm sm:text-base">Overall Accuracy</p>
           <p className="text-xl sm:text-2xl">
             {filling ? <span className="animate-pulse bg-gray-200 rounded px-4">&nbsp;</span> : (leaderboardAccuracy != null ? `${leaderboardAccuracy}%` : '-')}
           </p>
-          <div className="text-xs mt-1 text-gray-600">User Quiz Accuracy: {filling ? '-' : (userQuizAccuracy != null ? `${userQuizAccuracy}%` : '-')}</div>
         </CardContent>
       </Card>
     </div>
@@ -242,7 +238,7 @@ export default function UltraFastStudentDashboard() {
           </div>
         </div>
 
-        {/* Stats Section */}
+        {/* Stats Section - Memoized */}
         {StatsCards}
 
         {/* Top 10 Leaderboard */}
@@ -270,10 +266,23 @@ export default function UltraFastStudentDashboard() {
           </CardContent>
         </Card>
 
-        {/* --- ADMIN QUIZ ANALYTICS --- */}
+        {/* Quiz Attempt Stats */}
+        <Card>
+          <CardContent className="p-3 sm:p-4 text-center">
+            <p className="font-semibold text-sm sm:text-base">📝 Quiz Questions Attempted</p>
+            <p className="text-xl sm:text-2xl">
+              {filling ? <span className="animate-pulse bg-gray-100 rounded px-4">&nbsp;</span> : (quizStats?.attempted ?? 0)}
+            </p>
+            <p className="text-green-600 font-bold text-sm sm:text-base">
+              {filling ? <span className="animate-pulse bg-gray-100 rounded px-4">&nbsp;</span> : `${quizStats?.correct ?? 0} Correct`}
+            </p>
+          </CardContent>
+        </Card>
+
+        {/* Quiz Subject Stats Table */}
         <Card>
           <CardContent className="p-3 sm:p-4">
-            <h2 className="text-lg sm:text-xl font-bold mb-4 text-gray-800">📝 Admin Quiz Subject Statistics</h2>
+            <h2 className="text-lg sm:text-xl font-bold mb-4 text-gray-800">📝 Quiz Subject Statistics</h2>
             {filling && quizSubjectStats.length === 0 ? (
               <div>
                 {[...Array(3)].map((_, i) => (
@@ -311,9 +320,9 @@ export default function UltraFastStudentDashboard() {
           </CardContent>
         </Card>
 
-        {/* Admin Quiz Subject Accuracy Chart */}
+        {/* Quiz Subject Accuracy Chart */}
         <div className="rounded-lg p-4 sm:p-6 bg-white shadow">
-          <h2 className="text-lg sm:text-xl font-bold mb-4 text-gray-800">📈 Admin Quiz Subject Accuracy</h2>
+          <h2 className="text-lg sm:text-xl font-bold mb-4 text-gray-800">📈 Quiz Subject Accuracy</h2>
           {filling && quizSubjectStats.length === 0 ? (
             <div className="animate-pulse bg-gray-100 h-40 rounded"></div>
           ) : (
@@ -329,151 +338,6 @@ export default function UltraFastStudentDashboard() {
             </ResponsiveContainer>
           )}
         </div>
-
-        {/* --- USER-CREATED QUIZ ANALYTICS --- */}
-        <Card>
-          <CardContent className="p-3 sm:p-4">
-            <h2 className="text-lg sm:text-xl font-bold mb-4 text-gray-800">📝 User-Created Quiz Subject Statistics</h2>
-            {filling && userQuizSubjectStats.length === 0 ? (
-              <div>
-                {[...Array(3)].map((_, i) => (
-                  <div key={i} className="animate-pulse h-7 bg-gray-100 rounded mb-2"></div>
-                ))}
-              </div>
-            ) : userQuizSubjectStats.length === 0 ? (
-              <p className="text-gray-500 text-center text-sm sm:text-base">No user-created quiz data available.</p>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm sm:text-base">
-                  <thead>
-                    <tr className="bg-gray-100">
-                      <th className="p-2 text-left">Subject</th>
-                      <th className="p-2 text-center">Attempted</th>
-                      <th className="p-2 text-center">Correct</th>
-                      <th className="p-2 text-center">Wrong</th>
-                      <th className="p-2 text-center">Accuracy (%)</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {userQuizSubjectStats.map((stat, index) => (
-                      <tr key={index} className="border-b">
-                        <td className="p-2">{stat.subject}</td>
-                        <td className="p-2 text-center">{stat.attempted}</td>
-                        <td className="p-2 text-center text-green-600">{stat.correct}</td>
-                        <td className="p-2 text-center text-red-600">{stat.wrong}</td>
-                        <td className="p-2 text-center">{stat.accuracy}%</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* User Quiz Subject Accuracy Chart */}
-        <div className="rounded-lg p-4 sm:p-6 bg-white shadow">
-          <h2 className="text-lg sm:text-xl font-bold mb-4 text-gray-800">📈 User Quiz Subject Accuracy</h2>
-          {filling && userQuizSubjectStats.length === 0 ? (
-            <div className="animate-pulse bg-gray-100 h-40 rounded"></div>
-          ) : (
-            <ResponsiveContainer width="100%" height={250} minHeight={200}>
-              <LineChart data={userQuizSubjectStats}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="subject" fontSize={12} />
-                <YAxis domain={[0, 100]} fontSize={12} />
-                <Tooltip />
-                <Legend />
-                <Line type="monotone" dataKey="accuracy" stroke="#EC4899" name="Accuracy (%)" />
-              </LineChart>
-            </ResponsiveContainer>
-          )}
-        </div>
-
-        {/* User Quiz Chapter Statistics */}
-        <Card>
-          <CardContent className="p-3 sm:p-4">
-            <h2 className="text-lg sm:text-xl font-bold mb-4 text-gray-800">User Quiz Chapter Statistics</h2>
-            {filling && userQuizChapterStats.length === 0 ? (
-              <div>
-                {[...Array(3)].map((_, i) => (
-                  <div key={i} className="animate-pulse h-7 bg-gray-100 rounded mb-2"></div>
-                ))}
-              </div>
-            ) : userQuizChapterStats.length === 0 ? (
-              <p className="text-gray-500 text-center text-sm sm:text-base">No user quiz chapter data available.</p>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm sm:text-base">
-                  <thead>
-                    <tr className="bg-gray-100">
-                      <th className="p-2 text-left">Subject</th>
-                      <th className="p-2 text-left">Chapter</th>
-                      <th className="p-2 text-center">Attempted</th>
-                      <th className="p-2 text-center">Correct</th>
-                      <th className="p-2 text-center">Wrong</th>
-                      <th className="p-2 text-center">Accuracy (%)</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {userQuizChapterStats.map((stat, i) => (
-                      <tr key={i} className="border-b">
-                        <td className="p-2">{stat.subject}</td>
-                        <td className="p-2">{stat.chapter}</td>
-                        <td className="p-2 text-center">{stat.attempted}</td>
-                        <td className="p-2 text-center text-green-600">{stat.correct}</td>
-                        <td className="p-2 text-center text-red-600">{stat.wrong}</td>
-                        <td className="p-2 text-center">{stat.accuracy}%</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* User Question Bank Section */}
-        <Card>
-          <CardContent className="p-3 sm:p-4">
-            <h2 className="text-lg sm:text-xl font-bold mb-4 text-gray-800">Your Question Bank (User-Created Questions)</h2>
-            <div className="flex flex-wrap gap-4 mb-4">
-              {userQuestionBankStats.map(stat => (
-                <div key={stat.label} className="bg-gray-100 p-4 rounded-lg min-w-[120px] text-center">
-                  <div className="text-lg font-semibold">{stat.label}</div>
-                  <div className="text-2xl">{stat.value}</div>
-                </div>
-              ))}
-            </div>
-            <div className="text-lg font-semibold mb-2">Subject-wise Question Stats</div>
-            {subjectWiseUserQBank.length === 0 ? (
-              <div className="text-gray-500">No question bank data.</div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="bg-gray-100">
-                      <th className="p-2 text-left">Subject</th>
-                      <th className="p-2 text-center">Total</th>
-                      <th className="p-2 text-center">Used</th>
-                      <th className="p-2 text-center">Unused</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {subjectWiseUserQBank.map((stat, i) => (
-                      <tr key={i} className="border-b">
-                        <td className="p-2">{stat.subject}</td>
-                        <td className="p-2 text-center">{stat.total}</td>
-                        <td className="p-2 text-center text-blue-600">{stat.used}</td>
-                        <td className="p-2 text-center text-gray-500">{stat.unused}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </CardContent>
-        </Card>
       </div>
     </div>
   );
