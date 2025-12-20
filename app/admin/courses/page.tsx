@@ -48,6 +48,7 @@ interface Coupon {
   name: string;
   usageType: 'Single' | 'All';
   limit: number;
+  discountPercentage: number;
 }
 
 interface Series {
@@ -563,11 +564,14 @@ function SeriesTab({ courseId }: { courseId: string }) {
             <div className="border-t border-slate-100 pt-3">
               <p className="text-xs font-semibold text-slate-500 mb-2 uppercase tracking-tight">Coupons</p>
               <div className="flex flex-wrap gap-2">
-                {item.coupons?.map((c, i) => (
-                  <span key={i} className="px-2 py-1 border border-dashed border-green-300 bg-green-50 text-green-700 text-xs rounded-md font-medium" title={`Usage: ${c.usageType}, Limit: ${c.limit}`}>
-                    {c.name}
-                  </span>
-                ))}
+                {item.coupons?.map((c, i) => {
+                  const discounted = item.price ? Math.round(item.price - (item.price * (c.discountPercentage || 0) / 100)) : 0;
+                  return (
+                    <span key={i} className="px-2 py-1 border border-dashed border-green-300 bg-green-50 text-green-700 text-xs rounded-md font-medium" title={`Usage: ${c.usageType}, Limit: ${c.limit}`}>
+                      {c.name} {c.discountPercentage ? `(-${c.discountPercentage}% = ${discounted})` : ''}
+                    </span>
+                  );
+                })}
                 {(!item.coupons || item.coupons.length === 0) && (
                   <span className="text-xs text-slate-400">No coupons</span>
                 )}
@@ -609,7 +613,7 @@ function SeriesModal({ isOpen, onClose, onSuccess, courseId, seriesToEdit }: { i
     coupons: []
   });
 
-  const [couponInput, setCouponInput] = useState<Coupon>({ name: '', usageType: 'Single', limit: 1 });
+  const [couponInput, setCouponInput] = useState<Coupon>({ name: '', usageType: 'Single', limit: 1, discountPercentage: 0 });
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -658,7 +662,7 @@ function SeriesModal({ isOpen, onClose, onSuccess, courseId, seriesToEdit }: { i
       ...prev,
       coupons: [...(prev.coupons || []), couponInput]
     }));
-    setCouponInput({ name: '', usageType: 'Single', limit: 1 });
+    setCouponInput({ name: '', usageType: 'Single', limit: 1, discountPercentage: 0 });
   };
 
   const removeCoupon = (idx: number) => {
@@ -669,6 +673,10 @@ function SeriesModal({ isOpen, onClose, onSuccess, courseId, seriesToEdit }: { i
   };
 
   if (!isOpen) return null;
+
+  const discountedPrice = formData.price && couponInput.discountPercentage
+    ? Math.round(formData.price - (formData.price * couponInput.discountPercentage / 100))
+    : formData.price;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 overflow-y-auto">
@@ -741,8 +749,8 @@ function SeriesModal({ isOpen, onClose, onSuccess, courseId, seriesToEdit }: { i
 
           <div className="border-t border-slate-100 pt-4">
             <h4 className="text-sm font-bold text-slate-800 mb-3 flex items-center gap-2"><Tag className="w-4 h-4" /> Coupons</h4>
-            <div className="flex gap-2 items-end mb-4 bg-slate-50 p-3 rounded-xl">
-              <div className="flex-1 space-y-1">
+            <div className="flex gap-2 items-end mb-4 bg-slate-50 p-3 rounded-xl flex-wrap">
+              <div className="flex-1 min-w-[120px] space-y-1">
                 <label className="text-xs text-slate-500">Code/Name</label>
                 <input
                   className="w-full p-2 border border-slate-200 rounded-lg text-sm"
@@ -771,22 +779,47 @@ function SeriesModal({ isOpen, onClose, onSuccess, courseId, seriesToEdit }: { i
                   onChange={e => setCouponInput({ ...couponInput, limit: Number(e.target.value) })}
                 />
               </div>
+              <div className="w-24 space-y-1">
+                <label className="text-xs text-slate-500">Discount %</label>
+                <input
+                  type="number"
+                  min="0"
+                  max="100"
+                  className="w-full p-2 border border-slate-200 rounded-lg text-sm"
+                  value={couponInput.discountPercentage}
+                  onChange={e => setCouponInput({ ...couponInput, discountPercentage: Number(e.target.value) })}
+                />
+              </div>
               <button
                 onClick={addCoupon}
-                className="px-4 py-2 bg-slate-800 text-white rounded-lg hover:bg-black text-sm font-medium"
+                className="px-4 py-2 bg-slate-800 text-white rounded-lg hover:bg-black text-sm font-medium h-[38px]"
               >
                 Add
               </button>
             </div>
 
+            {/* Live Price Calculation Display */}
+            {couponInput.discountPercentage > 0 && formData.price > 0 && (
+              <div className="mb-4 text-sm text-slate-600 bg-green-50 p-2 rounded-lg border border-green-100 flex items-center gap-2">
+                <span className="font-semibold text-green-700">Ref Price: {discountedPrice} PKR</span>
+                <span className="text-xs">(Original: {formData.price}, Discount: {couponInput.discountPercentage}%)</span>
+              </div>
+            )}
+
             <div className="flex flex-wrap gap-2">
-              {formData.coupons?.map((c, i) => (
-                <div key={i} className="flex items-center gap-2 bg-indigo-50 text-indigo-700 px-3 py-1.5 rounded-lg border border-indigo-100 shadow-sm text-sm">
-                  <span className="font-bold">{c.name}</span>
-                  <span className="text-xs opacity-70">({c.usageType}, max {c.limit})</span>
-                  <button onClick={() => removeCoupon(i)} className="hover:text-red-500"><X className="w-3 h-3" /></button>
-                </div>
-              ))}
+              {formData.coupons?.map((c, i) => {
+                const discounted = formData.price ? Math.round(formData.price - (formData.price * (c.discountPercentage || 0) / 100)) : 0;
+                return (
+                  <div key={i} className="flex items-center gap-2 bg-indigo-50 text-indigo-700 px-3 py-1.5 rounded-lg border border-indigo-100 shadow-sm text-sm">
+                    <span className="font-bold">{c.name}</span>
+                    <span className="text-xs opacity-70">
+                      ({c.usageType}, {c.discountPercentage}% off
+                      {discounted > 0 ? ` -> ${discounted}` : ''})
+                    </span>
+                    <button onClick={() => removeCoupon(i)} className="hover:text-red-500"><X className="w-3 h-3" /></button>
+                  </div>
+                );
+              })}
               {(!formData.coupons || formData.coupons.length === 0) && (
                 <p className="text-sm text-slate-400 italic">No coupons added yet.</p>
               )}
