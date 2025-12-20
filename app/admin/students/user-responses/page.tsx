@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { db, auth } from 'app/firebase';
+import { db, auth } from '@/app/firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
@@ -230,10 +230,10 @@ const UserResponsesPage: React.FC = () => {
       {/* Hero Header */}
       <div className="relative overflow-hidden bg-gradient-to-r from-purple-100 via-pink-100 to-blue-100 border-b border-purple-200">
         <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGRlZnM+PHBhdHRlcm4gaWQ9ImdyaWQiIHdpZHRoPSI2MCIgaGVpZ2h0PSI2MCIgcGF0dGVyblVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHBhdGggZD0iTSAxMCAwIEwgMCAwIDAgMTAiIGZpbGw9Im5vbmUiIHN0cm9rZT0iYmxhY2siIHN0cm9rZS1vcGFjaXR5PSIwLjAzIiBzdHJva2Utd2lkdGg9IjEiLz48L3BhdHRlcm4+PC9kZWZzPjxyZWN0IHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiIGZpbGw9InVybCgjZ3JpZCkiLz48L3N2Zz4=')] opacity-30"></div>
-        
+
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 relative">
-          <Button 
-            variant="outline" 
+          <Button
+            variant="outline"
             onClick={() => router.push('/admin/students/results')}
             className="bg-white hover:bg-gray-50 mb-6 shadow-sm border-purple-200"
           >
@@ -269,7 +269,7 @@ const UserResponsesPage: React.FC = () => {
                   }
                 </div>
               </div>
-              
+
               <div className="flex items-center gap-4 mt-6">
                 <div className={`px-4 py-2 rounded-full ${performance.bg} border border-purple-200 shadow-sm`}>
                   <span className={`${performance.color} font-bold text-lg flex items-center gap-2`}>
@@ -297,15 +297,15 @@ const UserResponsesPage: React.FC = () => {
                     <p className="text-2xl font-bold text-gray-800">{attempt.score}<span className="text-gray-500">/{attempt.total}</span></p>
                   </div>
                 </div>
-                
+
                 <div className="space-y-3">
                   <div className="h-3 bg-gray-200 rounded-full overflow-hidden">
-                    <div 
+                    <div
                       className="h-full bg-gradient-to-r from-emerald-500 via-blue-500 to-purple-500 rounded-full transition-all duration-1000 ease-out"
                       style={{ width: `${percent}%` }}
                     ></div>
                   </div>
-                  
+
                   <div className="flex justify-between items-center text-sm">
                     <div className="flex items-center gap-2">
                       <Clock className="h-4 w-4 text-gray-500" />
@@ -345,7 +345,7 @@ const UserResponsesPage: React.FC = () => {
                 </div>
                 <h2 className="text-xl font-bold text-gray-800">Answer Distribution</h2>
               </div>
-              
+
               <ResponsiveContainer width="100%" height={280}>
                 <PieChart>
                   <Pie
@@ -363,9 +363,9 @@ const UserResponsesPage: React.FC = () => {
                       <Cell key={`cell-${idx}`} fill={COLORS[idx]} />
                     ))}
                   </Pie>
-                  <Tooltip 
-                    contentStyle={{ 
-                      backgroundColor: 'rgba(255, 255, 255, 0.95)', 
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: 'rgba(255, 255, 255, 0.95)',
                       border: '1px solid rgba(147, 51, 234, 0.2)',
                       borderRadius: '12px',
                       boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)'
@@ -386,25 +386,25 @@ const UserResponsesPage: React.FC = () => {
                 </div>
                 <h2 className="text-xl font-bold text-gray-800">Subject Performance</h2>
               </div>
-              
+
               <ResponsiveContainer width="100%" height={280}>
                 <RadarChart data={subjectData}>
                   <PolarGrid stroke="rgba(147, 51, 234, 0.2)" />
-                  <PolarAngleAxis 
-                    dataKey="subject" 
+                  <PolarAngleAxis
+                    dataKey="subject"
                     tick={{ fill: '#6b7280', fontSize: 12 }}
                   />
                   <PolarRadiusAxis angle={90} domain={[0, 100]} tick={{ fill: '#6b7280' }} />
-                  <Radar 
-                    name="Accuracy %" 
-                    dataKey="accuracy" 
-                    stroke="#8b5cf6" 
-                    fill="#8b5cf6" 
+                  <Radar
+                    name="Accuracy %"
+                    dataKey="accuracy"
+                    stroke="#8b5cf6"
+                    fill="#8b5cf6"
                     fillOpacity={0.6}
                   />
-                  <Tooltip 
-                    contentStyle={{ 
-                      backgroundColor: 'rgba(255, 255, 255, 0.95)', 
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: 'rgba(255, 255, 255, 0.95)',
                       border: '1px solid rgba(147, 51, 234, 0.2)',
                       borderRadius: '12px',
                       boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)'
@@ -420,28 +420,26 @@ const UserResponsesPage: React.FC = () => {
         <div className="flex gap-2 mb-8 overflow-x-auto pb-2">
           {TABS.map(tab => {
             const Icon = tab.icon;
-            const count = tab.key === 'all' ? attempt.detailed.length 
-              : tab.key === 'correct' ? correctCount 
-              : tab.key === 'wrong' ? wrongCount 
-              : skippedCount;
-            
+            const count = tab.key === 'all' ? attempt.detailed.length
+              : tab.key === 'correct' ? correctCount
+                : tab.key === 'wrong' ? wrongCount
+                  : skippedCount;
+
             return (
               <button
                 key={tab.key}
                 onClick={() => setActiveTab(tab.key as typeof activeTab)}
-                className={`group flex items-center gap-2 px-6 py-3 rounded-2xl font-semibold transition-all duration-300 whitespace-nowrap ${
-                  activeTab === tab.key
+                className={`group flex items-center gap-2 px-6 py-3 rounded-2xl font-semibold transition-all duration-300 whitespace-nowrap ${activeTab === tab.key
                     ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-lg shadow-purple-500/30 scale-105'
                     : 'bg-white text-gray-700 hover:bg-gray-50 border border-purple-200 shadow-sm'
-                }`}
+                  }`}
               >
                 <Icon className="h-5 w-5" />
                 <span>{tab.label}</span>
-                <span className={`px-2.5 py-0.5 rounded-full text-sm font-bold ${
-                  activeTab === tab.key 
-                    ? 'bg-white/20 text-white' 
+                <span className={`px-2.5 py-0.5 rounded-full text-sm font-bold ${activeTab === tab.key
+                    ? 'bg-white/20 text-white'
                     : 'bg-purple-100 text-purple-700'
-                }`}>
+                  }`}>
                   {count}
                 </span>
               </button>
@@ -457,26 +455,25 @@ const UserResponsesPage: React.FC = () => {
               <p className="text-gray-600 text-lg">No questions to show in this category</p>
             </div>
           )}
-          
+
           {filteredQuestions.map((q, idx) => (
-            <div 
-              key={q.questionId} 
+            <div
+              key={q.questionId}
               className="relative group"
             >
               <div className="absolute inset-0 bg-gradient-to-r from-purple-100/50 to-pink-100/50 rounded-3xl blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
               <div className="relative bg-white rounded-3xl p-6 border border-purple-200 shadow-xl">
                 {/* Question Header */}
                 <div className="flex items-start gap-4 mb-6">
-                  <div className={`flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center font-bold text-lg shadow-md ${
-                    q.isCorrect 
+                  <div className={`flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center font-bold text-lg shadow-md ${q.isCorrect
                       ? 'bg-gradient-to-br from-emerald-500 to-green-500 text-white'
                       : !q.selected || q.selected === ''
-                      ? 'bg-gradient-to-br from-amber-500 to-orange-500 text-white'
-                      : 'bg-gradient-to-br from-red-500 to-pink-500 text-white'
-                  }`}>
+                        ? 'bg-gradient-to-br from-amber-500 to-orange-500 text-white'
+                        : 'bg-gradient-to-br from-red-500 to-pink-500 text-white'
+                    }`}>
                     {idx + 1}
                   </div>
-                  
+
                   <div className="flex-1">
                     <p className="text-gray-800 text-lg font-medium mb-3 leading-relaxed">{q.questionText}</p>
                     <div className="flex flex-wrap gap-2">
@@ -497,7 +494,7 @@ const UserResponsesPage: React.FC = () => {
                       )}
                     </div>
                   </div>
-                  
+
                   <div>
                     {q.selected === null || q.selected === '' ? (
                       <div className="flex items-center gap-2 px-4 py-2 bg-amber-100 border border-amber-300 rounded-xl shadow-sm">
@@ -526,26 +523,23 @@ const UserResponsesPage: React.FC = () => {
                     return (
                       <div
                         key={i}
-                        className={`flex items-center gap-3 p-4 rounded-2xl transition-all duration-300 ${
-                          isCorrect
+                        className={`flex items-center gap-3 p-4 rounded-2xl transition-all duration-300 ${isCorrect
                             ? 'bg-emerald-50 border-2 border-emerald-400 shadow-md'
                             : isSelected
-                            ? 'bg-red-50 border-2 border-red-400 shadow-md'
-                            : 'bg-gray-50 border border-gray-200 hover:bg-gray-100 hover:shadow-sm'
-                        }`}
+                              ? 'bg-red-50 border-2 border-red-400 shadow-md'
+                              : 'bg-gray-50 border border-gray-200 hover:bg-gray-100 hover:shadow-sm'
+                          }`}
                       >
-                        <div className={`flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center font-bold shadow-sm ${
-                          isCorrect 
-                            ? 'bg-emerald-500 text-white' 
-                            : isSelected 
-                            ? 'bg-red-500 text-white' 
-                            : 'bg-gray-300 text-gray-700'
-                        }`}>
+                        <div className={`flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center font-bold shadow-sm ${isCorrect
+                            ? 'bg-emerald-500 text-white'
+                            : isSelected
+                              ? 'bg-red-500 text-white'
+                              : 'bg-gray-300 text-gray-700'
+                          }`}>
                           {String.fromCharCode(65 + i)}
                         </div>
-                        <span className={`flex-1 ${
-                          isCorrect || isSelected ? 'text-gray-800 font-medium' : 'text-gray-700'
-                        }`}>
+                        <span className={`flex-1 ${isCorrect || isSelected ? 'text-gray-800 font-medium' : 'text-gray-700'
+                          }`}>
                           {opt}
                         </span>
                         {isCorrect && (

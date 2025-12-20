@@ -4,7 +4,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { doc, getDoc, setDoc, serverTimestamp, getDocs, collection } from 'firebase/firestore';
 import { onAuthStateChanged, User } from 'firebase/auth';
-import { db, auth } from 'app/firebase';
+import { db, auth } from '@/app/firebase';
 import {
   Card,
   CardHeader,
@@ -145,7 +145,7 @@ const StartQuizPage: React.FC = () => {
         setAnswers(rt.answers || {});
         setFlags(rt.flags || {});
         const questionIndex = rt.currentIndex || 0;
-        setCurrentPage(Math.floor(questionIndex / quizData.questionsPerPage));
+        setCurrentPage(Math.floor(questionIndex / (quizData.questionsPerPage || 1)));
         if (!isAdmin && rt.remainingTime !== undefined) {
           setTimeLeft(rt.remainingTime);
         } else {
@@ -277,8 +277,8 @@ const StartQuizPage: React.FC = () => {
       subject: Array.isArray(quiz.subject)
         ? quiz.subject.map((s) => s.name).join(', ') || 'Unknown'
         : typeof quiz.subject === 'object'
-        ? quiz.subject?.name || 'Unknown'
-        : quiz.subject || 'Unknown',
+          ? quiz.subject?.name || 'Unknown'
+          : quiz.subject || 'Unknown',
       score,
       total,
       timestamp: serverTimestamp(),
@@ -664,7 +664,7 @@ const StartQuizPage: React.FC = () => {
 
       {showSummaryModal && (
         <Dialog open={showSummaryModal} onOpenChange={setShowSummaryModal}>
-        <DialogContent className="w-[90vw] max-w-md sm:max-w-lg max-h-[80vh] overflow-y-auto">
+          <DialogContent className="w-[90vw] max-w-md sm:max-w-lg max-h-[80vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Summary before Submission</DialogTitle>
               <DialogDescription>Review skipped and flagged questions before final submission.</DialogDescription>
@@ -805,9 +805,8 @@ const StartQuizPage: React.FC = () => {
                       <div className="flex items-center">
                         <button
                           onClick={() => toggleFlag(q.id)}
-                          className={`flex items-center gap-2 px-3 py-1 rounded text-sm transition ${
-                            flags[q.id] ? 'bg-yellow-100 text-yellow-800 border border-yellow-300' : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'
-                          }`}
+                          className={`flex items-center gap-2 px-3 py-1 rounded text-sm transition ${flags[q.id] ? 'bg-yellow-100 text-yellow-800 border border-yellow-300' : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'
+                            }`}
                           title={flags[q.id] ? 'Unflag question' : 'Flag question'}
                         >
                           <Flag className={`h-4 w-4 ${flags[q.id] ? 'text-yellow-600' : 'text-gray-400'}`} />
@@ -821,9 +820,8 @@ const StartQuizPage: React.FC = () => {
                         <label
                           key={i}
                           htmlFor={`opt-${q.id}-${i}`}
-                          className={`flex items-center p-3 border rounded-lg cursor-pointer transition hover:bg-gray-100 ${
-                            answers[q.id] === opt ? 'border-blue-500 bg-blue-50' : ''
-                          }`}
+                          className={`flex items-center p-3 border rounded-lg cursor-pointer transition hover:bg-gray-100 ${answers[q.id] === opt ? 'border-blue-500 bg-blue-50' : ''
+                            }`}
                         >
                           <input
                             type="radio"
