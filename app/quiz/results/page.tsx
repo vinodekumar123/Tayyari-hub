@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { onAuthStateChanged, User } from 'firebase/auth';
@@ -31,7 +31,7 @@ interface QuizData {
   selectedQuestions: Question[];
 }
 
-const ResultPage: React.FC = () => {
+const ResultPageContent: React.FC = () => {
   const searchParams = useSearchParams();
   const quizId = searchParams.get('id');
   const [user, setUser] = useState<User | null>(null);
@@ -94,13 +94,13 @@ const ResultPage: React.FC = () => {
   const remark = percentage >= 90
     ? '🎉 Excellent!'
     : percentage >= 70
-    ? '👍 Good Job!'
-    : '📝 Keep Practicing';
+      ? '👍 Good Job!'
+      : '📝 Keep Practicing';
 
   return (
     <div className="min-h-screen bg-gray-50 px-6 py-10 max-w-6xl mx-auto">
       {percentage >= 70 && <Confetti width={width} height={height} numberOfPieces={300} recycle={false} />}
-   <div className="mb-6">
+      <div className="mb-6">
         <Button
           variant="outline"
           onClick={() => {
@@ -122,13 +122,12 @@ const ResultPage: React.FC = () => {
           <p>✔️ Correct: <span className="text-green-700">{correctCount}</span></p>
           <p>❌ Wrong: <span className="text-red-600">{wrongCount}</span></p>
           <p className="font-semibold text-lg">{remark}</p>
-          <Badge className={`text-white text-sm px-3 py-1 rounded-full ${
-            percentage >= 90
+          <Badge className={`text-white text-sm px-3 py-1 rounded-full ${percentage >= 90
               ? 'bg-green-600'
               : percentage >= 70
-              ? 'bg-yellow-500'
-              : 'bg-red-500'
-          }`}>
+                ? 'bg-yellow-500'
+                : 'bg-red-500'
+            }`}>
             {percentage.toFixed(2)}%
           </Badge>
         </CardContent>
@@ -180,6 +179,14 @@ const ResultPage: React.FC = () => {
         );
       })}
     </div>
+  );
+};
+
+const ResultPage = () => {
+  return (
+    <React.Suspense fallback={<div className="flex justify-center items-center min-h-screen"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div></div>}>
+      <ResultPageContent />
+    </React.Suspense>
   );
 };
 

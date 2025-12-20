@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { doc, getDoc } from 'firebase/firestore';
 import { onAuthStateChanged, User } from 'firebase/auth';
@@ -43,7 +43,7 @@ interface SubjectStats {
   percentage: number;
 }
 
-const ResultPage: React.FC = () => {
+const ResultPageContent: React.FC = () => {
   const searchParams = useSearchParams();
   const quizId = searchParams.get('id');
   const isMock = searchParams.get('mock') === 'true';
@@ -328,44 +328,40 @@ const ResultPage: React.FC = () => {
         <div className="flex flex-wrap gap-2 bg-white p-2 rounded-lg shadow-md">
           <button
             onClick={() => setActiveTab('overview')}
-            className={`px-4 py-2 rounded-lg font-medium flex items-center gap-2 ${
-              activeTab === 'overview'
-                ? 'bg-blue-600 text-white'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
+            className={`px-4 py-2 rounded-lg font-medium flex items-center gap-2 ${activeTab === 'overview'
+              ? 'bg-blue-600 text-white'
+              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
           >
             <BookOpen className="w-4 h-4" />
             All Questions
           </button>
           <button
             onClick={() => setActiveTab('subjects')}
-            className={`px-4 py-2 rounded-lg font-medium flex items-center gap-2 ${
-              activeTab === 'subjects'
-                ? 'bg-blue-600 text-white'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
+            className={`px-4 py-2 rounded-lg font-medium flex items-center gap-2 ${activeTab === 'subjects'
+              ? 'bg-blue-600 text-white'
+              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
           >
             <BarChart3 className="w-4 h-4" />
             Subject Analysis
           </button>
           <button
             onClick={() => setActiveTab('wrong')}
-            className={`px-4 py-2 rounded-lg font-medium flex items-center gap-2 ${
-              activeTab === 'wrong'
-                ? 'bg-red-600 text-white'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
+            className={`px-4 py-2 rounded-lg font-medium flex items-center gap-2 ${activeTab === 'wrong'
+              ? 'bg-red-600 text-white'
+              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
           >
             <XCircle className="w-4 h-4" />
             Wrong Answers ({wrongAnswers})
           </button>
           <button
             onClick={() => setActiveTab('skipped')}
-            className={`px-4 py-2 rounded-lg font-medium flex items-center gap-2 ${
-              activeTab === 'skipped'
-                ? 'bg-yellow-600 text-white'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
+            className={`px-4 py-2 rounded-lg font-medium flex items-center gap-2 ${activeTab === 'skipped'
+              ? 'bg-yellow-600 text-white'
+              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
           >
             <Clock className="w-4 h-4" />
             Skipped ({skippedQuestions})
@@ -394,26 +390,25 @@ const ResultPage: React.FC = () => {
             <BarChart3 className="w-6 h-6" />
             Subject-wise Performance
           </h2>
-          
+
           <div className="grid gap-4">
             {subjectStats.map((stats) => (
               <Card key={stats.subject} className="shadow-md">
                 <CardContent className="p-6">
                   <div className="flex justify-between items-center mb-4">
                     <h3 className="text-xl font-bold text-gray-800">{stats.subject}</h3>
-                    <Badge 
-                      className={`px-3 py-1 ${
-                        stats.percentage >= 70 
-                          ? 'bg-green-100 text-green-800' 
-                          : stats.percentage >= 50
+                    <Badge
+                      className={`px-3 py-1 ${stats.percentage >= 70
+                        ? 'bg-green-100 text-green-800'
+                        : stats.percentage >= 50
                           ? 'bg-yellow-100 text-yellow-800'
                           : 'bg-red-100 text-red-800'
-                      }`}
+                        }`}
                     >
                       {stats.percentage.toFixed(1)}%
                     </Badge>
                   </div>
-                  
+
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-center">
                     <div className="bg-blue-50 p-3 rounded-lg">
                       <p className="text-2xl font-bold text-blue-600">{stats.total}</p>
@@ -436,7 +431,7 @@ const ResultPage: React.FC = () => {
                   {/* Progress Bar */}
                   <div className="mt-4">
                     <div className="w-full bg-gray-200 rounded-full h-2">
-                      <div 
+                      <div
                         className="bg-blue-600 h-2 rounded-full transition-all duration-300"
                         style={{ width: `${stats.percentage}%` }}
                       ></div>
@@ -489,6 +484,14 @@ const ResultPage: React.FC = () => {
         </div>
       )}
     </div>
+  );
+};
+
+const ResultPage = () => {
+  return (
+    <React.Suspense fallback={<div className="flex justify-center items-center min-h-screen"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div></div>}>
+      <ResultPageContent />
+    </React.Suspense>
   );
 };
 

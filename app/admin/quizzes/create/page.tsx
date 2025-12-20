@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,11 +12,11 @@ import { collection, getDocs, addDoc, Timestamp, query, updateDoc, getDoc, doc, 
 import { db } from "../../../firebase";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { 
-  BookOpen, 
-  Plus, 
-  Calendar, 
-  Clock, 
+import {
+  BookOpen,
+  Plus,
+  Calendar,
+  Clock,
   Eye,
   Search,
   Save as SaveIcon,
@@ -28,7 +28,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 
-export default function CreateQuiz() {
+function CreateQuizContent() {
   const router = useRouter();
   const [currentStep, setCurrentStep] = useState(1);
   const [courses, setCourses] = useState([]);
@@ -54,7 +54,7 @@ export default function CreateQuiz() {
     shuffleQuestions: true,
     shuffleOptions: true,
     showExplanation: true,
-    startDate: '',published: false,
+    startDate: '', published: false,
     endDate: '',
     startTime: '',
     endTime: '',
@@ -106,15 +106,15 @@ export default function CreateQuiz() {
               ...prev,
               ...data,
               course: data.course?.name || '',
-              subjects: Array.isArray(data.subjects) 
+              subjects: Array.isArray(data.subjects)
                 ? data.subjects.map(s => s.name || s).filter(name => name)
-                : data.subject?.name 
-                  ? [data.subject.name] 
+                : data.subject?.name
+                  ? [data.subject.name]
                   : [],
-              chapters: Array.isArray(data.chapters) 
+              chapters: Array.isArray(data.chapters)
                 ? data.chapters.map(c => c.name || c).filter(name => name)
-                : data.chapter?.name 
-                  ? [data.chapter.name] 
+                : data.chapter?.name
+                  ? [data.chapter.name]
                   : [],
               selectedQuestions: Array.isArray(data.selectedQuestions) ? data.selectedQuestions : [],
             }));
@@ -313,8 +313,8 @@ export default function CreateQuiz() {
     }
 
     const selectedCourse = courses.find(c => c.name === quizConfig.course);
-    const selectedSubjects = quizConfig.subjects.includes('all-subjects') 
-      ? subjects 
+    const selectedSubjects = quizConfig.subjects.includes('all-subjects')
+      ? subjects
       : subjects.filter(s => quizConfig.subjects.includes(s.name));
 
     const quizPayload = {
@@ -327,7 +327,7 @@ export default function CreateQuiz() {
         id: s.id,
         name: s.name,
       })),
-      chapters: quizConfig.chapters.includes('all-chapters') 
+      chapters: quizConfig.chapters.includes('all-chapters')
         ? chapters.map(ch => ({ id: ch, name: ch }))
         : quizConfig.chapters.map(ch => ({ id: ch, name: ch })),
       updatedAt: Timestamp.now(),
@@ -453,8 +453,8 @@ export default function CreateQuiz() {
   const MultiSelect = ({ value, onChange, options, placeholder, disabled, type }) => {
     const displayValue = value.includes('all-subjects') || value.includes('all-chapters')
       ? value.includes('all-subjects') ? 'All Subjects' : 'All Chapters'
-      : value.length > 0 
-        ? value.join(', ') 
+      : value.length > 0
+        ? value.join(', ')
         : placeholder;
 
     return (
@@ -936,11 +936,10 @@ export default function CreateQuiz() {
                       {questions.map((question) => (
                         <Card
                           key={question.id}
-                          className={`cursor-pointer transition-all duration-200 ${
-                            quizConfig.selectedQuestions.some((q) => q.id === question.id)
-                              ? 'ring-2 ring-blue-500 bg-blue-50 shadow-lg'
-                              : 'hover:shadow-md'
-                          }`}
+                          className={`cursor-pointer transition-all duration-200 ${quizConfig.selectedQuestions.some((q) => q.id === question.id)
+                            ? 'ring-2 ring-blue-500 bg-blue-50 shadow-lg'
+                            : 'hover:shadow-md'
+                            }`}
                         >
                           <CardContent className="p-5 flex items-start space-x-4">
                             <Checkbox
@@ -1094,5 +1093,13 @@ export default function CreateQuiz() {
         </Tabs>
       </div>
     </div>
+  );
+}
+
+export default function CreateQuiz() {
+  return (
+    <React.Suspense fallback={<div className="flex justify-center items-center min-h-screen"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div></div>}>
+      <CreateQuizContent />
+    </React.Suspense>
   );
 }

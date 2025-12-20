@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
+import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import {
   collection,
@@ -46,7 +46,7 @@ interface Score {
   answers: Record<string, string>;
 }
 
-export default function QuizStudentScores() {
+function QuizStudentScoresContent() {
   const router = useRouter();
   const params = useSearchParams();
   const quizId = params.get('id');
@@ -148,7 +148,7 @@ export default function QuizStudentScores() {
         const resultData = resultSnap.data();
         return {
           id: userId,
-            name: userData.fullName || 'Unknown',
+          name: userData.fullName || 'Unknown',
           fatherName: userData.fatherName || '-',
           district: userData.district || '-',
           answers: resultData.answers || {}
@@ -724,5 +724,13 @@ export default function QuizStudentScores() {
         }
       `}</style>
     </div>
+  );
+}
+
+export default function QuizStudentScores() {
+  return (
+    <React.Suspense fallback={<div className="flex justify-center items-center min-h-screen"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div></div>}>
+      <QuizStudentScoresContent />
+    </React.Suspense>
   );
 }

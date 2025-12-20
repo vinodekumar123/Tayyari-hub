@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { doc, getDoc, setDoc, serverTimestamp, getDocs, collection } from 'firebase/firestore';
 import { onAuthStateChanged, User } from 'firebase/auth';
@@ -53,7 +53,7 @@ const stripHtml = (html: string): string => {
   return div.textContent || div.innerText || '';
 };
 
-const StartQuizPage: React.FC = () => {
+const StartQuizPageContent: React.FC = () => {
   const searchParams = useSearchParams();
   const router = useRouter();
   const quizId = searchParams.get('id')!;
@@ -910,6 +910,14 @@ const StartQuizPage: React.FC = () => {
         )}
       </div>
     </div>
+  );
+};
+
+const StartQuizPage = () => {
+  return (
+    <React.Suspense fallback={<div className="flex justify-center items-center min-h-screen"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div></div>}>
+      <StartQuizPageContent />
+    </React.Suspense>
   );
 };
 

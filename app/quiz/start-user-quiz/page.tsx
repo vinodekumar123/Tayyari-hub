@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { db, auth } from '@/app/firebase';
 import {
@@ -63,7 +63,7 @@ function cleanObject(obj: any): any {
   return obj;
 }
 
-const StartUserQuizPage: React.FC = () => {
+const StartUserQuizPageContent: React.FC = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
   const quizId = searchParams.get('id') as string;
@@ -580,6 +580,14 @@ const StartUserQuizPage: React.FC = () => {
         </Card>
       </main>
     </div>
+  );
+};
+
+const StartUserQuizPage = () => {
+  return (
+    <React.Suspense fallback={<div className="flex justify-center items-center min-h-screen"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div></div>}>
+      <StartUserQuizPageContent />
+    </React.Suspense>
   );
 };
 
