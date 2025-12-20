@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { onAuthStateChanged } from 'firebase/auth';
 import { db, auth } from '../../../firebase';
@@ -265,7 +265,7 @@ export default function CreateQuestion() {
   const validateCsvQuestion = (row: any, index: number) => {
     const errors: string[] = [];
     const requiredFields = ['questionText', 'options', 'correctAnswer', 'course', 'subject', 'difficulty'];
-    
+
     requiredFields.forEach(field => {
       if (!row[field] || (typeof row[field] === 'string' && !row[field].trim())) {
         errors.push(`Row ${index + 1}: ${field} is required`);
