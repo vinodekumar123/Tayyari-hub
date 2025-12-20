@@ -72,7 +72,7 @@ type Question = {
   createdAt?: Date;
 };
 
-export default function CreateQuestion() {
+function CreateQuestionContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const id = searchParams.get("id");
@@ -814,5 +814,13 @@ export default function CreateQuestion() {
         )}
       </main>
     </div>
+  );
+}
+
+export default function CreateQuestion() {
+  return (
+    <React.Suspense fallback={<div className="flex justify-center items-center min-h-screen"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div></div>}>
+      <CreateQuestionContent />
+    </React.Suspense>
   );
 }
