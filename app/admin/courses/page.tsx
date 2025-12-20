@@ -13,7 +13,8 @@ import {
   deleteDoc,
   query,
   where,
-  serverTimestamp
+  serverTimestamp,
+  deleteField
 } from 'firebase/firestore';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -315,8 +316,8 @@ function CourseDetailView({
             key={tab}
             onClick={() => setActiveTab(tab as any)}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === tab
-                ? 'bg-indigo-600 text-white shadow-md'
-                : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+              ? 'bg-indigo-600 text-white shadow-md'
+              : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
               }`}
           >
             {tab.charAt(0).toUpperCase() + tab.slice(1)}
@@ -426,8 +427,8 @@ function SubjectsTab({ course, allSubjects, refreshData }: { course: Course, all
             <label
               key={sub.id}
               className={`flex items-center p-3 rounded-lg border cursor-pointer transition-all ${selectedIds.includes(sub.id)
-                  ? 'border-indigo-500 bg-indigo-50/50'
-                  : 'border-slate-200 hover:border-indigo-200'
+                ? 'border-indigo-500 bg-indigo-50/50'
+                : 'border-slate-200 hover:border-indigo-200'
                 }`}
             >
               <input
@@ -897,7 +898,11 @@ function ManageSubjectsModal({ isOpen, onClose, subjects, onUpdate }: { isOpen: 
   const [newSubjectName, setNewSubjectName] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const handleAdd = async () => {
+  // Chapter Management State
+  const [expandedSubjectId, setExpandedSubjectId] = useState<string | null>(null);
+  const [newChapterName, setNewChapterName] = useState('');
+
+  const handleAddSubject = async () => {
     if (!newSubjectName) return;
     setLoading(true);
     try {
@@ -911,7 +916,7 @@ function ManageSubjectsModal({ isOpen, onClose, subjects, onUpdate }: { isOpen: 
     }
   };
 
-  const handleDelete = async (id: string) => {
+  const handleDeleteSubject = async (id: string) => {
     if (!confirm('Delete this subject? It will be removed from all courses.')) return;
     setLoading(true);
     try {
@@ -931,13 +936,46 @@ function ManageSubjectsModal({ isOpen, onClose, subjects, onUpdate }: { isOpen: 
     }
   };
 
+  const handleAddChapter = async (subjectId: string) => {
+    if (!newChapterName.trim()) return;
+    setLoading(true);
+    try {
+      // Use dot notation to update a specific key in the map
+      await updateDoc(doc(db, 'subjects', subjectId), {
+        [`chapters.${newChapterName.trim()}`]: true
+      });
+      setNewChapterName('');
+      onUpdate();
+    } catch (err) {
+      console.error("Error adding chapter:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteChapter = async (subjectId: string, chapterName: string) => {
+    if (!confirm(`Remove chapter "${chapterName}"?`)) return;
+    setLoading(true);
+    try {
+      await updateDoc(doc(db, 'subjects', subjectId), {
+        [`chapters.${chapterName}`]: deleteField()
+      });
+      onUpdate();
+    } catch (err) {
+      console.error("Error deleting chapter:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-      <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="bg-white rounded-2xl w-full max-w-lg shadow-2xl p-6 flex flex-col max-h-[80vh]">
-        <h2 className="text-xl font-bold text-slate-800 mb-4">Manage Subjects</h2>
+      <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="bg-white rounded-2xl w-full max-w-lg shadow-2xl p-6 flex flex-col max-h-[85vh]">
+        <h2 className="text-xl font-bold text-slate-800 mb-4">Manage Subjects & Chapters</h2>
 
+        {/* Add Subject Input */}
         <div className="flex gap-2 mb-4">
           <input
             className="flex-1 p-2 border border-slate-200 rounded-lg outline-none focus:border-indigo-500"
@@ -946,23 +984,93 @@ function ManageSubjectsModal({ isOpen, onClose, subjects, onUpdate }: { isOpen: 
             onChange={e => setNewSubjectName(e.target.value)}
           />
           <button
-            onClick={handleAdd}
+            onClick={handleAddSubject}
             disabled={!newSubjectName.trim() || loading}
-            className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
+            className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 font-medium"
           >
-            Add
+            Add Subject
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto custom-scrollbar space-y-2 border-t border-slate-100 pt-4">
-          {subjects.map(sub => (
-            <div key={sub.id} className="flex justify-between items-center p-3 bg-slate-50 rounded-lg group">
-              <span className="font-medium text-slate-700">{sub.name}</span>
-              <button onClick={() => handleDelete(sub.id)} className="text-slate-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity">
-                <Trash className="w-4 h-4" />
-              </button>
-            </div>
-          ))}
+        {/* Subject List */}
+        <div className="flex-1 overflow-y-auto custom-scrollbar space-y-3 border-t border-slate-100 pt-4">
+          {subjects.map(sub => {
+            const isExpanded = expandedSubjectId === sub.id;
+            const chapters = Object.keys(sub.chapters || {});
+
+            return (
+              <div key={sub.id} className={`bg-slate-50 rounded-lg border transition-all ${isExpanded ? 'border-indigo-200 shadow-sm' : 'border-transparent'}`}>
+                {/* Subject Header */}
+                <div
+                  className="flex justify-between items-center p-3 cursor-pointer hover:bg-slate-100 rounded-lg"
+                  onClick={() => setExpandedSubjectId(isExpanded ? null : sub.id)}
+                >
+                  <div className="flex items-center gap-2">
+                    <ChevronRight className={`w-4 h-4 text-slate-400 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
+                    <span className="font-medium text-slate-700">{sub.name}</span>
+                    <span className="text-xs bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded-full">{chapters.length}</span>
+                  </div>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); handleDeleteSubject(sub.id); }}
+                    className="p-1 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors"
+                  >
+                    <Trash className="w-4 h-4" />
+                  </button>
+                </div>
+
+                {/* Chapters Section (Expanded) */}
+                <AnimatePresence>
+                  {isExpanded && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: 'auto', opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      className="overflow-hidden"
+                    >
+                      <div className="p-3 pt-0 pl-9 space-y-3 border-t border-slate-100/50">
+                        {/* New Chapter Input */}
+                        <div className="flex gap-2 mt-3">
+                          <input
+                            className="flex-1 p-1.5 text-sm border border-slate-200 rounded outline-none focus:border-indigo-500"
+                            placeholder="Add Chapter..."
+                            value={newChapterName}
+                            onChange={(e) => setNewChapterName(e.target.value)}
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                          <button
+                            onClick={(e) => { e.stopPropagation(); handleAddChapter(sub.id); }}
+                            disabled={!newChapterName.trim() || loading}
+                            className="p-1.5 bg-indigo-100 text-indigo-600 rounded hover:bg-indigo-200 disabled:opacity-50"
+                          >
+                            <Plus className="w-4 h-4" />
+                          </button>
+                        </div>
+
+                        {/* Chapters List */}
+                        <div className="space-y-1">
+                          {chapters.length === 0 ? (
+                            <p className="text-xs text-slate-400 italic">No chapters yet</p>
+                          ) : (
+                            chapters.map(chapter => (
+                              <div key={chapter} className="flex justify-between items-center group/chapter p-1 hover:bg-slate-100 rounded">
+                                <span className="text-sm text-slate-600">{chapter}</span>
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); handleDeleteChapter(sub.id, chapter); }}
+                                  className="text-slate-300 hover:text-red-500 opacity-0 group-hover/chapter:opacity-100 transition-opacity"
+                                >
+                                  <X className="w-3 h-3" />
+                                </button>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            );
+          })}
         </div>
 
         <div className="pt-4 mt-4 border-t border-slate-100 text-right">
