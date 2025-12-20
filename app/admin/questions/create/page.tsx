@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { onAuthStateChanged } from 'firebase/auth';
 import dynamic from 'next/dynamic';
 import Papa from 'papaparse';
-import 'react-quill/dist/quill.snow.css';
+import 'react-quill-new/dist/quill.snow.css';
 
 import { db, auth } from '../../../firebase';
 
@@ -47,7 +47,7 @@ import {
 } from '@/components/ui/dialog';
 
 // Dynamically import ReactQuill to avoid SSR issues
-const ReactQuill = dynamic(() => import('react-quill'), { ssr: false });
+const ReactQuill = dynamic(() => import('react-quill-new'), { ssr: false });
 
 // TypeScript Interfaces
 interface Course {
