@@ -87,7 +87,8 @@ export default function AdminDashboard() {
           // Alternatively, since we are in a component, fetching the doc is safer to be sure
           const docRef = await import('firebase/firestore').then(mod => mod.getDoc(mod.doc(db, 'users', user.uid)));
 
-          if (docRef.exists() && docRef.data().admin === true) {
+          const userData = docRef.data();
+          if (docRef.exists() && (userData?.admin === true || userData?.admin === 'true')) {
             // Authorized
           } else {
             router.push('/');

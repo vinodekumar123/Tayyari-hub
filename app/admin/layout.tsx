@@ -37,7 +37,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
         try {
           const userDoc = await getDoc(doc(db, 'users', user.uid));
-          if (userDoc.exists() && userDoc.data().admin === true) {
+          const userData = userDoc.data();
+          if (userDoc.exists() && (userData?.admin === true || userData?.admin === 'true')) {
             setLoading(false);
           } else {
             router.push('/'); // Redirect non-admins to home if accessing restricted admin pages
