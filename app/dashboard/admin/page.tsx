@@ -76,11 +76,33 @@ export default function AdminDashboard() {
     mockQuestions: 0,
   });
 
-  // Auth (no change)
+  // Auth with stricter Admin Check
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, (user) => user && setAdminUser(user));
+    const unsub = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        setAdminUser(user);
+        try {
+          // Check if custom claims or Firestore document confirms admin
+          const userDoc = await getCountFromServer(query(collection(db, 'users'), where('uid', '==', user.uid), where('admin', '==', true)));
+          // Alternatively, since we are in a component, fetching the doc is safer to be sure
+          const docRef = await import('firebase/firestore').then(mod => mod.getDoc(mod.doc(db, 'users', user.uid)));
+
+          if (docRef.exists() && docRef.data().admin === true) {
+            // Authorized
+          } else {
+            router.push('/');
+          }
+        } catch (e) {
+          console.error(e);
+          router.push('/');
+        }
+      } else {
+        router.push('/');
+      }
+    });
+
     return () => unsub();
-  }, []);
+  }, [router]);
 
   // Fast counts using index-only aggregations (instant + minimal bytes)
   useEffect(() => {
