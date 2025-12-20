@@ -799,7 +799,7 @@ function SeriesModal({ isOpen, onClose, onSuccess, courseId, seriesToEdit }: { i
             </div>
 
             {/* Live Price Calculation Display */}
-            {couponInput.discountPercentage > 0 && formData.price > 0 && (
+            {couponInput.discountPercentage > 0 && (formData.price || 0) > 0 && (
               <div className="mb-4 text-sm text-slate-600 bg-green-50 p-2 rounded-lg border border-green-100 flex items-center gap-2">
                 <span className="font-semibold text-green-700">Ref Price: {discountedPrice} PKR</span>
                 <span className="text-xs">(Original: {formData.price}, Discount: {couponInput.discountPercentage}%)</span>

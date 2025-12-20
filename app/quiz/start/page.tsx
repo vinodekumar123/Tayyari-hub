@@ -298,6 +298,23 @@ const StartQuizPageContent: React.FC = () => {
 
     await setDoc(doc(db, 'users', user.uid, 'quizAttempts', quizId, 'results', quizId), resultData);
 
+    // Update aggregated stats
+    try {
+      // Dynamic import to avoid server/client issues if any, though this is a client component
+      const { updateStudentStats } = await import('@/app/lib/student-stats');
+      await updateStudentStats(user.uid, {
+        quizId,
+        score,
+        total,
+        answers,
+        selectedQuestions: quiz.selectedQuestions,
+        subject: quiz.subject,
+        timestamp: serverTimestamp() as any
+      }, 'admin');
+    } catch (error) {
+      console.error("Stats update failed", error);
+    }
+
     setShowSubmissionModal(true);
     setShowSummaryModal(false);
     setTimeout(() => {

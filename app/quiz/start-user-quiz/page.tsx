@@ -317,6 +317,22 @@ const StartUserQuizPageContent: React.FC = () => {
         usedMockQuestionIds: arrayUnion(...questions.map(q => q.id)),
       });
 
+      // Update aggregated stats
+      try {
+        const { updateStudentStats } = await import('@/app/lib/student-stats');
+        await updateStudentStats(user.uid, {
+          quizId,
+          score,
+          total: questions.length,
+          answers,
+          selectedQuestions: questions,
+          subject: quiz.subject,
+          timestamp: serverTimestamp() as any
+        }, 'user');
+      } catch (error) {
+        console.error("Stats update failed", error);
+      }
+
       setShowSubmissionModal(true);
       setShowSummaryModal(false);
       setTimeout(() => {
