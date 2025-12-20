@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { db, auth } from 'app/firebase';
+import { db, auth } from '@/app/firebase';
 import {
   doc, getDoc, setDoc, serverTimestamp, updateDoc, arrayUnion,
 } from 'firebase/firestore';
@@ -281,7 +281,7 @@ const StartUserQuizPage: React.FC = () => {
       for (const q of questions) {
         const selected = answers[q.id] === undefined ? null : answers[q.id];
         const correct = q.correctAnswer === undefined ? null : q.correctAnswer;
-        const isCorrect = (selected && correct && selected === correct) ?? false;
+        const isCorrect = (selected && correct && selected === correct) ? true : false;
         detailed.push({
           questionId: q.id,
           questionText: stripHtml(q.questionText),
@@ -519,9 +519,8 @@ const StartUserQuizPage: React.FC = () => {
                   <div className="flex items-center">
                     <button
                       onClick={() => toggleFlag(q.id)}
-                      className={`flex items-center gap-2 px-3 py-1 rounded text-sm transition ${
-                        flags[q.id] ? 'bg-yellow-100 text-yellow-800 border border-yellow-300' : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'
-                      }`}
+                      className={`flex items-center gap-2 px-3 py-1 rounded text-sm transition ${flags[q.id] ? 'bg-yellow-100 text-yellow-800 border border-yellow-300' : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'
+                        }`}
                       title={flags[q.id] ? 'Unflag question' : 'Flag question'}
                     >
                       <Flag className={`h-4 w-4 ${flags[q.id] ? 'text-yellow-600' : 'text-gray-400'}`} />
@@ -534,9 +533,8 @@ const StartUserQuizPage: React.FC = () => {
                     <label
                       key={i}
                       htmlFor={`opt-${q.id}-${i}`}
-                      className={`flex items-center p-3 border rounded-lg cursor-pointer transition hover:bg-gray-100 ${
-                        answers[q.id] === opt ? 'border-blue-500 bg-blue-50' : ''
-                      }`}
+                      className={`flex items-center p-3 border rounded-lg cursor-pointer transition hover:bg-gray-100 ${answers[q.id] === opt ? 'border-blue-500 bg-blue-50' : ''
+                        }`}
                     >
                       <input
                         type="radio"

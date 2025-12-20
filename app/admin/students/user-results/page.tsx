@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { db, auth } from 'app/firebase';
+import { db, auth } from '@/app/firebase';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { collection, getDocs, doc, getDoc, query, orderBy } from 'firebase/firestore';
 import { useRouter } from 'next/navigation';
@@ -57,7 +57,7 @@ const UserQuizResultsPage: React.FC = () => {
           const data = docSnap.data();
           if (!data.completed) return; // Only show completed attempts
           _attempts.push({
-            ...data,
+            ...(data as any),
             id: docSnap.id,
             quizId: docSnap.id,
           });

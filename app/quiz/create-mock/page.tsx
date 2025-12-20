@@ -15,7 +15,7 @@ import {
   getDoc,
 } from 'firebase/firestore';
 import { onAuthStateChanged, User } from 'firebase/auth';
-import { db, auth } from 'app/firebase';
+import { db, auth } from '@/app/firebase';
 import { Button } from '@/components/ui/button';
 import { Sidebar } from '@/components/ui/sidebar';
 
@@ -368,7 +368,7 @@ export default function CreateUserQuizPage() {
   return (
     <div className="flex min-h-screen">
       <Sidebar />
-      
+
       <div className="flex-1 bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 py-12 px-4 sm:px-6 lg:px-8">
         <style jsx>{`
           @keyframes fadeIn {
@@ -451,17 +451,15 @@ export default function CreateUserQuizPage() {
                       type="button"
                       key={s}
                       onClick={() => toggleSubject(s)}
-                      className={`chip rounded-2xl p-4 text-left transition-all ${
-                        isSelected
+                      className={`chip rounded-2xl p-4 text-left transition-all ${isSelected
                           ? 'bg-gradient-to-br from-indigo-100 to-purple-100 border-2 border-indigo-400'
                           : 'bg-gray-50 border-2 border-gray-200'
-                      }`}
+                        }`}
                     >
                       <div className="flex items-center justify-between mb-2">
                         <span className="text-gray-800 font-semibold">{s}</span>
-                        <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
-                          isSelected ? 'bg-indigo-600 border-indigo-600' : 'border-gray-300'
-                        }`}>
+                        <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${isSelected ? 'bg-indigo-600 border-indigo-600' : 'border-gray-300'
+                          }`}>
                           {isSelected && <span className="text-white text-xs">✓</span>}
                         </div>
                       </div>
@@ -518,11 +516,10 @@ export default function CreateUserQuizPage() {
                           type="button"
                           key={subject + '::' + c}
                           onClick={() => toggleChapter(c)}
-                          className={`chip px-5 py-2.5 rounded-full text-sm font-medium transition-all ${
-                            isSelected
+                          className={`chip px-5 py-2.5 rounded-full text-sm font-medium transition-all ${isSelected
                               ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-md'
                               : 'bg-gray-100 text-gray-700 border-2 border-gray-200'
-                          }`}
+                            }`}
                         >
                           {c} <span className="text-xs opacity-70">({subject})</span>
                         </button>
