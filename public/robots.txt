@@ -1,0 +1,9 @@
+# *
+User-agent: *
+Allow: /
+
+# Host
+Host: https://tayyarihub.com
+
+# Sitemaps
+Sitemap: https://tayyarihub.com/sitemap.xml

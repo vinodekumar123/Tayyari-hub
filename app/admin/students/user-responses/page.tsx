@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { db, auth } from '@/app/firebase';
 import { doc, getDoc } from 'firebase/firestore';
@@ -66,7 +66,7 @@ const TABS = [
   { key: 'skipped', label: 'Skipped', icon: Info },
 ];
 
-const UserResponsesPage: React.FC = () => {
+const UserResponsesPageContent: React.FC = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
   const quizId = searchParams.get('id') as string;
@@ -430,15 +430,15 @@ const UserResponsesPage: React.FC = () => {
                 key={tab.key}
                 onClick={() => setActiveTab(tab.key as typeof activeTab)}
                 className={`group flex items-center gap-2 px-6 py-3 rounded-2xl font-semibold transition-all duration-300 whitespace-nowrap ${activeTab === tab.key
-                    ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-lg shadow-purple-500/30 scale-105'
-                    : 'bg-white text-gray-700 hover:bg-gray-50 border border-purple-200 shadow-sm'
+                  ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-lg shadow-purple-500/30 scale-105'
+                  : 'bg-white text-gray-700 hover:bg-gray-50 border border-purple-200 shadow-sm'
                   }`}
               >
                 <Icon className="h-5 w-5" />
                 <span>{tab.label}</span>
                 <span className={`px-2.5 py-0.5 rounded-full text-sm font-bold ${activeTab === tab.key
-                    ? 'bg-white/20 text-white'
-                    : 'bg-purple-100 text-purple-700'
+                  ? 'bg-white/20 text-white'
+                  : 'bg-purple-100 text-purple-700'
                   }`}>
                   {count}
                 </span>
@@ -466,10 +466,10 @@ const UserResponsesPage: React.FC = () => {
                 {/* Question Header */}
                 <div className="flex items-start gap-4 mb-6">
                   <div className={`flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center font-bold text-lg shadow-md ${q.isCorrect
-                      ? 'bg-gradient-to-br from-emerald-500 to-green-500 text-white'
-                      : !q.selected || q.selected === ''
-                        ? 'bg-gradient-to-br from-amber-500 to-orange-500 text-white'
-                        : 'bg-gradient-to-br from-red-500 to-pink-500 text-white'
+                    ? 'bg-gradient-to-br from-emerald-500 to-green-500 text-white'
+                    : !q.selected || q.selected === ''
+                      ? 'bg-gradient-to-br from-amber-500 to-orange-500 text-white'
+                      : 'bg-gradient-to-br from-red-500 to-pink-500 text-white'
                     }`}>
                     {idx + 1}
                   </div>
@@ -524,17 +524,17 @@ const UserResponsesPage: React.FC = () => {
                       <div
                         key={i}
                         className={`flex items-center gap-3 p-4 rounded-2xl transition-all duration-300 ${isCorrect
-                            ? 'bg-emerald-50 border-2 border-emerald-400 shadow-md'
-                            : isSelected
-                              ? 'bg-red-50 border-2 border-red-400 shadow-md'
-                              : 'bg-gray-50 border border-gray-200 hover:bg-gray-100 hover:shadow-sm'
+                          ? 'bg-emerald-50 border-2 border-emerald-400 shadow-md'
+                          : isSelected
+                            ? 'bg-red-50 border-2 border-red-400 shadow-md'
+                            : 'bg-gray-50 border border-gray-200 hover:bg-gray-100 hover:shadow-sm'
                           }`}
                       >
                         <div className={`flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center font-bold shadow-sm ${isCorrect
-                            ? 'bg-emerald-500 text-white'
-                            : isSelected
-                              ? 'bg-red-500 text-white'
-                              : 'bg-gray-300 text-gray-700'
+                          ? 'bg-emerald-500 text-white'
+                          : isSelected
+                            ? 'bg-red-500 text-white'
+                            : 'bg-gray-300 text-gray-700'
                           }`}>
                           {String.fromCharCode(65 + i)}
                         </div>
@@ -573,6 +573,14 @@ const UserResponsesPage: React.FC = () => {
         </div>
       </main>
     </div>
+  );
+};
+
+const UserResponsesPage = () => {
+  return (
+    <React.Suspense fallback={<div className="flex justify-center items-center min-h-screen"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div></div>}>
+      <UserResponsesPageContent />
+    </React.Suspense>
   );
 };
 

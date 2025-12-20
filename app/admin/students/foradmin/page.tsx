@@ -2,7 +2,7 @@
 
 'use client';
 
-import { useEffect, useState, useMemo, useRef } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import {
   collection,
@@ -48,7 +48,7 @@ const PRINT_SECTIONS = [
   { key: 'allTests', label: 'All Tests Table' },
 ];
 
-export default function ForAdminStudentResults() {
+function ForAdminStudentResultsContent() {
   const [results, setResults] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [studentName, setStudentName] = useState('');
@@ -114,7 +114,7 @@ export default function ForAdminStudentResults() {
         if (q.subjectName) return q.subjectName;
         if (q.topic) return typeof q.topic === 'string' ? q.topic : q.topic?.name ?? 'Unspecified';
         if (quizMeta?.questionFilters?.subjects?.length) return quizMeta.questionFilters.subjects.join(', ');
-        if (quizMeta?.subjects?.length) return Array.isArray(quizMeta.subjects) ? quizMeta.subjects.map((s:any)=>(typeof s==='string'?s:s?.name||'Unknown')).join(', ') : 'Unspecified';
+        if (quizMeta?.subjects?.length) return Array.isArray(quizMeta.subjects) ? quizMeta.subjects.map((s: any) => (typeof s === 'string' ? s : s?.name || 'Unknown')).join(', ') : 'Unspecified';
         if (quizMeta?.subject?.name) return quizMeta.subject.name;
         if (typeof quizMeta?.subject === 'string') return quizMeta.subject;
         return 'Unspecified';
@@ -217,7 +217,7 @@ export default function ForAdminStudentResults() {
                 if (quizMeta?.questionFilters?.subjects?.length) {
                   overallSubject = quizMeta.questionFilters.subjects.join(', ');
                 } else if (quizMeta?.subjects?.length) {
-                  overallSubject = Array.isArray(quizMeta.subjects) ? quizMeta.subjects.map((s:any)=>(typeof s==='string'?s:s?.name||'Unknown')).join(', ') : 'Unspecified';
+                  overallSubject = Array.isArray(quizMeta.subjects) ? quizMeta.subjects.map((s: any) => (typeof s === 'string' ? s : s?.name || 'Unknown')).join(', ') : 'Unspecified';
                 } else if (quizMeta?.subject?.name) {
                   overallSubject = quizMeta.subject.name;
                 } else if (typeof quizMeta?.subject === 'string') {
@@ -285,8 +285,8 @@ export default function ForAdminStudentResults() {
                 resultData.timestamp?.seconds
                   ? resultData.timestamp.seconds * 1000
                   : typeof resultData.timestamp === 'number'
-                  ? resultData.timestamp
-                  : resultData.timestamp || Date.now();
+                    ? resultData.timestamp
+                    : resultData.timestamp || Date.now();
 
               allResults.push({
                 id: quizId,
@@ -294,7 +294,7 @@ export default function ForAdminStudentResults() {
                 title: quizMeta.title || 'Untitled Quiz',
                 subject:
                   Array.isArray(selectedQuestions) && selectedQuestions.length
-                    ? selectedQuestions.map((q:any)=>(getQSubject(q, quizMeta))).join(', ')
+                    ? selectedQuestions.map((q: any) => (getQSubject(q, quizMeta))).join(', ')
                     : (quizMeta.subject || 'Unspecified'),
                 chapter: quizMeta.chapter?.name || quizMeta.chapter || 'N/A',
                 course: quizMeta.course?.name || quizMeta.course || 'Unknown',
@@ -402,7 +402,7 @@ export default function ForAdminStudentResults() {
     datasets: [{
       label: 'Accuracy (%)',
       data: subjectAnalytics.map(s => s.accuracy),
-      backgroundColor: subjectAnalytics.map((s,i)=>`rgba(${50+i*20},${100+i*10},${200-i*10},0.7)`),
+      backgroundColor: subjectAnalytics.map((s, i) => `rgba(${50 + i * 20},${100 + i * 10},${200 - i * 10},0.7)`),
       borderWidth: 1,
     }]
   }), [subjectAnalytics]);
@@ -411,7 +411,7 @@ export default function ForAdminStudentResults() {
     datasets: [{
       label: 'Test Accuracy (%)',
       data: results.map(r => r.accuracy),
-      backgroundColor: results.map((r,i)=>`rgba(59,130,246,${0.6+0.1*i})`)
+      backgroundColor: results.map((r, i) => `rgba(59,130,246,${0.6 + 0.1 * i})`)
     }]
   }), [results]);
   const subjectTrendLineData = useMemo(() => {
@@ -511,8 +511,8 @@ export default function ForAdminStudentResults() {
     if (sections.includes('summary')) {
       html += `<h2>Summary Cards</h2>
         <div class="card">
-          <div><strong>Best Test:</strong> ${bestTest ? escapeHtml(bestTest.title) : 'N/A'} (${bestTest ? bestTest.accuracy+'%' : ''}) <span class="remark">${bestTest ? getTestRemark(bestTest) : ''}</span></div>
-          <div><strong>Weakest Test:</strong> ${weakestTest ? escapeHtml(weakestTest.title) : 'N/A'} (${weakestTest ? weakestTest.accuracy+'%' : ''}) <span class="remark">${weakestTest ? getTestRemark(weakestTest) : ''}</span></div>
+          <div><strong>Best Test:</strong> ${bestTest ? escapeHtml(bestTest.title) : 'N/A'} (${bestTest ? bestTest.accuracy + '%' : ''}) <span class="remark">${bestTest ? getTestRemark(bestTest) : ''}</span></div>
+          <div><strong>Weakest Test:</strong> ${weakestTest ? escapeHtml(weakestTest.title) : 'N/A'} (${weakestTest ? weakestTest.accuracy + '%' : ''}) <span class="remark">${weakestTest ? getTestRemark(weakestTest) : ''}</span></div>
           <div><strong>Consistency:</strong> ${consistency}</div>
           <div><strong>Improvement:</strong> ${improvement >= 0 ? '↑' : '↓'} ${Math.abs(improvement)}%</div>
         </div>
@@ -592,11 +592,11 @@ export default function ForAdminStudentResults() {
         </thead>
         <tbody>
           ${results.map(r => {
-            const dateStr = r.timestamp ? format(new Date(r.timestamp), 'dd MMM yyyy, hh:mm a') : 'N/A';
-            const totalQ = r.countedQuestions && r.countedQuestions > 0 ? r.countedQuestions : r.currentTotal ?? r.total ?? 'N/A';
-            const correct = r.correct ?? r.originalScore ?? 0;
-            const accuracy = typeof r.accuracy === 'number' ? `${r.accuracy}%` : 'N/A';
-            return `
+        const dateStr = r.timestamp ? format(new Date(r.timestamp), 'dd MMM yyyy, hh:mm a') : 'N/A';
+        const totalQ = r.countedQuestions && r.countedQuestions > 0 ? r.countedQuestions : r.currentTotal ?? r.total ?? 'N/A';
+        const correct = r.correct ?? r.originalScore ?? 0;
+        const accuracy = typeof r.accuracy === 'number' ? `${r.accuracy}%` : 'N/A';
+        return `
               <tr>
                 <td>${escapeHtml(r.title)}</td>
                 <td>${dateStr}</td>
@@ -605,7 +605,7 @@ export default function ForAdminStudentResults() {
                 <td style="text-align:right">${accuracy}</td>
               </tr>
             `;
-          }).join('')}
+      }).join('')}
         </tbody>
       </table></div>`;
     }
@@ -900,5 +900,13 @@ export default function ForAdminStudentResults() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+export default function ForAdminStudentResults() {
+  return (
+    <React.Suspense fallback={<div className="flex justify-center items-center min-h-screen"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div></div>}>
+      <ForAdminStudentResultsContent />
+    </React.Suspense>
   );
 }

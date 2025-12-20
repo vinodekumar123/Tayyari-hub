@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { onAuthStateChanged } from 'firebase/auth';
 import dynamic from 'next/dynamic';
@@ -81,7 +81,7 @@ interface Question {
   createdAt?: Date;
 }
 
-export default function CreateQuestion() {
+function CreateQuestionContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const id = searchParams.get("id");
@@ -574,11 +574,10 @@ export default function CreateQuestion() {
                       {questionData.options.map((option, index) => (
                         <div
                           key={index}
-                          className={`p-2 rounded-md ${
-                            option === questionData.correctAnswer
-                              ? 'bg-green-100 text-green-800'
-                              : 'bg-white text-gray-800'
-                          }`}
+                          className={`p-2 rounded-md ${option === questionData.correctAnswer
+                            ? 'bg-green-100 text-green-800'
+                            : 'bg-white text-gray-800'
+                            }`}
                         >
                           {String.fromCharCode(65 + index)}. {option || 'No option text'}
                         </div>
@@ -885,5 +884,13 @@ export default function CreateQuestion() {
         )}
       </main>
     </div>
+  );
+}
+
+export default function CreateQuestion() {
+  return (
+    <React.Suspense fallback={<div className="flex justify-center items-center min-h-screen"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div></div>}>
+      <CreateQuestionContent />
+    </React.Suspense>
   );
 }
