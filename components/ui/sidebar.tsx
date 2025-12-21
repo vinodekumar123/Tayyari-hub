@@ -15,6 +15,7 @@ import { getFirestore, doc, getDoc } from 'firebase/firestore';
 import { app } from '../../app/firebase';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { ModeToggle } from '@/components/mode-toggle';
 
 type MenuItem = {
   icon: React.ElementType;
@@ -157,7 +158,7 @@ export function Sidebar() {
 
       {/* Sidebar */}
       <div
-        className={`fixed top-0 left-0 h-full z-50 bg-white border-r border-gray-200 flex flex-col transition-transform duration-300
+        className={`fixed top-0 left-0 h-full z-50 bg-background border-r border-border flex flex-col transition-transform duration-300
           ${collapsed ? 'w-16' : 'w-64'}
           ${mobileOpen ? 'translate-x-0' : '-translate-x-full'}
           md:translate-x-0 md:static md:flex`}
@@ -176,6 +177,9 @@ export function Sidebar() {
             <Button variant="ghost" size="icon" onClick={() => setMobileOpen(false)} className="md:hidden">
               <X className="h-5 w-5" />
             </Button>
+            <div className="flex items-center">
+              <ModeToggle />
+            </div>
           </div>
         </div>
 
@@ -185,7 +189,7 @@ export function Sidebar() {
             <div key={section.section}>
               <button
                 onClick={() => toggleSection(section.section)}
-                className={`flex items-center justify-between w-full text-left text-sm font-semibold text-gray-900 mb-3 ${collapsed ? 'hidden' : 'block'}`}
+                className={`flex items-center justify-between w-full text-left text-sm font-semibold text-foreground mb-3 ${collapsed ? 'hidden' : 'block'}`}
               >
                 <span className="text-base font-bold">{section.title}</span>
                 {expandedSections.includes(section.section) ? (
@@ -200,19 +204,17 @@ export function Sidebar() {
                   {section.items.map((item) => (
                     <Link key={item.href} href={item.href!}>
                       <div
-                        className={`flex items-center justify-between px-3 py-2 rounded-sm text-sm transition-all duration-200 group ${
-                          isActive(item.href)
-                            ? 'bg-gradient-to-r from-purple-100 to-blue-100 text-purple-700 shadow-sm'
-                            : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
-                        }`}
+                        className={`flex items-center justify-between px-3 py-2 rounded-sm text-sm transition-all duration-200 group ${isActive(item.href)
+                            ? 'bg-gradient-to-r from-purple-100 to-blue-100 text-purple-700 shadow-sm dark:from-purple-900/50 dark:to-blue-900/50 dark:text-purple-300'
+                            : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+                          }`}
                       >
                         <div className="flex items-center space-x-3">
                           <item.icon
-                            className={`h-10 w-5 ${
-                              isActive(item.href)
-                                ? 'text-purple-800'
-                                : 'text-gray-400 group-hover:text-gray-600'
-                            }`}
+                            className={`h-10 w-5 ${isActive(item.href)
+                                ? 'text-purple-800 dark:text-purple-400'
+                                : 'text-muted-foreground group-hover:text-foreground'
+                              }`}
                           />
                           {!collapsed && <span className="font-semibold text-base">{item.label}</span>}
                         </div>
@@ -232,7 +234,7 @@ export function Sidebar() {
           {/* Sign Out */}
           <div
             onClick={() => setShowSignOutDialog(true)}
-            className="flex items-center justify-between px-3 py-2 rounded-sm text-sm cursor-pointer transition-all duration-200 text-gray-600 hover:bg-red-100 hover:text-red-700"
+            className="flex items-center justify-between px-3 py-2 rounded-sm text-sm cursor-pointer transition-all duration-200 text-muted-foreground hover:bg-red-100 hover:text-red-700 dark:hover:bg-red-900/30"
           >
             <div className="flex items-center space-x-3">
               <LogOut className="h-5 w-5 text-red-500 group-hover:text-red-700" />
