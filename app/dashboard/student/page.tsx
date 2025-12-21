@@ -141,23 +141,23 @@ export default function UltraFastStudentDashboard() {
   };
 
   return (
-    <div className="flex min-h-screen bg-slate-50 flex-col md:flex-row">
+    <div className="flex min-h-screen bg-background flex-col md:flex-row">
       <Sidebar />
       <div className="flex-1 p-4 mt-8 sm:p-6 md:p-8 space-y-8 overflow-y-auto">
 
         {/* Header with Glassmorphism */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6 bg-white/70 backdrop-blur-md p-6 rounded-2xl shadow-sm border border-slate-100">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6 bg-background/70 backdrop-blur-md p-6 rounded-2xl shadow-sm border border-border">
           <div>
             <h1 className="text-3xl sm:text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-violet-600">
               {greeting}, {studentData?.fullName?.split(' ')[0] || 'Student'}
             </h1>
-            <p className="text-slate-500 font-medium mt-2 flex items-center gap-2">
+            <p className="text-muted-foreground font-medium mt-2 flex items-center gap-2">
               <Zap className="w-4 h-4 text-amber-500 fill-amber-500" />
               Your learning journey is on fire!
             </p>
           </div>
           <div className="flex gap-3">
-            <button onClick={refreshStats} className="p-3 bg-white rounded-xl shadow-sm border border-slate-200 hover:bg-slate-50 text-slate-600 transition-all">
+            <button onClick={refreshStats} className="p-3 bg-card rounded-xl shadow-sm border border-border hover:bg-accent text-muted-foreground transition-all">
               <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
             </button>
             <a href="/admin/quizzes/quizebank" className="px-6 py-3 bg-gradient-to-r from-indigo-600 to-violet-600 text-white rounded-xl font-bold hover:shadow-lg hover:translate-y-[-2px] transition-all flex items-center gap-2 shadow-indigo-200">
@@ -182,12 +182,12 @@ export default function UltraFastStudentDashboard() {
             </CardContent>
           </Card>
 
-          <Card className="hover:shadow-xl hover:-translate-y-1 transition-all duration-300 border-none shadow-md bg-white group">
+          <Card className="hover:shadow-xl hover:-translate-y-1 transition-all duration-300 border-none shadow-md bg-card group">
             <CardContent className="p-6">
               <div className="flex justify-between items-start">
                 <div>
-                  <p className="text-slate-500 font-semibold text-sm uppercase tracking-wider">Questions Solved</p>
-                  <h3 className="text-4xl font-black text-slate-800 mt-2">{stats.totalQuestions + stats.totalMockQuestions}</h3>
+                  <p className="text-muted-foreground font-semibold text-sm uppercase tracking-wider">Questions Solved</p>
+                  <h3 className="text-4xl font-black text-foreground mt-2">{stats.totalQuestions + stats.totalMockQuestions}</h3>
                 </div>
                 <div className="p-3 bg-emerald-100 rounded-2xl group-hover:rotate-12 transition-transform">
                   <CheckCircle className="w-8 h-8 text-emerald-600" />
@@ -197,7 +197,7 @@ export default function UltraFastStudentDashboard() {
                 <div className="w-full bg-slate-100 rounded-full h-2">
                   <div className="bg-emerald-500 h-2 rounded-full" style={{ width: `${stats.overallAccuracy}%` }}></div>
                 </div>
-                <p className="text-xs text-slate-400 mt-2 font-medium">{stats.totalCorrect + stats.totalMockCorrect} Correct Answers</p>
+                <p className="text-xs text-muted-foreground mt-2 font-medium">{stats.totalCorrect + stats.totalMockCorrect} Correct Answers</p>
               </div>
             </CardContent>
           </Card>
@@ -206,8 +206,8 @@ export default function UltraFastStudentDashboard() {
             <CardContent className="p-6">
               <div className="flex justify-between items-start">
                 <div>
-                  <p className="text-slate-500 font-semibold text-sm uppercase tracking-wider">Avg. Accuracy</p>
-                  <h3 className="text-4xl font-black text-slate-800 mt-2">{stats.overallAccuracy}%</h3>
+                  <p className="text-muted-foreground font-semibold text-sm uppercase tracking-wider">Avg. Accuracy</p>
+                  <h3 className="text-4xl font-black text-foreground mt-2">{stats.overallAccuracy}%</h3>
                 </div>
                 <div className="p-3 bg-blue-100 rounded-2xl group-hover:rotate-12 transition-transform">
                   <Target className="w-8 h-8 text-blue-600" />
@@ -223,8 +223,8 @@ export default function UltraFastStudentDashboard() {
             <CardContent className="p-6">
               <div className="flex justify-between items-start">
                 <div>
-                  <p className="text-slate-500 font-semibold text-sm uppercase tracking-wider">Mock Bank</p>
-                  <h3 className="text-4xl font-black text-slate-800 mt-2">
+                  <p className="text-muted-foreground font-semibold text-sm uppercase tracking-wider">Mock Bank</p>
+                  <h3 className="text-4xl font-black text-foreground mt-2">
                     {studentData?.usedMockQuestionIds?.length || 0}
                   </h3>
                 </div>
@@ -232,7 +232,7 @@ export default function UltraFastStudentDashboard() {
                   <BookOpen className="w-8 h-8 text-orange-600" />
                 </div>
               </div>
-              <p className="text-xs text-slate-400 mt-4 font-medium">Unique questions attempted</p>
+              <p className="text-xs text-muted-foreground mt-4 font-medium">Unique questions attempted</p>
             </CardContent>
           </Card>
         </div>
@@ -241,9 +241,9 @@ export default function UltraFastStudentDashboard() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
           {/* 1. Performance Trend (Area Chart) */}
-          <Card className="lg:col-span-2 border-none shadow-lg bg-white overflow-hidden">
-            <CardHeader className="border-b border-slate-50 bg-white p-6">
-              <CardTitle className="flex items-center gap-2 text-xl font-bold text-slate-800">
+          <Card className="lg:col-span-2 border-none shadow-lg bg-card overflow-hidden">
+            <CardHeader className="border-b border-border bg-card p-6">
+              <CardTitle className="flex items-center gap-2 text-xl font-bold text-foreground">
                 <Activity className="w-5 h-5 text-indigo-500" />
                 Performance Trend
               </CardTitle>
@@ -281,14 +281,14 @@ export default function UltraFastStudentDashboard() {
           </Card>
 
           {/* 2. Subject Radar Chart */}
-          <Card className="border-none shadow-lg bg-white overflow-hidden">
-            <CardHeader className="border-b border-slate-50 bg-white p-6">
-              <CardTitle className="flex items-center gap-2 text-xl font-bold text-slate-800">
+          <Card className="border-none shadow-lg bg-card overflow-hidden">
+            <CardHeader className="border-b border-border bg-card p-6">
+              <CardTitle className="flex items-center gap-2 text-xl font-bold text-foreground">
                 <Target className="w-5 h-5 text-rose-500" />
                 Subject Strengths
               </CardTitle>
             </CardHeader>
-            <CardContent className="p-6 flex items-center justify-center bg-slate-50/50">
+            <CardContent className="p-6 flex items-center justify-center bg-accent/50">
               <div className="h-[350px] w-full">
                 {radarData.length > 0 ? (
                   <ResponsiveContainer width="100%" height="100%">
@@ -315,9 +315,9 @@ export default function UltraFastStudentDashboard() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
           {/* 3. Correct vs Wrong Bar Chart */}
-          <Card className="lg:col-span-2 border-none shadow-lg bg-white">
-            <CardHeader className="border-b border-slate-50 bg-white p-6">
-              <CardTitle className="flex items-center gap-2 text-xl font-bold text-slate-800">
+          <Card className="lg:col-span-2 border-none shadow-lg bg-card">
+            <CardHeader className="border-b border-border bg-card p-6">
+              <CardTitle className="flex items-center gap-2 text-xl font-bold text-foreground">
                 <CheckCircle className="w-5 h-5 text-emerald-500" />
                 Accuracy Breakdown
               </CardTitle>
@@ -344,9 +344,9 @@ export default function UltraFastStudentDashboard() {
           </Card>
 
           {/* 4. Recent Activity List (Styled) */}
-          <Card className="border-none shadow-lg bg-white h-full">
-            <CardHeader className="border-b border-slate-50 bg-white p-6">
-              <CardTitle className="flex items-center gap-2 text-xl font-bold text-slate-800">
+          <Card className="border-none shadow-lg bg-card h-full">
+            <CardHeader className="border-b border-border bg-card p-6">
+              <CardTitle className="flex items-center gap-2 text-xl font-bold text-foreground">
                 <Clock className="w-5 h-5 text-slate-500" />
                 Recent Activity
               </CardTitle>
@@ -355,24 +355,24 @@ export default function UltraFastStudentDashboard() {
               <div className="max-h-[350px] overflow-y-auto">
                 {recentQuizzes.length > 0 ? (
                   recentQuizzes.map((q, i) => (
-                    <div key={i} className="flex items-center gap-4 p-4 hover:bg-slate-50 transition-colors border-b border-slate-50 last:border-0 group cursor-pointer">
+                    <div key={i} className="flex items-center gap-4 p-4 hover:bg-accent transition-colors border-b border-border last:border-0 group cursor-pointer">
                       <div className={`p-3 rounded-xl ${q.quizType === 'user' ? 'bg-orange-100 text-orange-600' : 'bg-violet-100 text-violet-600'} group-hover:scale-110 transition-transform`}>
                         {q.quizType === 'user' ? <ClipboardList className="w-5 h-5" /> : <Trophy className="w-5 h-5" />}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <h5 className="text-sm font-bold text-slate-800 truncate">{q.title || `Quiz #${q.attemptNumber}`}</h5>
-                        <p className="text-xs text-slate-400 mt-1 flex items-center gap-1">
+                        <h5 className="text-sm font-bold text-foreground truncate">{q.title || `Quiz #${q.attemptNumber}`}</h5>
+                        <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
                           {q.submittedAt?.toDate ? q.submittedAt.toDate().toLocaleDateString() : 'Just now'} •
                           <span className={q.score / q.total >= 0.7 ? 'text-emerald-500 font-medium' : 'text-amber-500 font-medium'}>
                             {Math.round((q.score / q.total) * 100)}% Accuracy
                           </span>
                         </p>
                       </div>
-                      <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-slate-500 group-hover:translate-x-1 transition-all" />
+                      <ChevronRight className="w-5 h-5 text-muted-foreground group-hover:text-foreground group-hover:translate-x-1 transition-all" />
                     </div>
                   ))
                 ) : (
-                  <div className="p-8 text-center text-slate-400">
+                  <div className="p-8 text-center text-muted-foreground">
                     <p>No recent activity needed.</p>
                   </div>
                 )}
@@ -382,6 +382,5 @@ export default function UltraFastStudentDashboard() {
         </div>
 
       </div>
-    </div>
-  );
+      );
 }

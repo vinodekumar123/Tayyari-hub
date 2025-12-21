@@ -79,7 +79,7 @@ const Navbar = () => {
             Why To Join
           </a>
           <a href="#screenshot" className="hover:text-blue-600 transition">
-            Schedule 
+            Schedule
           </a>
           <a href="#reviews" className="hover:text-blue-600 transition">
             Reviews
