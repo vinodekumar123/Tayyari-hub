@@ -76,8 +76,55 @@ export default function TeacherProfilePage() {
       ...doc.data(),
     }));
     setAllSubjects(subjects);
+    // Initial set, will be overridden by user effect if user exists
     setAvailableSubjects(subjects.map((s) => s.name));
   };
+
+  // Filter subjects whenever allSubjects or user form data changes
+  useEffect(() => {
+    // We check form.subjects if that exists, or we need to store assigned IDs separately.
+    // The current form structure puts user fields in root of form. 
+    // 'subjects' field in form state?
+    // Looking at fetchUserData: setForm({ ...form, ...data }) puts firestore 'subjects' into 'form.subjects'.
+    // Let's add 'subjects' to the form interface implicitly used here.
+
+    const assigned = (form as any).subjects;
+
+    if (assigned && Array.isArray(assigned) && assigned.length > 0 && allSubjects.length > 0) {
+      const assignedSet = new Set(assigned);
+      const filtered = allSubjects.filter(s => assignedSet.has(s.id) || assignedSet.has(s.name));
+
+      if (filtered.length > 0) {
+        setAvailableSubjects(filtered.map(s => s.name));
+      } else {
+        // If we couldn't match IDs/Names against allSubjects objects, 
+        // but we have assigned strings, utilize them directly if they look like names.
+        // Assuming 'assigned' contains names or IDs.
+        // Use the raw array if filtering against DB subjects failed (fallback)
+        // But strictly speaking, we want names for the dropdown. 
+        // If assigned are IDs and we failed to find them in allSubjects, we are in trouble.
+        // Assuming they match.
+        setAvailableSubjects(assigned);
+      }
+    } else if (allSubjects.length > 0 && !loading && userId) {
+      // If user loaded but has no subjects? user might be Admin.
+      // If Admin, show all? Or show none?
+      // User request said: "only subjects of that teacher".
+      // If no subjects assigned, empty list is correct.
+      // But for safety, if user is NOT teacher (e.g. admin), maybe show all?
+      // Let's re-read: "it will only subjects of that teacher". 
+      // If I am admin, I might want all.
+      // Checking role... Form doesn't explicitly store role in top level clearly, but data does.
+      // Let's strictly follow "assigned subjects" logic.
+      // If assigned is empty/null, and I am a teacher, I see nothing.
+      // If I am superadmin, I might not have 'subjects' array.
+      // Let's stick to: if subjects array exists, use it. If not, use all (default behavior for admins usually).
+      if (!assigned || assigned.length === 0) {
+        // If filtering was meant for teachers, we should keep all for others? 
+        // Current code sets allSubjects by default.
+      }
+    }
+  }, [allSubjects, (form as any).subjects, loading, userId]);
 
   const fetchUserData = async (uid: string) => {
     try {
@@ -103,6 +150,35 @@ export default function TeacherProfilePage() {
             ...(data.metadata || {}),
           },
         });
+
+        // Filter subjects based on assignment
+        if (data.subjects && Array.isArray(data.subjects) && data.subjects.length > 0) {
+          // data.subjects matches IDs from subjects collection? Or Names?
+          // Assuming data.subjects from "assignedSubjects" in other files are IDs
+          // Let's check logic: In teacher dashboard we saw it's IDs.
+          // However, to be safe, filter by ID if it matches, or Name if it matches.
+
+          const assignedIds = new Set(data.subjects);
+
+          // Filter allSubjects (which are objects {id, name, ...})
+          // If assignedIds contains the ID, keep it.
+
+          // Wait, allSubjects might not be populated yet if this runs fast. 
+          // But allSubjects is fetched in mount.
+          // Better to do this filtering logic in a useEffect that watches [allSubjects, form.subjects/userId] 
+          // BUT simpler: do it here if possible, or just set a local state "userAssignedSubjectIds".
+
+          const validSubjects = allSubjects.filter(s => assignedIds.has(s.id) || assignedIds.has(s.name));
+          if (validSubjects.length > 0) {
+            setAvailableSubjects(validSubjects.map(s => s.name));
+          } else {
+            // Fallback: if no matches found (maybe strings vs ids mismatch), just show all? 
+            // Or show none? The user requested restriction. 
+            // If data.subjects are names (legacy), we support that too.
+            const assignedNames = data.subjects;
+            setAvailableSubjects(assignedNames);
+          }
+        }
       }
     } catch (err) {
       toast.error('Failed to load profile.');

@@ -36,7 +36,7 @@ export default function OnboardingPage() {
   const router = useRouter();
   const [userId, setUserId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [showPlanModal, setShowPlanModal] = useState(false);
+
   const [form, setForm] = useState({
     fullName: '',
     fatherName: '',
@@ -145,25 +145,6 @@ export default function OnboardingPage() {
         plan: 'free',
       });
 
-      setShowPlanModal(true);
-    } catch (error) {
-      console.error('Error saving onboarding data:', error);
-      toast.error('Failed to save your information. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
-const handlePlanChoice = async (choice: 'free' | 'premium') => {
-  if (!userId) return;
-
-  setLoading(true);
-  try {
-    if (choice === 'free') {
-      // Update Firestore only if the user chooses the free plan
-      await updateDoc(doc(db, 'users', userId), {
-        plan: 'free',
-      });
-
       const userSnap = await getDoc(doc(db, 'users', userId));
       const data = userSnap.exists() ? userSnap.data() : {};
 
@@ -172,17 +153,14 @@ const handlePlanChoice = async (choice: 'free' | 'premium') => {
       } else {
         router.push('/dashboard/student');
       }
-    } else {
-      // If premium is selected, just navigate without changing plan in Firestore
-      router.push('/pricing');
+
+    } catch (error) {
+      console.error('Error saving onboarding data:', error);
+      toast.error('Failed to save your information. Please try again.');
+    } finally {
+      setLoading(false);
     }
-  } catch (err) {
-    console.error('Failed to save plan choice:', err);
-    toast.error('Could not process your request. Please try again.');
-  } finally {
-    setLoading(false);
-  }
-};
+  };
 
   if (loading) {
     return (
@@ -321,46 +299,7 @@ const handlePlanChoice = async (choice: 'free' | 'premium') => {
         </CardContent>
       </Card>
 
-      {showPlanModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-xl max-w-md w-full text-center shadow-2xl space-y-4">
-            <h2 className="text-xl sm:text-2xl font-bold text-gray-800">Choose Your Plan</h2>
-            <p className="text-gray-600 text-sm sm:text-base">
-              Upgrade to unlock unlimited quizzes, custom tests, and more!
-            </p>
-            <div className="flex flex-col sm:flex-row gap-4 mt-6">
-              <Button
-                onClick={() => handlePlanChoice('free')}
-                className="w-full bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-xl h-12"
-                disabled={loading}
-              >
-                {loading ? (
-                  <div className="flex items-center justify-center gap-2">
-                    <div className="w-5 h-5 border-2 border-t-primary border-gray-400 rounded-full animate-spin" />
-                    Processing...
-                  </div>
-                ) : (
-                  'Continue Free'
-                )}
-              </Button>
-              <Button
-                onClick={() => handlePlanChoice('premium')}
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white rounded-xl h-12"
-                disabled={loading}
-              >
-                {loading ? (
-                  <div className="flex items-center justify-center gap-2">
-                    <div className="w-5 h-5 border-2 border-t-white border-gray-400 rounded-full animate-spin" />
-                    Processing...
-                  </div>
-                ) : (
-                  'Go Premium – 1500 PKR'
-                )}
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
+
     </div>
   );
 }

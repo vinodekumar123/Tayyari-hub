@@ -25,9 +25,9 @@ import { Input } from '@/components/ui/input';
 const formatDate = (timestamp: any, date: Date | null) => {
   if (timestamp?.toDate) {
     const d = timestamp.toDate();
-    return d.toLocaleDateString('en-US', { 
-      day: '2-digit', 
-      month: 'short', 
+    return d.toLocaleDateString('en-US', {
+      day: '2-digit',
+      month: 'short',
       year: 'numeric',
       hour: '2-digit',
       minute: '2-digit',
@@ -35,9 +35,9 @@ const formatDate = (timestamp: any, date: Date | null) => {
     });
   }
   if (date) {
-    return date.toLocaleDateString('en-US', { 
-      day: '2-digit', 
-      month: 'short', 
+    return date.toLocaleDateString('en-US', {
+      day: '2-digit',
+      month: 'short',
       year: 'numeric',
       hour: '2-digit',
       minute: '2-digit',
@@ -339,7 +339,7 @@ export default function UnifiedResultsPage() {
   // Calculate stats
   const stats = {
     total: filtered.length,
-    avgScore: filtered.length > 0 
+    avgScore: filtered.length > 0
       ? (filtered.reduce((acc, r) => acc + (r.score / r.total * 100), 0) / filtered.length).toFixed(1)
       : '0',
     completed: filtered.filter(r => r.score === r.total).length,
@@ -362,7 +362,7 @@ export default function UnifiedResultsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:from-slate-950 dark:via-slate-900 dark:to-indigo-950 transition-colors duration-300">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
         <div className="mb-8">
@@ -370,83 +370,81 @@ export default function UnifiedResultsPage() {
             <div className="p-2 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-xl shadow-lg">
               <BarChart3 className="w-6 h-6 text-white" />
             </div>
-            <h1 className="text-4xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">
+            <h1 className="text-4xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 dark:from-white dark:to-gray-300 bg-clip-text text-transparent">
               Quiz Results Dashboard
             </h1>
           </div>
-          <p className="text-gray-600 ml-14">Track your progress and review your performance</p>
+          <p className="text-gray-600 dark:text-gray-400 ml-14">Track your progress and review your performance</p>
         </div>
 
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-          <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-slate-800 hover:shadow-md transition-all">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600 mb-1">Total Quizzes</p>
-                <p className="text-3xl font-bold text-gray-900">{stats.total}</p>
+                <p className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">Total Quizzes</p>
+                <p className="text-3xl font-bold text-gray-900 dark:text-white">{stats.total}</p>
               </div>
-              <div className="p-3 bg-blue-100 rounded-xl">
-                <BookOpen className="w-6 h-6 text-blue-600" />
+              <div className="p-3 bg-blue-100 dark:bg-blue-900/30 rounded-xl">
+                <BookOpen className="w-6 h-6 text-blue-600 dark:text-blue-400" />
               </div>
             </div>
           </div>
 
-          <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-slate-800 hover:shadow-md transition-all">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600 mb-1">Average Score</p>
-                <p className="text-3xl font-bold text-gray-900">{stats.avgScore}%</p>
+                <p className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">Average Score</p>
+                <p className="text-3xl font-bold text-gray-900 dark:text-white">{stats.avgScore}%</p>
               </div>
-              <div className="p-3 bg-green-100 rounded-xl">
-                <TrendingUp className="w-6 h-6 text-green-600" />
+              <div className="p-3 bg-green-100 dark:bg-green-900/30 rounded-xl">
+                <TrendingUp className="w-6 h-6 text-green-600 dark:text-green-400" />
               </div>
             </div>
           </div>
 
-          <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-slate-800 hover:shadow-md transition-all">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600 mb-1">Perfect Scores</p>
-                <p className="text-3xl font-bold text-gray-900">{stats.completed}</p>
+                <p className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">Perfect Scores</p>
+                <p className="text-3xl font-bold text-gray-900 dark:text-white">{stats.completed}</p>
               </div>
-              <div className="p-3 bg-purple-100 rounded-xl">
-                <Award className="w-6 h-6 text-purple-600" />
+              <div className="p-3 bg-purple-100 dark:bg-purple-900/30 rounded-xl">
+                <Award className="w-6 h-6 text-purple-600 dark:text-purple-400" />
               </div>
             </div>
           </div>
         </div>
 
         {/* Quiz Type Toggle */}
-        <div className="bg-white rounded-2xl p-2 shadow-sm border border-gray-100 mb-6 inline-flex">
+        <div className="bg-white dark:bg-slate-900 rounded-2xl p-2 shadow-sm border border-gray-100 dark:border-slate-800 mb-6 inline-flex">
           <button
             onClick={() => setViewType(ADMIN)}
-            className={`px-6 py-3 rounded-xl font-semibold text-sm transition-all ${
-              viewType === ADMIN
-                ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md'
-                : 'text-gray-600 hover:text-gray-900'
-            }`}
+            className={`px-6 py-3 rounded-xl font-semibold text-sm transition-all ${viewType === ADMIN
+              ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md'
+              : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white'
+              }`}
           >
             Admin Quizzes
           </button>
           <button
             onClick={() => setViewType(USER)}
-            className={`px-6 py-3 rounded-xl font-semibold text-sm transition-all ${
-              viewType === USER
-                ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md'
-                : 'text-gray-600 hover:text-gray-900'
-            }`}
+            className={`px-6 py-3 rounded-xl font-semibold text-sm transition-all ${viewType === USER
+              ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md'
+              : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white'
+              }`}
           >
             User Quizzes
           </button>
         </div>
 
         {/* Filters */}
-        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 mb-8">
+        <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-slate-800 mb-8">
           <div className="flex items-center gap-2 mb-4">
-            <Filter className="w-5 h-5 text-gray-600" />
-            <h2 className="text-lg font-semibold text-gray-900">Filters</h2>
+            <Filter className="w-5 h-5 text-gray-600 dark:text-gray-300" />
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Filters</h2>
           </div>
-          
+
           <div className="grid md:grid-cols-3 gap-4">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
@@ -454,7 +452,7 @@ export default function UnifiedResultsPage() {
                 placeholder="Search by title, subject or course..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="pl-10 h-12 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="pl-10 h-12 border-gray-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-slate-800 dark:text-white"
               />
             </div>
 
@@ -465,13 +463,13 @@ export default function UnifiedResultsPage() {
                 setSelectedChapter('all');
               }}
             >
-              <SelectTrigger className="h-12 border-gray-200 rounded-xl">
+              <SelectTrigger className="h-12 border-gray-200 dark:border-slate-700 rounded-xl dark:bg-slate-800 dark:text-white">
                 <SelectValue placeholder="Filter by Subject" />
               </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Subjects</SelectItem>
+              <SelectContent className="dark:bg-slate-800 dark:border-slate-700">
+                <SelectItem value="all" className="dark:text-white dark:focus:bg-slate-700">All Subjects</SelectItem>
                 {subjects.map((subj, idx) => (
-                  <SelectItem key={idx} value={subj}>{subj}</SelectItem>
+                  <SelectItem key={idx} value={subj} className="dark:text-white dark:focus:bg-slate-700">{subj}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -481,13 +479,13 @@ export default function UnifiedResultsPage() {
               onValueChange={setSelectedChapter}
               disabled={viewType === USER || chapters.length === 0}
             >
-              <SelectTrigger className="h-12 border-gray-200 rounded-xl">
+              <SelectTrigger className="h-12 border-gray-200 dark:border-slate-700 rounded-xl dark:bg-slate-800 dark:text-white">
                 <SelectValue placeholder="Filter by Chapter" />
               </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Chapters</SelectItem>
+              <SelectContent className="dark:bg-slate-800 dark:border-slate-700">
+                <SelectItem value="all" className="dark:text-white dark:focus:bg-slate-700">All Chapters</SelectItem>
                 {chapters.map((ch, idx) => (
-                  <SelectItem key={idx} value={ch}>{ch}</SelectItem>
+                  <SelectItem key={idx} value={ch} className="dark:text-white dark:focus:bg-slate-700">{ch}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -498,37 +496,37 @@ export default function UnifiedResultsPage() {
         {loading ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {Array.from({ length: 6 }).map((_, i) => (
-              <Card key={i} className="rounded-2xl border-gray-100">
+              <Card key={i} className="rounded-2xl border-gray-100 dark:border-slate-800 dark:bg-slate-900">
                 <CardHeader className="pb-4">
-                  <Skeleton className="h-6 w-3/4 mb-2" />
-                  <Skeleton className="h-4 w-1/2" />
+                  <Skeleton className="h-6 w-3/4 mb-2 dark:bg-slate-800" />
+                  <Skeleton className="h-4 w-1/2 dark:bg-slate-800" />
                 </CardHeader>
                 <CardContent className="space-y-3">
-                  <Skeleton className="h-4 w-full" />
-                  <Skeleton className="h-4 w-2/3" />
-                  <Skeleton className="h-10 w-full mt-4" />
+                  <Skeleton className="h-4 w-full dark:bg-slate-800" />
+                  <Skeleton className="h-4 w-2/3 dark:bg-slate-800" />
+                  <Skeleton className="h-10 w-full mt-4 dark:bg-slate-800" />
                 </CardContent>
               </Card>
             ))}
           </div>
         ) : filtered.length === 0 ? (
-          <div className="bg-white rounded-2xl p-12 text-center shadow-sm border border-gray-100">
-            <div className="inline-flex p-4 bg-gray-100 rounded-full mb-4">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl p-12 text-center shadow-sm border border-gray-100 dark:border-slate-800">
+            <div className="inline-flex p-4 bg-gray-100 dark:bg-slate-800 rounded-full mb-4">
               <BookOpen className="w-8 h-8 text-gray-400" />
             </div>
-            <p className="text-gray-600 text-lg font-medium">No results found</p>
-            <p className="text-gray-500 text-sm mt-2">Try adjusting your filters or search terms</p>
+            <p className="text-gray-600 dark:text-gray-300 text-lg font-medium">No results found</p>
+            <p className="text-gray-500 dark:text-gray-400 text-sm mt-2">Try adjusting your filters or search terms</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filtered.map((result) => {
               const badge = getScoreBadge(result.score, result.total);
               const percentage = ((result.score / result.total) * 100).toFixed(0);
-              
+
               return (
                 <Card
                   key={result.id}
-                  className="group hover:shadow-xl transition-all duration-300 border-gray-100 rounded-2xl overflow-hidden bg-white"
+                  className="group hover:shadow-xl transition-all duration-300 border-gray-100 dark:border-slate-800 rounded-2xl overflow-hidden bg-white dark:bg-slate-900"
                 >
                   <div className="relative">
                     <div className="bg-gradient-to-br from-blue-600 to-indigo-600 p-6">
@@ -542,7 +540,7 @@ export default function UnifiedResultsPage() {
                           </span>
                         </div>
                       </div>
-                      
+
                       {/* Score Circle */}
                       <div className="flex items-center gap-4">
                         <div className="relative w-20 h-20">
@@ -585,8 +583,8 @@ export default function UnifiedResultsPage() {
                     <div className="flex items-start gap-2 text-sm">
                       <BookOpen className="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0" />
                       <div>
-                        <p className="text-gray-500 text-xs">Subject</p>
-                        <p className="text-gray-900 font-medium">{result.subject}</p>
+                        <p className="text-gray-500 dark:text-gray-400 text-xs">Subject</p>
+                        <p className="text-gray-900 dark:text-gray-100 font-medium">{result.subject}</p>
                       </div>
                     </div>
 
@@ -594,8 +592,8 @@ export default function UnifiedResultsPage() {
                       <div className="flex items-start gap-2 text-sm">
                         <BookOpen className="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0" />
                         <div>
-                          <p className="text-gray-500 text-xs">Chapter</p>
-                          <p className="text-gray-900 font-medium">{result.chapter}</p>
+                          <p className="text-gray-500 dark:text-gray-400 text-xs">Chapter</p>
+                          <p className="text-gray-900 dark:text-gray-100 font-medium">{result.chapter}</p>
                         </div>
                       </div>
                     )}
@@ -603,8 +601,8 @@ export default function UnifiedResultsPage() {
                     <div className="flex items-start gap-2 text-sm">
                       <Calendar className="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0" />
                       <div>
-                        <p className="text-gray-500 text-xs">Completed</p>
-                        <p className="text-gray-900 font-medium">
+                        <p className="text-gray-500 dark:text-gray-400 text-xs">Completed</p>
+                        <p className="text-gray-900 dark:text-gray-100 font-medium">
                           {formatDate(result.timestamp, result.date)}
                         </p>
                       </div>

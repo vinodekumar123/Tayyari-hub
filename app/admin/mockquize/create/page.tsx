@@ -153,7 +153,7 @@ export default function CreateMockQuiz() {
       let q = collection(db, 'mock-questions');
       let questionQuery = query(q, orderBy('createdAt', 'desc'));
       const questionDocs = await getDocs(questionQuery);
-      const filtered = questionDocs.docs
+      const filtered: any[] = questionDocs.docs
         .map((d) => ({
           id: d.id,
           ...d.data(),

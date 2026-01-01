@@ -1,21 +1,33 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
   BookOpen, Users, Trophy, BarChart3, Settings, Plus,
   Database, Home, ChevronDown, ChevronRight, LogOut,
-  ClipboardList, UserCircle, Menu, X, FileBarChart
+  ClipboardList, UserCircle, Menu, X, FileBarChart, Flag
 } from 'lucide-react';
 import logo from "../../app/assets/logo.png";
 import Image from "next/image";
 import { getAuth, onAuthStateChanged, signOut } from 'firebase/auth';
 import { getFirestore, doc, getDoc } from 'firebase/firestore';
 import { app } from '../../app/firebase';
+import { ensureSessionActive, subscribeToSession, updateSessionHeartbeat, logoutUserSession } from '@/lib/sessionUtils';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ModeToggle } from '@/components/mode-toggle';
+import { NotificationBell } from '@/components/notifications/NotificationBell';
+import { useFcmToken } from '@/hooks/useFcmToken';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import { AlertTriangle } from 'lucide-react';
 
 type MenuItem = {
   icon: React.ElementType;
@@ -35,11 +47,13 @@ export function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
 
-  const [expandedSections, setExpandedSections] = useState<string[]>([]);
+  const [expandedSections, setExpandedSections] = useState<string[]>(['main', 'content', 'users', 'settings', 'student']);
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [showSignOutDialog, setShowSignOutDialog] = useState(false);
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
+  const [isSuperAdmin, setIsSuperAdmin] = useState<boolean>(false);
+  const [sessionExpiredOpen, setSessionExpiredOpen] = useState(false);
 
   useEffect(() => {
     if (mobileOpen) {
@@ -52,36 +66,84 @@ export function Sidebar() {
     };
   }, [mobileOpen]);
 
+  // Refs for cleanup
+  const unsubscribeSessionRef = useRef<() => void | null>(null);
+  const heartbeatIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Initialize FCM Token
+  useFcmToken();
+
+  const [userRole, setUserRole] = useState<string>('student');
+
+  useEffect(() => {
+    // Sync role state when admin/superadmin changes (simplified)
+    // Ideally we fetch this in the auth effect
+  }, [isAdmin, isSuperAdmin]);
+
   const adminMenu: Section[] = [
     {
       section: 'main',
-      title: 'Admin Dashboard',
-      items: [{ icon: Home, label: 'Dashboard', href: '/dashboard/admin' }],
+      title: 'Dashboard',
+      items: [
+        {
+          icon: Home,
+          label: 'Dashboard',
+          href: userRole === 'teacher' ? '/dashboard/teacher' : '/dashboard/admin'
+        },
+        ...(isSuperAdmin ? [{ icon: BarChart3, label: 'Analytics & Stats', href: '/admin/statistics' }] : []),
+        ...(userRole === 'teacher' ? [
+          { icon: ClipboardList, label: 'My Tasks', href: '/dashboard/teacher/tasks' },
+          { icon: Flag, label: 'Reports', href: '/dashboard/teacher/reports' },
+          { icon: BarChart3, label: 'My Performance', href: '/dashboard/teacher/stats' }
+        ] : [
+          // Admins also get personal tasks/stats
+          { icon: ClipboardList, label: 'My Assigned Tasks', href: '/dashboard/admin/my-tasks' },
+          { icon: BarChart3, label: 'My Revenue', href: '/dashboard/admin/my-stats' }
+        ])
+      ],
     },
+    // Admin Task Management
+    ...(!userRole.includes('teacher') ? [{
+      section: 'tasks',
+      title: 'Task Management',
+      items: [
+        { icon: ClipboardList, label: 'Manage Tasks', href: '/admin/tasks' }
+      ]
+    }] : []),
+
     {
       section: 'content',
       title: 'Content Management',
       items: [
-        { icon: BookOpen, label: 'Courses', href: '/admin/courses' },
+        // Courses: Admin/SuperAdmin only
+        ...(!userRole.includes('teacher') ? [{ icon: BookOpen, label: 'Courses', href: '/admin/courses' }] : []),
+        ...(userRole.includes('teacher') ? [{ icon: Users, label: 'Community', href: '/dashboard/teacher/community' }] : []),
+
+        { icon: BookOpen, label: 'Content Hub', href: '/admin/content' },
+        ...(!userRole.includes('teacher') ? [{ icon: Users, label: 'Community', href: '/dashboard/admin/community' }] : []),
+
         { icon: Database, label: 'Question Bank', href: '/admin/questions/questionbank' },
         { icon: Plus, label: 'Add Question', href: '/admin/questions/create' },
         { icon: Database, label: 'Mock Questions', href: '/admin/mockquestions/questionbank' },
         { icon: Plus, label: 'Add Mock Question', href: '/admin/mockquestions/create' },
         { icon: Trophy, label: 'Quizzes', href: '/admin/quizzes/quizebank' },
         { icon: Plus, label: 'Create Quiz', href: '/admin/quizzes/create' },
+        { icon: Flag, label: 'Reported Questions', href: '/admin/reports' },
       ],
     },
-    {
+    // User Management: Admin/SuperAdmin only
+    ...(!userRole.includes('teacher') ? [{
       section: 'users',
       title: 'User Management',
       items: [
         { icon: Users, label: 'Students', href: '/admin/students' },
         { icon: FileBarChart, label: 'Results', href: '/admin/results' },
+        { icon: UserCircle, label: 'Login Sessions', href: '/admin/users/sessions' },
       ],
-    },
+    }] : []),
     {
       section: 'settings',
-      title: 'Admin Profile',
+      title: 'Profile',
       items: [{ icon: Settings, label: 'Settings', href: '/admin/settings' }],
     },
   ];
@@ -92,15 +154,27 @@ export function Sidebar() {
       title: 'Student Panel',
       items: [
         { icon: Home, label: 'Dashboard', href: '/dashboard/student' },
+        { icon: BookOpen, label: 'Study Zone', href: '/dashboard/study' },
+        { icon: Users, label: 'Community', href: '/dashboard/student/community' },
+        { icon: Trophy, label: 'Leaderboard', href: '/dashboard/leaderboard' },
         { icon: Trophy, label: 'Quizzes', href: '/admin/quizzes/quizebank' },
         // New student-only items requested:
         { icon: Plus, label: 'Create Your Own Test', href: '/quiz/create-mock' },
+        { icon: BookOpen, label: 'Flashcards', href: '/dashboard/student/flashcards' },
         { icon: Trophy, label: 'Your Created Tests', href: '/admin/quizzes/user-created-quizzes' },
         { icon: ClipboardList, label: 'Results', href: '/admin/students/results' },
-        { icon: UserCircle, label: 'Profile Settings', href: '/admin/student-profile' },
+        { icon: Flag, label: 'My Reports', href: '/dashboard/student/reports' },
+        { icon: UserCircle, label: 'Settings & Security', href: '/dashboard/student/settings' },
       ],
     },
   ];
+
+  useEffect(() => {
+    // Force expand 'content' section for admin so they see the new Report link
+    if (isAdmin) {
+      setExpandedSections(prev => prev.includes('content') ? prev : [...prev, 'content']);
+    }
+  }, [isAdmin]);
 
   useEffect(() => {
     const auth = getAuth(app);
@@ -111,21 +185,92 @@ export function Sidebar() {
         const userRef = doc(db, 'users', user.uid);
         const snap = await getDoc(userRef);
         if (snap.exists()) {
+          // Auto-ensure session is active (Initial Check)
+          ensureSessionActive(user).catch((err) => {
+            if (err.message && (err.message.includes("revoked") || err.message.includes("blocked"))) {
+              setSessionExpiredOpen(true);
+            }
+          });
+
+          // Real-time Session Status Listener
+          const unsub = subscribeToSession(user, (status) => {
+            if (status === 'revoked') {
+              setSessionExpiredOpen(true);
+            }
+          });
+          // @ts-ignore
+          unsubscribeSessionRef.current = unsub;
+
+          // Heartbeat: Update session active timestamp every 5 minutes
+          const hbInterval = setInterval(() => {
+            updateSessionHeartbeat(user);
+          }, 5 * 60 * 1000);
+          heartbeatIntervalRef.current = hbInterval;
+
           const data = snap.data();
-          const isAdminUser = data.admin === true;
-          setIsAdmin(isAdminUser);
-          const roleMenu = isAdminUser ? adminMenu : studentMenu;
-          setExpandedSections(roleMenu.map((section) => section.section)); // ✅ Expand all sections initially
+          const role = data.role || (data.superadmin ? 'superadmin' : (data.admin ? 'admin' : 'student'));
+          setUserRole(role);
+
+          const isAdminOrTeacher = role === 'admin' || role === 'superadmin' || role === 'teacher' || data.admin === true;
+
+          setIsAdmin(isAdminOrTeacher);
+          setIsSuperAdmin(role === 'superadmin' || data.superadmin === true);
+          const isAdminUser = data.admin === true || data.role === 'admin' || data.role === 'superadmin';
+          const isSuperAdminUser = data.superadmin === true || data.role === 'superadmin';
+          const isTeacherUser = data.role === 'teacher';
+
+          setIsAdmin(isAdminUser || isTeacherUser); // Teachers can access Admin Layout
+          setIsSuperAdmin(isSuperAdminUser);
+
+          // Store role for menu logic
+          // A better approach is to store the whole user object or specific role state
+          // For now, we rely on local variables inside the effect, but we need state for rendering.
+          // Let's add a state for role.
         } else {
+          // User exists but has no document (New user/Onboarding pending)
           setIsAdmin(false);
+          setIsSuperAdmin(false);
+          setUserRole('student');
         }
       } else {
+        // User logged out: Cleanup listeners immediately
+        if (unsubscribeSessionRef.current) {
+          // @ts-ignore
+          unsubscribeSessionRef.current();
+          unsubscribeSessionRef.current = null;
+        }
+        if (heartbeatIntervalRef.current) {
+          clearInterval(heartbeatIntervalRef.current);
+          heartbeatIntervalRef.current = null;
+        }
+
         setIsAdmin(false);
+        setIsSuperAdmin(false);
+        setUserRole('student'); // Default to student if no user
       }
     });
 
-    return () => unsubscribe();
-  }, []);
+    return () => {
+      unsubscribe();
+      if (unsubscribeSessionRef.current) {
+        // @ts-ignore
+        unsubscribeSessionRef.current();
+      }
+      if (heartbeatIntervalRef.current) {
+        clearInterval(heartbeatIntervalRef.current);
+      }
+    };
+  }, []); // Empty dependency array means runs once. But adminMenu accesses state. 
+  // IMPORTANT: adminMenu is defined inside component body, so on every render it effectively captures current isSuperAdmin.
+  // The useEffect sets state, triggering re-render, which re-defines adminMenu with correct items.
+  // The only issue is `setExpandedSections` in useEffect references `adminMenu`. 
+  // Since `adminMenu` depends on `isSuperAdmin` which is false initially, it won't expand validly on first load.
+  // Let's fix that by moving setExpandedSections to a separate effect or just relying on isAdminUser check inside the effect. 
+  // Actually, the previous code used `adminMenu` inside useEffect. Since adminMenu is const in function body, it's newly created on every render.
+  // Inside useEffect (closure), `adminMenu` refers to the one created during the *first* render (where isSuperAdmin is false).
+  // So initial expansion might miss the new item, but that's fine.
+
+
 
   const toggleSection = (section: string) => {
     setExpandedSections((prev) =>
@@ -137,8 +282,17 @@ export function Sidebar() {
 
   const handleSignOut = async () => {
     const auth = getAuth(app);
+    if (auth.currentUser) {
+      await logoutUserSession(auth.currentUser.uid);
+    }
     await signOut(auth);
     router.push('/');
+  };
+
+  const handleSessionExpiredConfirm = async () => {
+    const auth = getAuth(app);
+    await signOut(auth);
+    window.location.href = '/auth/login';
   };
 
   if (isAdmin === null) return null;
@@ -177,7 +331,8 @@ export function Sidebar() {
             <Button variant="ghost" size="icon" onClick={() => setMobileOpen(false)} className="md:hidden">
               <X className="h-5 w-5" />
             </Button>
-            <div className="flex items-center">
+            <div className="flex items-center gap-1">
+              <NotificationBell />
               <ModeToggle />
             </div>
           </div>
@@ -205,15 +360,15 @@ export function Sidebar() {
                     <Link key={item.href} href={item.href!}>
                       <div
                         className={`flex items-center justify-between px-3 py-2 rounded-sm text-sm transition-all duration-200 group ${isActive(item.href)
-                            ? 'bg-gradient-to-r from-purple-100 to-blue-100 text-purple-700 shadow-sm dark:from-purple-900/50 dark:to-blue-900/50 dark:text-purple-300'
-                            : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+                          ? 'bg-gradient-to-r from-purple-100 to-blue-100 text-purple-700 shadow-sm dark:from-purple-900/50 dark:to-blue-900/50 dark:text-purple-300'
+                          : 'text-muted-foreground hover:bg-accent hover:text-foreground'
                           }`}
                       >
                         <div className="flex items-center space-x-3">
                           <item.icon
                             className={`h-10 w-5 ${isActive(item.href)
-                                ? 'text-purple-800 dark:text-purple-400'
-                                : 'text-muted-foreground group-hover:text-foreground'
+                              ? 'text-purple-800 dark:text-purple-400'
+                              : 'text-muted-foreground group-hover:text-foreground'
                               }`}
                           />
                           {!collapsed && <span className="font-semibold text-base">{item.label}</span>}
@@ -266,6 +421,31 @@ export function Sidebar() {
           </div>
         </div>
       )}
+
+      {/* Session Expired Dialog - BLOCKING */}
+      <Dialog open={sessionExpiredOpen} onOpenChange={(open) => {
+        // FORCE OPEN: Do not match 'open' state if it's trying to close (false)
+        // Only allow closing via the specific confirm button logic if we wanted, 
+        // but here `onOpenChange` is triggered by clicking outside. We explicitly IGNORE false to keep it open.
+        if (open) setSessionExpiredOpen(true);
+      }}>
+        <DialogContent className="sm:max-w-md [&>button]:hidden"> {/* Hide defaults close X button via CSS if needed, or preventDefault */}
+          <DialogHeader>
+            <div className="mx-auto bg-red-100 p-3 rounded-full w-fit mb-2">
+              <AlertTriangle className="h-6 w-6 text-red-600" />
+            </div>
+            <DialogTitle className="text-center text-xl">Session Expired</DialogTitle>
+            <DialogDescription className="text-center pt-2">
+              Your session has been expired or revoked by an administrator.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="sm:justify-center mt-4">
+            <Button onClick={handleSessionExpiredConfirm} className="w-full sm:w-auto bg-red-600 hover:bg-red-700 text-white">
+              Okay, Log in
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

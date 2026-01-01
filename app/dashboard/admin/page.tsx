@@ -10,16 +10,19 @@ import {
   query,
   where,
   Timestamp,
-  onSnapshot,
 } from 'firebase/firestore';
 import { Card, CardContent } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Sidebar } from '@/components/ui/sidebar';
-import { Users, Trophy, Database, AlertCircle, FileText, BookOpen, Star } from 'lucide-react';
+
+import {
+  Users, Trophy, Database, AlertCircle, FileText,
+  BookOpen, Star, Zap, Activity, Clock
+} from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { Skeleton } from '@/components/ui/skeleton';
 import Link from 'next/link';
+import { cn, glassmorphism, gradients, animations, shadows } from '@/lib/design-tokens';
 
+// --- Types ---
 type Counts = {
   totalStudents: number;
   totalPremiumStudents: number;
@@ -30,37 +33,103 @@ type Counts = {
   mockQuestions: number;
 };
 
+// --- Components ---
+
 const StatCard = memo(function StatCard({
   title,
   value,
   icon,
-  bg,
+  gradient,
   loading,
 }: {
   title: string;
   value: number;
   icon: React.ReactNode;
-  bg: string;
+  gradient: string;
   loading: boolean;
 }) {
   return (
-    <Card className="hover:shadow-lg transition-shadow">
-      <CardContent className="p-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-sm font-medium text-gray-600">{title}</p>
-            {loading ? (
-              <Skeleton className="h-6 w-16 mt-2" />
-            ) : (
-              <p className="text-2xl font-bold text-gray-900">{value}</p>
-            )}
-          </div>
-          <div className={`p-3 rounded-full ${bg}`}>{icon}</div>
+    <div className={cn(
+      "relative group overflow-hidden rounded-2xl border p-6 transition-all duration-300",
+      "bg-white/40 dark:bg-slate-900/40 backdrop-blur-xl border-white/20 dark:border-slate-800",
+      "hover:shadow-xl hover:scale-[1.02]",
+      shadows.sm
+    )}>
+      {/* Dynamic Background Glow */}
+      <div className={cn(
+        "absolute -right-6 -top-6 h-24 w-24 rounded-full opacity-10 blur-2xl transition-all duration-500 group-hover:opacity-20",
+        gradient
+      )} />
+
+      <div className="flex items-center justify-between relative z-10">
+        <div className="space-y-1">
+          <p className="text-sm font-medium text-muted-foreground">{title}</p>
+          {loading ? (
+            <Skeleton className="h-8 w-24 rounded-md bg-slate-200/50 dark:bg-slate-800/50" />
+          ) : (
+            <div className="flex items-baseline gap-2">
+              <span className="text-3xl font-bold tracking-tight text-foreground">{value.toLocaleString()}</span>
+            </div>
+          )}
         </div>
-      </CardContent>
-    </Card>
+        <div className={cn(
+          "flex h-12 w-12 items-center justify-center rounded-xl shadow-inner",
+          "bg-gradient-to-br from-white/80 to-white/20 dark:from-slate-800 dark:to-slate-900",
+          "border border-white/20 dark:border-slate-700 backdrop-blur-md"
+        )}>
+          {icon}
+        </div>
+      </div>
+    </div>
   );
 });
+
+const QuickActionCard = ({
+  title,
+  description,
+  icon: Icon,
+  href,
+  colorClass
+}: {
+  title: string,
+  description: string,
+  icon: any,
+  href: string,
+  colorClass: string
+}) => (
+  <Link href={href} className="block group">
+    <div className={cn(
+      "h-full p-6 rounded-2xl border transition-all duration-300 relative overflow-hidden",
+      "bg-white/40 dark:bg-slate-900/40 backdrop-blur-xl border-white/20 dark:border-slate-800",
+      "hover:border-primary/20 hover:shadow-lg dark:hover:border-primary/40",
+      animations.smoothScaleSmall
+    )}>
+      <div className={cn(
+        "absolute inset-0 opacity-0 group-hover:opacity-5 transition-opacity duration-300",
+        colorClass
+      )} />
+      <div className="flex items-start gap-4">
+        <div className={cn(
+          "p-3 rounded-xl shadow-sm transition-transform duration-300 group-hover:scale-110",
+          "bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-900",
+          "border border-slate-100 dark:border-slate-700"
+        )}>
+          <Icon className={cn("h-6 w-6", colorClass.replace('bg-', 'text-'))} />
+        </div>
+        <div>
+          <h3 className="font-semibold text-lg text-foreground group-hover:text-primary transition-colors">
+            {title}
+          </h3>
+          <p className="text-sm text-muted-foreground mt-1 leading-relaxed">
+            {description}
+          </p>
+        </div>
+      </div>
+    </div>
+  </Link>
+);
+
+// --- Main Page ---
 
 export default function AdminDashboard() {
   const router = useRouter();
@@ -76,53 +145,42 @@ export default function AdminDashboard() {
     mockQuestions: 0,
   });
 
-  // Auth with stricter Admin Check
+  // Auth Protection
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (user) => {
       if (user) {
         setAdminUser(user);
         try {
-          // Check if custom claims or Firestore document confirms admin
-          const userDoc = await getCountFromServer(query(collection(db, 'users'), where('uid', '==', user.uid), where('admin', '==', true)));
-          // Alternatively, since we are in a component, fetching the doc is safer to be sure
           const docRef = await import('firebase/firestore').then(mod => mod.getDoc(mod.doc(db, 'users', user.uid)));
-
           const userData = docRef.data();
-          if (docRef.exists() && (userData?.admin === true || userData?.admin === 'true')) {
-            // Authorized
-          } else {
+          if (!docRef.exists() || (userData?.admin !== true && userData?.admin !== 'true')) {
             router.push('/');
           }
         } catch (e) {
-          console.error(e);
           router.push('/');
         }
       } else {
         router.push('/');
       }
     });
-
     return () => unsub();
   }, [router]);
 
-  // Fast counts using index-only aggregations (instant + minimal bytes)
+  // Fast Data Loading
   useEffect(() => {
     let isMounted = true;
-
     const now = Timestamp.fromDate(new Date());
 
     async function loadCountsFast() {
       try {
         const [
-          usersCountSnap,
-          premiumCountSnap,
-          quizzesCountSnap,
-          mockQuizzesCountSnap,
-          questionsCountSnap,
-          mockQuestionsCountSnap,
-          // Active quizzes fast path: requires a composite index and ONE range.
-          // If you can store isActive or a precomputed windowStart, use that instead.
-          activeStartSnap, // startDate <= now
+          usersSnap,
+          premiumSnap,
+          quizzesSnap,
+          mockQuizzesSnap,
+          questionsSnap,
+          mockQuestionsSnap,
+          activeStartSnap,
         ] = await Promise.all([
           getCountFromServer(collection(db, 'users')),
           getCountFromServer(query(collection(db, 'users'), where('plan', '==', 'premium'))),
@@ -133,9 +191,6 @@ export default function AdminDashboard() {
           getCountFromServer(query(collection(db, 'quizzes'), where('startDate', '<=', now))),
         ]);
 
-        // Active quizzes workaround (single-range limitation):
-        // Count docs with startDate <= now, then subtract those already ended.
-        // (This still uses index-only counts, so it's very fast.)
         const endedSnap = await getCountFromServer(
           query(collection(db, 'quizzes'), where('endDate', '<', now))
         );
@@ -143,12 +198,12 @@ export default function AdminDashboard() {
 
         if (!isMounted) return;
         setCounts({
-          totalStudents: usersCountSnap.data().count,
-          totalPremiumStudents: premiumCountSnap.data().count,
-          totalQuizzes: quizzesCountSnap.data().count,
-          totalMockQuizzes: mockQuizzesCountSnap.data().count,
-          quizQuestions: questionsCountSnap.data().count,
-          mockQuestions: mockQuestionsCountSnap.data().count,
+          totalStudents: usersSnap.data().count,
+          totalPremiumStudents: premiumSnap.data().count,
+          totalQuizzes: quizzesSnap.data().count,
+          totalMockQuizzes: mockQuizzesSnap.data().count,
+          quizQuestions: questionsSnap.data().count,
+          mockQuestions: mockQuestionsSnap.data().count,
           activeQuizzes: active,
         });
       } finally {
@@ -157,8 +212,7 @@ export default function AdminDashboard() {
     }
 
     loadCountsFast();
-    // Refresh occasionally while staying cheap (no huge snapshots):
-    const id = setInterval(loadCountsFast, 30_000); // every 30s
+    const id = setInterval(loadCountsFast, 30_000);
     return () => {
       isMounted = false;
       clearInterval(id);
@@ -167,69 +221,120 @@ export default function AdminDashboard() {
 
   const statDefs = useMemo(
     () => [
-      { title: 'Total Students', value: counts.totalStudents, icon: <Users className="h-6 w-6 text-blue-600" />, bg: 'bg-blue-100' },
-      { title: 'Total Premium Students', value: counts.totalPremiumStudents, icon: <Star className="h-6 w-6 text-indigo-600" />, bg: 'bg-indigo-100' },
-      { title: 'Total Quizzes', value: counts.totalQuizzes, icon: <Trophy className="h-6 w-6 text-green-600" />, bg: 'bg-green-100' },
-      { title: 'Mock Quizzes', value: counts.totalMockQuizzes, icon: <FileText className="h-6 w-6 text-yellow-600" />, bg: 'bg-yellow-100' },
-      { title: 'Active Quizzes', value: counts.activeQuizzes, icon: <AlertCircle className="h-6 w-6 text-red-600" />, bg: 'bg-red-100' },
-      { title: 'Quiz Questions', value: counts.quizQuestions, icon: <Database className="h-6 w-6 text-purple-600" />, bg: 'bg-purple-100' },
-      { title: 'Mock Questions', value: counts.mockQuestions, icon: <BookOpen className="h-6 w-6 text-pink-600" />, bg: 'bg-pink-100' },
+      {
+        title: 'Total Students',
+        value: counts.totalStudents,
+        icon: <Users className="h-6 w-6 text-blue-600 dark:text-blue-400" />,
+        gradient: 'bg-blue-500'
+      },
+      {
+        title: 'Premium Users',
+        value: counts.totalPremiumStudents,
+        icon: <Star className="h-6 w-6 text-amber-500 dark:text-amber-400" />,
+        gradient: 'bg-amber-500'
+      },
+      {
+        title: 'Total Quizzes',
+        value: counts.totalQuizzes,
+        icon: <Trophy className="h-6 w-6 text-violet-600 dark:text-violet-400" />,
+        gradient: 'bg-violet-500'
+      },
+      {
+        title: 'Active Now',
+        value: counts.activeQuizzes,
+        icon: <Activity className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />,
+        gradient: 'bg-emerald-500'
+      },
+      {
+        title: 'Question Bank',
+        value: counts.quizQuestions,
+        icon: <Database className="h-6 w-6 text-indigo-600 dark:text-indigo-400" />,
+        gradient: 'bg-indigo-500'
+      },
+      {
+        title: 'Mock Questions',
+        value: counts.mockQuestions,
+        icon: <BookOpen className="h-6 w-6 text-rose-600 dark:text-rose-400" />,
+        gradient: 'bg-rose-500'
+      },
     ],
     [counts]
   );
 
   return (
-    <div className="flex h-screen bg-gray-50">
-      <Sidebar />
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <header className="bg-white shadow-sm border-b">
-          <div className="flex h-16 items-center justify-between px-6">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">Admin Dashboard</h1>
-              <p className="text-gray-600">Quick platform analytics</p>
-            </div>
-            {adminUser && (
-              <div className="flex items-center space-x-3">
-                <img
-                  src={adminUser.photoURL || '/default-avatar.png'}
-                  alt="Admin Avatar"
-                  className="w-10 h-10 rounded-full object-cover border"
-                />
-                <div className="text-right">
-                  <p className="text-sm font-semibold text-gray-800">{adminUser.displayName || 'Admin'}</p>
-                  <p className="text-xs text-gray-500 truncate">{adminUser.email}</p>
-                </div>
-              </div>
-            )}
-          </div>
-        </header>
-
-        <main className="flex-1 overflow-auto p-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-            {statDefs.map((s) => (
-              <StatCard key={s.title} {...s} loading={loading} />
-            ))}
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Link href="/admin/quizzes/create" passHref>
-              <Button className="h-24 w-full flex flex-col justify-center items-center space-y-2">
-                <span className="text-lg font-semibold">Create Quiz</span>
-              </Button>
-            </Link>
-            <Link href="/admin/students" passHref>
-              <Button variant="outline" className="h-24 w-full flex flex-col justify-center items-center space-y-2">
-                <span className="text-lg font-semibold">Manage Students</span>
-              </Button>
-            </Link>
-            <Link href="/admin/results" passHref>
-              <Button variant="outline" className="h-24 w-full flex flex-col justify-center items-center space-y-2">
-                <span className="text-lg font-semibold">View Results</span>
-              </Button>
-            </Link>
-          </div>
-        </main>
+    <div className="flex-1 flex flex-col overflow-hidden relative h-full">
+      {/* Background Gradient Mesh */}
+      <div className="absolute inset-0 pointer-events-none">
+        <div className="absolute top-0 left-0 w-full h-96 bg-gradient-to-b from-blue-50/50 to-transparent dark:from-blue-900/10" />
+        <div className="absolute top-20 right-20 w-72 h-72 bg-purple-500/10 rounded-full blur-3xl" />
+        <div className="absolute top-40 left-20 w-72 h-72 bg-blue-500/10 rounded-full blur-3xl" />
       </div>
+
+      <main className="flex-1 overflow-y-auto relative z-10 p-6 md:p-8 space-y-8">
+
+        {/* Header Section */}
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 animate-in fade-in slide-in-from-top-4 duration-500">
+          <div>
+            <h1 className="text-3xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-slate-900 to-slate-600 dark:from-white dark:to-slate-400">
+              Dashboard Overview
+            </h1>
+            <p className="text-muted-foreground mt-1 font-medium">
+              Welcome back, {adminUser?.displayName?.split(' ')[0] || 'Admin'} 👋
+            </p>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <div className="hidden md:flex items-center px-4 py-2 rounded-full border bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm text-sm font-medium text-muted-foreground">
+              <Clock className="w-4 h-4 mr-2 text-primary" />
+              {new Date().toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'short', day: 'numeric' })}
+            </div>
+          </div>
+        </div>
+
+        {/* Stats Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
+          {statDefs.map((s) => (
+            <StatCard key={s.title} {...s} loading={loading} />
+          ))}
+        </div>
+
+        {/* Quick Actions Grid */}
+        <h2 className="text-xl font-bold text-foreground mt-8 mb-4 flex items-center gap-2">
+          <Zap className="w-5 h-5 text-amber-500" />
+          Quick Actions
+        </h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in fade-in slide-in-from-bottom-8 duration-700 delay-100">
+          <QuickActionCard
+            title="Create New Quiz"
+            description="Set up a new quiz series, add questions, and schedule exams."
+            icon={FileText}
+            href="/admin/quizzes/create"
+            colorClass="bg-blue-500"
+          />
+          <QuickActionCard
+            title="Manage Students"
+            description="View enrolled students, track progress, and manage access."
+            icon={Users}
+            href="/admin/students"
+            colorClass="bg-violet-500"
+          />
+          <QuickActionCard
+            title="View Results"
+            description="Analyze performance reports and view individual scorecards."
+            icon={Trophy}
+            href="/admin/results"
+            colorClass="bg-emerald-500"
+          />
+          <QuickActionCard
+            title="Content Bank"
+            description="Manage question libraries and update course content."
+            icon={Database}
+            href="/admin/questions/questionbank"
+            colorClass="bg-indigo-500"
+          />
+        </div>
+
+      </main>
     </div>
   );
 }

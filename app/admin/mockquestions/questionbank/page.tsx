@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   collection,
   getDocs,
@@ -8,26 +9,92 @@ import {
   deleteDoc,
   query,
   where,
+  limit,
+  startAfter,
+  QueryDocumentSnapshot,
+  DocumentData,
+  writeBatch,
+  updateDoc
 } from 'firebase/firestore';
 import { db } from '../../../firebase';
-import { useRouter } from 'next/navigation';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuPortal,
+} from "@/components/ui/dropdown-menu";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+  SheetFooter,
+  SheetClose
+} from "@/components/ui/sheet";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
-import { Label } from 'recharts';
+import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Skeleton } from "@/components/ui/skeleton";
+import { Separator } from "@/components/ui/separator";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogFooter,
-  DialogTrigger,
-} from '@/components/ui/dialog';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Pencil, Trash, Plus, Loader2, Download } from 'lucide-react';
+} from "@/components/ui/dialog";
+import {
+  MoreHorizontal,
+  Plus,
+  Filter,
+  Trash2,
+  Download,
+  Copy,
+  ChevronDown,
+  Search,
+  RefreshCw,
+  Eye,
+  Edit,
+  Save,
+  Archive,
+  History,
+  PieChart,
+  UserCheck,
+  AlertTriangle,
+  BarChart2,
+  Info,
+  CheckCircle,
+} from 'lucide-react';
+import { toast } from 'sonner';
+import Papa from 'papaparse';
 
+// --- Types ---
 type Question = {
   id: string;
   questionText: string;
@@ -42,505 +109,818 @@ type Question = {
   year?: string;
   book?: string;
   teacher?: string;
-  enableExplanation?: boolean;  createdAt?: Date; // ✅ add this
-
+  enableExplanation?: boolean;
+  createdAt?: Date;
+  status?: 'draft' | 'published' | 'review';
+  usageCount?: number;
+  totalAttempts?: number;
+  correctAttempts?: number;
+  totalTimeSpent?: number;
+  optionCounts?: Record<string, number>;
+  lastUsedAt?: any;
+  isDeleted?: boolean;
 };
 
-const QuestionBankPage = () => {
+// --- Helper Functions ---
+function parseCreatedAt(data: DocumentData): Date {
+  if (data.createdAt?.toDate) return data.createdAt.toDate();
+  if (typeof data.createdAt === 'string') return new Date(data.createdAt);
+  return new Date();
+}
+
+function stripHtml(html: string) {
+  const tmp = document.createElement("DIV");
+  tmp.innerHTML = html;
+  return tmp.textContent || tmp.innerText || "";
+}
+
+const ITEMS_PER_PAGE = 20;
+
+export default function MockQuestionBankPage() {
   const router = useRouter();
+
+  // State
   const [questions, setQuestions] = useState<Question[]>([]);
-  const [filtered, setFiltered] = useState<Question[]>([]);
-  const [search, setSearch] = useState('');
-  const [loading, setLoading] = useState(true);
+  const [lastDoc, setLastDoc] = useState<QueryDocumentSnapshot<DocumentData> | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
   const [selectedQuestions, setSelectedQuestions] = useState<string[]>([]);
-  const [isBulkDeleteDialogOpen, setIsBulkDeleteDialogOpen] = useState(false);
-  const [deleteMode, setDeleteMode] = useState<'selected' | 'subject' | 'all'>('selected');
-  const [selectedSubject, setSelectedSubject] = useState('');
-  const [isDeleting, setIsDeleting] = useState(false);
+  const [previewQuestion, setPreviewQuestion] = useState<Question | null>(null);
+  const [analyticsQuestion, setAnalyticsQuestion] = useState<Question | null>(null);
+  const [isBatchEditing, setIsBatchEditing] = useState(false);
+  const [showDeleted, setShowDeleted] = useState(false);
+  const [batchUpdateData, setBatchUpdateData] = useState<{
+    course?: string;
+    subject?: string;
+    topic?: string;
+    difficulty?: string;
+    status?: 'draft' | 'published' | 'review';
+  }>({});
 
-  useEffect(() => {
-    const fetchQuestions = async () => {
-      try {
-       const snapshot = await getDocs(collection(db, 'mock-questions'));
-const fetched: Question[] = snapshot.docs.map((d) => {
-  const data = d.data() as any;
-  return {
-    id: d.id,
-    ...data,
-    createdAt: data?.createdAt?.toDate
-      ? data.createdAt.toDate()
-      : undefined, // fallback if older docs don't have it
-  };
-});
+  // Filters
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterCourse, setFilterCourse] = useState('All');
+  const [filterSubject, setFilterSubject] = useState('All');
+  const [filterDifficulty, setFilterDifficulty] = useState('All');
+  const [filterYear, setFilterYear] = useState('All');
+  const [filterStatus, setFilterStatus] = useState('All');
 
-        setQuestions(fetched);
-        setFiltered(fetched);
-      } catch (error) {
-        console.error('Error fetching questions:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
+  // Metadata for filter options
+  const [availableSubjects, setAvailableSubjects] = useState<string[]>([]);
+  const [availableCourses, setAvailableCourses] = useState<string[]>([]);
+  const [availableYears, setAvailableYears] = useState<string[]>([]);
 
-    fetchQuestions();
-  }, []);
-
-  const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const keyword = e.target.value.toLowerCase();
-    setSearch(keyword);
-    const filtered = questions.filter(
-      (q) =>
-        q.course?.toLowerCase().includes(keyword) ||
-        q.subject?.toLowerCase().includes(keyword) ||
-        q.chapter?.toLowerCase().includes(keyword) ||
-        q.questionText?.toLowerCase().includes(keyword)
-    );
-    setFiltered(filtered);
-    setSelectedQuestions([]);
-  };
-
-  const handleSelectQuestion = (id: string) => {
-    setSelectedQuestions((prev) =>
-      prev.includes(id) ? prev.filter((qid) => qid !== id) : [...prev, id]
-    );
-  };
-
-  const handleSelectAll = () => {
-    if (selectedQuestions.length === filtered.length) {
-      setSelectedQuestions([]);
-    } else {
-      setSelectedQuestions(filtered.map((q) => q.id));
-    }
-  };
-
-  const handleDelete = async (id: string) => {
-    const confirm = window.confirm('Are you sure you want to delete this question?');
-    if (!confirm) return;
-
+  // Initial Fetch & Filter Sync
+  const fetchQuestions = useCallback(async (isLoadMore = false) => {
+    setLoading(true);
     try {
-      await deleteDoc(doc(db, 'mock-questions', id));
-      const updated = questions.filter((q) => q.id !== id);
-      setQuestions(updated);
-      setFiltered(updated);
-      setSelectedQuestions((prev) => prev.filter((qid) => qid !== id));
-    } catch (error) {
-      console.error('Error deleting question:', error);
-    }
-  };
+      let q;
+      const constraints: any[] = [];
+      if (filterCourse !== 'All') constraints.push(where('course', '==', filterCourse));
+      if (filterSubject !== 'All') constraints.push(where('subject', '==', filterSubject));
+      if (filterDifficulty !== 'All') constraints.push(where('difficulty', '==', filterDifficulty));
+      if (filterYear !== 'All') constraints.push(where('year', '==', filterYear));
+      if (filterStatus !== 'All') constraints.push(where('status', '==', filterStatus));
 
-  const handleBulkDelete = async () => {
-    if (deleteMode === 'selected' && selectedQuestions.length === 0) {
-      alert('Please select at least one question to delete.');
-      return;
-    }
-
-    const confirm = window.confirm(
-      `Are you sure you want to delete ${
-        deleteMode === 'selected'
-          ? `${selectedQuestions.length} selected question(s)`
-          : deleteMode === 'subject'
-          ? `all questions for subject "${selectedSubject}"`
-          : 'all questions'
-      }? This action cannot be undone.`
-    );
-    if (!confirm) return;
-
-    setIsDeleting(true);
-    try {
-      if (deleteMode === 'selected') {
-        for (const id of selectedQuestions) {
-          await deleteDoc(doc(db, 'mock-questions', id));
-        }
-        const updated = questions.filter((q) => !selectedQuestions.includes(q.id));
-        setQuestions(updated);
-        setFiltered(updated);
-        setSelectedQuestions([]);
-      } else if (deleteMode === 'subject') {
-        const q = query(collection(db, 'mock-questions'), where('subject', '==', selectedSubject));
-        const snapshot = await getDocs(q);
-        for (const doc of snapshot.docs) {
-          await deleteDoc(doc.ref);
-        }
-        const updated = questions.filter((q) => q.subject !== selectedSubject);
-        setQuestions(updated);
-        setFiltered(updated);
-        setSelectedQuestions([]);
-      } else if (deleteMode === 'all') {
-        const snapshot = await getDocs(collection(db, 'mock-questions'));
-        for (const doc of snapshot.docs) {
-          await deleteDoc(doc.ref);
-        }
-        setQuestions([]);
-        setFiltered([]);
-        setSelectedQuestions([]);
+      if (showDeleted) {
+        constraints.push(where('isDeleted', '==', true));
       }
-      setIsBulkDeleteDialogOpen(false);
-      setSelectedSubject('');
+
+      if (constraints.length > 0) {
+        q = query(collection(db, 'mock-questions'), ...constraints, limit(ITEMS_PER_PAGE));
+      } else {
+        q = query(collection(db, 'mock-questions'), limit(ITEMS_PER_PAGE));
+      }
+
+      if (isLoadMore && lastDoc) {
+        q = query(q, startAfter(lastDoc));
+      }
+
+      const snapshot = await getDocs(q);
+      console.log("Firestore snapshot size:", snapshot.size);
+
+      const fetched: Question[] = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...(doc.data() as Omit<Question, 'id'>),
+        createdAt: parseCreatedAt(doc.data())
+      }));
+
+      // Client-side filtering
+      const filtered = fetched.filter(q => {
+        const matchesSearch = searchQuery ? q.questionText.toLowerCase().includes(searchQuery.toLowerCase()) : true;
+        const matchesDeleted = showDeleted ? true : q.isDeleted !== true;
+        return matchesSearch && matchesDeleted;
+      });
+
+      console.log("Total fetched:", fetched.length, "After filtering:", filtered.length);
+
+      if (isLoadMore) {
+        setQuestions(prev => [...prev, ...filtered]);
+      } else {
+        setQuestions(filtered);
+      }
+
+      setLastDoc(snapshot.docs[snapshot.docs.length - 1]);
+      setHasMore(snapshot.docs.length === ITEMS_PER_PAGE);
+
+      // Extract unique values for filters
+      const subjects = new Set([...availableSubjects, ...fetched.map(q => q.subject || '')].filter(Boolean));
+      setAvailableSubjects(Array.from(subjects));
+
+      const courses = new Set([...availableCourses, ...fetched.map(q => q.course || '')].filter(Boolean));
+      setAvailableCourses(Array.from(courses));
+
+      const years = new Set([...availableYears, ...fetched.map(q => q.year || '')].filter(Boolean));
+      setAvailableYears(Array.from(years));
+
+      fetchStats(fetched.map(q => q.id));
+
     } catch (error) {
-      console.error('Error during bulk delete:', error);
-      alert('Failed to delete questions.');
+      console.error("Error fetching questions:", error);
+      toast.error("Failed to fetch questions");
     } finally {
-      setIsDeleting(false);
+      setLoading(false);
+    }
+  }, [filterCourse, filterSubject, filterDifficulty, filterYear, filterStatus, searchQuery, showDeleted, lastDoc]); // eslint-disable-line
+
+  // Debounced Search
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setLastDoc(null);
+      fetchQuestions(false);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [searchQuery, filterCourse, filterSubject, filterDifficulty, filterYear, filterStatus, showDeleted]);
+
+  const fetchStats = async (ids: string[]) => {
+    if (ids.length === 0) return;
+    try {
+      const qSnap = await getDocs(collection(db, 'quizzes'));
+      const quizData = qSnap.docs.map(d => d.data());
+
+      setQuestions(prev => prev.map(q => {
+        if (ids.includes(q.id)) {
+          const count = quizData.filter(qz =>
+            qz.selectedQuestions?.some((sq: any) => sq.id === q.id)
+          ).length;
+          return { ...q, usageCount: count };
+        }
+        return q;
+      }));
+    } catch (e) {
+      console.error("Error fetching stats:", e);
     }
   };
 
-  const exportToCSV = (exportQuestions: Question[], filename: string) => {
-    const headers = [
-      'questionText',
-      'options',
-      'correctAnswer',
-      'course',
-      'subject',
-      'chapter',
-      'difficulty',
-      'explanation',
-      'topic',
-      'year',
-      'book',
-      'teacher',
-      'enableExplanation',
-    ];
-    const rows = exportQuestions.map((q) =>
-      [
-        `"${q.questionText.replace(/"/g, '""')}"`,
-        `"${q.options.map((opt) => opt.replace(/"/g, '""')).join('|')}"`,
-        `"${q.correctAnswer?.replace(/"/g, '""') || ''}"`,
-        `"${q.course?.replace(/"/g, '""') || ''}"`,
-        `"${q.subject?.replace(/"/g, '""') || ''}"`,
-        `"${q.chapter?.replace(/"/g, '""') || ''}"`,
-        `"${q.difficulty?.replace(/"/g, '""') || ''}"`,
-        `"${q.explanation?.replace(/"/g, '""') || ''}"`,
-        `"${q.topic?.replace(/"/g, '""') || ''}"`,
-        `"${q.year?.replace(/"/g, '""') || ''}"`,
-        `"${q.book?.replace(/"/g, '""') || ''}"`,
-        `"${q.teacher?.replace(/"/g, '""') || ''}"`,
-        q.enableExplanation ? 'true' : 'false',
-      ].join(',')
-    );
+  // Actions
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      setSelectedQuestions(questions.map(q => q.id));
+    } else {
+      setSelectedQuestions([]);
+    }
+  };
 
-    const csvContent = [headers.join(','), ...rows].join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const handleSelectOne = (id: string) => {
+    setSelectedQuestions(prev =>
+      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+    );
+  };
+
+  const handleSoftDelete = async () => {
+    if (selectedQuestions.length === 0) return;
+    if (!confirm(`Move ${selectedQuestions.length} questions to Delete Bin?`)) return;
+
+    setLoading(true);
+    try {
+      const batch = writeBatch(db);
+      selectedQuestions.forEach(id => {
+        batch.update(doc(db, 'mock-questions', id), { isDeleted: true, updatedAt: new Date() });
+      });
+      await batch.commit();
+
+      setQuestions(prev => prev.filter(q => !selectedQuestions.includes(q.id)));
+      setSelectedQuestions([]);
+      toast.success("Questions moved to Delete Bin");
+    } catch (err) {
+      toast.error("Failed to delete questions");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRestore = async () => {
+    if (selectedQuestions.length === 0) return;
+    setLoading(true);
+    try {
+      const batch = writeBatch(db);
+      selectedQuestions.forEach(id => {
+        batch.update(doc(db, 'mock-questions', id), { isDeleted: false, updatedAt: new Date() });
+      });
+      await batch.commit();
+
+      setQuestions(prev => prev.filter(q => !selectedQuestions.includes(q.id)));
+      setSelectedQuestions([]);
+      toast.success("Questions restored successfully");
+    } catch (err) {
+      toast.error("Failed to restore questions");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handlePermanentDelete = async () => {
+    if (selectedQuestions.length === 0) return;
+    if (!confirm(`PERMANENTLY DELETE ${selectedQuestions.length} questions? This cannot be undone.`)) return;
+
+    setLoading(true);
+    try {
+      const batch = writeBatch(db);
+      selectedQuestions.forEach(id => {
+        batch.delete(doc(db, 'mock-questions', id));
+      });
+      await batch.commit();
+
+      setQuestions(prev => prev.filter(q => !selectedQuestions.includes(q.id)));
+      setSelectedQuestions([]);
+      toast.success("Questions permanently deleted");
+    } catch (err) {
+      toast.error("Failed to delete questions");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleClone = async (question: Question) => {
+    try {
+      const { id, ...data } = question; // eslint-disable-line
+      const newDoc = await import('firebase/firestore').then(mod => mod.addDoc(collection(db, 'mock-questions'), {
+        ...data,
+        questionText: `${data.questionText} (Copy)`,
+        createdAt: new Date(),
+      }));
+      toast.success("Question duplicated!");
+      setQuestions([{ ...data, questionText: `${data.questionText} (Copy)`, id: newDoc.id, createdAt: new Date() } as Question, ...questions]);
+    } catch (e) {
+      toast.error("Failed to duplicate");
+    }
+  };
+
+  const handleExport = () => {
+    const dataToExport = questions.filter(q => selectedQuestions.length ? selectedQuestions.includes(q.id) : true);
+    const csv = Papa.unparse(dataToExport.map(q => ({
+      ...q,
+      options: q.options.join('|')
+    })));
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
     const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.setAttribute('href', url);
-    link.setAttribute('download', filename);
+    link.setAttribute("href", url);
+    link.setAttribute("download", "mock_questions_export.csv");
+    link.style.visibility = 'hidden';
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
   };
 
-  const handleExportCSV = (mode: 'all' | 'subject', subject?: string) => {
-    const exportQuestions =
-      mode === 'all' ? questions : questions.filter((q) => q.subject === subject);
-    const filename =
-      mode === 'all'
-        ? 'all_mock_questions.csv'
-        : `mock_questions_${subject?.replace(/\s+/g, '_').toLowerCase()}.csv`;
-    exportToCSV(exportQuestions, filename);
+  const handleBulkUpdate = async () => {
+    if (selectedQuestions.length === 0) return;
+    setLoading(true);
+    try {
+      const batch = writeBatch(db);
+      selectedQuestions.forEach(id => {
+        const docRef = doc(db, 'mock-questions', id);
+        batch.update(docRef, { ...batchUpdateData, updatedAt: new Date() });
+      });
+      await batch.commit();
+
+      setQuestions(prev => prev.map(q =>
+        selectedQuestions.includes(q.id) ? { ...q, ...batchUpdateData } : q
+      ));
+
+      setSelectedQuestions([]);
+      setIsBatchEditing(false);
+      setBatchUpdateData({});
+      toast.success(`Successfully updated ${selectedQuestions.length} questions`);
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to update questions");
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const uniqueSubjects = Array.from(new Set(questions.map((q) => q.subject).filter((s): s is string => !!s)));
+  const handleStatusChange = async (id: string, newStatus: 'draft' | 'published' | 'review') => {
+    setLoading(true);
+    try {
+      await updateDoc(doc(db, 'mock-questions', id), { status: newStatus, updatedAt: new Date() });
+      setQuestions(prev => prev.map(q => q.id === id ? { ...q, status: newStatus } : q));
+      toast.success(`Status updated to ${newStatus}`);
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to update status");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
-    <div className="min-h-screen bg-white rounded-xl p-4 sm:p-6 lg:p-8">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-center mb-6 gap-4">
-        <div className="flex items-center gap-2">
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-800">
-            📘 Question Bank
-          </h1>
-          <span className="text-sm sm:text-base text-gray-600">
-            (Total Questions: {questions.length})
-          </span>
+    <div className="min-h-screen bg-gray-50/50 dark:bg-gray-950 p-6 space-y-6">
+
+      {/* Header Statistics & Title */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div>
+          <h1 className="text-3xl font-extrabold tracking-tight text-gray-900 dark:text-gray-100">Mock Question Bank</h1>
+          <p className="text-gray-500 dark:text-gray-400 mt-1">Manage and organize your mock examination content.</p>
         </div>
-        <div className="flex gap-3">
-          <Button
-            className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white transition-colors"
-            onClick={() => router.push('/admin/mockquestions/create')}
-          >
-            <Plus className="h-5 w-5 mr-2" />
-            New Question
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => router.push('/admin/mockquestions/create')} className="bg-white dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700">
+            <Plus className="mr-2 h-4 w-4" /> New Question
           </Button>
-          <Dialog open={isBulkDeleteDialogOpen} onOpenChange={setIsBulkDeleteDialogOpen}>
-            <DialogTrigger asChild>
-              <Button
-                variant="destructive"
-                className="w-full sm:w-auto hover:bg-red-700 text-white"
-              >
-                <Trash className="h-5 w-5 mr-2" />
-                Bulk Delete
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-[500px]">
-              <DialogHeader>
-                <DialogTitle className="text-xl font-semibold">Bulk Delete Questions</DialogTitle>
-              </DialogHeader>
-              <div className="space-y-4 py-4">
-                <div>
-                  <Label className="text-sm font-medium text-gray-700">Delete Mode</Label>
-                  <Select value={deleteMode} onValueChange={(val) => setDeleteMode(val as 'selected' | 'subject' | 'all')}>
-                    <SelectTrigger className="mt-1">
-                      <SelectValue placeholder="Select delete mode" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="selected">Selected Questions</SelectItem>
-                      <SelectItem value="subject">By Subject</SelectItem>
-                      <SelectItem value="all">All Questions</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                {deleteMode === 'subject' && (
-                  <div>
-                    <Label className="text-sm font-medium text-gray-700">Subject</Label>
-                    <Select value={selectedSubject} onValueChange={setSelectedSubject}>
-                      <SelectTrigger className="mt-1">
-                        <SelectValue placeholder="Select subject" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {uniqueSubjects.map((subject) => (
-                          <SelectItem key={subject} value={subject}>
-                            {subject}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                )}
-                {deleteMode === 'selected' && (
-                  <p className="text-sm text-gray-600">
-                    {selectedQuestions.length} question(s) selected
-                  </p>
-                )}
-              </div>
-              <DialogFooter>
-                <Button
-                  variant="outline"
-                  onClick={() => setIsBulkDeleteDialogOpen(false)}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  variant="destructive"
-                  onClick={handleBulkDelete}
-                  disabled={isDeleting || (deleteMode === 'selected' && selectedQuestions.length === 0) || (deleteMode === 'subject' && !selectedSubject)}
-                >
-                  {isDeleting ? (
-                    <>
-                      <Loader2 className="h-5 w-5 mr-2 animate-spin" />
-                      Deleting...
-                    </>
-                  ) : (
-                    'Delete'
-                  )}
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-          <Dialog>
-            <DialogTrigger asChild>
-              <Button className="w-full sm:w-auto bg-green-600 hover:bg-green-700 text-white">
-                <Download className="h-5 w-5 mr-2" />
-                Export CSV
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-[500px]">
-              <DialogHeader>
-                <DialogTitle className="text-xl font-semibold">Export Questions to CSV</DialogTitle>
-              </DialogHeader>
-              <div className="space-y-4 py-4">
-                <div>
-                  <Label className="text-sm font-medium text-gray-700">Export Mode</Label>
-                  <Select
-                    defaultValue="all"
-                    onValueChange={(val) =>
-                      val === 'all'
-                        ? handleExportCSV('all')
-                        : setSelectedSubject('')
-                    }
-                  >
-                    <SelectTrigger className="mt-1">
-                      <SelectValue placeholder="Select export mode" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Questions</SelectItem>
-                      <SelectItem value="subject">By Subject</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label className="text-sm font-medium text-gray-700">Subject</Label>
-                  <Select
-                    value={selectedSubject}
-                    onValueChange={(val) => {
-                      setSelectedSubject(val);
-                      if (val) handleExportCSV('subject', val);
-                    }}
-                    disabled={questions.length === 0}
-                  >
-                    <SelectTrigger className="mt-1">
-                      <SelectValue placeholder="Select subject" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {uniqueSubjects.map((subject) => (
-                        <SelectItem key={subject} value={subject}>
-                          {subject}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <DialogFooter>
-                <Button
-                  variant="outline"
-                  onClick={() => setSelectedSubject('')}
-                >
-                  Close
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+          <Button variant="secondary" className="gap-2" onClick={() => fetchQuestions(false)}>
+            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+          </Button>
+          <Button
+            variant={showDeleted ? "destructive" : "outline"}
+            className="gap-2"
+            onClick={() => setShowDeleted(!showDeleted)}
+          >
+            <Archive className="h-4 w-4" /> {showDeleted ? 'Exit Bin' : 'Delete Bin'}
+          </Button>
         </div>
       </div>
 
-      {/* Search */}
-      <div className="mb-6 flex max-w-full sm:max-w-xl gap-2">
-        <Input
-          placeholder="Search by course, subject, chapter, or question..."
-          value={search}
-          onChange={handleSearch}
-          className="w-full py-6 px-4 border-gray-300 focus:border-blue-500 focus:ring-blue-500 rounded-md"
-        />
-        {search && (
-          <Button
-            variant="outline"
-            onClick={() => setSearch('')}
-            className="border-gray-300 hover:bg-gray-100 text-gray-700"
-          >
-            Clear
-          </Button>
+      {/* Toolbar */}
+      <div className="sticky top-0 z-10 -mx-6 px-6 py-4 bg-gray-50/80 dark:bg-gray-950/80 backdrop-blur-md border-b border-gray-200 dark:border-gray-800 flex flex-col md:flex-row gap-4 items-center justify-between transition-all">
+
+        {/* Search & Filter */}
+        <div className="flex items-center gap-2 w-full md:w-auto flex-1 max-w-2xl">
+          <div className="relative flex-1">
+            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-500 dark:text-gray-400" />
+            <Input
+              placeholder="Search questions..."
+              className="pl-9 bg-white dark:bg-gray-900 shadow-sm border-gray-200 dark:border-gray-800 focus:ring-blue-500"
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+            />
+          </div>
+
+          <Sheet>
+            <SheetTrigger asChild>
+              <Button variant="outline" className="bg-white dark:bg-gray-900 shadow-sm dark:border-gray-800">
+                <Filter className="mr-2 h-4 w-4" /> Filters
+              </Button>
+            </SheetTrigger>
+            <SheetContent>
+              <SheetHeader>
+                <SheetTitle>Filter Questions</SheetTitle>
+                <SheetDescription>Refine your view by specific attributes.</SheetDescription>
+              </SheetHeader>
+              <div className="py-6 space-y-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Course</label>
+                  <Select value={filterCourse} onValueChange={setFilterCourse}>
+                    <SelectTrigger><SelectValue placeholder="All Courses" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="All">All Courses</SelectItem>
+                      {availableCourses.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Subject</label>
+                  <Select value={filterSubject} onValueChange={setFilterSubject}>
+                    <SelectTrigger><SelectValue placeholder="All Subjects" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="All">All Subjects</SelectItem>
+                      {availableSubjects.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Difficulty</label>
+                  <Select value={filterDifficulty} onValueChange={setFilterDifficulty}>
+                    <SelectTrigger><SelectValue placeholder="All" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="All">All</SelectItem>
+                      <SelectItem value="Easy">Easy</SelectItem>
+                      <SelectItem value="Medium">Medium</SelectItem>
+                      <SelectItem value="Hard">Hard</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Year</label>
+                  <Select value={filterYear} onValueChange={setFilterYear}>
+                    <SelectTrigger><SelectValue placeholder="All Years" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="All">All Years</SelectItem>
+                      {availableYears.map(y => <SelectItem key={y} value={y}>{y}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Status</label>
+                  <Select value={filterStatus} onValueChange={setFilterStatus}>
+                    <SelectTrigger><SelectValue placeholder="All Status" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="All">All Status</SelectItem>
+                      <SelectItem value="draft">Draft</SelectItem>
+                      <SelectItem value="published">Published</SelectItem>
+                      <SelectItem value="review">Review Required</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <SheetFooter>
+                <SheetClose asChild>
+                  <Button type="submit">Apply Filters</Button>
+                </SheetClose>
+              </SheetFooter>
+            </SheetContent>
+          </Sheet>
+        </div>
+
+        {/* Bulk Actions */}
+        {selectedQuestions.length > 0 && (
+          <div className="flex items-center gap-2 bg-blue-50 dark:bg-blue-900/30 px-4 py-2 rounded-lg border border-blue-100 dark:border-blue-800 animate-in fade-in slide-in-from-top-2">
+            <span className="text-sm font-medium text-blue-700 dark:text-blue-300">{selectedQuestions.length} Selected</span>
+            <div className="h-4 w-px bg-blue-200 dark:bg-blue-700 mx-2" />
+
+            {!showDeleted ? (
+              <Button size="sm" variant="ghost" className="text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/30" onClick={handleSoftDelete}>
+                <Trash2 className="h-4 w-4 mr-1" /> Delete
+              </Button>
+            ) : (
+              <>
+                <Button size="sm" variant="ghost" className="text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 hover:bg-green-50 dark:hover:bg-green-900/30" onClick={handleRestore}>
+                  <RefreshCw className="h-4 w-4 mr-1" /> Restore
+                </Button>
+                <Button size="sm" variant="ghost" className="text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/30" onClick={handlePermanentDelete}>
+                  <AlertTriangle className="h-4 w-4 mr-1" /> Permanent Delete
+                </Button>
+              </>
+            )}
+
+            <Button size="sm" variant="ghost" className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/30" onClick={() => setIsBatchEditing(true)}>
+              <Edit className="h-4 w-4 mr-1" /> Update
+            </Button>
+            <Button size="sm" variant="ghost" className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/30" onClick={handleExport}>
+              <Download className="h-4 w-4 mr-1" /> Export
+            </Button>
+          </div>
         )}
       </div>
 
-      {/* Content */}
-      {loading ? (
-        <div className="grid grid-cols-1 gap-6">
-          {[...Array(6)].map((_, i) => (
-            <Card key={i} className="p-4 animate-pulse bg-white shadow-md">
-              <div className="h-6 bg-gray-200 rounded w-2/3 mb-3"></div>
-              <div className="grid grid-cols-2 gap-2 mb-4">
-                <div className="h-6 bg-gray-100 rounded"></div>
-                <div className="h-6 bg-gray-100 rounded"></div>
-              </div>
-              <div className="flex justify-end gap-2">
-                <div className="h-8 w-16 bg-gray-300 rounded"></div>
-                <div className="h-8 w-16 bg-gray-300 rounded"></div>
-              </div>
-            </Card>
-          ))}
-        </div>
-      ) : filtered.length === 0 ? (
-        <p className="text-center text-gray-500 text-lg mt-10">No questions found.</p>
-      ) : (
-        <div className="grid grid-cols-1 gap-6">
-          <div className="flex items-center gap-2 mb-4">
-            <Checkbox
-              checked={selectedQuestions.length === filtered.length && filtered.length > 0}
-              onCheckedChange={handleSelectAll}
-            />
-            <span className="text-sm text-gray-600">
-              Select All ({selectedQuestions.length}/{filtered.length})
-            </span>
-          </div>
-          {filtered.map((question, idx) => {
-            const {
-              id,
-              questionText,
-              options = [],
-              correctAnswer,
-              course,
-              subject,
-              chapter,
-              difficulty,
-            } = question;
-
-            return (
-              <Card
-                key={id}
-                className="p-4 bg-white shadow-md hover:shadow-lg transition-shadow duration-300 rounded-xl"
-              >
-                <div className="flex flex-wrap gap-2 mt-2">
-  {course && <Badge className="bg-blue-100 text-blue-800">{course}</Badge>}
-  {subject && (
-    <Badge variant="outline" className="border-blue-200 text-gray-700">
-      {subject}
-    </Badge>
-  )}
-  {chapter && (
-    <Badge variant="secondary" className="bg-gray-100 text-gray-700">
-      {chapter}
-    </Badge>
-  )}
-  {difficulty && (
-    <Badge className="bg-green-100 text-green-800">{difficulty}</Badge>
-  )}
-</div>
-
-                <div className="grid grid-cols-1 gap-2 mt-4">
-                  {options.map((opt, i) => (
-                    <div
-                      key={i}
-                      className={`p-2 rounded-md border text-sm ${
-                        opt === correctAnswer
-                          ? 'bg-green-100 border-green-400 text-green-900'
-                          : 'bg-gray-50 border-gray-200 text-gray-700'
-                      }`}
-                    >
-                      {String.fromCharCode(65 + i)}. {opt}
+      {/* Main Table */}
+      <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden">
+        <Table>
+          <TableHeader className="bg-gray-50/50 dark:bg-gray-800/50">
+            <TableRow className="border-gray-200 dark:border-gray-800">
+              <TableHead className="w-[50px]">
+                <Checkbox
+                  checked={questions.length > 0 && selectedQuestions.length === questions.length}
+                  onCheckedChange={(checked) => handleSelectAll(!!checked)}
+                />
+              </TableHead>
+              <TableHead className="w-[40%] text-gray-700 dark:text-gray-300">Question</TableHead>
+              <TableHead className="text-gray-700 dark:text-gray-300">Metadata</TableHead>
+              <TableHead className="text-gray-700 dark:text-gray-300">Stats</TableHead>
+              <TableHead className="text-gray-700 dark:text-gray-300">Details</TableHead>
+              <TableHead className="text-right text-gray-700 dark:text-gray-300">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {questions.length === 0 && !loading ? (
+              <TableRow>
+                <TableCell colSpan={6} className="h-64 text-center text-gray-500">
+                  No questions found matching your filters.
+                </TableCell>
+              </TableRow>
+            ) : (
+              questions.map((question) => (
+                <TableRow key={question.id} className="group hover:bg-gray-50/80 dark:hover:bg-gray-800/80 transition-colors border-gray-100 dark:border-gray-800">
+                  <TableCell>
+                    <Checkbox
+                      checked={selectedQuestions.includes(question.id)}
+                      onCheckedChange={() => handleSelectOne(question.id)}
+                    />
+                  </TableCell>
+                  <TableCell className="max-w-[400px]">
+                    <div className="space-y-1 py-2">
+                      <div className="font-medium text-gray-900 dark:text-gray-100 group-hover:text-blue-700 dark:group-hover:text-blue-400 transition-colors whitespace-normal break-words prose prose-sm dark:prose-invert">
+                        <div dangerouslySetInnerHTML={{ __html: question.questionText }} />
+                      </div>
+                      <div className="flex gap-2 text-xs text-gray-500 dark:text-gray-400">
+                        <span className="font-mono bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded">ID: {question.id.slice(0, 6)}</span>
+                        <span>{question.options.length} Options</span>
+                      </div>
                     </div>
-                  ))}
-                </div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex flex-col gap-1.5">
+                      <div className="flex gap-2">
+                        <Badge variant="outline" className="text-xs bg-white dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700">{question.course}</Badge>
+                        <Badge variant="outline" className="text-xs bg-white dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700">{question.subject}</Badge>
+                      </div>
+                      {question.topic && <span className="text-xs text-gray-500 dark:text-gray-400 truncate max-w-[150px]">{question.topic}</span>}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex flex-col gap-1 text-[10px] text-gray-500">
+                      <div className="flex items-center gap-1.5" title="Used in X Quizzes">
+                        <PieChart className="h-3 w-3" />
+                        <span>{question.usageCount || 0} Quizzes</span>
+                      </div>
+                      <div className="flex items-center gap-1.5" title="Success Rate">
+                        <UserCheck className="h-3 w-3" />
+                        <span>{question.totalAttempts ? `${Math.round(((question.correctAttempts || 0) / question.totalAttempts) * 100)}%` : 'No data'}</span>
+                      </div>
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex flex-col gap-1.5">
+                      <Badge className={`w-fit text-[10px] uppercase
+                                    ${question.difficulty === 'Easy' ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 border-green-200' : ''}
+                                    ${question.difficulty === 'Medium' ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300 border-yellow-200' : ''}
+                                    ${question.difficulty === 'Hard' ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 border-red-200' : ''}
+                                `}>
+                        {question.difficulty || 'N/A'}
+                      </Badge>
+                      <Badge variant="secondary" className={`w-fit text-[10px] uppercase
+                                    ${question.status === 'published' ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-100 text-gray-700'}
+                                `}>
+                        {question.status || 'draft'}
+                      </Badge>
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <div className="flex items-center justify-end gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-gray-500 hover:text-blue-600 dark:hover:text-blue-400"
+                        onClick={() => setPreviewQuestion(question)}
+                      >
+                        <Eye className="h-4 w-4" />
+                      </Button>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" className="h-8 w-8 p-0">
+                            <span className="sr-only">Open menu</span>
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                          <DropdownMenuItem onClick={() => setPreviewQuestion(question)}>
+                            <Eye className="mr-2 h-4 w-4" /> Preview
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => router.push(`/admin/mockquestions/create?id=${question.id}`)}>
+                            <Edit className="mr-2 h-4 w-4" /> Edit
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleClone(question)}>
+                            <Copy className="mr-2 h-4 w-4" /> Duplicate
+                          </DropdownMenuItem>
 
-                <div className="flex justify-end gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="border-gray-300 hover:bg-gray-100 text-gray-700"
-                    onClick={() => router.push(`/admin/mockquestions/create?id=${id}`)}
-                  >
-                    <Pencil className="h-4 w-4 mr-1" /> Edit
-                  </Button>
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    className="hover:bg-red-700 text-white"
-                    onClick={() => handleDelete(id)}
-                  >
-                    <Trash className="h-4 w-4 mr-1" /> Delete
-                  </Button>
-                </div>
-                
-{/* ✅ created date */}
-{question.createdAt && (
-  <p className="text-xs text-gray-500 mt-1">
-    Created on:{' '}
-    {question.createdAt.toLocaleDateString(undefined, {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-    })}{' '}
-    • {question.createdAt.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
-  </p>
-)}
+                          <DropdownMenuSub>
+                            <DropdownMenuSubTrigger>
+                              <RefreshCw className="mr-2 h-4 w-4" /> Change Status
+                            </DropdownMenuSubTrigger>
+                            <DropdownMenuPortal>
+                              <DropdownMenuSubContent>
+                                <DropdownMenuItem onClick={() => handleStatusChange(question.id, 'draft')}>
+                                  <Badge className="bg-gray-100 text-gray-700">Draft</Badge>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleStatusChange(question.id, 'review')}>
+                                  <Badge className="bg-yellow-100 text-yellow-700">Under Review</Badge>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleStatusChange(question.id, 'published')}>
+                                  <Badge className="bg-green-100 text-green-700">Published</Badge>
+                                </DropdownMenuItem>
+                              </DropdownMenuSubContent>
+                            </DropdownMenuPortal>
+                          </DropdownMenuSub>
 
-              </Card>
-            );
-          })}
-        </div>
-      )}
+                          <DropdownMenuItem onClick={() => setAnalyticsQuestion(question)}>
+                            <BarChart2 className="mr-2 h-4 w-4" /> Analytics
+                          </DropdownMenuItem>
+
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem onClick={() => {
+                            setSelectedQuestions([question.id]);
+                            handleSoftDelete();
+                          }} className="text-red-600 dark:text-red-400">
+                            <Trash2 className="mr-2 h-4 w-4" /> Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
+            {loading && (
+              <>
+                {[...Array(3)].map((_, i) => (
+                  <TableRow key={`skeleton-${i}`} className="border-gray-100 dark:border-gray-800">
+                    <TableCell><Skeleton className="h-4 w-4" /></TableCell>
+                    <TableCell><Skeleton className="h-12 w-full" /></TableCell>
+                    <TableCell><Skeleton className="h-8 w-24" /></TableCell>
+                    <TableCell><Skeleton className="h-6 w-16" /></TableCell>
+                    <TableCell><Skeleton className="h-6 w-16" /></TableCell>
+                    <TableCell><Skeleton className="h-8 w-8 ml-auto" /></TableCell>
+                  </TableRow>
+                ))}
+              </>
+            )}
+          </TableBody>
+        </Table>
+
+        {/* Load More Footer */}
+        {hasMore && !loading && questions.length > 0 && (
+          <div className="p-4 border-t border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-900 flex justify-center">
+            <Button variant="outline" onClick={() => fetchQuestions(true)} className="w-full sm:w-auto bg-white dark:bg-gray-800 dark:border-gray-700">
+              Load More Questions <ChevronDown className="ml-2 h-4 w-4" />
+            </Button>
+          </div>
+        )}
+      </div>
+
+      {/* Preview Modal */}
+      <Dialog open={!!previewQuestion} onOpenChange={(open) => !open && setPreviewQuestion(null)}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Question Preview</DialogTitle>
+            <DialogDescription>
+              This is how students will see this question.
+            </DialogDescription>
+          </DialogHeader>
+
+          {previewQuestion && (
+            <div className="space-y-6 py-4">
+              <div className="flex flex-wrap gap-2">
+                <Badge variant="secondary">{previewQuestion.course}</Badge>
+                <Badge variant="secondary">{previewQuestion.subject}</Badge>
+                <Badge variant="secondary">{previewQuestion.difficulty}</Badge>
+                {previewQuestion.year && <Badge variant="outline">Year: {previewQuestion.year}</Badge>}
+                <Badge className={previewQuestion.status === 'published' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}>
+                  {previewQuestion.status || 'draft'}
+                </Badge>
+              </div>
+
+              <div className="prose prose-sm dark:prose-invert max-w-none">
+                <div dangerouslySetInnerHTML={{ __html: previewQuestion.questionText }} />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {previewQuestion.options.map((option, idx) => (
+                  <div
+                    key={idx}
+                    className={`p-4 rounded-lg border flex items-start gap-3 ${option === previewQuestion.correctAnswer
+                      ? 'border-green-500 bg-green-50 dark:bg-green-900/20'
+                      : 'border-gray-200 dark:border-gray-800'
+                      }`}
+                  >
+                    <span className="flex-shrink-0 flex items-center justify-center w-6 h-6 rounded-full bg-gray-100 dark:bg-gray-800 text-xs font-bold">
+                      {String.fromCharCode(65 + idx)}
+                    </span>
+                    <span className="flex-1">{option}</span>
+                    {option === previewQuestion.correctAnswer && (
+                      <CheckCircle className="h-5 w-5 text-green-600 flex-shrink-0" />
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              {previewQuestion.explanation && (
+                <div className="mt-6 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800 rounded-lg">
+                  <h4 className="font-semibold text-sm text-blue-900 dark:text-blue-300 mb-2">Explanation</h4>
+                  <div className="prose prose-sm dark:prose-invert max-w-none">
+                    <div dangerouslySetInnerHTML={{ __html: previewQuestion.explanation }} />
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Analytics Modal */}
+      <Dialog open={!!analyticsQuestion} onOpenChange={(open) => !open && setAnalyticsQuestion(null)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Question Analytics</DialogTitle>
+            <DialogDescription>
+              Performance metrics and usage statistics
+            </DialogDescription>
+          </DialogHeader>
+
+          {analyticsQuestion && (
+            <div className="space-y-6 py-4">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <Card>
+                  <CardContent className="pt-6">
+                    <div className="text-2xl font-bold">{analyticsQuestion.usageCount || 0}</div>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Times Used</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="pt-6">
+                    <div className="text-2xl font-bold">{analyticsQuestion.totalAttempts || 0}</div>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Total Attempts</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="pt-6">
+                    <div className="text-2xl font-bold text-green-600">
+                      {analyticsQuestion.totalAttempts ? `${Math.round(((analyticsQuestion.correctAttempts || 0) / analyticsQuestion.totalAttempts) * 100)}%` : 'N/A'}
+                    </div>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Success Rate</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="pt-6">
+                    <div className="text-2xl font-bold">{analyticsQuestion.totalTimeSpent ? `${Math.round(analyticsQuestion.totalTimeSpent / 60)}m` : 'N/A'}</div>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Avg. Time</p>
+                  </CardContent>
+                </Card>
+              </div>
+
+              <div>
+                <h4 className="font-semibold mb-3">Option Distribution</h4>
+                <div className="space-y-2">
+                  {analyticsQuestion.options.map((opt, idx) => {
+                    const count = analyticsQuestion.optionCounts?.[opt] || 0;
+                    const total = analyticsQuestion.totalAttempts || 1;
+                    const percentage = Math.round((count / total) * 100);
+                    const isCorrect = opt === analyticsQuestion.correctAnswer;
+
+                    return (
+                      <div key={idx} className="space-y-1">
+                        <div className="flex justify-between text-sm">
+                          <span className={isCorrect ? 'font-semibold text-green-600' : ''}>
+                            {String.fromCharCode(65 + idx)}. {opt.substring(0, 50)}{opt.length > 50 ? '...' : ''}
+                          </span>
+                          <span className="text-gray-500">{count} ({percentage}%)</span>
+                        </div>
+                        <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                          <div
+                            className={`h-2 rounded-full ${isCorrect ? 'bg-green-500' : 'bg-blue-500'}`}
+                            style={{ width: `${percentage}%` }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Batch Edit Modal */}
+      <Dialog open={isBatchEditing} onOpenChange={setIsBatchEditing}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Batch Update {selectedQuestions.length} Questions</DialogTitle>
+            <DialogDescription>
+              Update metadata for all selected questions at once.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Status</label>
+              <Select value={batchUpdateData.status || ''} onValueChange={(v: any) => setBatchUpdateData(prev => ({ ...prev, status: v }))}>
+                <SelectTrigger><SelectValue placeholder="No change" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="draft">Draft</SelectItem>
+                  <SelectItem value="review">Review</SelectItem>
+                  <SelectItem value="published">Published</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Difficulty</label>
+              <Select value={batchUpdateData.difficulty || ''} onValueChange={(v) => setBatchUpdateData(prev => ({ ...prev, difficulty: v }))}>
+                <SelectTrigger><SelectValue placeholder="No change" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Easy">Easy</SelectItem>
+                  <SelectItem value="Medium">Medium</SelectItem>
+                  <SelectItem value="Hard">Hard</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsBatchEditing(false)}>Cancel</Button>
+            <Button onClick={handleBulkUpdate}>Update Questions</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
     </div>
   );
-};
-
-export default QuestionBankPage;
+}

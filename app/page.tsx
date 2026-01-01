@@ -1,30 +1,47 @@
-// src/pages/HomePage.jsx
 import React from "react";
-import HeroSection from "../components/Home/hero";
+import HeroSection from "@/components/Home/hero";
 import Navbar from "@/components/Home/navbar";
 import CoursesSection from "@/components/Home/courses";
 import Footer from "@/components/Home/footer";
 import TestimonialSection from "@/components/Home/reviews";
-import PricingSection from "@/components/Home/pricing";
+import FeaturesBento from "@/components/Home/features-bento";
+import SeriesSchedule from "@/components/Home/series-schedule";
+import PricingBundles from "@/components/Home/pricing-bundles";
 import WhatsappInviteSection from "@/components/Home/whatsapp";
-import DashboardShowcase from "@/components/Home/screenshot";
-import Whytojoin from "@/components/Home/why-to-join";
+import HeroModern from "@/components/Home/hero-modern";
+import { ScrollReveal } from "@/components/ui/scroll-reveal";
 
-const HomePage = () => {
+export default function Home() {
   return (
-    <>
-      <HeroSection />
-<Navbar/>   
-<CoursesSection/>
-<Whytojoin/>
-<DashboardShowcase/>
+    <main className="bg-white dark:bg-gray-950 min-h-screen">
+      <Navbar />
+      <HeroModern />
 
-<PricingSection/>
-<WhatsappInviteSection/>
-<TestimonialSection/>
-<Footer/>
- </>
+      <ScrollReveal>
+        <CoursesSection />
+      </ScrollReveal>
+
+      <ScrollReveal>
+        <FeaturesBento />
+      </ScrollReveal>
+
+      <ScrollReveal>
+        <SeriesSchedule />
+      </ScrollReveal>
+
+      <ScrollReveal>
+        <PricingBundles />
+      </ScrollReveal>
+
+      <ScrollReveal>
+        <WhatsappInviteSection />
+      </ScrollReveal>
+
+      <ScrollReveal>
+        <TestimonialSection />
+      </ScrollReveal>
+
+      <Footer />
+    </main>
   );
-};
-
-export default HomePage;
+}

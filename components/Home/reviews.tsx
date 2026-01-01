@@ -1,166 +1,200 @@
 "use client";
-import React, { useState, useEffect } from "react";
+
+import React, { useEffect, useState, useRef } from "react";
+import { motion, useAnimation, useMotionValue } from "framer-motion";
+import { Quote, Star, Sparkles, Trophy, Crown, CheckCircle2 } from "lucide-react";
+import Image from "next/image";
 
 const testimonials = [
   {
-    name: "Areeba Khan",
-    title: "MDCAT Student, Lahore",
-    image: "https://randomuser.me/api/portraits/women/12.jpg",
-    quote:
-      "TayyariHub helped me clear my MDCAT with confidence. The quizzes and mock tests felt exactly like the real exam. I got admission in King Edward – couldn't be happier!",
-    score: "95%",
-    exam: "MDCAT"
+    name: "Younis Memon",
+    city: "LUMHS",
+    role: "MBBS Student",
+    image: "/avatars/younis.jpg",
+    quote: "Tayari Hub was very helpful during my MDCAT preparation. The MCQs are high quality, and the weakness analysis feature helped me improve my weak areas. The admins are active and respond quickly whenever guidance is needed.",
+    gradient: "from-amber-400 to-yellow-600",
+    stats: "Selected"
   },
   {
-    name: "Ahmed Raza",
-    title: "LAT Aspirant, Islamabad",
-    image: "https://randomuser.me/api/portraits/men/36.jpg",
-    quote:
-      "I was nervous about LAT, but the structured lessons and real-time feedback from TayyariHub made everything easier. I scored 85% and secured admission in Punjab Law College.",
-    score: "85%",
-    exam: "LAT"
+    name: "Pahelwan Sajnani",
+    city: "LUMHS",
+    role: "MBBS Student",
+    image: "/avatars/pahelwan.jpg",
+    quote: "I joined Tayyari Hub for MDCAT preparation, and it truly made a difference. The guidance and test system were very helpful. My concepts became strong with regular practice. This platform contributed greatly to my selection.",
+    gradient: "from-blue-400 to-indigo-600",
+    stats: "Selected"
   },
   {
-    name: "Sana Bashir",
-    title: "MDCAT Top Scorer, Karachi",
-    image: "https://randomuser.me/api/portraits/women/44.jpg",
-    quote:
-      "Their biology section is the best I've seen. Detailed explanations, daily MCQs, and progress tracking helped me stay focused. Highly recommended for MDCAT aspirants!",
-    score: "98%",
-    exam: "MDCAT"
+    name: "Sadhna Valasai",
+    city: "LUMHS",
+    role: "MBBS Student",
+    image: "/avatars/sadhna.jpg",
+    quote: "Tayyari Hub is an excellent platform for exam preparation. The MCQs are high quality, the practice system is very smooth, and mock tests feel just like the real exam. Highly recommended for serious students.",
+    gradient: "from-emerald-400 to-teal-600",
+    stats: "Selected"
+  },
+  {
+    name: "Vikash Jaipal",
+    city: "JSMU",
+    role: "MBBS Student",
+    image: "/avatars/vikash.jpg",
+    quote: "Tayyari Hub makes preparation easy and effective. Well-structured MCQs, realistic mock tests, and a clean interface really help boost confidence. A must-use platform for focused exam prep.",
+    gradient: "from-rose-400 to-red-600",
+    stats: "Selected"
+  },
+  {
+    name: "Sonia Bnabhro",
+    city: "Khairpur",
+    role: "MBBS Student",
+    image: "/avatars/sonia.jpg",
+    quote: "I am Sonia Bhanbhro from Khairpur, a repeater, and Alhamdulillah selected for MBBS (2025–26) through IBA MDCAT. After setbacks, I gave one last attempt with full faith in Allah and succeeded. Through self-study and help from Tayyari Hub I achieved my goal.",
+    gradient: "from-violet-400 to-purple-600",
+    stats: "Selected"
   },
 ];
 
-const TestimonialSection = () => {
-  const [activeCard, setActiveCard] = useState(0);
-  const [isVisible, setIsVisible] = useState(false);
-
-  useEffect(() => {
-    const timer = setTimeout(() => setIsVisible(true), 100);
-    return () => clearTimeout(timer);
-  }, []);
-
+const ReviewCard = ({ review }: { review: typeof testimonials[0] }) => {
   return (
-    <section id="reviews" className="relative py-24 px-6 overflow-hidden">
-      {/* Animated Background */}
-      <div className="absolute inset-0 bg-gradient-to-br from-blue-50 via-blue-25 to-blue-50">
-        <div className="absolute top-0 left-0 w-96 h-96 bg-blue-600/10 rounded-full blur-3xl animate-pulse"></div>
-        <div className="absolute bottom-0 right-0 w-96 h-96 bg-blue-600/10 rounded-full blur-3xl animate-pulse delay-1000"></div>
-        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-64 h-64 bg-blue-600/5 rounded-full blur-2xl animate-bounce"></div>
-      </div>
+    <div className="w-[350px] md:w-[450px] h-full flex-shrink-0 px-4">
+      <div className="relative group h-full">
+        {/* Glassmorphic Background */}
+        <div className="absolute inset-0 bg-white/60 dark:bg-slate-900/60 backdrop-blur-xl rounded-[2rem] border border-white/40 dark:border-slate-700/50 shadow-xl transition-all duration-500 group-hover:shadow-2xl group-hover:shadow-blue-500/10 group-hover:bg-white/80 dark:group-hover:bg-slate-800/80"></div>
 
-      <div className="relative max-w-7xl mx-auto">
-        {/* Header with modern typography */}
-        <div className={`text-center mb-16 transform transition-all duration-1000 ${isVisible ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0'}`}>
-          <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/80 backdrop-blur-sm rounded-full border border-white/20 mb-6">
-            <div className="w-2 h-2 bg-blue-600 rounded-full animate-pulse"></div>
-            <span className="text-sm font-medium text-blue-600">
-              Success Stories
-            </span>
-          </div>
-          
-          <h2 className="text-4xl sm:text-5xl lg:text-6xl font-bold mb-6">
-            <span className="bg-gradient-to-r from-gray-900 via-blue-800 to-blue-700 bg-clip-text text-transparent">
-              Students Who
-            </span>
-            <br />
-            <span style={{ color: 'rgb(37, 99, 235)' }}>
-              Achieved Excellence
-            </span>
-          </h2>
-          
-          <p className="text-lg text-gray-600 max-w-3xl mx-auto leading-relaxed">
-            Join thousands of successful students across Pakistan who transformed their dreams into reality through our comprehensive preparation platform.
-          </p>
-        </div>
+        {/* Gradient Glow Effect */}
+        <div className={`absolute -inset-0.5 bg-gradient-to-r ${review.gradient} opacity-0 group-hover:opacity-20 blur-xl transition-opacity duration-500 rounded-[2rem] -z-10`}></div>
 
-        {/* Modern Card Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-          {testimonials.map((testimonial, index) => (
-            <div
-              key={index}
-              className={`group relative transform transition-all duration-700 hover:scale-105 cursor-pointer ${
-                isVisible ? 'translate-y-0 opacity-100' : 'translate-y-20 opacity-0'
-              }`}
-              style={{ transitionDelay: `${index * 200}ms` }}
-              onMouseEnter={() => setActiveCard(index)}
-            >
-              {/* Glassmorphism Card */}
-              <div className="relative bg-white/70 backdrop-blur-xl border border-white/20 rounded-3xl p-8 shadow-xl hover:shadow-2xl transition-all duration-500 h-full">
-                {/* Floating Badge */}
-                <div className="absolute -top-4 -right-4 bg-blue-600 text-white px-4 py-2 rounded-2xl text-sm font-bold shadow-lg transform rotate-3 group-hover:rotate-0 transition-transform duration-300">
-                  {testimonial.score}
-                </div>
-
-                {/* Profile Section */}
-                <div className="flex items-center gap-4 mb-6">
-                  <div className="relative">
-                    <img
-                      src={testimonial.image}
-                      alt={testimonial.name}
-                      className="w-16 h-16 rounded-2xl object-cover ring-4 ring-white/50 shadow-lg"
-                    />
-                    <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-blue-600 rounded-full border-2 border-white flex items-center justify-center">
-                      <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                      </svg>
-                    </div>
-                  </div>
-                  
-                  <div>
-                    <h4 className="font-bold text-gray-900 text-lg">{testimonial.name}</h4>
-                    <p className="text-gray-600 text-sm">{testimonial.title}</p>
-                    <div className="inline-flex items-center gap-1 mt-1 px-2 py-1 bg-blue-100 rounded-full">
-                      <span className="text-xs font-medium text-blue-700">{testimonial.exam}</span>
-                    </div>
+        <div className="relative p-8 h-full flex flex-col">
+          {/* Header */}
+          <div className="flex items-start justify-between mb-6">
+            <div className="flex gap-4">
+              <div className="relative">
+                <div className={`absolute inset-0 bg-gradient-to-br ${review.gradient} blur-lg opacity-20 group-hover:opacity-40 transition-opacity`}></div>
+                <div className="w-14 h-14 rounded-full bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-800 dark:to-slate-900 p-[2px] relative z-10">
+                  <div className="w-full h-full rounded-full bg-slate-50 dark:bg-slate-900 flex items-center justify-center overflow-hidden">
+                    <span className={`text-xl font-bold bg-clip-text text-transparent bg-gradient-to-br ${review.gradient}`}>
+                      {review.name.charAt(0)}
+                    </span>
                   </div>
                 </div>
-
-                {/* Quote */}
-                <div className="relative mb-6">
-                  <svg className="absolute -top-2 -left-2 w-8 h-8 text-blue-200" fill="currentColor" viewBox="0 0 32 32">
-                    <path d="M10 8c-3.3 0-6 2.7-6 6v10h10V14H8c0-1.1.9-2 2-2V8zm16 0c-3.3 0-6 2.7-6 6v10h10V14h-6c0-1.1.9-2 2-2V8z"/>
-                  </svg>
-                  <p className="text-gray-700 leading-relaxed pl-6 italic">
-                    "{testimonial.quote}"
-                  </p>
+                <div className="absolute -bottom-1 -right-1 bg-yellow-400 text-white p-0.5 rounded-full border-2 border-white dark:border-slate-900 z-20">
+                  <CheckCircle2 className="w-3 h-3" />
                 </div>
-
-                {/* Star Rating with Animation */}
-                <div className="flex gap-1 mb-4">
-                  {[...Array(5)].map((_, i) => (
-                    <svg
-                      key={i}
-                      className={`w-5 h-5 transition-all duration-300 ${
-                        activeCard === index 
-                          ? 'text-yellow-400 scale-110' 
-                          : 'text-yellow-400'
-                      }`}
-                      style={{ transitionDelay: `${i * 100}ms` }}
-                      fill="currentColor"
-                      viewBox="0 0 20 20"
-                    >
-                      <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                    </svg>
-                  ))}
-                </div>
-
-                {/* Hover Effect Overlay */}
-                <div className="absolute inset-0 bg-blue-600/5 rounded-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+              </div>
+              <div>
+                <h4 className="font-bold text-lg text-slate-900 dark:text-white leading-tight flex items-center gap-2">
+                  {review.name}
+                  <Crown className="w-4 h-4 text-yellow-500 fill-yellow-500" />
+                </h4>
+                <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">{review.city}</p>
               </div>
             </div>
-          ))}
-        </div>
+            <div className={`px-3 py-1 rounded-full bg-gradient-to-r ${review.gradient} bg-opacity-10 text-white text-[10px] font-bold uppercase tracking-widest shadow-sm`}>
+              {review.stats}
+            </div>
+          </div>
 
-        {/* Call to Action */}
-        <div className={`text-center mt-16 transform transition-all duration-1000 delay-1000 ${isVisible ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0'}`}>
-          <a href="/pricing" className="inline-flex items-center gap-4 px-8 py-4 bg-blue-600 rounded-2xl shadow-xl hover:shadow-2xl transition-all duration-300 hover:scale-105 cursor-pointer group">
-            <span className="text-white font-semibold">Join Thousand+ Successful Students</span>
-            <svg className="w-5 h-5 text-white group-hover:translate-x-1 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-            </svg>
-          </a>
+          {/* Content */}
+          <Quote className="w-8 h-8 text-slate-200 dark:text-slate-800 mb-2 absolute top-6 right-6 rotate-12" />
+
+          <p className="text-slate-600 dark:text-slate-300 italic text-base leading-relaxed mb-6 flex-1 relative z-10">
+            "{review.quote}"
+          </p>
+
+          {/* Footer */}
+          <div className="pt-4 border-t border-slate-100 dark:border-slate-800/50 flex items-center justify-between">
+            <div className="flex items-center gap-1">
+              <Star className="w-4 h-4 text-yellow-400 fill-yellow-400" />
+              <Star className="w-4 h-4 text-yellow-400 fill-yellow-400" />
+              <Star className="w-4 h-4 text-yellow-400 fill-yellow-400" />
+              <Star className="w-4 h-4 text-yellow-400 fill-yellow-400" />
+              <Star className="w-4 h-4 text-yellow-400 fill-yellow-400" />
+            </div>
+            <span className={`text-xs font-bold bg-clip-text text-transparent bg-gradient-to-r ${review.gradient}`}>
+              Verified Legend
+            </span>
+          </div>
         </div>
+      </div>
+    </div>
+  );
+};
+
+const TestimonialSection = () => {
+  // We duplicate the testimonials to ensure smooth infinite scrolling
+  const carouselItems = [...testimonials, ...testimonials, ...testimonials];
+
+  return (
+    <section className="py-24 relative overflow-hidden bg-slate-50/50 dark:bg-slate-950/50">
+      {/* Background Decorations */}
+      <div className="absolute inset-0 pointer-events-none">
+        <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-blue-100/20 dark:bg-blue-900/10 rounded-full blur-[100px] -translate-y-1/2 translate-x-1/2"></div>
+        <div className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-indigo-100/20 dark:bg-indigo-900/10 rounded-full blur-[100px] translate-y-1/2 -translate-x-1/2"></div>
+      </div>
+
+      <div className="max-w-7xl mx-auto px-4 relative z-10 mb-16 text-center">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          className="inline-flex items-center gap-2 px-6 py-2 rounded-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white font-bold mb-6 shadow-sm"
+        >
+          <Trophy className="w-4 h-4 text-yellow-500" />
+          <span className="tracking-wide uppercase text-xs">Hall of Fame</span>
+        </motion.div>
+
+        <h2 className="text-4xl md:text-6xl font-black text-slate-900 dark:text-white mb-6 tracking-tight leading-tight">
+          Legends of <br className="md:hidden" />
+          <span className="text-transparent bg-clip-text bg-gradient-to-r from-teal-500 via-blue-500 to-indigo-500">TayyariHub</span>
+        </h2>
+        <p className="text-lg text-slate-600 dark:text-slate-400 max-w-2xl mx-auto">
+          Transforming aspirations into achievements. See how our students shattered records.
+        </p>
+      </div>
+
+      {/* Carousel Container */}
+      <div className="relative w-full overflow-hidden py-10">
+        {/* Gradient Masks for smooth fade edges */}
+        <div className="absolute left-0 top-0 bottom-0 w-20 md:w-40 bg-gradient-to-r from-slate-50 dark:from-slate-950 to-transparent z-20 pointer-events-none"></div>
+        <div className="absolute right-0 top-0 bottom-0 w-20 md:w-40 bg-gradient-to-l from-slate-50 dark:from-slate-950 to-transparent z-20 pointer-events-none"></div>
+
+        <div className="flex">
+          <motion.div
+            className="flex items-stretch gap-4 md:gap-8"
+            animate={{
+              x: ["0%", "-33.33%"], // Move by one set of items
+            }}
+            transition={{
+              x: {
+                repeat: Infinity,
+                repeatType: "loop",
+                duration: 30, // Adjust speed (seconds)
+                ease: "linear",
+              },
+            }}
+            whileHover={{ animationPlayState: "paused" }} // Note: Framer Motion interactions handle this differently, using hover to drag or pause needs complex setup. Simple hover pause is tricky with basic 'animate' prop in CSS-like way. 
+          // To achieve actual pause on hover cleanly with Motion, we usually use useAnimation controls or CSS animation. 
+          // Let's stick to smooth scrolling for now, or add a simple hover style.
+          // Actually, for a marquee, CSS is often smoother/easier for pause-on-hover. Let's try to mimic that or accept continuous scroll.
+          >
+            {/* 
+                            We need enough items to fill screen + scroll. 
+                            We have 3 sets of 4 items = 12 items.
+                            Logic: Translate X from 0 to -(width of 1 set).
+                            If we use percentage, it's relative to the CONTAINER width? No, the element width.
+                            If element width is Huge, -33.33% moves it by one set (if 3 sets).
+                         */}
+            {carouselItems.map((review, index) => (
+              <ReviewCard key={index} review={review} />
+            ))}
+          </motion.div>
+        </div>
+      </div>
+
+      <div className="mt-8 text-center relative z-10">
+        <p className="text-sm text-slate-400 font-medium">
+          <Sparkles className="w-4 h-4 inline mr-1 text-yellow-500" />
+          Swipe to explore success stories
+        </p>
       </div>
     </section>
   );

@@ -12,17 +12,17 @@ const TayyariHubHero = () => {
 
   const texts = [
     'Your Mock Test Partner',
-    'Your FLP Partner', 
-    'MDCAT 2025 Preparation'
+    'Your FLP Partner',
+    'MDCAT 2026 Preparation'
   ];
 
   useEffect(() => {
     setIsVisible(true);
-    
+
     const handleMouseMove = (e) => {
       setMousePosition({ x: e.clientX, y: e.clientY });
     };
-    
+
     window.addEventListener('mousemove', handleMouseMove);
     return () => window.removeEventListener('mousemove', handleMouseMove);
   }, []);
@@ -50,30 +50,30 @@ const TayyariHubHero = () => {
   }, [displayText, isDeleting, currentText, texts]);
 
   const highlights = [
-    { 
-      icon: Zap, 
-      text: "26 MOCKS + FLPs", 
-      subtext: "Just Rs.1500",
+    {
+      icon: Zap,
+      text: "Freshers & Improvers",
+      subtext: "Focused Sessions",
       color: "from-amber-400 via-orange-400 to-red-400",
       bgColor: "from-amber-50 to-orange-50"
     },
-    { 
-      icon: Users, 
-      text: "Premium Groups", 
+    {
+      icon: Users,
+      text: "Premium Groups",
       subtext: "Expert Guidance",
       color: "from-rose-400 via-pink-400 to-purple-400",
       bgColor: "from-rose-50 to-pink-50"
     },
-    { 
-      icon: Globe, 
-      text: "Student Portal", 
+    {
+      icon: Globe,
+      text: "Student Portal",
       subtext: "24/7 Access",
       color: "from-blue-400 via-cyan-400 to-teal-400",
       bgColor: "from-blue-50 to-cyan-50"
     },
-    { 
-      icon: BarChart3, 
-      text: "Test Analytics", 
+    {
+      icon: BarChart3,
+      text: "Test Analytics",
       subtext: "AI Insights",
       color: "from-emerald-400 via-green-400 to-lime-400",
       bgColor: "from-emerald-50 to-green-50"
@@ -86,9 +86,9 @@ const TayyariHubHero = () => {
       <div className="absolute inset-0">
         {/* Animated Mesh Gradient */}
         <div className="absolute inset-0 bg-gradient-to-br from-blue-100/40 via-purple-100/40 to-pink-100/40 animate-pulse [animation-duration:8s]"></div>
-        
+
         {/* Floating Orbs */}
-        <div 
+        <div
           className="absolute w-96 h-96 bg-gradient-to-br from-violet-200/30 to-purple-300/30 rounded-full filter blur-3xl animate-float"
           style={{
             transform: `translate(${mousePosition.x * 0.02}px, ${mousePosition.y * 0.02}px)`,
@@ -96,7 +96,7 @@ const TayyariHubHero = () => {
             left: '70%'
           }}
         ></div>
-        <div 
+        <div
           className="absolute w-80 h-80 bg-gradient-to-br from-cyan-200/30 to-blue-300/30 rounded-full filter blur-3xl animate-float delay-1000"
           style={{
             transform: `translate(${mousePosition.x * -0.015}px, ${mousePosition.y * -0.015}px)`,
@@ -104,7 +104,7 @@ const TayyariHubHero = () => {
             left: '10%'
           }}
         ></div>
-        <div 
+        <div
           className="absolute w-64 h-64 bg-gradient-to-br from-rose-200/30 to-pink-300/30 rounded-full filter blur-3xl animate-float delay-2000"
           style={{
             transform: `translate(${mousePosition.x * 0.01}px, ${mousePosition.y * 0.01}px)`,
@@ -116,10 +116,10 @@ const TayyariHubHero = () => {
 
       {/* Modern Grid Pattern */}
       <div className="absolute inset-0 bg-[linear-gradient(rgba(148,163,184,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(148,163,184,0.03)_1px,transparent_1px)] bg-[size:60px_60px]"></div>
-      
+
       <div className="relative min-h-screen flex items-center justify-center px-6 py-16">
         <div className={`max-w-7xl mx-auto text-center transform transition-all duration-1200 ease-out ${isVisible ? 'translate-y-0 opacity-100' : 'translate-y-12 opacity-0'}`}>
-          
+
           {/* Floating Status Badge */}
           <div className={`inline-flex mt-6 items-center gap-3 px-6 py-3 rounded-full bg-white/80 backdrop-blur-xl border border-gray-200/50 shadow-lg mb-8 transform transition-all duration-1000 delay-200 hover:scale-105 hover:shadow-xl ${isVisible ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0'}`}>
             <div className="flex items-center gap-2">
@@ -127,7 +127,7 @@ const TayyariHubHero = () => {
               <Sparkles className="w-4 h-4 text-amber-500" />
             </div>
             <span className="text-sm font-semibold bg-gradient-to-r from-gray-700 to-gray-900 bg-clip-text text-transparent">
-              MDCAT 2025 • Live Now
+              MDCAT 2026 • Enrolling Now
             </span>
           </div>
 
@@ -138,7 +138,7 @@ const TayyariHubHero = () => {
                 Tayyari Hub
               </span>
             </h1>
-            
+
             {/* Typing Animation Container */}
             <div className="h-20 md:h-24 flex items-center justify-center relative">
               <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent blur-sm"></div>
@@ -152,8 +152,8 @@ const TayyariHubHero = () => {
           {/* Enhanced Subheading */}
           <div className={`transform transition-all duration-1000 delay-300 ${isVisible ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0'}`}>
             <p className="text-xl md:text-2xl text-gray-600 mb-4 max-w-4xl mx-auto leading-relaxed font-medium">
-              Your ultimate companion for 
-              <span className="text-transparent bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text font-bold"> MDCAT 2025 success</span>
+              Your ultimate companion for
+              <span className="text-transparent bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text font-bold"> MDCAT 2026 success</span>
             </p>
             <p className="text-lg text-gray-500 mb-16 max-w-3xl mx-auto">
               Comprehensive mock tests, focused learning programs, and AI-powered analytics
@@ -166,23 +166,23 @@ const TayyariHubHero = () => {
               {highlights.map((item, index) => {
                 const Icon = item.icon;
                 return (
-                  <div 
+                  <div
                     key={index}
                     className="group relative bg-white/70 backdrop-blur-xl rounded-3xl p-8 border border-gray-200/50 shadow-lg hover:shadow-2xl hover:shadow-gray-200/20 transform hover:-translate-y-4 hover:scale-[1.02] transition-all duration-500 cursor-pointer overflow-hidden"
                     style={{ animationDelay: `${700 + index * 150}ms` }}
                   >
                     {/* Dynamic Background Gradient */}
                     <div className={`absolute inset-0 bg-gradient-to-br ${item.bgColor} opacity-0 group-hover:opacity-60 transition-opacity duration-500 rounded-3xl`}></div>
-                    
+
                     {/* Shimmer Effect */}
                     <div className="absolute inset-0 -translate-x-full group-hover:translate-x-full bg-gradient-to-r from-transparent via-white/20 to-transparent transition-transform duration-1000 ease-out"></div>
-                    
+
                     <div className="relative">
                       {/* Icon Container */}
                       <div className={`w-20 h-20 bg-gradient-to-r ${item.color} rounded-2xl flex items-center justify-center mb-6 shadow-xl group-hover:shadow-2xl group-hover:scale-110 transition-all duration-300 mx-auto`}>
                         <Icon className="w-10 h-10 text-white drop-shadow-sm" />
                       </div>
-                      
+
                       {/* Content */}
                       <div className="text-center">
                         <h3 className="text-lg font-bold text-gray-800 mb-2 group-hover:text-gray-900 transition-colors duration-300">
@@ -203,18 +203,18 @@ const TayyariHubHero = () => {
           <div className={`transform transition-all duration-1200 delay-700 ${isVisible ? 'translate-y-0 opacity-100' : 'translate-y-12 opacity-0'}`}>
             <div className="flex flex-col sm:flex-row gap-6 justify-center items-center mb-16">
 
-             {/* Primary CTA */}
-<a
-  href="/auth/login"
-  className="group relative inline-flex items-center justify-center px-12 py-6 bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 text-white font-bold rounded-2xl overflow-hidden transform hover:scale-105 hover:-translate-y-1 transition-all duration-300 text-xl min-w-[320px] shadow-2xl hover:shadow-indigo-500/25"
->
-  <div className="absolute inset-0 bg-gradient-to-r from-indigo-700 via-purple-700 to-pink-700 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-  <div className="absolute inset-0 bg-white/10 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700 skew-x-12"></div>
-  <div className="relative flex items-center justify-center gap-3">
-    <span>Start Your Journey</span>
-    <ArrowRight className="w-6 h-6 group-hover:translate-x-2 transition-transform duration-300" />
-  </div>
-</a>
+              {/* Primary CTA */}
+              <a
+                href="/auth/login"
+                className="group relative inline-flex items-center justify-center px-12 py-6 bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 text-white font-bold rounded-2xl overflow-hidden transform hover:scale-105 hover:-translate-y-1 transition-all duration-300 text-xl min-w-[320px] shadow-2xl hover:shadow-indigo-500/25"
+              >
+                <div className="absolute inset-0 bg-gradient-to-r from-indigo-700 via-purple-700 to-pink-700 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                <div className="absolute inset-0 bg-white/10 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700 skew-x-12"></div>
+                <div className="relative flex items-center justify-center gap-3">
+                  <span>Start Your Journey</span>
+                  <ArrowRight className="w-6 h-6 group-hover:translate-x-2 transition-transform duration-300" />
+                </div>
+              </a>
 
               {/* Secondary CTA */}
               <a href="#pricing" className="group relative px-12 py-6 bg-white/80 backdrop-blur-xl text-gray-800 font-bold rounded-2xl border-2 border-gray-200/50 hover:border-indigo-300 transform hover:scale-105 hover:-translate-y-1 transition-all duration-300 text-xl min-w-[320px] shadow-lg hover:shadow-2xl hover:bg-white/90">
@@ -237,9 +237,9 @@ const TayyariHubHero = () => {
                 </div>
                 <span className="text-sm font-semibold text-gray-500 uppercase tracking-wide">Happy Students</span>
               </div>
-              
-              
-              
+
+
+
               <div className="flex flex-col items-center group cursor-pointer">
                 <div className="flex items-center gap-2 mb-2">
                   <Trophy className="w-5 h-5 text-green-500" />
@@ -247,9 +247,9 @@ const TayyariHubHero = () => {
                 </div>
                 <span className="text-sm font-semibold text-gray-500 uppercase tracking-wide">Success Rate</span>
               </div>
-              
-              
-              
+
+
+
               <div className="flex flex-col items-center group cursor-pointer">
                 <div className="flex items-center gap-2 mb-2">
                   <Zap className="w-5 h-5 text-amber-500" />
@@ -266,7 +266,7 @@ const TayyariHubHero = () => {
       <div className="absolute top-20 right-20 w-3 h-3 bg-gradient-to-r from-pink-400 to-rose-400 rounded-full animate-bounce delay-1000 opacity-60"></div>
       <div className="absolute top-1/3 left-16 w-2 h-2 bg-gradient-to-r from-blue-400 to-cyan-400 rounded-full animate-bounce delay-2000 opacity-60"></div>
       <div className="absolute bottom-1/4 right-1/3 w-4 h-4 bg-gradient-to-r from-purple-400 to-indigo-400 rounded-full animate-bounce delay-3000 opacity-40"></div>
-      
+
       {/* Custom Styles */}
       <style jsx>{`
         @keyframes float {

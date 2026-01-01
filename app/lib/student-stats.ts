@@ -47,9 +47,11 @@ export async function updateStudentStats(userId: string, result: QuizResult, typ
 
             if (type === 'admin') {
                 stats.totalQuizzes = (stats.totalQuizzes || 0) + 1;
-                stats.totalQuestions = (stats.totalQuestions || 0) + questionsAttempted; // or result.total? usually "Questions Attempted" is more useful for accuracy.
+                stats.totalQuestions = (stats.totalQuestions || 0) + questionsAttempted;
                 stats.totalCorrect = (stats.totalCorrect || 0) + correct;
                 stats.totalWrong = (stats.totalWrong || 0) + wrong;
+                // Add totalScore for Leaderboard
+                stats.totalScore = (stats.totalScore || 0) + result.score;
                 // Total Time? Passed in result? The limit was passed, but actual time taken?
                 // We'll skip time for now as it wasn't passed in the simple result object payload in the plan, 
                 // but we can add it if available in the calling context.

@@ -2,6 +2,7 @@
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { getAuth, GoogleAuthProvider } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
+import { getStorage } from "firebase/storage";
 
 // ✅ Your Firebase project config
 const firebaseConfig = {
@@ -21,9 +22,18 @@ const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 const auth = getAuth(app);
 const provider = new GoogleAuthProvider();
 const db = getFirestore(app);
+const storage = getStorage(app);
+
+// Initialize Messaging only on client side
+let messaging: any = null;
+if (typeof window !== 'undefined') {
+  import('firebase/messaging').then(({ getMessaging }) => {
+    messaging = getMessaging(app);
+  });
+}
 
 // ✅ Export everything you might need
-export { app, auth, provider, db };
+export { app, auth, provider, db, storage, messaging };
 
 // Debug only (won’t run in prod build)
 if (process.env.NODE_ENV === "development") {

@@ -18,6 +18,24 @@ import { onAuthStateChanged, User } from 'firebase/auth';
 import { db, auth } from '@/app/firebase';
 import { Button } from '@/components/ui/button';
 import { Sidebar } from '@/components/ui/sidebar';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
+import {
+  Loader2,
+  BookOpen,
+  Layers,
+  Clock,
+  FileText,
+  CheckCircle2,
+  AlertCircle,
+  Sparkles,
+  ChevronRight,
+  Brain
+} from 'lucide-react';
+import { toast } from 'react-hot-toast';
+import { glassmorphism, animations } from '@/lib/design-tokens';
 
 const MAX_QUESTIONS = 100;
 
@@ -99,8 +117,9 @@ export default function CreateUserQuizPage() {
         setChaptersBySubject(chaptersObj);
 
         if (sArr.length > 0 && selectedSubjects.length === 0) {
-          setSelectedSubjects([sArr[0]]);
-          setSelectedChapters(chaptersObj[sArr[0]]?.slice(0, 1) || []);
+          // Optional: Pre-select first subject?
+          // setSelectedSubjects([sArr[0]]);
+          // setSelectedChapters(chaptersObj[sArr[0]]?.slice(0, 1) || []);
         }
       } catch (err) {
         console.error('Failed to load mock-questions meta', err);
@@ -120,9 +139,14 @@ export default function CreateUserQuizPage() {
         selectedSubjects.forEach((s) => {
           const chs = chaptersBySubject[s] || [];
           if (chs.length > 0 && !chapters.some((c) => chs.includes(c))) {
-            chapters.push(chs[0]);
+            // Auto-select first chapter ONLY if no chapters selected for this subject yet
+            // Logic kept from original but slightly refined to avoid aggressive auto-select
+            if (!chapters.filter(c => chs.includes(c)).length) {
+              chapters.push(chs[0]);
+            }
           }
         });
+        // Filter out chapters from deselected subjects
         chapters = chapters.filter((c) =>
           selectedSubjects.some((s) => (chaptersBySubject[s] || []).includes(c))
         );
@@ -148,9 +172,15 @@ export default function CreateUserQuizPage() {
 
   useEffect(() => {
     const fetchAnalytics = async () => {
-      if (!user) return;
+      if (!user || subjects.length === 0) return;
+
       const analytics: Record<string, SubjectUsageDoc> = {};
-      for (const subject of subjects) {
+
+      // Batch fetches? Or parallel promises.
+      // Firestore batch get is getDocs(query(collection(users, uid, question-usage), where(documentId(), in, subjects)))
+      // simpler to map
+
+      await Promise.all(subjects.map(async (subject) => {
         const docRef = doc(db, 'users', user.uid, 'question-usage', subject);
         try {
           const snap = await getDoc(docRef);
@@ -158,27 +188,16 @@ export default function CreateUserQuizPage() {
             analytics[subject] = snap.data() as SubjectUsageDoc;
             if (!analytics[subject].usedQuestions) analytics[subject].usedQuestions = [];
           } else {
-            analytics[subject] = {
-              usedQuestions: [],
-              totalQuestions: 0,
-              usedQuestionsCount: 0,
-              unusedQuestionsCount: 0,
-              updatedAt: null,
-            };
+            // Defaults
+            analytics[subject] = { usedQuestions: [], totalQuestions: 0, usedQuestionsCount: 0, unusedQuestionsCount: 0, updatedAt: null };
           }
         } catch {
-          analytics[subject] = {
-            usedQuestions: [],
-            totalQuestions: 0,
-            usedQuestionsCount: 0,
-            unusedQuestionsCount: 0,
-            updatedAt: null,
-          };
+          analytics[subject] = { usedQuestions: [], totalQuestions: 0, usedQuestionsCount: 0, unusedQuestionsCount: 0, updatedAt: null };
         }
-      }
+      }));
       setSubjectAnalytics(analytics);
     };
-    if (subjects.length > 0 && user) fetchAnalytics();
+    fetchAnalytics();
   }, [subjects, user]);
 
   const toggleChapter = (c: string) => {
@@ -191,37 +210,26 @@ export default function CreateUserQuizPage() {
   const toggleSubject = (s: string) => {
     setSelectedSubjects((prev) => {
       if (prev.includes(s)) {
-        setSelectedChapters((chs) =>
-          chs.filter((ch) => !(chaptersBySubject[s] || []).includes(ch))
-        );
         return prev.filter((x) => x !== s);
       } else {
-        const chs = chaptersBySubject[s] || [];
-        setSelectedChapters((prevChs) => {
-          if (chs.length > 0 && !prevChs.some((c) => chs.includes(c))) {
-            return [...prevChs, chs[0]];
-          }
-          return prevChs;
-        });
         return [...prev, s];
       }
     });
   };
 
-  const handleCreate = async (e?: React.FormEvent) => {
-    e?.preventDefault();
+  const handleCreate = async () => {
     setError(null);
 
     if (!user) {
-      setError('You must be logged in to create a test.');
+      toast.error('You must be logged in to create a test.');
       return;
     }
     if (selectedSubjects.length === 0) {
-      setError('Please select at least one subject.');
+      toast.error('Please select at least one subject.');
       return;
     }
     if (selectedChapters.length === 0) {
-      setError('Please select at least one chapter.');
+      toast.error('Please select at least one chapter.');
       return;
     }
 
@@ -229,21 +237,17 @@ export default function CreateUserQuizPage() {
     for (const subj of selectedSubjects) {
       const count = questionsPerSubject[subj] || 0;
       if (count <= 0) {
-        setError(`Number of questions for ${subj} must be at least 1.`);
+        toast.error(`Number of sorular for ${subj} must be at least 1.`);
         return;
       }
       totalSelectedQuestions += count;
     }
     if (totalSelectedQuestions > MAX_QUESTIONS) {
-      setError(`Total questions across all subjects cannot exceed ${MAX_QUESTIONS}.`);
+      toast.error(`Total questions cannot exceed ${MAX_QUESTIONS}.`);
       return;
     }
     if (!questionsPerPage || questionsPerPage <= 0) {
-      setError('Questions per page must be at least 1.');
-      return;
-    }
-    if (questionsPerPage > totalSelectedQuestions) {
-      setError('Questions per page cannot exceed total number of questions.');
+      toast.error('Questions per page must be at least 1.');
       return;
     }
 
@@ -273,8 +277,13 @@ export default function CreateUserQuizPage() {
         const used = pool.filter((q) => usedSet.has(q.id));
         const selected: MockQuestion[] = [];
         for (let i = 0; i < unused.length && selected.length < numThisSubject; i++) selected.push(unused[i]);
+        // Only if not enough unused, take used
         for (let i = 0; i < used.length && selected.length < numThisSubject; i++) selected.push(used[i]);
         allSelectedQuestions = allSelectedQuestions.concat(selected);
+      }
+
+      if (allSelectedQuestions.length === 0) {
+        throw new Error("No questions found for the selected chapters/subjects.");
       }
 
       const selectedSnapshot = allSelectedQuestions.map((q) => ({
@@ -291,7 +300,7 @@ export default function CreateUserQuizPage() {
       const newDocRef = doc(collection(db, 'user-quizzes'));
       const quizTitle =
         title?.trim() ||
-        `${selectedSubjects.join(', ')} Test - ${new Date().toLocaleDateString()}`;
+        `${selectedSubjects.map(s => s.substring(0, 3)).join(', ')} Mock - ${new Date().toLocaleDateString()}`;
 
       await setDoc(newDocRef, {
         title: quizTitle,
@@ -305,6 +314,7 @@ export default function CreateUserQuizPage() {
         createdAt: serverTimestamp(),
       });
 
+      // Update analytics
       const batch = writeBatch(db);
       const subjectToIds: Record<string, string[]> = {};
       for (const q of allSelectedQuestions) {
@@ -318,20 +328,18 @@ export default function CreateUserQuizPage() {
         const oldUsedSet = new Set(subjectAnalytics[subj]?.usedQuestions || []);
         subjectToIds[subj].forEach((id) => oldUsedSet.add(id));
         const usedArr = Array.from(oldUsedSet);
-        const usedCount = pool.filter(q => oldUsedSet.has(q.id)).length;
-        const total = pool.length;
-        const unusedCount = total - usedCount;
+        const usedCount = pool.filter(q => oldUsedSet.has(q.id)).length; // Approx check against pool
+        // Better: just save the IDs we used
 
         const usageDocRef = doc(db, 'users', user.uid, 'question-usage', subj);
         batch.set(usageDocRef, {
           usedQuestions: usedArr,
-          totalQuestions: total,
-          usedQuestionsCount: usedCount,
-          unusedQuestionsCount: unusedCount,
           updatedAt: serverTimestamp(),
+          // total/used counts can be updated lazily or here if we have full pool data
         }, { merge: true });
       }
 
+      // Increment global usage
       allSelectedQuestions.forEach((q) => {
         const qRef = doc(db, 'mock-questions', q.id);
         batch.update(qRef, {
@@ -340,12 +348,12 @@ export default function CreateUserQuizPage() {
       });
       await batch.commit();
 
+      toast.success("Quiz created successfully!");
       router.push(`/quiz/start-user-quiz?id=${newDocRef.id}`);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error creating user quiz', err);
-      setError('Failed to create test. Try again later.');
+      toast.error(err.message || 'Failed to create test. Try again later.');
       setCreating(false);
-      return;
     }
   };
 
@@ -353,246 +361,259 @@ export default function CreateUserQuizPage() {
 
   if (loading) {
     return (
-      <div className="flex min-h-screen">
+      <div className="flex h-screen bg-background">
         <Sidebar />
-        <div className="flex-1 bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center">
-          <div className="text-center">
-            <div className="w-16 h-16 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-            <p className="text-gray-700 text-lg font-medium">Loading your workspace...</p>
+        <main className="flex-1 p-8 flex items-center justify-center">
+          <div className="flex flex-col items-center gap-4">
+            <Loader2 className="h-12 w-12 text-primary animate-spin" />
+            <p className="text-muted-foreground animate-pulse">Loading your workspace...</p>
           </div>
-        </div>
+        </main>
       </div>
     );
   }
 
   return (
-    <div className="flex min-h-screen">
+    <div className="flex min-h-screen bg-background text-foreground">
       <Sidebar />
+      <main className="flex-1 overflow-auto h-screen">
+        <div className="w-full max-w-6xl mx-auto px-4 py-8 md:py-12 space-y-8">
 
-      <div className="flex-1 bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 py-12 px-4 sm:px-6 lg:px-8">
-        <style jsx>{`
-          @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(20px); }
-            to { opacity: 1; transform: translateY(0); }
-          }
-          .card-light {
-            background: white;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-            transition: all 0.3s ease;
-          }
-          .card-light:hover {
-            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
-            transform: translateY(-2px);
-          }
-          .btn-primary {
-            background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
-            transition: all 0.3s ease;
-          }
-          .btn-primary:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 10px 30px rgba(79, 70, 229, 0.4);
-          }
-          .chip {
-            transition: all 0.3s ease;
-          }
-          .chip:hover {
-            transform: scale(1.05);
-          }
-          .animate-fade-in {
-            animation: fadeIn 0.5s ease-out forwards;
-          }
-        `}</style>
-
-        <div className="max-w-6xl mx-auto">
           {/* Header */}
-          <div className="text-center mb-12 animate-fade-in">
-            <h1 className="text-5xl md:text-6xl font-bold mb-4 bg-clip-text text-transparent bg-gradient-to-r from-indigo-600 to-purple-600">
-              Craft Your Test
-            </h1>
-            <p className="text-gray-600 text-lg">Design a personalized quiz tailored to your learning goals</p>
+          <div className="relative group rounded-3xl overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-r from-[#004AAD] via-[#0066FF] to-[#00B4D8] opacity-10 dark:opacity-20 blur-xl" />
+            <div className={`relative ${glassmorphism.light} p-8 md:p-12 border border-primary/10 rounded-3xl flex flex-col md:flex-row items-center justify-between gap-6`}>
+              <div className="space-y-4 text-center md:text-left">
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-sm font-semibold">
+                  <Sparkles className="w-4 h-4" />
+                  <span>AI-Powered Custom Mocks</span>
+                </div>
+                <h1 className="text-4xl md:text-5xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-[#004AAD] to-[#00B4D8] dark:from-[#0066FF] dark:to-[#66D9EF]">
+                  Craft Your Perfect Test
+                </h1>
+                <p className="text-lg text-muted-foreground max-w-2xl">
+                  Design a personalized quiz tailored to your exact learning needs. Select subjects, chapters, and difficulty to challenge yourself.
+                </p>
+              </div>
+              <div className="hidden md:block">
+                <Brain className="w-32 h-32 text-primary/20 rotate-12" />
+              </div>
+            </div>
           </div>
 
-          {/* Error Alert */}
-          {error && (
-            <div className="mb-8 bg-red-50 border-2 border-red-200 rounded-2xl p-4 animate-fade-in">
-              <div className="flex items-start gap-3">
-                <div className="w-6 h-6 rounded-full bg-red-200 flex items-center justify-center flex-shrink-0 mt-0.5">
-                  <span className="text-red-600 text-sm font-bold">!</span>
-                </div>
-                <p className="text-red-700 flex-1">{error}</p>
-              </div>
-            </div>
-          )}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            {/* Left Column: Configuration */}
+            <div className="lg:col-span-2 space-y-6">
 
-          <div className="space-y-8">
-            {/* Title Input */}
-            <div className="card-light rounded-3xl p-8 animate-fade-in">
-              <label className="block text-gray-700 text-sm font-semibold mb-3 uppercase tracking-wider">Test Title</label>
-              <input
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder="My Chemistry Practice Test"
-                className="w-full bg-gray-50 border-2 border-gray-200 rounded-xl px-6 py-4 text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
-              />
-            </div>
+              {/* Basic Info */}
+              <Card className={`${glassmorphism.light} border-primary/10 shadow-lg`}>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <FileText className="w-5 h-5 text-primary" />
+                    Test Details
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Quiz Title</label>
+                    <Input
+                      placeholder="e.g. Weekend Chemistry Marathon"
+                      value={title}
+                      onChange={(e) => setTitle(e.target.value)}
+                      className="h-12 bg-background/50 border-primary/20 focus:ring-primary"
+                    />
+                  </div>
+                </CardContent>
+              </Card>
 
-            {/* Subjects Selection */}
-            <div className="card-light rounded-3xl p-8 animate-fade-in">
-              <div className="flex items-center justify-between mb-6">
-                <label className="text-gray-700 text-sm font-semibold uppercase tracking-wider">Select Subjects</label>
-                <span className="text-indigo-600 text-sm font-medium">{selectedSubjects.length} selected</span>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
-                {subjects.map((s) => {
-                  const analytics = subjectAnalytics[s];
-                  const isSelected = selectedSubjects.includes(s);
-                  return (
-                    <button
-                      type="button"
-                      key={s}
-                      onClick={() => toggleSubject(s)}
-                      className={`chip rounded-2xl p-4 text-left transition-all ${isSelected
-                          ? 'bg-gradient-to-br from-indigo-100 to-purple-100 border-2 border-indigo-400'
-                          : 'bg-gray-50 border-2 border-gray-200'
-                        }`}
-                    >
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-gray-800 font-semibold">{s}</span>
-                        <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${isSelected ? 'bg-indigo-600 border-indigo-600' : 'border-gray-300'
-                          }`}>
-                          {isSelected && <span className="text-white text-xs">✓</span>}
+              {/* Subject Selection */}
+              <Card className={`${glassmorphism.light} border-primary/10 shadow-lg overflow-visible`}>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <BookOpen className="w-5 h-5 text-primary" />
+                    Select Subjects
+                  </CardTitle>
+                  <CardDescription>Choose at least one subject to include in your mock.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {subjects.map((s) => {
+                      const isSelected = selectedSubjects.includes(s);
+                      const analytics = subjectAnalytics[s];
+                      return (
+                        <div
+                          key={s}
+                          onClick={() => toggleSubject(s)}
+                          className={`
+                                                relative p-4 rounded-xl cursor-pointer border transition-all duration-200 group
+                                                ${isSelected
+                              ? 'bg-primary/5 border-primary shadow-md dark:shadow-primary/10'
+                              : 'bg-background hover:bg-muted border-border hover:border-primary/50'}
+                                            `}
+                        >
+                          <div className="flex justify-between items-start mb-2">
+                            <span className={`font-semibold ${isSelected ? 'text-primary' : 'text-foreground'}`}>{s}</span>
+                            {isSelected && <CheckCircle2 className="w-5 h-5 text-primary" />}
+                          </div>
+
+                          {isSelected && (
+                            <div className="mt-2 pt-2 border-t border-primary/10 animate-in fade-in slide-in-from-top-1">
+                              <div className="flex items-center gap-2 mb-2">
+                                <span className="text-xs text-muted-foreground whitespace-nowrap">Questions:</span>
+                                <Input
+                                  type="number"
+                                  min={1}
+                                  className="h-7 text-xs w-20 bg-background/80"
+                                  value={questionsPerSubject[s] || ''}
+                                  onClick={(e) => e.stopPropagation()}
+                                  onChange={(e) => setQuestionsPerSubject(prev => ({ ...prev, [s]: parseInt(e.target.value) || 0 }))}
+                                />
+                              </div>
+                              {analytics && (
+                                <div className="flex gap-2 text-[10px] text-muted-foreground">
+                                  <span className="text-green-600 dark:text-green-400 font-medium">{analytics.unusedQuestionsCount || 0} New</span>
+                                  <span>•</span>
+                                  <span className="text-amber-600 dark:text-amber-400 font-medium">{analytics.usedQuestionsCount || 0} Used</span>
+                                </div>
+                              )}
+                            </div>
+                          )}
                         </div>
-                      </div>
-                      {analytics && (
-                        <div className="flex gap-3 text-xs">
-                          <span className="text-gray-600">Total: {analytics.totalQuestions}</span>
-                          <span className="text-green-600">Fresh: {analytics.unusedQuestionsCount}</span>
-                          <span className="text-amber-600">Used: {analytics.usedQuestionsCount}</span>
-                        </div>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
+                      );
+                    })}
+                  </div>
+                </CardContent>
+              </Card>
 
-              {/* Questions per subject */}
+              {/* Chapter Selection */}
               {selectedSubjects.length > 0 && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {selectedSubjects.map(subj => (
-                    <div key={subj} className="bg-gray-50 rounded-xl p-4 border-2 border-gray-200">
-                      <label className="block text-gray-600 text-xs mb-2 uppercase tracking-wider font-medium">{subj}</label>
-                      <input
-                        type="number"
-                        min={1}
-                        max={subjectAnalytics[subj]?.totalQuestions || 100}
-                        value={questionsPerSubject[subj] || 1}
-                        onChange={e =>
-                          setQuestionsPerSubject(ps => ({
-                            ...ps,
-                            [subj]: Math.max(1, Number(e.target.value))
-                          }))
-                        }
-                        className="w-full bg-white border-2 border-gray-200 rounded-lg px-4 py-2 text-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                      />
+                <Card className={`${glassmorphism.light} border-primary/10 shadow-lg`}>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Layers className="w-5 h-5 text-primary" />
+                      Filter Chapters
+                    </CardTitle>
+                    <CardDescription>Refine your test by selecting specific chapters.</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="flex flex-wrap gap-2">
+                      {selectedSubjects.flatMap(subject =>
+                        (chaptersBySubject[subject] || []).map(chapter => {
+                          const isSelected = selectedChapters.includes(chapter);
+                          return (
+                            <Badge
+                              key={`${subject}-${chapter}`}
+                              variant={isSelected ? "default" : "outline"}
+                              className={`
+                                                        cursor-pointer px-3 py-1.5 text-sm transition-all
+                                                        ${isSelected
+                                  ? 'bg-gradient-to-r from-[#004AAD] to-[#0066FF] hover:from-[#004AAD] hover:to-[#004AAD] border-transparent'
+                                  : 'hover:bg-primary/5 hover:text-primary hover:border-primary/50'}
+                                                    `}
+                              onClick={() => toggleChapter(chapter)}
+                            >
+                              {chapter}
+                            </Badge>
+                          )
+                        })
+                      )}
                     </div>
-                  ))}
-                </div>
+                  </CardContent>
+                </Card>
               )}
             </div>
 
-            {/* Chapters Selection */}
-            {selectedSubjects.length > 0 && (
-              <div className="card-light rounded-3xl p-8 animate-fade-in">
-                <div className="flex items-center justify-between mb-6">
-                  <label className="text-gray-700 text-sm font-semibold uppercase tracking-wider">Select Chapters</label>
-                  <span className="text-indigo-600 text-sm font-medium">{selectedChapters.length} selected</span>
-                </div>
-                <div className="flex flex-wrap gap-3">
-                  {selectedSubjects.flatMap((subject) =>
-                    (chaptersBySubject[subject] || []).map((c) => {
-                      const isSelected = selectedChapters.includes(c);
-                      return (
-                        <button
-                          type="button"
-                          key={subject + '::' + c}
-                          onClick={() => toggleChapter(c)}
-                          className={`chip px-5 py-2.5 rounded-full text-sm font-medium transition-all ${isSelected
-                              ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-md'
-                              : 'bg-gray-100 text-gray-700 border-2 border-gray-200'
-                            }`}
-                        >
-                          {c} <span className="text-xs opacity-70">({subject})</span>
-                        </button>
-                      );
-                    })
+            {/* Right Column: Summary & Actions */}
+            <div className="space-y-6">
+              <Card className={`${glassmorphism.medium} border-primary/20 shadow-xl sticky top-6`}>
+                <CardHeader className="pb-4 border-b border-primary/10">
+                  <CardTitle>Test Summary</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-6 pt-6">
+
+                  {/* Stats Grid */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="p-3 rounded-xl bg-background/50 border border-primary/10 text-center">
+                      <p className="text-2xl font-bold text-primary">{totalQuestions}</p>
+                      <p className="text-xs text-muted-foreground uppercase tracking-wide">Questions</p>
+                    </div>
+                    <div className="p-3 rounded-xl bg-background/50 border border-primary/10 text-center">
+                      <p className="text-2xl font-bold text-primary">{selectedSubjects.length}</p>
+                      <p className="text-xs text-muted-foreground uppercase tracking-wide">Subjects</p>
+                    </div>
+                  </div>
+
+                  {/* Settings */}
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-center">
+                        <label className="text-sm font-medium flex items-center gap-2">
+                          <Clock className="w-4 h-4 text-muted-foreground" />
+                          Duration (min)
+                        </label>
+                        <span className="text-sm font-bold text-primary">{duration}</span>
+                      </div>
+                      <input
+                        type="range"
+                        min="5"
+                        max="180"
+                        step="5"
+                        value={duration}
+                        onChange={(e) => setDuration(parseInt(e.target.value))}
+                        className="w-full h-2 bg-secondary rounded-lg appearance-none cursor-pointer accent-primary"
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-center">
+                        <label className="text-sm font-medium flex items-center gap-2">
+                          <FileText className="w-4 h-4 text-muted-foreground" />
+                          Questions / Page
+                        </label>
+                        <Input
+                          type="number"
+                          value={questionsPerPage}
+                          onChange={(e) => setQuestionsPerPage(parseInt(e.target.value))}
+                          className="w-20 h-8 text-right bg-background/50"
+                          min={1}
+                          max={totalQuestions}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Action Button */}
+                  <Button
+                    className="w-full h-14 text-lg font-bold shadow-lg shadow-primary/25 bg-gradient-to-r from-[#004AAD] to-[#0066FF] hover:from-[#003380] hover:to-[#004AAD] transition-all hover:scale-[1.02] active:scale-[0.98]"
+                    onClick={handleCreate}
+                    disabled={creating || totalQuestions === 0}
+                  >
+                    {creating ? (
+                      <>
+                        <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                        Creating...
+                      </>
+                    ) : (
+                      <>
+                        Start Mock Test
+                        <ChevronRight className="w-5 h-5 ml-2" />
+                      </>
+                    )}
+                  </Button>
+
+                  {error && (
+                    <div className="flex items-center gap-2 p-3 text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/30 rounded-lg border border-red-200 dark:border-red-900/50">
+                      <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                      <p>{error}</p>
+                    </div>
                   )}
-                </div>
-              </div>
-            )}
 
-            {/* Configuration */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-fade-in">
-              <div className="card-light rounded-3xl p-6">
-                <label className="block text-gray-700 text-sm font-semibold mb-3 uppercase tracking-wider">Duration</label>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="number"
-                    min={1}
-                    value={duration}
-                    onChange={(e) => setDuration(Number(e.target.value))}
-                    className="flex-1 bg-gray-50 border-2 border-gray-200 rounded-xl px-4 py-3 text-gray-800 text-center text-xl font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                  />
-                  <span className="text-gray-600 text-sm font-medium">min</span>
-                </div>
-              </div>
-
-              <div className="card-light rounded-3xl p-6">
-                <label className="block text-gray-700 text-sm font-semibold mb-3 uppercase tracking-wider">Per Page</label>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="number"
-                    min={1}
-                    max={totalQuestions || 1}
-                    value={questionsPerPage}
-                    onChange={(e) => setQuestionsPerPage(Number(e.target.value))}
-                    className="flex-1 bg-gray-50 border-2 border-gray-200 rounded-xl px-4 py-3 text-gray-800 text-center text-xl font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                  />
-                  <span className="text-gray-600 text-sm font-medium">Q's</span>
-                </div>
-              </div>
-
-              <div className="card-light rounded-3xl p-6 flex flex-col justify-between">
-                <label className="block text-gray-700 text-sm font-semibold mb-3 uppercase tracking-wider">Total Questions</label>
-                <div className="text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-purple-600">
-                  {totalQuestions}
-                </div>
-              </div>
-            </div>
-
-            {/* Submit Button */}
-            <div className="flex justify-center pt-6 animate-fade-in">
-              <button
-                type="button"
-                onClick={handleCreate}
-                disabled={creating}
-                className="btn-primary px-12 py-5 rounded-2xl text-white font-semibold text-lg shadow-xl disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-3"
-              >
-                {creating ? (
-                  <>
-                    <div className="w-5 h-5 border-3 border-white border-t-transparent rounded-full animate-spin"></div>
-                    Creating Your Test...
-                  </>
-                ) : (
-                  <>
-                    <span>Create Test & Launch</span>
-                    <span className="text-2xl">→</span>
-                  </>
-                )}
-              </button>
+                </CardContent>
+              </Card>
             </div>
           </div>
         </div>
-      </div>
+      </main>
     </div>
   );
 }

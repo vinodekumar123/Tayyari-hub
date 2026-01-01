@@ -2,12 +2,14 @@
 
 import React, { useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, addDoc, collection, serverTimestamp, query, where, getDocs, setDoc } from 'firebase/firestore';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { db, auth } from '@/app/firebase';
+import { toast } from 'sonner';
 
 import Confetti from 'react-confetti';
 import useWindowSize from 'react-use/lib/useWindowSize';
+import { useRouter } from 'next/navigation';
 
 import {
   Card,
@@ -16,7 +18,18 @@ import {
   CardContent
 } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Info, CheckCircle, XCircle, Circle, Clock, BarChart3, Target, BookOpen } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import { Textarea } from '@/components/ui/textarea';
+
+import { Info, CheckCircle, XCircle, Circle, Clock, BarChart3, Target, BookOpen, Flag, Lock, Bookmark } from 'lucide-react';
 
 interface Question {
   id: string;
@@ -25,6 +38,7 @@ interface Question {
   correctAnswer: string;
   explanation?: string;
   subject?: string;
+  graceMark?: boolean;
 }
 
 interface QuizData {
@@ -48,6 +62,7 @@ const ResultPageContent: React.FC = () => {
   const quizId = searchParams.get('id');
   const isMock = searchParams.get('mock') === 'true';
   const studentId = searchParams.get('studentId');
+  const router = useRouter();
 
   const [user, setUser] = useState<User | null>(null);
   const [quiz, setQuiz] = useState<QuizData | null>(null);
@@ -61,9 +76,58 @@ const ResultPageContent: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'overview' | 'subjects' | 'wrong' | 'skipped'>('overview');
   const { width, height } = useWindowSize();
 
+  // Report State
+  const [reportModalOpen, setReportModalOpen] = useState(false);
+  const [selectedQuestionForReport, setSelectedQuestionForReport] = useState<Question | null>(null);
+  const [reportIssue, setReportIssue] = useState('');
+  const [isReporting, setIsReporting] = useState(false);
+  const [savedQuestions, setSavedQuestions] = useState<Set<string>>(new Set());
+
+  // Enrollment / Upgrade State
+  const [hasPaidEnrollment, setHasPaidEnrollment] = useState(false);
+  const [upgradeDialogOpen, setUpgradeDialogOpen] = useState(false);
+  const [enrollmentCheckDone, setEnrollmentCheckDone] = useState(false);
+
   useEffect(() => {
     onAuthStateChanged(auth, u => setUser(u));
   }, []);
+
+  // Check Enrollment Status (Admin always allowed)
+  useEffect(() => {
+    if (!user) return;
+    const checkEnrollments = async () => {
+      try {
+        const userDocRef = doc(db, 'users', user.uid);
+        const userDoc = await getDoc(userDocRef);
+
+        // If Admin/Superadmin, allow immediately
+        if (userDoc.exists() && (userDoc.data().admin === true || userDoc.data().superadmin === true)) {
+          setHasPaidEnrollment(true);
+          setEnrollmentCheckDone(true);
+          return;
+        }
+
+        // Check for Paid Enrollments
+        const q = query(
+          collection(db, 'enrollments'),
+          where('studentId', '==', user.uid),
+          where('status', '==', 'active')
+        );
+        const snapshot = await getDocs(q);
+        const isPaidUser = snapshot.docs.some(doc => {
+          const data = doc.data();
+          return data.price > 0;
+        });
+
+        setHasPaidEnrollment(isPaidUser);
+      } catch (error) {
+        console.error("Error checking enrollments:", error);
+      } finally {
+        setEnrollmentCheckDone(true);
+      }
+    };
+    checkEnrollments();
+  }, [user]);
 
   useEffect(() => {
     if (!quizId || !user || !studentId) return;
@@ -124,7 +188,10 @@ const ResultPageContent: React.FC = () => {
 
       questions.forEach(q => {
         const userAnswer = answers[q.id];
-        if (!userAnswer || userAnswer === '') {
+        // Grace mark logic: if graceMark is true, count as correct regardless of answer
+        if (q.graceMark) {
+          correct++;
+        } else if (!userAnswer || userAnswer === '') {
           skipped++;
         } else if (userAnswer === q.correctAnswer) {
           correct++;
@@ -156,7 +223,9 @@ const ResultPageContent: React.FC = () => {
         stats.total++;
 
         const userAnswer = answers[q.id];
-        if (!userAnswer || userAnswer === '') {
+        if (q.graceMark) {
+          stats.correct++;
+        } else if (!userAnswer || userAnswer === '') {
           stats.skipped++;
         } else if (userAnswer === q.correctAnswer) {
           stats.correct++;
@@ -178,15 +247,88 @@ const ResultPageContent: React.FC = () => {
     load();
   }, [quizId, user, isMock, studentId]);
 
+  const openReportModal = (q: Question) => {
+    if (!enrollmentCheckDone) {
+      toast.info("Checking permission...");
+      return;
+    }
+
+    if (!hasPaidEnrollment) {
+      setUpgradeDialogOpen(true);
+      return;
+    }
+
+    setSelectedQuestionForReport(q);
+    setReportIssue('');
+    setReportModalOpen(true);
+  };
+
+  const handleReportSubmit = async () => {
+    if (!selectedQuestionForReport || !user || !quizId || !reportIssue.trim()) return;
+    setIsReporting(true);
+    try {
+      await addDoc(collection(db, 'reported_questions'), {
+        quizId,
+        questionId: selectedQuestionForReport.id,
+        questionText: selectedQuestionForReport.questionText,
+        studentId: user.uid,
+        studentName: user.displayName || user.email || 'Student',
+        issue: reportIssue,
+        status: 'pending',
+        createdAt: serverTimestamp(),
+        type: 'quiz_result_report'
+      });
+      toast.success("Report Submitted", { description: "Admins will review this question." });
+      setReportModalOpen(false);
+    } catch (e) {
+      toast.error("Failed to submit report");
+    } finally {
+      setIsReporting(false);
+    }
+  };
+
+  const handleSaveToFlashcards = async (question: Question) => {
+    if (!user) return;
+    try {
+      await setDoc(doc(db, 'users', user.uid, 'flashcards', question.id), {
+        id: question.id,
+        questionText: question.questionText || '',
+        options: question.options || [],
+        correctAnswer: question.correctAnswer || '',
+        explanation: question.explanation || '',
+        subject: question.subject || 'General',
+        savedAt: serverTimestamp(),
+        isDeleted: false
+      });
+      setSavedQuestions((prev) => {
+        const newSet = new Set(prev);
+        newSet.add(question.id);
+        return newSet;
+      });
+      toast.success("Saved to Flashcards");
+    } catch (e) {
+      console.error(e);
+      toast.error("Failed to save flashcard");
+    }
+  };
+
   if (accessDenied) {
     return (
-      <div className="text-center mt-16 text-lg text-red-600 font-semibold">
-        🚫 Responses for this quiz are not available yet.
+      <div className="flex items-center justify-center min-h-screen bg-background">
+        <div className="text-center p-8 bg-card rounded-xl shadow-lg border border-border">
+          <p className="text-lg text-destructive font-semibold">
+            🚫 Responses for this quiz are not available yet.
+          </p>
+        </div>
       </div>
     );
   }
 
-  if (!quiz) return <p className="text-center py-10">Loading result...</p>;
+  if (!quiz) return (
+    <div className="flex justify-center items-center min-h-screen bg-background">
+      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+    </div>
+  );
 
   const groupedBySubject = quiz.selectedQuestions.reduce((acc, q) => {
     const subj = q.subject || 'General';
@@ -197,78 +339,128 @@ const ResultPageContent: React.FC = () => {
 
   const wrongQuestions = quiz.selectedQuestions.filter(q => {
     const userAnswer = userAnswers[q.id];
-    return userAnswer && userAnswer !== q.correctAnswer;
+    return !q.graceMark && userAnswer && userAnswer !== q.correctAnswer;
   });
 
   const skippedQuestionsList = quiz.selectedQuestions.filter(q => {
     const userAnswer = userAnswers[q.id];
-    return !userAnswer || userAnswer === '';
+    return !q.graceMark && (!userAnswer || userAnswer === '');
   });
 
   const totalQuestions = quiz.selectedQuestions.length;
   const percentage = (score / totalQuestions) * 100;
   let remark = 'Needs Improvement';
-  if (percentage === 100) remark = '🏆 Perfect Score! Outstanding!';
-  else if (percentage >= 90) remark = '🔥 Excellent Performance!';
-  else if (percentage >= 70) remark = '🎉 Great Job!';
-  else if (percentage >= 50) remark = '👍 Good Effort';
-  else remark = '📘 Keep Practicing';
+  let remarkColor = 'bg-red-500';
+  if (percentage === 100) { remark = '🏆 Perfect Score! Outstanding!'; remarkColor = 'bg-indigo-600'; }
+  else if (percentage >= 90) { remark = '🔥 Excellent Performance!'; remarkColor = 'bg-emerald-600'; }
+  else if (percentage >= 70) { remark = '🎉 Great Job!'; remarkColor = 'bg-blue-600'; }
+  else if (percentage >= 50) { remark = '👍 Good Effort'; remarkColor = 'bg-yellow-500'; }
 
   const renderQuestionCard = (q: Question, idx: number, showSubject: boolean = false) => {
     const userAnswer = userAnswers[q.id];
-    const isCorrect = userAnswer === q.correctAnswer;
     const isSkipped = !userAnswer || userAnswer === '';
 
     return (
-      <Card key={q.id} className="mb-6 shadow-md border border-gray-200">
-        <CardHeader>
-          <CardTitle className="text-lg font-semibold text-gray-900 flex gap-2 items-center">
-            <span>Q{idx + 1}.</span>
-            <span dangerouslySetInnerHTML={{ __html: q.questionText }} />
-            {isSkipped && (
-              <Badge variant="secondary" className="ml-auto bg-yellow-100 text-yellow-800">
-                <Clock className="w-3 h-3 mr-1" />
-                Skipped
-              </Badge>
-            )}
-            {showSubject && q.subject && (
-              <Badge variant="outline" className="ml-auto">
-                {q.subject}
-              </Badge>
-            )}
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {q.options.map((opt, i) => {
-            const isSelected = opt === userAnswer;
-            const isAnswer = opt === q.correctAnswer;
-
-            let style = 'border-gray-300';
-            let icon = <Circle className="text-gray-400 w-4 h-4 mr-2" />;
-
-            if (isAnswer) {
-              style = 'border-green-500 bg-green-100';
-              icon = <CheckCircle className="text-green-600 w-5 h-5 mr-2" />;
-            } else if (isSelected && !isAnswer) {
-              style = 'border-red-500 bg-red-100';
-              icon = <XCircle className="text-red-600 w-5 h-5 mr-2" />;
-            }
-
-            return (
-              <div
-                key={i}
-                className={`flex items-center p-4 rounded-lg border text-base font-medium ${style}`}
-              >
-                {icon}
-                {String.fromCharCode(65 + i)}. {opt}
+      <Card key={q.id} className="mb-6 shadow-lg border border-border/50 bg-card/50 backdrop-blur-sm hover:shadow-xl transition-all duration-300">
+        <CardHeader className="dir-ltr rounded-t-lg bg-muted/30 border-b border-border/50 pb-4">
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
+            <CardTitle className="text-lg font-semibold text-foreground flex gap-2 items-start leading-relaxed w-full">
+              <span className="text-primary font-bold min-w-[2.5rem]">Q{idx + 1}.</span>
+              <div className="flex-1">
+                <span dangerouslySetInnerHTML={{ __html: q.questionText }} />
+                {q.graceMark && <span className="ml-2 text-xs bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded border border-yellow-200 font-normal inline-block">Grace Mark Awarded</span>}
               </div>
-            );
-          })}
+            </CardTitle>
+            <div className="flex items-center gap-2 self-end md:self-auto shrink-0">
+              {isSkipped && !q.graceMark && (
+                <Badge variant="secondary" className="bg-yellow-100/50 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-400 border-yellow-200 dark:border-yellow-800">
+                  <Clock className="w-3 h-3 mr-1" />
+                  Skipped
+                </Badge>
+              )}
+              {showSubject && q.subject && (
+                <Badge variant="outline" className="text-xs">
+                  {q.subject}
+                </Badge>
+              )}
+              <Button
+                variant="ghost"
+                size="sm"
+                className="bg-red-50 hover:bg-red-100 text-red-600 hover:text-red-700 dark:bg-red-900/10 dark:hover:bg-red-900/30 dark:text-red-400 h-8 px-2"
+                onClick={() => openReportModal(q)}
+                title="Report Mistake"
+              >
+                <Flag className="w-4 h-4 mr-1.5" />
+                Report
+              </Button>
+              {savedQuestions.has(q.id) ? (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled
+                  className="bg-green-50 text-green-600 dark:bg-green-900/20 dark:text-green-400 h-8 px-2 ml-2"
+                >
+                  <CheckCircle className="w-4 h-4 mr-1.5" />
+                  Saved
+                </Button>
+              ) : (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="bg-indigo-50 hover:bg-indigo-100 text-indigo-600 hover:text-indigo-700 dark:bg-indigo-900/10 dark:hover:bg-indigo-900/30 dark:text-indigo-400 h-8 px-2 ml-2"
+                  onClick={() => handleSaveToFlashcards(q)}
+                  title="Save to Flashcards"
+                >
+                  <Bookmark className="w-4 h-4 mr-1.5" />
+                  Save
+                </Button>
+              )}
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4 pt-6">
+          <div className="grid grid-cols-1 gap-3">
+            {q.options.map((opt, i) => {
+              const isSelected = opt === userAnswer;
+              const isAnswer = opt === q.correctAnswer;
+
+              let style = 'border-border bg-card hover:bg-accent/40 text-foreground';
+              let icon = <Circle className="text-muted-foreground w-4 h-4 mr-3" />;
+
+              if (q.graceMark) {
+                if (isAnswer) {
+                  style = 'border-yellow-400/50 bg-yellow-50/50 dark:bg-yellow-900/20 text-yellow-900 dark:text-yellow-100';
+                  icon = <CheckCircle className="text-yellow-500 w-5 h-5 mr-3" />;
+                }
+              } else {
+                if (isAnswer) {
+                  style = 'border-green-500/50 bg-green-50/50 dark:bg-green-900/20 text-green-900 dark:text-green-100 shadow-[0_0_0_1px_rgba(34,197,94,0.2)]';
+                  icon = <CheckCircle className="text-green-600 dark:text-green-400 w-5 h-5 mr-3" />;
+                } else if (isSelected && !isAnswer) {
+                  style = 'border-red-500/50 bg-red-50/50 dark:bg-red-900/20 text-red-900 dark:text-red-100 shadow-[0_0_0_1px_rgba(239,68,68,0.2)]';
+                  icon = <XCircle className="text-red-600 dark:text-red-400 w-5 h-5 mr-3" />;
+                }
+              }
+
+              return (
+                <div
+                  key={i}
+                  className={`flex items-center p-4 rounded-xl border text-base font-medium transition-colors duration-200 ${style}`}
+                >
+                  {icon}
+                  <span className="flex-1">{String.fromCharCode(65 + i)}. {opt}</span>
+                </div>
+              );
+            })}
+          </div>
 
           {q.explanation && (
-            <div className="bg-blue-50 border border-blue-200 p-4 text-blue-800 rounded-lg flex items-start gap-3">
-              <Info className="h-5 w-5 mt-1" />
-              <p>{q.explanation}</p>
+            <div className="mt-4 bg-blue-50/50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-800 p-4 rounded-xl flex items-start gap-3 text-sm text-blue-800 dark:text-blue-300">
+              <Info className="h-5 w-5 mt-0.5 shrink-0 text-blue-600 dark:text-blue-400" />
+              <div className="leading-relaxed">
+                <span className="font-semibold block mb-1">Explanation:</span>
+                {q.explanation}
+              </div>
             </div>
           )}
         </CardContent>
@@ -277,219 +469,274 @@ const ResultPageContent: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-white px-6 py-10 mx-auto">
-      {showConfetti && (
-        <>
-          <Confetti width={width} height={height} />
-          <div className="text-4xl text-center font-bold my-6 animate-bounce">
-            🎉 Congratulations! 🎉
-          </div>
-        </>
-      )}
+    <div className="min-h-screen bg-background dark:bg-[#020817] p-4 md:p-8 transition-colors duration-300">
+      {/* Dynamic Background */}
+      <div className="fixed inset-0 bg-[url('/grid.svg')] bg-center [mask-image:linear-gradient(180deg,white,rgba(255,255,255,0))] dark:bg-[url('/grid-dark.svg')] opacity-50 pointer-events-none" />
 
-      {/* Main Result Card */}
-      <Card className="mb-10 shadow-2xl border-0">
-        <CardHeader className="bg-blue-600 rounded-t-xl text-white p-6">
-          <CardTitle className="text-3xl font-bold">{quiz.title} - Result</CardTitle>
-        </CardHeader>
-        <CardContent className="bg-white p-6 space-y-4 rounded-b-xl text-lg">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-            <div className="bg-green-100 rounded-lg p-4">
-              <p className="text-sm text-green-800 font-medium">✅ Correct</p>
-              <p className="text-2xl font-bold text-green-800">{score}</p>
-            </div>
-            <div className="bg-red-100 rounded-lg p-4">
-              <p className="text-sm text-red-800 font-medium">❌ Wrong</p>
-              <p className="text-2xl font-bold text-red-800">{wrongAnswers}</p>
-            </div>
-            <div className="bg-yellow-100 rounded-lg p-4">
-              <p className="text-sm text-yellow-800 font-medium">⏭️ Skipped</p>
-              <p className="text-2xl font-bold text-yellow-800">{skippedQuestions}</p>
-            </div>
-            <div className="bg-blue-100 rounded-lg p-4">
-              <p className="text-sm text-blue-800 font-medium">📘 Subject</p>
-              <p className="text-lg font-semibold text-blue-800">{quiz.subject}</p>
-            </div>
-            <div className="bg-purple-100 rounded-lg p-4">
-              <p className="text-sm text-purple-800 font-medium">📊 Score</p>
-              <p className="text-xl font-bold text-purple-800">{percentage.toFixed(1)}%</p>
+      <div className="relative max-w-7xl mx-auto space-y-8">
+        {showConfetti && (
+          <div className="fixed inset-0 pointer-events-none z-50 flex items-center justify-center">
+            <Confetti width={width} height={height} numberOfPieces={500} recycle={false} />
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-5xl md:text-7xl font-bold animate-bounce text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-orange-500 drop-shadow-2xl">
+              🎉 Congratulations! 🎉
             </div>
           </div>
-          <div className="text-center pt-4">
-            <Badge className="text-base px-4 py-2 rounded-full bg-indigo-600 text-white animate-pulse">
-              {remark}
-            </Badge>
-          </div>
-        </CardContent>
-      </Card>
+        )}
 
-      {/* Navigation Tabs */}
-      <div className="mb-8">
-        <div className="flex flex-wrap gap-2 bg-white p-2 rounded-lg shadow-md">
-          <button
-            onClick={() => setActiveTab('overview')}
-            className={`px-4 py-2 rounded-lg font-medium flex items-center gap-2 ${activeTab === 'overview'
-              ? 'bg-blue-600 text-white'
-              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
-          >
-            <BookOpen className="w-4 h-4" />
-            All Questions
-          </button>
-          <button
-            onClick={() => setActiveTab('subjects')}
-            className={`px-4 py-2 rounded-lg font-medium flex items-center gap-2 ${activeTab === 'subjects'
-              ? 'bg-blue-600 text-white'
-              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
-          >
-            <BarChart3 className="w-4 h-4" />
-            Subject Analysis
-          </button>
-          <button
-            onClick={() => setActiveTab('wrong')}
-            className={`px-4 py-2 rounded-lg font-medium flex items-center gap-2 ${activeTab === 'wrong'
-              ? 'bg-red-600 text-white'
-              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
-          >
-            <XCircle className="w-4 h-4" />
-            Wrong Answers ({wrongAnswers})
-          </button>
-          <button
-            onClick={() => setActiveTab('skipped')}
-            className={`px-4 py-2 rounded-lg font-medium flex items-center gap-2 ${activeTab === 'skipped'
-              ? 'bg-yellow-600 text-white'
-              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
-          >
-            <Clock className="w-4 h-4" />
-            Skipped ({skippedQuestions})
-          </button>
+        {/* Header Section */}
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight text-foreground">{quiz.title}</h1>
+            <p className="text-muted-foreground mt-1 text-sm font-medium uppercase tracking-wide">
+              {quiz.subject} • Result Analysis
+            </p>
+          </div>
+          <Badge className={`text-sm font-semibold px-4 py-1.5 rounded-full shadow-lg ${remarkColor} text-white hover:${remarkColor}`}>
+            {remark}
+          </Badge>
+        </div>
+
+        {/* Stats Grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+          {[
+            { label: 'Score', value: `${score} / ${totalQuestions}`, color: 'text-primary', bg: 'bg-primary/10', icon: Target },
+            { label: 'Percentage', value: `${percentage.toFixed(1)}%`, color: 'text-purple-600 dark:text-purple-400', bg: 'bg-purple-100/50 dark:bg-purple-900/20', icon: BarChart3 },
+            { label: 'Correct', value: score, color: 'text-green-600 dark:text-green-400', bg: 'bg-green-100/50 dark:bg-green-900/20', icon: CheckCircle },
+            { label: 'Wrong', value: wrongAnswers, color: 'text-red-600 dark:text-red-400', bg: 'bg-red-100/50 dark:bg-red-900/20', icon: XCircle },
+            { label: 'Skipped', value: skippedQuestions, color: 'text-yellow-600 dark:text-yellow-400', bg: 'bg-yellow-100/50 dark:bg-yellow-900/20', icon: Clock },
+          ].map((stat, i) => (
+            <Card key={i} className="border-border/60 bg-card/60 backdrop-blur-sm hover:translate-y-[-2px] transition-transform duration-200 shadow-sm">
+              <CardContent className="p-4 flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">{stat.label}</p>
+                  <p className={`text-2xl font-bold mt-1 ${stat.color}`}>{stat.value}</p>
+                </div>
+                <div className={`p-2.5 rounded-xl ${stat.bg}`}>
+                  <stat.icon className={`w-5 h-5 ${stat.color}`} />
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+
+        {/* Grace Mark Notice */}
+        {quiz.selectedQuestions.some(q => q.graceMark) && (
+          <div className="p-4 bg-yellow-50/80 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-xl text-yellow-800 dark:text-yellow-200 flex items-center gap-3 shadow-sm backdrop-blur-sm">
+            <div className="p-2 bg-yellow-100 dark:bg-yellow-900/40 rounded-full">
+              <Info className="w-5 h-5 text-yellow-600 dark:text-yellow-400" />
+            </div>
+            <p className="font-medium text-sm">Grace marks were awarded for flagged questions to ensure fair scoring.</p>
+          </div>
+        )}
+
+        {/* Navigation Tabs */}
+        <div className="bg-muted p-1 rounded-xl inline-flex flex-wrap gap-1 shadow-inner">
+          {[
+            { id: 'overview', icon: BookOpen, label: 'All Questions' },
+            { id: 'subjects', icon: BarChart3, label: 'Subject Analysis' },
+            { id: 'wrong', icon: XCircle, label: `Wrong (${wrongAnswers})` },
+            { id: 'skipped', icon: Clock, label: `Skipped (${skippedQuestions})` },
+          ].map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id as any)}
+              className={`
+                px-4 py-2 rounded-lg font-medium text-sm flex items-center gap-2 transition-all duration-200
+                ${activeTab === tab.id
+                  ? 'bg-background text-foreground shadow-sm scale-[1.02]'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-background/50'}
+              `}
+            >
+              <tab.icon className="w-4 h-4" />
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Tab Content */}
+        <div className="animate-in fade-in slide-in-from-bottom-3 duration-300">
+          {activeTab === 'overview' && (
+            <div className="space-y-8">
+              {Object.entries(groupedBySubject).map(([subject, questions]) => (
+                <div key={subject}>
+                  <div className="flex items-center gap-3 mb-4 pl-1">
+                    <div className="h-8 w-1 bg-primary rounded-full" />
+                    <h2 className="text-xl font-bold text-foreground">
+                      {subject}
+                    </h2>
+                    <Badge variant="secondary" className="text-xs font-normal">
+                      {questions.length} Questions
+                    </Badge>
+                  </div>
+                  {questions.map((q, idx) => renderQuestionCard(q, idx))}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {activeTab === 'subjects' && (
+            <div className="grid gap-6 md:grid-cols-2">
+              {subjectStats.map((stats) => (
+                <Card key={stats.subject} className="overflow-hidden border-border/50 bg-card/50 backdrop-blur-sm shadow-md hover:shadow-lg transition-all duration-300">
+                  <CardHeader className="bg-muted/30 border-b border-border/50 pb-4">
+                    <div className="flex justify-between items-center">
+                      <CardTitle className="text-lg font-bold">{stats.subject}</CardTitle>
+                      <Badge
+                        className={`px-3 py-1 font-bold ${stats.percentage >= 70
+                          ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                          : stats.percentage >= 50
+                            ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400'
+                            : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+                          }`}
+                      >
+                        {stats.percentage.toFixed(1)}%
+                      </Badge>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="p-6">
+                    <div className="grid grid-cols-4 gap-2 text-center mb-6">
+                      {[
+                        { label: 'Total', value: stats.total, color: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-50 dark:bg-blue-900/20' },
+                        { label: 'Correct', value: stats.correct, color: 'text-green-600 dark:text-green-400', bg: 'bg-green-50 dark:bg-green-900/20' },
+                        { label: 'Wrong', value: stats.wrong, color: 'text-red-600 dark:text-red-400', bg: 'bg-red-50 dark:bg-red-900/20' },
+                        { label: 'Skip', value: stats.skipped, color: 'text-yellow-600 dark:text-yellow-400', bg: 'bg-yellow-50 dark:bg-yellow-900/20' },
+                      ].map((item, idx) => (
+                        <div key={idx} className={`p-2.5 rounded-lg ${item.bg}`}>
+                          <p className={`text-xl font-bold ${item.color}`}>{item.value}</p>
+                          <p className="text-xs text-muted-foreground font-medium uppercase mt-1">{item.label}</p>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Stacked Progress Bar */}
+                    <div className="h-3 w-full bg-muted rounded-full overflow-hidden flex">
+                      <div style={{ width: `${(stats.correct / stats.total) * 100}%` }} className="h-full bg-green-500" />
+                      <div style={{ width: `${(stats.wrong / stats.total) * 100}%` }} className="h-full bg-red-500" />
+                      <div style={{ width: `${(stats.skipped / stats.total) * 100}%` }} className="h-full bg-yellow-400" />
+                    </div>
+                    <div className="flex justify-between text-[10px] text-muted-foreground mt-2 font-medium">
+                      <span>Correct</span>
+                      <span>Wrong</span>
+                      <span>Skipped</span>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+
+          {activeTab === 'wrong' && (
+            <div className="space-y-6">
+              <h2 className="text-xl font-bold text-destructive mb-4 flex items-center gap-2">
+                <XCircle className="w-6 h-6" />
+                Wrong Answers ({wrongAnswers})
+              </h2>
+              {wrongQuestions.length === 0 ? (
+                <div className="flex flex-col items-center justify-center p-12 bg-card/40 border border-dashed border-border rounded-xl text-center">
+                  <div className="w-20 h-20 bg-green-100 dark:bg-green-900/20 rounded-full flex items-center justify-center mb-4">
+                    <CheckCircle className="w-10 h-10 text-green-600 dark:text-green-400" />
+                  </div>
+                  <h3 className="text-xl font-bold text-foreground mb-2">Perfect Score on Attempted!</h3>
+                  <p className="text-muted-foreground max-w-sm">
+                    You didn't get any questions wrong. That's an outstanding achievement!
+                  </p>
+                </div>
+              ) : (
+                wrongQuestions.map((q, idx) => renderQuestionCard(q, idx, true))
+              )}
+            </div>
+          )}
+
+          {activeTab === 'skipped' && (
+            <div className="space-y-6">
+              <h2 className="text-xl font-bold text-yellow-600 dark:text-yellow-400 mb-4 flex items-center gap-2">
+                <Clock className="w-6 h-6" />
+                Skipped Questions ({skippedQuestions})
+              </h2>
+              {skippedQuestionsList.length === 0 ? (
+                <div className="flex flex-col items-center justify-center p-12 bg-card/40 border border-dashed border-border rounded-xl text-center">
+                  <div className="w-20 h-20 bg-blue-100 dark:bg-blue-900/20 rounded-full flex items-center justify-center mb-4">
+                    <Target className="w-10 h-10 text-blue-600 dark:text-blue-400" />
+                  </div>
+                  <h3 className="text-xl font-bold text-foreground mb-2">Full Attempt!</h3>
+                  <p className="text-muted-foreground max-w-sm">
+                    You attempted every single question. Way to go!
+                  </p>
+                </div>
+              ) : (
+                skippedQuestionsList.map((q, idx) => renderQuestionCard(q, idx, true))
+              )}
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Tab Content */}
-      {activeTab === 'overview' && (
-        <div>
-          {Object.entries(groupedBySubject).map(([subject, questions]) => (
-            <div key={subject} className="mb-8">
-              <h2 className="text-2xl font-bold text-blue-700 mb-4 flex items-center gap-2">
-                <BookOpen className="w-6 h-6" />
-                {subject}
-              </h2>
-              {questions.map((q, idx) => renderQuestionCard(q, idx))}
+      {/* Report Dialog */}
+      <Dialog open={reportModalOpen} onOpenChange={setReportModalOpen}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <Flag className="w-5 h-5" /> Report Question Issue
+            </DialogTitle>
+            <DialogDescription>
+              Describe the issue (e.g., wrong answer, typo, formatting).
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4 space-y-4">
+            <div className="p-4 bg-muted/50 rounded-lg border border-border text-sm text-foreground/80 italic font-medium leading-relaxed">
+              <span className="text-muted-foreground not-italic block text-xs mb-1 font-bold uppercase">Selected Question:</span>
+              "{selectedQuestionForReport?.questionText.replace(/<[^>]+>/g, '').substring(0, 150)}{selectedQuestionForReport?.questionText && selectedQuestionForReport.questionText.length > 150 ? '...' : ''}"
             </div>
-          ))}
-        </div>
-      )}
-
-      {activeTab === 'subjects' && (
-        <div className="space-y-6">
-          <h2 className="text-2xl font-bold text-blue-700 mb-6 flex items-center gap-2">
-            <BarChart3 className="w-6 h-6" />
-            Subject-wise Performance
-          </h2>
-
-          <div className="grid gap-4">
-            {subjectStats.map((stats) => (
-              <Card key={stats.subject} className="shadow-md">
-                <CardContent className="p-6">
-                  <div className="flex justify-between items-center mb-4">
-                    <h3 className="text-xl font-bold text-gray-800">{stats.subject}</h3>
-                    <Badge
-                      className={`px-3 py-1 ${stats.percentage >= 70
-                        ? 'bg-green-100 text-green-800'
-                        : stats.percentage >= 50
-                          ? 'bg-yellow-100 text-yellow-800'
-                          : 'bg-red-100 text-red-800'
-                        }`}
-                    >
-                      {stats.percentage.toFixed(1)}%
-                    </Badge>
-                  </div>
-
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-center">
-                    <div className="bg-blue-50 p-3 rounded-lg">
-                      <p className="text-2xl font-bold text-blue-600">{stats.total}</p>
-                      <p className="text-sm text-blue-800">Total</p>
-                    </div>
-                    <div className="bg-green-50 p-3 rounded-lg">
-                      <p className="text-2xl font-bold text-green-600">{stats.correct}</p>
-                      <p className="text-sm text-green-800">Correct</p>
-                    </div>
-                    <div className="bg-red-50 p-3 rounded-lg">
-                      <p className="text-2xl font-bold text-red-600">{stats.wrong}</p>
-                      <p className="text-sm text-red-800">Wrong</p>
-                    </div>
-                    <div className="bg-yellow-50 p-3 rounded-lg">
-                      <p className="text-2xl font-bold text-yellow-600">{stats.skipped}</p>
-                      <p className="text-sm text-yellow-800">Skipped</p>
-                    </div>
-                  </div>
-
-                  {/* Progress Bar */}
-                  <div className="mt-4">
-                    <div className="w-full bg-gray-200 rounded-full h-2">
-                      <div
-                        className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                        style={{ width: `${stats.percentage}%` }}
-                      ></div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+            <div className="space-y-2">
+              <label className="text-sm font-semibold text-foreground">Issue Description</label>
+              <Textarea
+                placeholder="Please describe the mistake or issue in detail..."
+                value={reportIssue}
+                onChange={(e) => setReportIssue(e.target.value)}
+                className="min-h-[100px] resize-none"
+              />
+            </div>
           </div>
-        </div>
-      )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setReportModalOpen(false)}>Cancel</Button>
+            <Button onClick={handleReportSubmit} disabled={isReporting} className="bg-destructive hover:bg-destructive/90 text-white">
+              {isReporting ? 'Submitting...' : 'Submit Report'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
-      {activeTab === 'wrong' && (
-        <div>
-          <h2 className="text-2xl font-bold text-red-700 mb-6 flex items-center gap-2">
-            <XCircle className="w-6 h-6" />
-            Wrong Answers ({wrongAnswers})
-          </h2>
-          {wrongQuestions.length === 0 ? (
-            <Card className="shadow-md">
-              <CardContent className="p-8 text-center">
-                <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
-                <h3 className="text-xl font-bold text-green-700 mb-2">Perfect!</h3>
-                <p className="text-gray-600">You didn't get any questions wrong. Great job!</p>
-              </CardContent>
-            </Card>
-          ) : (
-            wrongQuestions.map((q, idx) => renderQuestionCard(q, idx, true))
-          )}
-        </div>
-      )}
-
-      {activeTab === 'skipped' && (
-        <div>
-          <h2 className="text-2xl font-bold text-yellow-700 mb-6 flex items-center gap-2">
-            <Clock className="w-6 h-6" />
-            Skipped Questions ({skippedQuestions})
-          </h2>
-          {skippedQuestionsList.length === 0 ? (
-            <Card className="shadow-md">
-              <CardContent className="p-8 text-center">
-                <Target className="w-16 h-16 text-blue-500 mx-auto mb-4" />
-                <h3 className="text-xl font-bold text-blue-700 mb-2">Well Done!</h3>
-                <p className="text-gray-600">You attempted all questions. Great effort!</p>
-              </CardContent>
-            </Card>
-          ) : (
-            skippedQuestionsList.map((q, idx) => renderQuestionCard(q, idx, true))
-          )}
-        </div>
-      )}
+      {/* Upgrade Required Dialog */}
+      <Dialog open={upgradeDialogOpen} onOpenChange={setUpgradeDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-indigo-600">
+              <Lock className="w-5 h-5" /> Feature Locked
+            </DialogTitle>
+            <DialogDescription className="text-base pt-2">
+              Reporting questions is a premium feature available only to paid users.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4 text-center">
+            <p className="text-muted-foreground mb-4">
+              Please enroll in any <strong>Paid Series</strong> to unlock question reporting and other premium benefits.
+            </p>
+          </div>
+          <DialogFooter className="sm:justify-center">
+            <Button variant="outline" onClick={() => setUpgradeDialogOpen(false)}>Close</Button>
+            <Button className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white" onClick={() => router.push('/dashboard/student')}>
+              Explore Paid Series
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
 
 const ResultPage = () => {
   return (
-    <React.Suspense fallback={<div className="flex justify-center items-center min-h-screen"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div></div>}>
+    <React.Suspense fallback={<div className="flex justify-center items-center min-h-screen"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div></div>}>
       <ResultPageContent />
     </React.Suspense>
   );

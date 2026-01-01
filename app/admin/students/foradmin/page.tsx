@@ -35,8 +35,14 @@ import {
   BarElement,
   Tooltip,
   Legend,
+  Filler
 } from 'chart.js';
-Chart.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, Tooltip, Legend);
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Calendar, Filter, Printer, Download, ChevronLeft, TrendingUp, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { glassmorphism, brandColors } from '@/lib/design-tokens';
+import { motion, AnimatePresence } from 'framer-motion';
+
+Chart.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, Tooltip, Legend, Filler);
 
 // Section keys for printing
 const PRINT_SECTIONS = [
@@ -61,6 +67,11 @@ function ForAdminStudentResultsContent() {
     { subject: string; attempted: number; skipped: number; correct: number; wrong: number; accuracy: number }[]
   >([]);
   const [progressPoints, setProgressPoints] = useState<number[]>([]);
+
+  // Filters
+  const [dateResultFilter, setDateResultFilter] = useState('all');
+  const [subjectResultFilter, setSubjectResultFilter] = useState('all');
+
   const [printSelection, setPrintSelection] = useState<string[]>(PRINT_SECTIONS.map(s => s.key));
 
   // Chart refs for exporting images
@@ -356,33 +367,95 @@ function ForAdminStudentResultsContent() {
     fetchStudentResults();
   }, [studentId]);
 
-  // Premium Analytics
-  const bestTest = useMemo(() => results.length ? results.reduce((a, b) => a.accuracy > b.accuracy ? a : b) : null, [results]);
-  const weakestTest = useMemo(() => results.length ? results.reduce((a, b) => a.accuracy < b.accuracy ? a : b) : null, [results]);
-  const bestSubject = useMemo(() => subjectAnalytics.length ? subjectAnalytics.reduce((a, b) => a.accuracy > b.accuracy ? a : b) : null, [subjectAnalytics]);
-  const weakestSubject = useMemo(() => subjectAnalytics.length ? subjectAnalytics.reduce((a, b) => a.accuracy < b.accuracy ? a : b) : null, [subjectAnalytics]);
+  // Derived filtered results
+  const filteredResults = useMemo(() => {
+    let filtered = [...results];
+
+    // Date Filter
+    const now = Date.now();
+    if (dateResultFilter === '7d') {
+      filtered = filtered.filter(r => (now - r.timestamp) <= 7 * 24 * 60 * 60 * 1000);
+    } else if (dateResultFilter === '30d') {
+      filtered = filtered.filter(r => (now - r.timestamp) <= 30 * 24 * 60 * 60 * 1000);
+    } else if (dateResultFilter === '90d') {
+      filtered = filtered.filter(r => (now - r.timestamp) <= 90 * 24 * 60 * 60 * 1000);
+    }
+
+    // Subject Filter
+    if (subjectResultFilter !== 'all') {
+      filtered = filtered.filter(r => r.subject?.includes(subjectResultFilter));
+    }
+
+    return filtered;
+  }, [results, dateResultFilter, subjectResultFilter]);
+
+  // Re-calculate analytics based on filtered results
+  const filteredAnalytics = useMemo(() => {
+    const total = filteredResults.reduce((acc, curr) => acc + (curr.countedQuestions || curr.currentTotal || 0), 0);
+    const scored = filteredResults.reduce((acc, curr) => acc + (curr.correct || 0), 0);
+    const average = total > 0 ? parseFloat(((scored / total) * 100).toFixed(2)) : 0;
+    return { total, scored, average };
+  }, [filteredResults]);
+
+  // Premium Analytics (Updated to use filteredResults)
+  const bestTest = useMemo(() => filteredResults.length ? filteredResults.reduce((a, b) => a.accuracy > b.accuracy ? a : b) : null, [filteredResults]);
+  const weakestTest = useMemo(() => filteredResults.length ? filteredResults.reduce((a, b) => a.accuracy < b.accuracy ? a : b) : null, [filteredResults]);
+
+  const subjectAnalyticsFiltered = useMemo(() => {
+    // Re-aggregate subject stats based on filtered tests? 
+    // Or just filter the existing subjectAnalytics?
+    // Better to re-calculate from filteredResults to be accurate to the time period.
+    const map: Record<string, { attempted: number, correct: number }> = {};
+    filteredResults.forEach(r => {
+      const subjs = r.subject ? r.subject.split(',').map((s: string) => s.trim()) : ['Unspecified'];
+      subjs.forEach(s => {
+        if (!map[s]) map[s] = { attempted: 0, correct: (0) };
+        // We don't have per-question subject breakdown easily available here without re-processing all raw data.
+        // Approximation: Use the test's average accuracy for the subject bucket? No, that's inaccurate.
+        // Fallback: If filtering by Date, we can't easily re-compute subject-level accuracy unless we stored question-level data in 'results'.
+        // Current 'results' has 'correct', 'countedQuestions'.
+        // If the test has single subject, we can add it.
+        // If mixed, we assign to all? (Slightly inaccurate but acceptable for summary)
+        map[s].attempted += r.countedQuestions || 0;
+        map[s].correct += r.correct || 0;
+      });
+    });
+
+    return Object.entries(map).map(([subject, val]) => ({
+      subject,
+      accuracy: val.attempted > 0 ? Math.round((val.correct / val.attempted) * 100) : 0
+    }));
+  }, [filteredResults]);
+
+  const bestSubject = useMemo(() => subjectAnalyticsFiltered.length ? subjectAnalyticsFiltered.reduce((a, b) => a.accuracy > b.accuracy ? a : b) : null, [subjectAnalyticsFiltered]);
+  const weakestSubject = useMemo(() => subjectAnalyticsFiltered.length ? subjectAnalyticsFiltered.reduce((a, b) => a.accuracy < b.accuracy ? a : b) : null, [subjectAnalyticsFiltered]);
+
   const subjectOverTimeData = useMemo(() => {
-    const map = {};
-    results.forEach(r => {
+    const map: any = {};
+    filteredResults.forEach(r => {
       const date = r.timestamp ? format(new Date(r.timestamp), 'dd MMM') : '';
-      (r.subject?.split(',') || ['Unspecified']).forEach(subject => {
+      (r.subject?.split(',') || ['Unspecified']).forEach((subject: string) => {
         subject = subject.trim();
         if (!map[subject]) map[subject] = [];
         map[subject].push({ date, accuracy: r.accuracy });
       });
     });
     return map;
-  }, [results]);
+  }, [filteredResults]);
+
   const consistency = useMemo(() => {
-    if (!results.length) return 0;
-    const mean = results.reduce((a, b) => a + b.accuracy, 0) / results.length;
-    const variance = results.reduce((a, b) => a + Math.pow(b.accuracy - mean, 2), 0) / results.length;
+    if (!filteredResults.length) return 0;
+    const mean = filteredResults.reduce((a, b) => a + b.accuracy, 0) / filteredResults.length;
+    const variance = filteredResults.reduce((a, b) => a + Math.pow(b.accuracy - mean, 2), 0) / filteredResults.length;
     return Math.round(Math.sqrt(variance) * 100) / 100;
-  }, [results]);
+  }, [filteredResults]);
+
   const improvement = useMemo(() => {
-    if (progressPoints.length < 2) return 0;
-    return Math.round(progressPoints[progressPoints.length - 1] - progressPoints[0]);
-  }, [progressPoints]);
+    // Sort by time
+    const sorted = [...filteredResults].sort((a, b) => a.timestamp - b.timestamp);
+    if (sorted.length < 2) return 0;
+    return Math.round(sorted[sorted.length - 1].accuracy - sorted[0].accuracy);
+  }, [filteredResults]);
   function getTestRemark(test) {
     if (test.accuracy >= 90) return "🌟 Outstanding!";
     if (test.accuracy >= 75) return "👏 Good job!";
@@ -417,17 +490,56 @@ function ForAdminStudentResultsContent() {
   const subjectTrendLineData = useMemo(() => {
     const subjects = Object.keys(subjectOverTimeData);
     return {
-      labels: results.map(r => r.timestamp ? format(new Date(r.timestamp), 'dd MMM') : ''),
+      labels: filteredResults.map(r => r.timestamp ? format(new Date(r.timestamp), 'dd MMM') : ''),
       datasets: subjects.map((subject, idx) => ({
         label: subject,
-        data: subjectOverTimeData[subject].map(d => d.accuracy),
-        fill: false,
-        borderColor: `hsl(${idx * 60}, 60%, 55%)`,
-        backgroundColor: `hsl(${idx * 60}, 75%, 70%)`,
-        tension: 0.4
+        data: subjectOverTimeData[subject].map((d: any) => d.accuracy),
+        fill: true,
+        borderColor: `hsl(${idx * 45 + 200}, 80%, 60%)`,
+        backgroundColor: `hsla(${idx * 45 + 200}, 80%, 60%, 0.1)`,
+        tension: 0.4,
+        pointBackgroundColor: `hsl(${idx * 45 + 200}, 80%, 60%)`,
+        pointBorderColor: '#fff',
+        pointRadius: 4,
+        pointHoverRadius: 6
       }))
     };
-  }, [subjectOverTimeData, results]);
+  }, [subjectOverTimeData, filteredResults]);
+
+  const commonChartOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        labels: {
+          color: 'rgba(128, 128, 128, 0.8)',
+          font: { family: "'Inter', sans-serif" }
+        }
+      },
+      tooltip: {
+        backgroundColor: 'rgba(0, 0, 0, 0.8)',
+        titleColor: '#fff',
+        bodyColor: '#fff',
+        borderColor: 'rgba(255, 255, 255, 0.1)',
+        borderWidth: 1,
+        padding: 12,
+        cornerRadius: 8,
+        displayColors: true
+      }
+    },
+    scales: {
+      y: {
+        beginAtZero: true,
+        max: 100,
+        grid: { color: 'rgba(128, 128, 128, 0.1)' },
+        ticks: { color: 'rgba(128, 128, 128, 0.8)' }
+      },
+      x: {
+        grid: { display: false },
+        ticks: { color: 'rgba(128, 128, 128, 0.8)' }
+      }
+    }
+  };
   const tableRows = useMemo(() => {
     return results.map((r) => ({
       id: r.id,
@@ -625,186 +737,242 @@ function ForAdminStudentResultsContent() {
   }
 
   // UI
+  // UI
   return (
-    <div className="mx-auto py-12 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-white to-blue-50 min-h-screen">
-      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-6 gap-4">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-800">✨ {studentName || 'Student'} — Premium Analytics</h1>
-          <p className="text-gray-600 mt-1">
-            Overall: <span className="font-semibold text-gray-800">{analytics.scored}</span> /{' '}
-            <span className="font-semibold text-gray-800">{analytics.total}</span>{' '}
-            (<span className="text-blue-600 font-semibold">{analytics.average}%</span>)
-          </p>
-          <div className="mt-3 text-sm text-gray-500">
-            Premium features: Subject graphs, test ranking, remarks, consistency, improvement trend, and more!
+    <div className='min-h-screen bg-background text-foreground py-8 px-4 sm:px-6 lg:px-8 space-y-8'>
+      {/* Header Section */}
+      <div className='relative group'>
+        <div className='absolute inset-0 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 rounded-3xl blur-xl opacity-20 dark:opacity-30' />
+        <div className={`${glassmorphism.light} p-8 rounded-3xl border border-white/20 dark:border-white/10 relative overflow-hidden`}>
+          <div className='flex flex-col xl:flex-row justify-between items-start xl:items-center gap-6'>
+
+            <div className='flex items-center gap-4'>
+              <Button variant='ghost' size='icon' onClick={() => router.back()} className='hover:bg-white/20'>
+                <ChevronLeft className='w-6 h-6' />
+              </Button>
+              <div>
+                <h1 className='text-3xl font-black text-foreground'>
+                  {studentName}
+                </h1>
+                <p className='text-muted-foreground flex items-center gap-2 mt-1'>
+                  Analytics Dashboard <span className='w-1 h-1 rounded-full bg-gray-400' /> Premium View
+                </p>
+              </div>
+            </div>
+
+            <div className='flex flex-wrap items-center gap-3'>
+              {/* Filters */}
+              <div className='flex items-center gap-2 bg-white/50 dark:bg-black/20 p-1 rounded-lg border border-white/20'>
+                <Filter className='w-4 h-4 ml-2 text-muted-foreground' />
+                <Select value={dateResultFilter} onValueChange={setDateResultFilter}>
+                  <SelectTrigger className='w-[140px] border-0 bg-transparent focus:ring-0'>
+                    <SelectValue placeholder="Period" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Time</SelectItem>
+                    <SelectItem value="7d">Last 7 Days</SelectItem>
+                    <SelectItem value="30d">Last 30 Days</SelectItem>
+                    <SelectItem value="90d">Last 3 Months</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className='flex items-center gap-2 bg-white/50 dark:bg-black/20 p-1 rounded-lg border border-white/20'>
+                <Select value={subjectResultFilter} onValueChange={setSubjectResultFilter}>
+                  <SelectTrigger className='w-[160px] border-0 bg-transparent focus:ring-0'>
+                    <SelectValue placeholder="Subject Filter" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Subjects</SelectItem>
+                    {subjectAnalytics.map(s => (
+                      <SelectItem key={s.subject} value={s.subject}>{s.subject}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <Button
+                variant='outline'
+                onClick={() => printSelectedSectionsWithCharts(printSelection)}
+                className='gap-2 bg-white/50 dark:bg-white/10 backdrop-blur-sm border-white/20 hover:bg-white/80 dark:hover:bg-white/20'
+              >
+                <Printer className='w-4 h-4' /> Print Report
+              </Button>
+            </div>
           </div>
-        </div>
-        <div className="flex flex-col gap-2 items-end">
-          <div className="flex flex-wrap gap-2">
-            {PRINT_SECTIONS.map(section => (
-              <label key={section.key} className="inline-flex items-center text-xs font-medium text-gray-600 bg-gray-100 px-2 py-1 rounded">
-                <input
-                  type="checkbox"
-                  checked={printSelection.includes(section.key)}
-                  onChange={e => {
-                    setPrintSelection(sel =>
-                      e.target.checked
-                        ? [...sel, section.key]
-                        : sel.filter(k => k !== section.key)
-                    );
-                  }}
-                  className="mr-2"
-                />
-                {section.label}
-              </label>
-            ))}
+
+          {/* Quick Stats Row */}
+          <div className='grid grid-cols-2 md:grid-cols-4 gap-4 mt-8'>
+            <div className='bg-white/40 dark:bg-black/40 p-4 rounded-2xl border border-white/10'>
+              <p className='text-sm text-muted-foreground'>Total Questions</p>
+              <p className='text-2xl font-bold'>{filteredAnalytics.total}</p>
+            </div>
+            <div className='bg-white/40 dark:bg-black/40 p-4 rounded-2xl border border-white/10'>
+              <p className='text-sm text-muted-foreground'>Correct Answers</p>
+              <p className='text-2xl font-bold text-green-600 dark:text-green-400'>{filteredAnalytics.scored}</p>
+            </div>
+            <div className='bg-white/40 dark:bg-black/40 p-4 rounded-2xl border border-white/10'>
+              <p className='text-sm text-muted-foreground'>Average Accuracy</p>
+              <div className='flex items-end gap-2'>
+                <p className='text-2xl font-bold text-blue-600 dark:text-blue-400'>{filteredAnalytics.average}%</p>
+                <span className='text-xs text-muted-foreground mb-1'>overall</span>
+              </div>
+            </div>
+            <div className='bg-white/40 dark:bg-black/40 p-4 rounded-2xl border border-white/10'>
+              <p className='text-sm text-muted-foreground'>Net Improvement</p>
+              <div className='flex items-center gap-1'>
+                {improvement >= 0 ? <TrendingUp className='w-5 h-5 text-green-500' /> : <TrendingUp className='w-5 h-5 text-red-500 rotate-180' />}
+                <p className={`text-2xl font-bold ${improvement >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-500'}`}>
+                  {Math.abs(improvement)}%
+                </p>
+              </div>
+            </div>
           </div>
-          <Button
-            variant="outline"
-            onClick={() => printSelectedSectionsWithCharts(printSelection)}
-            disabled={printSelection.length === 0}
-          >
-            🖨️ Print Selected Analytics
-          </Button>
         </div>
       </div>
 
       {/* Advanced analytics cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8" id="summary-print">
-        <Card className="p-4 bg-gradient-to-r from-indigo-50 to-blue-100 shadow">
-          <CardHeader>
-            <CardTitle>Best Test</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {bestTest ? (
-              <>
-                <div className="font-semibold text-lg">{bestTest.title}</div>
-                <div className="text-sm text-gray-600">Accuracy: <span className="font-bold text-green-700">{bestTest.accuracy}%</span></div>
-                <div className="mt-2 text-md">{getTestRemark(bestTest)}</div>
-              </>
-            ) : <div>No attempts</div>}
-          </CardContent>
-        </Card>
-        <Card className="p-4 bg-gradient-to-r from-pink-50 to-red-100 shadow">
-          <CardHeader>
-            <CardTitle>Weakest Test</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {weakestTest ? (
-              <>
-                <div className="font-semibold text-lg">{weakestTest.title}</div>
-                <div className="text-sm text-gray-600">Accuracy: <span className="font-bold text-red-700">{weakestTest.accuracy}%</span></div>
-                <div className="mt-2 text-md">{getTestRemark(weakestTest)}</div>
-              </>
-            ) : <div>No attempts</div>}
-          </CardContent>
-        </Card>
-        <Card className="p-4 bg-gradient-to-r from-green-50 to-lime-100 shadow">
-          <CardHeader>
-            <CardTitle>Consistency</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-lg font-bold">{consistency}</div>
-            <div className="text-sm text-gray-600">Std. deviation of accuracy</div>
-            <div className="mt-2 text-md">Improvement: <span className={`font-bold ${improvement >= 0 ? 'text-green-700' : 'text-red-700'}`}>{improvement >= 0 ? `↑ ${improvement}%` : `↓ ${Math.abs(improvement)}%`}</span></div>
-          </CardContent>
-        </Card>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6" id="summary-print">
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
+          <Card className={`${glassmorphism.light} border-l-4 border-l-green-500 overflow-hidden`}>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-green-500" /> Best Performance
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {bestTest ? (
+                <>
+                  <div className="font-black text-lg truncate" title={bestTest.title}>{bestTest.title}</div>
+                  <div className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-green-600 to-emerald-600 mt-1">
+                    {bestTest.accuracy}%
+                  </div>
+                </>
+              ) : <div className="text-muted-foreground italic">No attempts yet</div>}
+            </CardContent>
+          </Card>
+        </motion.div>
+
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
+          <Card className={`${glassmorphism.light} border-l-4 border-l-red-500 overflow-hidden`}>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-red-500" /> Needs Focus
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {weakestTest ? (
+                <>
+                  <div className="font-black text-lg truncate" title={weakestTest.title}>{weakestTest.title}</div>
+                  <div className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-red-600 to-rose-600 mt-1">
+                    {weakestTest.accuracy}%
+                  </div>
+                </>
+              ) : <div className="text-muted-foreground italic">No attempts yet</div>}
+            </CardContent>
+          </Card>
+        </motion.div>
+
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
+          <Card className={`${glassmorphism.light} border-l-4 border-l-blue-500 overflow-hidden`}>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm uppercase tracking-wider text-muted-foreground">Consistency Score</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold text-foreground">{consistency}</div>
+              <div className="text-xs text-muted-foreground mt-1">Std. Deviation (Lower is better)</div>
+            </CardContent>
+          </Card>
+        </motion.div>
       </div>
 
       {/* Subject-wise analytics with chart */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8" id="subjectCharts-print">
-        <Card className="p-4">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8" id="subjectCharts-print">
+        <Card className={`${glassmorphism.light} border border-green-500/10`}>
           <CardHeader>
-            <CardTitle>Subject-wise Accuracy</CardTitle>
+            <CardTitle>Subject Mastery</CardTitle>
           </CardHeader>
-          <CardContent>
-            <Bar ref={subjectBarRef} data={subjectChartData} options={{
-              responsive: true,
-              plugins: { legend: { display: false } },
-              scales: { y: { min: 0, max: 100 } }
-            }} />
+          <CardContent className="h-[300px]">
+            <Bar ref={subjectBarRef} data={subjectChartData} options={commonChartOptions} />
           </CardContent>
         </Card>
-        <Card className="p-4">
+        <Card className={`${glassmorphism.light} border border-blue-500/10`}>
           <CardHeader>
-            <CardTitle>Subject Trend Over Time</CardTitle>
+            <CardTitle>Performance Trend</CardTitle>
           </CardHeader>
-          <CardContent>
-            <Line ref={subjectLineRef} data={subjectTrendLineData} options={{
-              responsive: true,
-              plugins: { legend: { position: 'bottom' } },
-              scales: { y: { min: 0, max: 100 } }
-            }} />
+          <CardContent className="h-[300px]">
+            <Line ref={subjectLineRef} data={subjectTrendLineData} options={commonChartOptions} />
           </CardContent>
         </Card>
       </div>
 
       {/* Subject ranking and remarks */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8" id="subjectRemarks-print">
-        <Card className="p-4 bg-gradient-to-r from-cyan-50 to-teal-100">
+        <Card className={`${glassmorphism.light} border-l-4 border-l-emerald-500`}>
           <CardHeader>
-            <CardTitle>Best Subject</CardTitle>
+            <CardTitle className="flex items-center gap-2"><TrendingUp className="w-5 h-5 text-emerald-500" /> Strongest Subject</CardTitle>
           </CardHeader>
           <CardContent>
             {bestSubject ? (
               <>
-                <div className="font-semibold text-lg">{bestSubject.subject}</div>
-                <div className="text-sm text-gray-600">Accuracy: <span className="font-bold text-green-700">{bestSubject.accuracy}%</span></div>
-                <div className="mt-2 text-md">{getSubjectRemark(bestSubject)}</div>
+                <div className="font-bold text-xl">{bestSubject.subject}</div>
+                <div className="text-sm text-muted-foreground">Accuracy: <span className="font-bold text-emerald-500">{bestSubject.accuracy}%</span></div>
+                <div className="mt-4 p-3 bg-emerald-50 dark:bg-emerald-950/20 rounded-lg text-sm text-emerald-800 dark:text-emerald-200 border border-emerald-100 dark:border-emerald-900">
+                  {getSubjectRemark(bestSubject)}
+                </div>
               </>
-            ) : <div>No subjects</div>}
+            ) : <div className="text-muted-foreground">No subjects</div>}
           </CardContent>
         </Card>
-        <Card className="p-4 bg-gradient-to-r from-yellow-50 to-orange-100">
+
+        <Card className={`${glassmorphism.light} border-l-4 border-l-rose-500`}>
           <CardHeader>
-            <CardTitle>Weakest Subject</CardTitle>
+            <CardTitle className="flex items-center gap-2"><AlertCircle className="w-5 h-5 text-rose-500" /> Improvement Area</CardTitle>
           </CardHeader>
           <CardContent>
             {weakestSubject ? (
               <>
-                <div className="font-semibold text-lg">{weakestSubject.subject}</div>
-                <div className="text-sm text-gray-600">Accuracy: <span className="font-bold text-red-700">{weakestSubject.accuracy}%</span></div>
-                <div className="mt-2 text-md">{getSubjectRemark(weakestSubject)}</div>
+                <div className="font-bold text-xl">{weakestSubject.subject}</div>
+                <div className="text-sm text-muted-foreground">Accuracy: <span className="font-bold text-rose-500">{weakestSubject.accuracy}%</span></div>
+                <div className="mt-4 p-3 bg-rose-50 dark:bg-rose-950/20 rounded-lg text-sm text-rose-800 dark:text-rose-200 border border-rose-100 dark:border-rose-900">
+                  {getSubjectRemark(weakestSubject)}
+                </div>
               </>
-            ) : <div>No subjects</div>}
+            ) : <div className="text-muted-foreground">No subjects</div>}
           </CardContent>
         </Card>
       </div>
 
       {/* Test-wise bar chart */}
-      <Card className="p-4 mb-8" id="testCharts-print">
+      <Card className={`${glassmorphism.light} mb-8`} id="testCharts-print">
         <CardHeader>
-          <CardTitle>Test Accuracy Comparison</CardTitle>
+          <CardTitle>Detailed Test Comparison</CardTitle>
         </CardHeader>
-        <CardContent>
-          <Bar ref={testBarRef} data={testBarData} options={{
-            responsive: true,
-            plugins: { legend: { display: false } },
-            scales: { y: { min: 0, max: 100 } }
-          }} />
+        <CardContent className="h-[350px]">
+          <Bar ref={testBarRef} data={testBarData} options={commonChartOptions} />
         </CardContent>
       </Card>
 
       {/* Test-wise remarks table */}
-      <Card className="p-4 mb-8" id="testRemarks-print">
+      <Card className={`${glassmorphism.light} mb-8`} id="testRemarks-print">
         <CardHeader>
           <CardTitle>Test-wise Remarks & Analytics</CardTitle>
         </CardHeader>
         <CardContent>
-          <table className="min-w-full divide-y divide-gray-200">
+          <table className="min-w-full divide-y divide-gray-200 dark:divide-white/10">
             <thead>
-              <tr className="bg-gray-50">
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Test</th>
-                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Accuracy</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Remarks</th>
+              <tr className="bg-gray-50/50 dark:bg-white/5">
+                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Test</th>
+                <th className="px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase">Accuracy</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Remarks</th>
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
+            <tbody className="bg-transparent divide-y divide-gray-200 dark:divide-white/10">
               {results.map(test => (
                 <tr key={test.id}>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">{test.title}</td>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm text-blue-700 text-right">{test.accuracy}%</td>
-                  <td className="px-4 py-3 whitespace-nowrap text-md">{getTestRemark(test)}</td>
+                  <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-foreground">{test.title}</td>
+                  <td className="px-4 py-3 whitespace-nowrap text-sm text-blue-600 dark:text-blue-400 text-right">{test.accuracy}%</td>
+                  <td className="px-4 py-3 whitespace-nowrap text-md text-foreground">{getTestRemark(test)}</td>
                 </tr>
               ))}
             </tbody>
@@ -813,25 +981,25 @@ function ForAdminStudentResultsContent() {
       </Card>
 
       {/* Subject-wise remarks */}
-      <Card className="p-4 mb-8" id="subjectRemarks-table-print">
+      <Card className={`${glassmorphism.light} mb-8`} id="subjectRemarks-table-print">
         <CardHeader>
           <CardTitle>Subject-wise Remarks</CardTitle>
         </CardHeader>
         <CardContent>
-          <table className="min-w-full divide-y divide-gray-200">
+          <table className="min-w-full divide-y divide-gray-200 dark:divide-white/10">
             <thead>
-              <tr className="bg-gray-50">
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Subject</th>
-                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Accuracy</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Remarks</th>
+              <tr className="bg-gray-50/50 dark:bg-white/5">
+                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Subject</th>
+                <th className="px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase">Accuracy</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Remarks</th>
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
+            <tbody className="bg-transparent divide-y divide-gray-200 dark:divide-white/10">
               {subjectAnalytics.map(subj => (
                 <tr key={subj.subject}>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">{subj.subject}</td>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm text-blue-700 text-right">{subj.accuracy}%</td>
-                  <td className="px-4 py-3 whitespace-nowrap text-md">{getSubjectRemark(subj)}</td>
+                  <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-foreground">{subj.subject}</td>
+                  <td className="px-4 py-3 whitespace-nowrap text-sm text-blue-600 dark:text-blue-400 text-right">{subj.accuracy}%</td>
+                  <td className="px-4 py-3 whitespace-nowrap text-md text-foreground">{getSubjectRemark(subj)}</td>
                 </tr>
               ))}
             </tbody>
@@ -840,55 +1008,59 @@ function ForAdminStudentResultsContent() {
       </Card>
 
       {/* All Tests Table */}
-      <Card className="p-4 mb-8" id="allTests-print">
+      <Card className={`${glassmorphism.light}`} id="allTests-print">
         <CardHeader>
-          <CardTitle>All Tests</CardTitle>
+          <CardTitle>Test History</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
+            <table className="min-w-full divide-y divide-gray-200 dark:divide-white/10">
               <thead>
-                <tr className="bg-gray-50">
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Title</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Submitted</th>
-                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Total Qs</th>
-                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Correct</th>
-                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Accuracy</th>
-                  <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
-                  <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                <tr className="bg-gray-50/50 dark:bg-white/5">
+                  <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Title</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Submitted</th>
+                  <th className="px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider">Total Qs</th>
+                  <th className="px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider">Correct</th>
+                  <th className="px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider">Accuracy</th>
+                  <th className="px-4 py-3 text-center text-xs font-medium text-muted-foreground uppercase tracking-wider">Type</th>
+                  <th className="px-4 py-3 text-center text-xs font-medium text-muted-foreground uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {tableRows.map((row) => (
+              <tbody className="bg-transparent divide-y divide-gray-200 dark:divide-white/10">
+                {tableRows.filter(r => filteredResults.find(fr => fr.id === r.id)).map((row) => (
                   <tr key={row.id}>
-                    <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">{row.title}</td>
-                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                    <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-foreground">{row.title}</td>
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-muted-foreground">
                       {row.date ? format(row.date, 'dd MMM yyyy, hh:mm a') : 'N/A'}
                     </td>
-                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700 text-right">{row.totalQuestions}</td>
-                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700 text-right">{row.correct}</td>
-                    <td className="px-4 py-3 whitespace-nowrap text-sm text-blue-700 text-right">{row.accuracy}%</td>
-                    <td className="px-4 py-3 whitespace-nowrap text-sm text-center text-gray-600">{row.type}</td>
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-foreground text-right">{row.totalQuestions}</td>
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-green-600 dark:text-green-400 text-right font-bold">{row.correct}</td>
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-blue-600 dark:text-blue-400 text-right font-bold">{row.accuracy}%</td>
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-center text-muted-foreground">{row.type}</td>
                     <td className="px-4 py-3 whitespace-nowrap text-sm text-center">
                       <div className="flex items-center justify-center gap-2">
                         <Button
                           variant="ghost"
+                          size="sm"
                           onClick={() =>
                             router.push(
                               `/admin/students/responses?id=${row.id}&mock=${row.type === 'By Own'}&studentId=${studentId}`
                             )
                           }
+                          className="hover:bg-blue-50 dark:hover:bg-blue-900/20 text-blue-600 dark:text-blue-400"
                         >
-                          🔎 View
+                          View
                         </Button>
                         <Button
-                          variant="outline"
+                          variant="ghost"
+                          size="sm"
+                          className="hover:bg-gray-100 dark:hover:bg-white/10"
                           onClick={() => {
                             const single = results.find((r) => r.id === row.id);
                             if (single) printSelectedSectionsWithCharts(['allTests']);
                           }}
                         >
-                          🖨️ Print
+                          Print
                         </Button>
                       </div>
                     </td>

@@ -1,16 +1,18 @@
-export const metadata = {
-  title: 'TayyariHub',
-  description: 'Entry Test Companion',
-}
+'use client';
 
-export default function RootLayout({
+import { Sidebar } from '@/components/ui/sidebar';
+
+export default function DashboardLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
   return (
-    <html lang="en">
-      <body>{children}</body>
-    </html>
+    <div className="flex min-h-screen bg-background flex-col md:flex-row">
+      <Sidebar />
+      <main className="flex-1 overflow-y-auto h-screen">
+        {children}
+      </main>
+    </div>
   )
 }

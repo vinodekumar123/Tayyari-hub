@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState } from "react";
@@ -9,11 +8,8 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
-import { Mail, Lock, BookOpen, Sparkles, ArrowRight, ChevronLeft } from "lucide-react";
-import logo from "../../assets/logo.png";
-import Image from "next/image";
+import { Mail, Lock, ChevronLeft, User, Trophy, BarChart3, BookOpen, Sparkles } from "lucide-react";
+import { motion } from "framer-motion";
 
 export default function RegisterPage() {
   const [email, setEmail] = useState("");
@@ -38,7 +34,7 @@ export default function RegisterPage() {
     } catch (err: any) {
       setError(
         err.code === "auth/email-already-in-use"
-          ? "This email is already registered. Please sign in."
+          ? "Account exists. Please sign in."
           : err.message
       );
     } finally {
@@ -49,170 +45,170 @@ export default function RegisterPage() {
 
   const handleGoogleSignup = async () => {
     setIsLoading(true);
-    document.body.style.cursor = "wait";
     try {
       await signInWithPopup(auth, provider);
       router.push("/auth/onboarding");
     } catch (err: any) {
-      if (err.code === "auth/popup-closed-by-user") {
-        setError("Google Sign-In was cancelled. Please try again.");
-      } else if (err.code === "auth/popup-blocked") {
-        setError("Popup was blocked by your browser. Please allow popups and try again.");
-      } else {
-        setError("Google Sign-In failed. Please try again.");
-      }
+      setError("Google signup failed.");
     } finally {
       setIsLoading(false);
-      document.body.style.cursor = "default";
     }
   };
 
+  const FeatureItem = ({ icon: Icon, title, desc }: { icon: any, title: string, desc: string }) => (
+    <div className="flex items-start gap-4 p-4 rounded-xl bg-white/5 border border-white/5 hover:bg-white/10 transition-colors">
+      <div className="w-10 h-10 rounded-lg bg-blue-500/20 flex items-center justify-center flex-shrink-0">
+        <Icon className="w-5 h-5 text-blue-400" />
+      </div>
+      <div>
+        <h4 className="font-bold text-slate-200">{title}</h4>
+        <p className="text-sm text-slate-500 leading-snug">{desc}</p>
+      </div>
+    </div>
+  );
+
   return (
-    <div className="min-h-screen bg-white flex items-center justify-center p-4 relative overflow-hidden">
-      <div className="absolute top-20 left-20 w-72 h-72 bg-blue-300 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-pulse" />
-      <div className="absolute bottom-20 right-20 w-72 h-72 bg-blue-200 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-pulse delay-1000" />
-      
-      <div className="w-full max-w-md relative z-10">
-             <div className="mt-6">
-  <Link href="/" className="text-primary hover:underline font-medium inline-flex items-center gap-1">
-    <ChevronLeft size={18} />
-    Back
-  </Link>
-</div>
-        <div className="text-center mb-8">
-          <Link href="/" className="inline-flex items-center space-x-3 mb-6 group">
-              <Image
-            src={logo}
-            alt="Tayyari Hub Logo"
-            className="h-10 w-auto"
-            priority
-          />
-          </Link>
-          <h1 className="text-4xl font-bold text-gray-900 mb-3">Create Account</h1>
-          <p className="text-gray-600 text-lg">Join the journey to success</p>
-        </div>
+    <div className="min-h-screen relative flex items-center justify-center bg-slate-950 overflow-hidden text-slate-200">
 
-        <Card className="glass-card border shadow-2xl">
-          <CardContent className="space-y-6">
-            {error && <p className="text-red-500 text-sm text-center">{error}</p>}
+      {/* Cinematic Background */}
+      <div className="absolute inset-0">
+        <div className="absolute top-[-20%] right-[-10%] w-[800px] h-[800px] bg-blue-600/10 rounded-full blur-[120px] animate-pulse-slow"></div>
+        <div className="absolute bottom-[-20%] left-[-10%] w-[800px] h-[800px] bg-indigo-600/10 rounded-full blur-[120px] animate-pulse-slow delay-1000"></div>
+        <div className="absolute inset-0 bg-[url('/grid.svg')] opacity-[0.05]"></div>
+      </div>
+
+      <div className="container relative z-10 max-w-6xl mx-auto px-4 grid lg:grid-cols-2 gap-20 items-center">
+
+        {/* Left: Info (Only visible on large screens) */}
+        <motion.div
+          initial={{ opacity: 0, x: -50 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.8 }}
+          className="hidden lg:block space-y-10"
+        >
+          <div>
+            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 font-bold text-sm mb-6">
+              <Trophy className="w-4 h-4" />
+              <span>Join 10,000+ Achievers</span>
+            </div>
+            <h1 className="text-6xl font-black leading-tight tracking-tight mb-6">
+              Unlock Your <br />
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-indigo-400 to-cyan-400">Potential.</span>
+            </h1>
+            <p className="text-lg text-slate-400 max-w-md leading-relaxed">
+              Create your free account today and get instant access to premium study materials.
+            </p>
+          </div>
+
+          <div className="grid gap-4">
+            <FeatureItem icon={BookOpen} title="Smart Question Bank" desc="Thousands of verified MCQs with detailed explanations." />
+            <FeatureItem icon={BarChart3} title="Performance Analytics" desc="Track your progress and identify weak areas instantly." />
+          </div>
+        </motion.div>
+
+        {/* Right: Register Form */}
+        <motion.div
+          initial={{ opacity: 0, y: 30 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, delay: 0.2 }}
+          className="w-full max-w-md mx-auto"
+        >
+          <div className="bg-slate-900/40 backdrop-blur-2xl border border-white/5 rounded-[2rem] p-8 md:p-10 shadow-2xl relative overflow-hidden">
+
+            <div className="mb-8 text-center lg:text-left">
+              <Link href="/" className="inline-flex items-center gap-2 text-slate-400 hover:text-white transition-colors mb-6 text-sm font-medium">
+                <ChevronLeft className="w-4 h-4" /> Back to Home
+              </Link>
+              <h2 className="text-3xl font-bold text-white mb-2">Create Account</h2>
+              <p className="text-slate-400 text-sm">Join the community for free.</p>
+            </div>
+
+            {error && (
+              <div className="mb-6 p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm font-medium flex items-center gap-3 animate-pulse">
+                <div className="w-1.5 h-1.5 rounded-full bg-red-500" /> {error}
+              </div>
+            )}
+
             <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="email" className="text-gray-700 font-medium">Email Address</Label>
-                <div className="relative">
-                  <Mail className="absolute left-4 top-4 h-5 w-5 text-gray-400" />
-                  <Input
-                    id="email"
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="Enter email"
-                    required
-                    className="pl-12 h-12 border-gray-200 focus:border-primary focus:ring-primary/20 rounded-xl"
-                  />
-                </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="email" className="text-slate-300 ml-1 text-xs uppercase tracking-wider font-bold">Email</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="name@example.com"
+                  className="h-11 rounded-xl bg-slate-950/50 border-white/10 focus:border-blue-500/50 focus:bg-slate-950 transition-all text-white placeholder:text-slate-600"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                />
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="password" className="text-gray-700 font-medium">Password</Label>
-                <div className="relative">
-                  <Lock className="absolute left-4 top-4 h-5 w-5 text-gray-400" />
-                  <Input
-                    id="password"
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Enter password"
-                    required
-                    className="pl-12 h-12 border-gray-200 focus:border-primary focus:ring-primary/20 rounded-xl"
-                  />
-                </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="password" className="text-slate-300 ml-1 text-xs uppercase tracking-wider font-bold">Password</Label>
+                <Input
+                  id="password"
+                  type="password"
+                  placeholder="Create a password"
+                  className="h-11 rounded-xl bg-slate-950/50 border-white/10 focus:border-blue-500/50 focus:bg-slate-950 transition-all text-white placeholder:text-slate-600"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                />
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="confirmPassword" className="text-gray-700 font-medium">Confirm Password</Label>
-                <div className="relative">
-                  <Lock className="absolute left-4 top-4 h-5 w-5 text-gray-400" />
-                  <Input
-                    id="confirmPassword"
-                    type="password"
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    placeholder="Re-enter password"
-                    required
-                    className="pl-12 h-12 border-gray-200 focus:border-primary focus:ring-primary/20 rounded-xl"
-                  />
-                </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="confirmPassword" className="text-slate-300 ml-1 text-xs uppercase tracking-wider font-bold">Confirm Password</Label>
+                <Input
+                  id="confirmPassword"
+                  type="password"
+                  placeholder="Confirm your password"
+                  className="h-11 rounded-xl bg-slate-950/50 border-white/10 focus:border-blue-500/50 focus:bg-slate-950 transition-all text-white placeholder:text-slate-600"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  required
+                />
               </div>
 
-              <Button
-                type="submit"
-                className="w-full h-12 bg-primary text-white rounded-xl shadow-md hover:bg-blue-700 transition-all duration-300 font-semibold text-lg"
-                disabled={isLoading}
-              >
-                {isLoading ? (
-                  <div className="flex items-center space-x-2">
-                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                    <span>Creating...</span>
-                  </div>
-                ) : (
-                  <div className="flex items-center space-x-2">
-                    <Sparkles className="h-5 w-5" />
-                    <span>Create Account</span>
-                    <ArrowRight className="h-5 w-5" />
-                  </div>
-                )}
-              </Button>
+              <div className="pt-4">
+                <Button
+                  type="submit"
+                  disabled={isLoading}
+                  className="w-full h-12 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-xl font-bold shadow-lg shadow-blue-500/20 hover:shadow-blue-500/40 hover:-translate-y-1 transition-all duration-300 border border-t-white/20"
+                >
+                  {isLoading ? "Creating Account..." : "Join Now"}
+                </Button>
+              </div>
             </form>
 
-            <div className="relative">
-              <div className="absolute inset-0 flex items-center">
-                <Separator className="w-full" />
-              </div>
-              <div className="relative flex justify-center text-xs uppercase">
-                <span className="bg-white px-4 text-gray-500 font-medium">Or continue with</span>
+            <div className="relative my-6">
+              <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-white/10"></div></div>
+              <div className="relative flex justify-center text-xs uppercase font-bold text-slate-500">
+                <span className="bg-[#0f172a] px-4">OR</span>
               </div>
             </div>
 
             <Button
-              variant="outline"
+              variant="ghost"
               onClick={handleGoogleSignup}
-              className="w-full h-12 border-2 border-gray-200 hover:border-gray-300 hover:bg-gray-50 rounded-xl transition-all duration-300 font-medium"
               disabled={isLoading}
+              className="w-full h-11 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl font-medium text-white flex items-center justify-center gap-2 transition-colors"
             >
-              {isLoading ? (
-                <div className="flex items-center space-x-2">
-                  <div className="w-5 h-5 border-2 border-gray-300 border-t-primary rounded-full animate-spin" />
-                  <span>Signing up...</span>
-                </div>
-              ) : (
-                <>
-                  <svg className="mr-3 h-5 w-5" viewBox="0 0 24 24">
-                    <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
-                    <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-                    <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
-                    <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
-                  </svg>
-                  Continue with Google
-                </>
-              )}
+              <svg className="w-4 h-4" viewBox="0 0 24 24">
+                <path fill="currentColor" d="M12.545,10.239v3.821h5.445c-0.712,2.315-2.647,3.972-5.445,3.972c-3.332,0-6.033-2.701-6.033-6.032s2.701-6.032,6.033-6.032c1.498,0,2.866,0.549,3.921,1.453l2.814-2.814C17.503,2.988,15.139,2,12.545,2C7.021,2,2.543,6.477,2.543,12s4.478,10,10.002,10c8.396,0,10.249-7.85,9.426-11.748L12.545,10.239z" />
+              </svg>
+              Sign up with Google
             </Button>
 
-            <div className="text-center text-sm">
-              <span className="text-gray-600">Already have an account? </span>
-              <Link href="/auth/login" className="text-primary hover:underline font-medium">
-                Sign in
-              </Link>
-            </div>
+            <p className="text-center text-sm text-slate-500 mt-6">
+              Already have an account? <Link href="/auth/login" className="font-bold text-blue-400 hover:text-blue-300 hover:underline">Sign in</Link>
+            </p>
 
- {/* ✅ Terms and Conditions notice */}
-  <div className="text-center text-xs text-gray-500 mt-4">
-    By signing in, you agree to our{" "}
-    <Link href="/privacy-policy" className="text-primary hover:underline font-medium">
-      Terms and Conditions
-    </Link>
-  </div>
-          </CardContent>
-        </Card>
+            <div className="text-center text-xs text-slate-600 mt-6">
+              By signing up, you agree to our{" "}
+              <Link href="/privacy-policy" className="hover:text-blue-400 transition-colors">Terms and Conditions</Link>
+            </div>
+          </div>
+        </motion.div>
       </div>
     </div>
   );

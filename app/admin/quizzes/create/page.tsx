@@ -1,14 +1,21 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
-import { collection, getDocs, addDoc, Timestamp, query, updateDoc, getDoc, doc, orderBy, where } from "firebase/firestore";
+import { collection, getDocs, addDoc, Timestamp, query, updateDoc, getDoc, doc, orderBy, where, limit, startAfter } from "firebase/firestore";
 import { db } from "../../../firebase";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useSearchParams, useRouter } from 'next/navigation';
@@ -27,24 +34,30 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { brandColors, animations, glassmorphism } from '@/lib/design-tokens';
+import { motion } from 'framer-motion';
 
 function CreateQuizContent() {
   const router = useRouter();
-  const [currentStep, setCurrentStep] = useState(1);
-  const [courses, setCourses] = useState([]);
-  const [subjects, setSubjects] = useState([]);
-  const [chapters, setChapters] = useState([]);
+  const [currentStep, setCurrentStep] = useState<number>(1);
+  const [courses, setCourses] = useState<any[]>([]);
+  const [subjects, setSubjects] = useState<any[]>([]);
+  const [chapters, setChapters] = useState<string[]>([]);
   const params = useSearchParams();
   const quizId = params.get('id');
   const isEditMode = Boolean(quizId);
 
-  // Date filter for question creation
   const [questionDateFilter, setQuestionDateFilter] = useState('');
+  const [seriesList, setSeriesList] = useState<any[]>([]); // New Series State
+  const [questionsLimit, setQuestionsLimit] = useState(20); // Pagination limit
+  const [lastQuestionDoc, setLastQuestionDoc] = useState<any>(null); // For cursor pagination
+  const [loadingQuestions, setLoadingQuestions] = useState(false);
 
-  const [quizConfig, setQuizConfig] = useState({
+  const [quizConfig, setQuizConfig] = useState<any>({
     title: '',
     description: '',
     course: '',
+    series: [], // New series field
     subjects: [],
     chapters: [],
     totalQuestions: 20,
@@ -83,18 +96,9 @@ function CreateQuizContent() {
         }));
         setCourses(courseList);
 
-        // Questions
-        const q = query(
-          collection(db, "questions"),
-          orderBy("createdAt", "desc")
-        );
-        const snapshot = await getDocs(q);
-        const questions = snapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...(doc.data()),
-          usedInQuizzes: doc.data().usedInQuizzes || 0,
-        }));
-        setAvailableQuestions(questions);
+        // Initial Load: Fetch Series only. Questions are fetched based on selection via useEffect.
+        const seriesSnap = await getDocs(collection(db, 'series'));
+        setSeriesList(seriesSnap.docs.map(d => ({ id: d.id, ...d.data() })));
 
         // When in edit mode, fetch quiz details
         if (quizId) {
@@ -111,6 +115,7 @@ function CreateQuizContent() {
                 : data.subject?.name
                   ? [data.subject.name]
                   : [],
+              series: data.series || [], // Load series
               chapters: Array.isArray(data.chapters)
                 ? data.chapters.map(c => c.name || c).filter(name => name)
                 : data.chapter?.name
@@ -131,7 +136,7 @@ function CreateQuizContent() {
   }, [quizId]);
 
   // Available question state
-  const [availableQuestions, setAvailableQuestions] = useState([]);
+  const [availableQuestions, setAvailableQuestions] = useState<any[]>([]);
 
   // Subjects by course
   useEffect(() => {
@@ -185,21 +190,21 @@ function CreateQuizContent() {
           }
         }));
       }
-      setChapters(Array.from(allChapters));
+      setChapters(Array.from(allChapters) as string[]);
     };
     fetchChapters();
     // eslint-disable-next-line
   }, [quizConfig.subjects, subjects]);
 
   // Handlers
-  const handleInputChange = (field, value) => {
+  const handleInputChange = (field: string, value: any) => {
     setQuizConfig(prev => ({
       ...prev,
       [field]: value,
     }));
   };
 
-  const handleMultiSelectChange = (field, value) => {
+  const handleMultiSelectChange = (field: string, value: any) => {
     setQuizConfig(prev => ({
       ...prev,
       [field]: Array.isArray(value) ? value : [value],
@@ -207,7 +212,7 @@ function CreateQuizContent() {
     }));
   };
 
-  const handleQuestionFilterChange = (field, value) => {
+  const handleQuestionFilterChange = (field: string, value: any) => {
     setQuizConfig(prev => ({
       ...prev,
       questionFilters: {
@@ -219,7 +224,7 @@ function CreateQuizContent() {
   };
 
   // Question selection (with bigger radios)
-  const handleQuestionSelection = async (question) => {
+  const handleQuestionSelection = (question: any) => {
     setQuizConfig((prev) => {
       const isSelected = prev.selectedQuestions.some(q => q.id === question.id);
       const updatedQuestions = isSelected
@@ -231,33 +236,11 @@ function CreateQuizContent() {
         selectedQuestions: updatedQuestions,
       };
     });
-
-    try {
-      const questionRef = doc(db, 'questions', question.id);
-      if (question.usedInQuizzes === undefined) {
-        question.usedInQuizzes = 0;
-      }
-      await updateDoc(questionRef, {
-        usedInQuizzes: question.usedInQuizzes + (quizConfig.selectedQuestions.some(q => q.id === question.id) ? -1 : 1)
-      });
-    } catch (error) {
-      console.error("Error updating question usage:", error);
-    }
   };
 
   // Auto select logic: select the latest added questions (top N recent)
-  const handleAutoSelectQuestions = async () => {
+  const handleAutoSelectQuestions = () => {
     if (quizConfig.selectedQuestions.length > 0) {
-      for (const question of quizConfig.selectedQuestions) {
-        try {
-          const questionRef = doc(db, 'questions', question.id);
-          await updateDoc(questionRef, {
-            usedInQuizzes: Math.max((question.usedInQuizzes || 1) - 1, 0),
-          });
-        } catch (error) {
-          console.error("Error decrementing usage count:", error);
-        }
-      }
       setQuizConfig((prev) => ({
         ...prev,
         selectedQuestions: [],
@@ -266,7 +249,7 @@ function CreateQuizContent() {
     }
 
     // Filter by date if applied
-    let filtered = availableQuestions;
+    let filtered: any[] = availableQuestions;
     if (quizConfig.questionFilters.createdAfter) {
       const afterDate = new Date(quizConfig.questionFilters.createdAfter).getTime();
       filtered = filtered.filter(q => {
@@ -288,17 +271,6 @@ function CreateQuizContent() {
       ...prev,
       selectedQuestions: selected,
     }));
-
-    for (const question of selected) {
-      try {
-        const questionRef = doc(db, 'questions', question.id);
-        await updateDoc(questionRef, {
-          usedInQuizzes: (question.usedInQuizzes || 0) + 1,
-        });
-      } catch (error) {
-        console.error("Error incrementing usage count:", error);
-      }
-    }
   };
 
   const handleCreateOrUpdateQuiz = async () => {
@@ -330,6 +302,7 @@ function CreateQuizContent() {
       chapters: quizConfig.chapters.includes('all-chapters')
         ? chapters.map(ch => ({ id: ch, name: ch }))
         : quizConfig.chapters.map(ch => ({ id: ch, name: ch })),
+      series: quizConfig.series || [], // Save series
       updatedAt: Timestamp.now(),
       published: quizConfig.published || false,
     };
@@ -339,14 +312,26 @@ function CreateQuizContent() {
     }
 
     try {
+      const { updateQuestionUsage } = await import('../../../lib/analytics');
+      const currentIds = quizConfig.selectedQuestions.map(q => q.id);
+      let previousIds = [];
+
       if (isEditMode) {
         const quizRef = doc(db, 'quizzes', quizId);
+        const oldSnap = await getDoc(quizRef);
+        if (oldSnap.exists()) {
+          previousIds = (oldSnap.data().selectedQuestions || []).map(q => q.id);
+        }
         await updateDoc(quizRef, quizPayload);
         alert("Quiz updated successfully!");
       } else {
         await addDoc(collection(db, "quizzes"), quizPayload);
         alert("Quiz created successfully!");
       }
+
+      // Perform usage tracking update
+      await updateQuestionUsage(currentIds, previousIds);
+
       router.push("/dashboard/admin");
     } catch (error) {
       console.error("Error saving quiz:", error);
@@ -375,7 +360,7 @@ function CreateQuizContent() {
     }
   };
 
-  const getDifficultyColor = (difficulty) => {
+  const getDifficultyColor = (difficulty: string) => {
     switch (difficulty) {
       case 'Easy': return 'bg-green-100 text-green-800';
       case 'Medium': return 'bg-yellow-100 text-yellow-800';
@@ -385,8 +370,8 @@ function CreateQuizContent() {
   };
 
   // Helper to show counts
-  const countQuestionsFor = ({ course, subject, chapter }) => {
-    let filtered = availableQuestions;
+  const countQuestionsFor = ({ course, subject, chapter }: { course?: string, subject?: string, chapter?: string }) => {
+    let filtered: any[] = availableQuestions;
     if (course) {
       filtered = filtered.filter(q => q.course === course);
     }
@@ -447,14 +432,13 @@ function CreateQuizContent() {
     }
     acc[subject].push(question);
     return acc;
-  }, {});
+  }, {} as Record<string, any[]>);
 
-  // MultiSelect component with badge count
   const MultiSelect = ({ value, onChange, options, placeholder, disabled, type }) => {
     const displayValue = value.includes('all-subjects') || value.includes('all-chapters')
       ? value.includes('all-subjects') ? 'All Subjects' : 'All Chapters'
       : value.length > 0
-        ? value.join(', ')
+        ? `${value.length} selected`
         : placeholder;
 
     return (
@@ -462,42 +446,39 @@ function CreateQuizContent() {
         <PopoverTrigger asChild>
           <Button
             variant="outline"
-            className="w-full justify-between border-gray-300 focus:border-blue-500 rounded-xl"
+            className="w-full justify-between h-12 bg-white/50 dark:bg-black/20 border-white/20 dark:border-white/10 rounded-xl text-left font-normal"
             disabled={disabled}
           >
             <span className="truncate">{displayValue}</span>
-            <span>▼</span>
+            <span className="opacity-50">▼</span>
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-full max-h-60 overflow-y-auto">
-          <div className="space-y-2">
+        <PopoverContent className={`${glassmorphism.light} w-[300px] p-2 border-white/20 dark:border-white/10 max-h-[300px] overflow-y-auto custom-scrollbar`}>
+          <div className="space-y-1">
             {options.map((option) => (
-              <div key={option.value} className="flex items-center justify-between">
-                <div className="flex items-center">
-                  <Checkbox
-                    checked={value.includes(option.value)}
-                    onCheckedChange={(checked) => {
-                      if (checked) {
-                        if (option.value === 'all-subjects' || option.value === 'all-chapters') {
-                          onChange([option.value]);
-                        } else {
-                          onChange([
-                            ...value.filter(v => v !== 'all-subjects' && v !== 'all-chapters'),
-                            option.value
-                          ]);
-                        }
-                      } else {
-                        onChange(value.filter(v => v !== option.value));
-                      }
-                    }}
-                    className="mr-2"
-                    style={{ width: 22, height: 22 }} // Slightly larger for better UX
-                  />
-                  <span>{option.label}</span>
-                </div>
-                {/* Show badge with number of questions */}
+              <div
+                key={option.value}
+                className="flex items-center space-x-2 p-2 rounded-lg hover:bg-black/5 dark:hover:bg-white/10 cursor-pointer transition-colors"
+                onClick={() => {
+                  const isSelected = value.includes(option.value);
+                  if (isSelected) {
+                    onChange(value.filter(v => v !== option.value));
+                  } else {
+                    if (option.value === 'all-subjects' || option.value === 'all-chapters') {
+                      onChange([option.value]);
+                    } else {
+                      onChange([...value.filter(v => v !== 'all-subjects' && v !== 'all-chapters'), option.value]);
+                    }
+                  }
+                }}
+              >
+                <Checkbox
+                  checked={value.includes(option.value)}
+                  className="border-gray-400 dark:border-gray-500"
+                />
+                <span className="flex-1 text-sm">{option.label}</span>
                 {!!type && (
-                  <Badge variant="secondary" className="ml-2">
+                  <Badge variant="secondary" className="bg-black/5 dark:bg-white/10 text-xs text-muted-foreground">
                     {type === 'course' && countQuestionsFor({ course: option.value })}
                     {type === 'subject' && countQuestionsFor({ subject: option.value })}
                     {type === 'chapter' && countQuestionsFor({ chapter: option.value })}
@@ -512,91 +493,115 @@ function CreateQuizContent() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
-      <header className="bg-white/90 shadow-lg backdrop-blur-md border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex items-center justify-between">
+    <div className="min-h-screen bg-background text-foreground bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-blue-50 via-background to-background dark:from-blue-950/20 dark:via-background dark:to-background">
+      <header className={`${glassmorphism.light} sticky top-0 z-50 border-b border-white/20 dark:border-white/10`}>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
           <div className="flex items-center space-x-4">
-            <div className="h-12 w-12 bg-gradient-to-r from-blue-600 to-indigo-700 rounded-xl flex items-center justify-center">
-              <BookOpen className="h-6 w-6 text-white" />
+            <div className="h-10 w-10 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/20">
+              <BookOpen className="h-5 w-5 text-white" />
             </div>
-            <h1 className="text-3xl font-bold text-gray-900 tracking-tight">
-              {isEditMode ? 'Edit Quiz' : 'Create Quiz'}
-            </h1>
+            <div>
+              <h1 className="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400">
+                {isEditMode ? 'Edit Quiz' : 'Create New Quiz'}
+              </h1>
+              <p className="text-xs text-muted-foreground font-medium">
+                {isEditMode ? 'Modify existing quiz details' : 'Set up a new assessment'}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <Button variant="ghost" size="sm" onClick={() => router.back()} className="text-muted-foreground hover:text-foreground">
+              Cancel
+            </Button>
           </div>
         </div>
       </header>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <Tabs defaultValue="basic" className="space-y-8">
-          <TabsList className="grid w-full grid-cols-4 bg-white/80 backdrop-blur-md rounded-xl p-1 shadow-md">
-            <TabsTrigger value="basic" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white rounded-lg transition-all duration-200">Basic Info</TabsTrigger>
-            <TabsTrigger value="settings" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white rounded-lg transition-all duration-200">Settings</TabsTrigger>
-            <TabsTrigger value="questions" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white rounded-lg transition-all duration-200">Questions</TabsTrigger>
-            <TabsTrigger value="schedule" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white rounded-lg transition-all duration-200">Schedule</TabsTrigger>
+          <TabsList className={`${glassmorphism.medium} p-1 rounded-2xl border border-white/20 dark:border-white/10 w-full grid grid-cols-4 lg:w-[600px] mx-auto`}>
+            <TabsTrigger value="basic" className="rounded-xl data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-600 data-[state=active]:to-indigo-600 data-[state=active]:text-white transition-all duration-300">Basic Info</TabsTrigger>
+            <TabsTrigger value="settings" className="rounded-xl data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-600 data-[state=active]:to-indigo-600 data-[state=active]:text-white transition-all duration-300">Settings</TabsTrigger>
+            <TabsTrigger value="questions" className="rounded-xl data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-600 data-[state=active]:to-indigo-600 data-[state=active]:text-white transition-all duration-300">Questions</TabsTrigger>
+            <TabsTrigger value="schedule" className="rounded-xl data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-600 data-[state=active]:to-indigo-600 data-[state=active]:text-white transition-all duration-300">Schedule</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="basic" className="space-y-8">
-            <Card className="bg-white/90 backdrop-blur-md shadow-lg hover:shadow-xl transition-shadow duration-300 rounded-xl">
-              <CardHeader className="border-b border-gray-200">
-                <CardTitle className="text-2xl font-semibold text-gray-900">Basic Information</CardTitle>
+          <TabsContent value="basic" className="space-y-8 focus-visible:outline-none">
+            <Card className={`${glassmorphism.light} border-white/20 dark:border-white/10 shadow-xl`}>
+              <CardHeader className="border-b border-white/10 pb-6">
+                <CardTitle className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-gray-900 to-gray-600 dark:from-white dark:to-gray-300">
+                  Basic Information
+                </CardTitle>
+                <p className="text-sm text-muted-foreground">Define the core details of your quiz.</p>
               </CardHeader>
-              <CardContent className="space-y-6 pt-6">
-                <div className="space-y-4">
-                  <Label htmlFor="title" className="text-lg font-medium text-gray-700">Quiz Title *</Label>
-                  <Input
-                    id="title"
-                    placeholder="Enter quiz title"
-                    value={quizConfig.title}
-                    onChange={(e) => handleInputChange('title', e.target.value)}
-                    className="border-gray-300 focus:border-blue-500 focus:ring-blue-500 rounded-xl"
-                  />
+              <CardContent className="space-y-8 pt-8">
+                <div className="grid grid-cols-1 gap-8">
+                  <div className="space-y-3">
+                    <Label htmlFor="title" className="text-base font-semibold">Quiz Title <span className="text-red-500">*</span></Label>
+                    <Input
+                      id="title"
+                      placeholder="e.g. Advanced Physics Mechanics Final"
+                      value={quizConfig.title}
+                      onChange={(e) => handleInputChange('title', e.target.value)}
+                      className="h-12 text-lg bg-white/50 dark:bg-black/20 border-white/20 dark:border-white/10 focus:ring-blue-500 rounded-xl"
+                    />
+                  </div>
+                  <div className="space-y-3">
+                    <Label htmlFor="description" className="text-base font-semibold">Description</Label>
+                    <Textarea
+                      id="description"
+                      placeholder="Briefly describe what this quiz covers..."
+                      value={quizConfig.description}
+                      onChange={(e) => handleInputChange('description', e.target.value)}
+                      rows={4}
+                      className="resize-none bg-white/50 dark:bg-black/20 border-white/20 dark:border-white/10 focus:ring-blue-500 rounded-xl"
+                    />
+                  </div>
                 </div>
-                <div className="space-y-4">
-                  <Label htmlFor="description" className="text-lg font-medium text-gray-700">Description</Label>
-                  <Textarea
-                    id="description"
-                    placeholder="Enter quiz description"
-                    value={quizConfig.description}
-                    onChange={(e) => handleInputChange('description', e.target.value)}
-                    rows={4}
-                    className="border-gray-300 focus:border-blue-500 focus:ring-blue-500 rounded-xl"
-                  />
-                </div>
+
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  <div className="space-y-4">
-                    <Label htmlFor="course" className="text-lg font-medium text-gray-700">Course *</Label>
+                  <div className="space-y-3">
+                    <Label htmlFor="course" className="text-base font-semibold">Course <span className="text-red-500">*</span></Label>
                     <Popover>
                       <PopoverTrigger asChild>
                         <Button
                           variant="outline"
-                          className="w-full justify-between border-gray-300 focus:border-blue-500 rounded-xl"
+                          className="w-full justify-between h-12 bg-white/50 dark:bg-black/20 border-white/20 dark:border-white/10 rounded-xl"
                         >
-                          <span>{quizConfig.course || 'Select course'}</span>
-                          <span>▼</span>
+                          <span className={!quizConfig.course ? 'text-muted-foreground' : ''}>
+                            {quizConfig.course || 'Select course'}
+                          </span>
+                          <span className="opacity-50">▼</span>
                         </Button>
                       </PopoverTrigger>
-                      <PopoverContent className="w-full">
-                        <div className="space-y-2">
+                      <PopoverContent className="w-[300px] p-2" align="start">
+                        <div className="space-y-1 max-h-[300px] overflow-y-auto custom-scrollbar">
                           {courses.map(course => (
                             <div
                               key={course.name}
-                              className="flex items-center cursor-pointer hover:bg-blue-100 p-2 rounded justify-between"
+                              className={`flex items-center justify-between p-3 rounded-lg cursor-pointer transition-colors ${quizConfig.course === course.name
+                                ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400'
+                                : 'hover:bg-accent'
+                                }`}
                               onClick={() => {
                                 handleInputChange('course', course.name);
                                 handleMultiSelectChange('subjects', []);
                                 handleMultiSelectChange('chapters', []);
                               }}
                             >
-                              <span>{course.name}</span>
-                              <Badge variant="secondary" className="ml-2">{countQuestionsFor({ course: course.name })}</Badge>
+                              <span className="font-medium">{course.name}</span>
+                              <Badge variant="secondary" className="bg-white/50 dark:bg-black/20 ml-2">
+                                {countQuestionsFor({ course: course.name })}
+                              </Badge>
                             </div>
                           ))}
                         </div>
                       </PopoverContent>
                     </Popover>
                   </div>
-                  <div className="space-y-4">
-                    <Label htmlFor="subjects" className="text-lg font-medium text-gray-700">Subjects *</Label>
+
+                  <div className="space-y-3">
+                    <Label htmlFor="subjects" className="text-base font-semibold">Subjects <span className="text-red-500">*</span></Label>
                     <MultiSelect
                       value={quizConfig.subjects}
                       onChange={(value) => handleMultiSelectChange('subjects', value)}
@@ -606,8 +611,9 @@ function CreateQuizContent() {
                       type="subject"
                     />
                   </div>
-                  <div className="space-y-4">
-                    <Label htmlFor="chapters" className="text-lg font-medium text-gray-700">Chapters</Label>
+
+                  <div className="space-y-3">
+                    <Label htmlFor="chapters" className="text-base font-semibold">Chapters</Label>
                     <MultiSelect
                       value={quizConfig.chapters}
                       onChange={(value) => handleMultiSelectChange('chapters', value)}
@@ -617,32 +623,45 @@ function CreateQuizContent() {
                       type="chapter"
                     />
                   </div>
+
+                  <div className="space-y-3">
+                    <Label htmlFor="series" className="text-base font-semibold">Series</Label>
+                    <MultiSelect
+                      value={quizConfig.series || []}
+                      onChange={(value) => handleMultiSelectChange('series', value)}
+                      options={seriesList.map(s => ({ value: s.id, label: s.name }))}
+                      placeholder="Assign to Series"
+                      disabled={false}
+                      type=""
+                    />
+                  </div>
                 </div>
               </CardContent>
             </Card>
           </TabsContent>
 
-          <TabsContent value="settings" className="space-y-8">
-            <Card className="bg-white/90 backdrop-blur-md shadow-lg hover:shadow-xl transition-shadow duration-300 rounded-xl">
-              <CardHeader className="border-b border-gray-200">
-                <CardTitle className="text-2xl font-semibold text-gray-900">Quiz Settings</CardTitle>
+          <TabsContent value="settings" className="space-y-8 focus-visible:outline-none">
+            <Card className={`${glassmorphism.light} border-white/20 dark:border-white/10 shadow-xl`}>
+              <CardHeader className="border-b border-white/10 pb-6">
+                <CardTitle className="text-2xl font-bold">Quiz Configuration</CardTitle>
+                <p className="text-sm text-muted-foreground">Customize how the quiz behaves.</p>
               </CardHeader>
-              <CardContent className="space-y-6 pt-6">
+              <CardContent className="space-y-6 pt-8">
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                  <div className="space-y-4">
-                    <Label htmlFor="totalQuestions" className="text-lg font-medium text-gray-700">Total Questions</Label>
+                  <div className="space-y-3">
+                    <Label htmlFor="totalQuestions" className="text-base font-semibold">Total Questions</Label>
                     <Input
                       id="totalQuestions"
                       type="number"
                       min="1"
-                      max="100"
+                      max="200"
                       value={quizConfig.totalQuestions}
                       onChange={(e) => handleInputChange('totalQuestions', parseInt(e.target.value))}
-                      className="border-gray-300 focus:border-blue-500 focus:ring-blue-500 rounded-xl"
+                      className="bg-white/50 dark:bg-black/20 border-white/20 dark:border-white/10 rounded-xl"
                     />
                   </div>
-                  <div className="space-y-4">
-                    <Label htmlFor="questionsPerPage" className="text-lg font-medium text-gray-700">Questions Per Page</Label>
+                  <div className="space-y-3">
+                    <Label htmlFor="questionsPerPage" className="text-base font-semibold">Questions / Page</Label>
                     <Input
                       id="questionsPerPage"
                       type="number"
@@ -650,11 +669,11 @@ function CreateQuizContent() {
                       max={quizConfig.totalQuestions}
                       value={quizConfig.questionsPerPage}
                       onChange={(e) => handleInputChange('questionsPerPage', parseInt(e.target.value))}
-                      className="border-gray-300 focus:border-blue-500 focus:ring-blue-500 rounded-xl"
+                      className="bg-white/50 dark:bg-black/20 border-white/20 dark:border-white/10 rounded-xl"
                     />
                   </div>
-                  <div className="space-y-4">
-                    <Label htmlFor="duration" className="text-lg font-medium text-gray-700">Duration (minutes)</Label>
+                  <div className="space-y-3">
+                    <Label htmlFor="duration" className="text-base font-semibold">Duration (min)</Label>
                     <Input
                       id="duration"
                       type="number"
@@ -662,11 +681,11 @@ function CreateQuizContent() {
                       max="300"
                       value={quizConfig.duration}
                       onChange={(e) => handleInputChange('duration', parseInt(e.target.value))}
-                      className="border-gray-300 focus:border-blue-500 focus:ring-blue-500 rounded-xl"
+                      className="bg-white/50 dark:bg-black/20 border-white/20 dark:border-white/10 rounded-xl"
                     />
                   </div>
-                  <div className="space-y-4">
-                    <Label htmlFor="maxAttempts" className="text-lg font-medium text-gray-700">Max Attempts</Label>
+                  <div className="space-y-3">
+                    <Label htmlFor="maxAttempts" className="text-base font-semibold">Max Attempts</Label>
                     <Input
                       id="maxAttempts"
                       type="number"
@@ -674,101 +693,79 @@ function CreateQuizContent() {
                       max="10"
                       value={quizConfig.maxAttempts}
                       onChange={(e) => handleInputChange('maxAttempts', parseInt(e.target.value))}
-                      className="border-gray-300 focus:border-blue-500 focus:ring-blue-500 rounded-xl"
+                      className="bg-white/50 dark:bg-black/20 border-white/20 dark:border-white/10 rounded-xl"
                     />
                   </div>
                 </div>
-                <div className="space-y-4">
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 p-6 bg-white/30 dark:bg-black/20 rounded-xl border border-white/10">
                   <div className="flex items-center space-x-3">
                     <Checkbox
                       id="shuffleQuestions"
                       checked={quizConfig.shuffleQuestions}
                       onCheckedChange={(checked) => handleInputChange('shuffleQuestions', checked)}
-                      className="h-5 w-5 border-gray-300"
+                      className="h-5 w-5 data-[state=checked]:bg-blue-600 border-gray-400 dark:border-gray-500"
                     />
-                    <Label htmlFor="shuffleQuestions" className="text-lg font-medium text-gray-700">Shuffle Questions</Label>
+                    <Label htmlFor="shuffleQuestions" className="text-base cursor-pointer">Shuffle Questions</Label>
                   </div>
                   <div className="flex items-center space-x-3">
                     <Checkbox
                       id="shuffleOptions"
                       checked={quizConfig.shuffleOptions}
                       onCheckedChange={(checked) => handleInputChange('shuffleOptions', checked)}
-                      className="h-5 w-5 border-gray-300"
+                      className="h-5 w-5 data-[state=checked]:bg-blue-600 border-gray-400 dark:border-gray-500"
                     />
-                    <Label htmlFor="shuffleOptions" className="text-lg font-medium text-gray-700">Shuffle Answer Options</Label>
+                    <Label htmlFor="shuffleOptions" className="text-base cursor-pointer">Shuffle Options</Label>
                   </div>
                   <div className="flex items-center space-x-3">
                     <Checkbox
                       id="showExplanation"
                       checked={quizConfig.showExplanation}
                       onCheckedChange={(checked) => handleInputChange('showExplanation', checked)}
-                      className="h-5 w-5 border-gray-300"
+                      className="h-5 w-5 data-[state=checked]:bg-blue-600 border-gray-400 dark:border-gray-500"
                     />
-                    <Label htmlFor="showExplanation" className="text-lg font-medium text-gray-700">Show Explanations</Label>
+                    <Label htmlFor="showExplanation" className="text-base cursor-pointer">Show Explanations</Label>
                   </div>
                 </div>
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-4">
-                    <Label htmlFor="accessType" className="text-lg font-medium text-gray-700">Access Type</Label>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <Button
-                          variant="outline"
-                          className="w-full justify-between border-gray-300 focus:border-blue-500 rounded-xl"
+                  <div className="space-y-3">
+                    <Label htmlFor="accessType" className="text-base font-semibold">Access Type</Label>
+                    <div className="grid grid-cols-2 gap-3">
+                      {['free', 'paid'].map(type => (
+                        <div
+                          key={type}
+                          onClick={() => handleInputChange('accessType', type)}
+                          className={`cursor-pointer text-center py-3 px-4 rounded-xl border transition-all ${quizConfig.accessType === type
+                            ? 'bg-blue-600 text-white border-blue-600 shadow-lg shadow-blue-500/30'
+                            : 'bg-white/50 dark:bg-black/20 border-white/20 dark:border-white/10 hover:bg-white/70'
+                            }`}
                         >
-                          <span>{quizConfig.accessType || 'Select access type'}</span>
-                          <span>▼</span>
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-full">
-                        <div className="space-y-2">
-                          {['free', 'paid'].map(type => (
-                            <div
-                              key={type}
-                              className="flex items-center cursor-pointer hover:bg-blue-100 p-2 rounded"
-                              onClick={() => handleInputChange('accessType', type)}
-                            >
-                              {type.charAt(0).toUpperCase() + type.slice(1)}
-                            </div>
-                          ))}
+                          {type.charAt(0).toUpperCase() + type.slice(1)}
                         </div>
-                      </PopoverContent>
-                    </Popover>
+                      ))}
+                    </div>
                   </div>
-                  <div className="space-y-4">
-                    <Label htmlFor="resultVisibility" className="text-lg font-medium text-gray-700">Result Visibility</Label>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <Button
-                          variant="outline"
-                          className="w-full justify-between border-gray-300 focus:border-blue-500 rounded-xl"
-                        >
-                          <span>{quizConfig.resultVisibility || 'Select visibility'}</span>
-                          <span>▼</span>
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-full">
-                        <div className="space-y-2">
-                          {['immediate', 'manual', 'scheduled'].map(visibility => (
-                            <div
-                              key={visibility}
-                              className="flex items-center cursor-pointer hover:bg-blue-100 p-2 rounded"
-                              onClick={() => handleInputChange('resultVisibility', visibility)}
-                            >
-                              {visibility.charAt(0).toUpperCase() + visibility.slice(1)}
-                            </div>
-                          ))}
-                        </div>
-                      </PopoverContent>
-                    </Popover>
+                  <div className="space-y-3">
+                    <Label htmlFor="resultVisibility" className="text-base font-semibold">Result Visibility</Label>
+                    <Select value={quizConfig.resultVisibility} onValueChange={(v) => handleInputChange('resultVisibility', v)}>
+                      <SelectTrigger className="w-full h-12 bg-white/50 dark:bg-black/20 border-white/20 dark:border-white/10 rounded-xl">
+                        <SelectValue placeholder="Select visibility" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="immediate">Immediate</SelectItem>
+                        <SelectItem value="manual">Manual Release</SelectItem>
+                        <SelectItem value="scheduled">Scheduled</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
               </CardContent>
             </Card>
           </TabsContent>
 
-          <TabsContent value="questions" className="space-y-8">
-            <Card className="bg-white/90 backdrop-blur-md shadow-lg hover:shadow-xl transition-shadow duration-300 rounded-xl">
+          <TabsContent value="questions" className="space-y-8 focus-visible:outline-none">
+            <Card className={`${glassmorphism.light} border-white/20 dark:border-white/10 shadow-xl`}>
               <CardHeader className="border-b border-gray-200">
                 <div className="flex justify-between items-center">
                   <CardTitle className="text-2xl font-semibold text-gray-900">Question Selection</CardTitle>
@@ -828,6 +825,7 @@ function CreateQuizContent() {
                         options={[{ value: 'all-subjects', label: 'All Subjects' }, ...subjects.map(s => ({ value: s.name, label: s.name }))]}
                         placeholder="All subjects"
                         type="subject"
+                        disabled={false}
                       />
                     </div>
                     <div className="space-y-2">
@@ -838,6 +836,7 @@ function CreateQuizContent() {
                         options={[{ value: 'all-chapters', label: 'All Chapters' }, ...chapters.map(ch => ({ value: ch, label: ch }))]}
                         placeholder="All chapters"
                         type="chapter"
+                        disabled={false}
                       />
                     </div>
                     <div className="space-y-2">
@@ -929,160 +928,243 @@ function CreateQuizContent() {
                 <div className="space-y-8">
                   {Object.entries(groupedQuestions).map(([subject, questions]) => (
                     <div key={subject} className="space-y-4">
-                      <div className="border-b-2 border-blue-500 pb-2 flex items-center">
-                        <h3 className="text-xl font-semibold text-gray-900">{subject}</h3>
-                        <Badge variant="secondary" className="ml-3">{questions.length}</Badge>
+                      <div className="border-b border-white/10 pb-2 flex items-center">
+                        <h3 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400">{subject}</h3>
+                        <Badge variant="secondary" className="ml-3 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300">{questions.length}</Badge>
                       </div>
-                      {questions.map((question) => (
-                        <Card
-                          key={question.id}
-                          className={`cursor-pointer transition-all duration-200 ${quizConfig.selectedQuestions.some((q) => q.id === question.id)
-                            ? 'ring-2 ring-blue-500 bg-blue-50 shadow-lg'
-                            : 'hover:shadow-md'
-                            }`}
-                        >
-                          <CardContent className="p-5 flex items-start space-x-4">
-                            <Checkbox
-                              checked={quizConfig.selectedQuestions.some((q) => q.id === question.id)}
-                              onCheckedChange={() => handleQuestionSelection(question)}
-                              className="h-8 w-8 mt-1 border-gray-400" // bigger for better UX
-                              style={{ minWidth: 32, minHeight: 32 }}
-                            />
-                            <div className="flex-1 space-y-2">
-                              <div className="flex items-start justify-between">
-                                <p className="font-medium text-gray-900 text-lg">
-                                  {question.questionText ? question.questionText.replace(/<[^>]+>/g, '') : 'Untitled Question'}
-                                </p>
-                              </div>
-                              <div className="flex items-center flex-wrap gap-2">
-                                <Badge variant="outline" className="border-gray-300 text-gray-700">
-                                  {question.chapter}
-                                </Badge>
-                                <Badge className={getDifficultyColor(question.difficulty ?? 'Easy')}>
-                                  {question.difficulty ?? 'Easy'}
-                                </Badge>
-                                <span className="text-sm text-gray-500">
-                                  Used in {question.usedInQuizzes || 0} quizzes
-                                </span>
-                                {question.createdAt && (
-                                  <span className="text-xs text-gray-400 ml-2">
-                                    Added: {question.createdAt.seconds ? new Date(question.createdAt.seconds * 1000).toLocaleDateString() : new Date(question.createdAt).toLocaleDateString()}
+                      {questions.map((question) => {
+                        const isSelected = quizConfig.selectedQuestions.some((q) => q.id === question.id);
+                        return (
+                          <div
+                            key={question.id}
+                            className={`group relative p-4 rounded-xl border transition-all duration-200 cursor-pointer ${isSelected
+                              ? 'bg-blue-50/50 dark:bg-blue-900/10 border-blue-500/50 shadow-[0_0_15px_rgba(59,130,246,0.1)]'
+                              : 'bg-white/40 dark:bg-black/20 border-white/10 hover:border-blue-500/30 hover:bg-white/60 dark:hover:bg-white/5'
+                              }`}
+                            onClick={() => handleQuestionSelection(question)}
+                          >
+                            <div className="flex items-start gap-4">
+                              <Checkbox
+                                checked={isSelected}
+                                className={`mt-1 h-5 w-5 rounded-md border-2 ${isSelected ? 'border-blue-500 bg-blue-500 text-white' : 'border-gray-400 dark:border-gray-500'}`}
+                              />
+                              <div className="flex-1 space-y-2">
+                                <div className="flex items-start justify-between gap-4">
+                                  <div
+                                    className="font-medium text-foreground text-base line-clamp-2"
+                                    dangerouslySetInnerHTML={{ __html: question.questionText || 'Untitled Question' }}
+                                  />
+                                  <div className="flex flex-col gap-2 shrink-0">
+                                    {question.accessType === 'paid' ? (
+                                      <Badge className="bg-gradient-to-r from-amber-500 to-yellow-500 text-white border-0">Premium</Badge>
+                                    ) : question.seriesId ? (
+                                      <Badge variant="outline" className="border-purple-500 text-purple-600 dark:text-purple-400">Series</Badge>
+                                    ) : (
+                                      <Badge variant="secondary" className="bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400">Free</Badge>
+                                    )}
+                                  </div>
+                                </div>
+                                <div className="flex items-center flex-wrap gap-2 text-sm">
+                                  <Badge variant="outline" className="bg-white/30 dark:bg-black/20 border-white/20">
+                                    {question.chapter || 'No Chapter'}
+                                  </Badge>
+                                  <Badge className={getDifficultyColor(question.difficulty ?? 'Easy')}>
+                                    {question.difficulty ?? 'Easy'}
+                                  </Badge>
+                                  <span className="text-muted-foreground text-xs flex items-center gap-1">
+                                    <Eye className="w-3 h-3" />
+                                    Used in {question.usedInQuizzes || 0} quizzes
                                   </span>
-                                )}
+                                </div>
                               </div>
                             </div>
-                          </CardContent>
-                        </Card>
-                      ))}
+                          </div>
+                        );
+                      })}
                     </div>
                   ))}
+
+                  {/* Load More Button */}
+                  <div className="flex justify-center pt-8">
+                    <Button
+                      variant="outline"
+                      onClick={async () => {
+                        if (!lastQuestionDoc) return;
+                        setLoadingQuestions(true);
+                        const q = query(
+                          collection(db, "questions"),
+                          orderBy("createdAt", "desc"),
+                          startAfter(lastQuestionDoc),
+                          limit(20)
+                        );
+                        const snapshot = await getDocs(q);
+                        const newQuestions = snapshot.docs.map((doc) => ({
+                          id: doc.id,
+                          ...(doc.data()),
+                          usedInQuizzes: doc.data().usedInQuizzes || 0,
+                        }));
+                        setAvailableQuestions(prev => [...prev, ...newQuestions]);
+                        setLastQuestionDoc(snapshot.docs[snapshot.docs.length - 1]);
+                        setLoadingQuestions(false);
+                      }}
+                      className="w-full md:w-auto min-w-[200px] h-12 bg-white/10 dark:bg-white/5 hover:bg-white/20 border-white/10 backdrop-blur-md"
+                      disabled={loadingQuestions}
+                    >
+                      {loadingQuestions ? (
+                        <span className="flex items-center"><span className="animate-spin mr-2">⏳</span> Loading...</span>
+                      ) : 'Load More Questions'}
+                    </Button>
+                  </div>
                 </div>
               </CardContent>
             </Card>
           </TabsContent>
 
-          <TabsContent value="schedule" className="space-y-8">
-            <Card className="bg-white/90 backdrop-blur-md shadow-lg hover:shadow-xl transition-shadow duration-300 rounded-xl">
-              <CardHeader className="border-b border-gray-200">
-                <CardTitle className="text-2xl font-semibold text-gray-900">Schedule Quiz</CardTitle>
+          <TabsContent value="schedule" className="space-y-8 focus-visible:outline-none">
+            <Card className={`${glassmorphism.light} border-white/20 dark:border-white/10 shadow-xl`}>
+              <CardHeader className="border-b border-white/10 pb-6">
+                <CardTitle className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-gray-900 to-gray-600 dark:from-white dark:to-gray-300">
+                  Schedule Quiz
+                </CardTitle>
+                <p className="text-sm text-muted-foreground">Set timing and publication status.</p>
               </CardHeader>
-              <CardContent className="space-y-6 pt-6">
+              <CardContent className="space-y-6 pt-8">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-4">
-                    <Label htmlFor="startDate" className="text-lg font-medium text-gray-700">Start Date</Label>
+                  <div className="space-y-3">
+                    <Label htmlFor="startDate" className="text-base font-semibold">Start Date</Label>
                     <div className="relative">
-                      <Calendar className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
+                      <Calendar className="absolute left-3 top-3.5 h-5 w-5 text-muted-foreground" />
                       <Input
                         id="startDate"
                         type="date"
                         value={quizConfig.startDate}
                         onChange={(e) => handleInputChange('startDate', e.target.value)}
-                        className="pl-12 border-gray-300 focus:border-blue-500 focus:ring-blue-500 rounded-xl"
+                        className="pl-12 h-12 bg-white/50 dark:bg-black/20 border-white/20 dark:border-white/10 rounded-xl"
                       />
                     </div>
                   </div>
-                  <div className="space-y-4">
-                    <Label htmlFor="endDate" className="text-lg font-medium text-gray-700">End Date</Label>
+                  <div className="space-y-3">
+                    <Label htmlFor="endDate" className="text-base font-semibold">End Date</Label>
                     <div className="relative">
-                      <Calendar className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
+                      <Calendar className="absolute left-3 top-3.5 h-5 w-5 text-muted-foreground" />
                       <Input
                         id="endDate"
                         type="date"
                         value={quizConfig.endDate}
                         onChange={(e) => handleInputChange('endDate', e.target.value)}
-                        className="pl-12 border-gray-300 focus:border-blue-500 focus:ring-blue-500 rounded-xl"
+                        className="pl-12 h-12 bg-white/50 dark:bg-black/20 border-white/20 dark:border-white/10 rounded-xl"
                       />
                     </div>
                   </div>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-4">
-                    <Label htmlFor="startTime" className="text-lg font-medium text-gray-700">Start Time</Label>
+                  <div className="space-y-3">
+                    <Label htmlFor="startTime" className="text-base font-semibold">Start Time</Label>
                     <div className="relative">
-                      <Clock className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
+                      <Clock className="absolute left-3 top-3.5 h-5 w-5 text-muted-foreground" />
                       <Input
                         id="startTime"
                         type="time"
                         value={quizConfig.startTime}
                         onChange={(e) => handleInputChange('startTime', e.target.value)}
-                        className="pl-12 border-gray-300 focus:border-blue-500 focus:ring-blue-500 rounded-xl"
+                        className="pl-12 h-12 bg-white/50 dark:bg-black/20 border-white/20 dark:border-white/10 rounded-xl"
                       />
                     </div>
                   </div>
-                  <div className="space-y-4">
-                    <Label htmlFor="endTime" className="text-lg font-medium text-gray-700">End Time</Label>
+                  <div className="space-y-3">
+                    <Label htmlFor="endTime" className="text-base font-semibold">End Time</Label>
                     <div className="relative">
-                      <Clock className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
+                      <Clock className="absolute left-3 top-3.5 h-5 w-5 text-muted-foreground" />
                       <Input
                         id="endTime"
                         type="time"
                         value={quizConfig.endTime}
                         onChange={(e) => handleInputChange('endTime', e.target.value)}
-                        className="pl-12 border-gray-300 focus:border-blue-500 focus:ring-blue-500 rounded-xl"
+                        className="pl-12 h-12 bg-white/50 dark:bg-black/20 border-white/20 dark:border-white/10 rounded-xl"
                       />
                     </div>
                   </div>
-                  <div className="flex items-center space-x-3">
+                  <div className="flex items-center space-x-3 pt-4">
                     <Checkbox
                       id="published"
                       checked={quizConfig.published}
                       onCheckedChange={(checked) => handleInputChange('published', checked)}
-                      className="h-5 w-5 border-gray-300"
+                      className="h-5 w-5 data-[state=checked]:bg-blue-600 border-gray-400 dark:border-gray-500"
                     />
-                    <Label htmlFor="published" className="text-lg font-medium text-gray-700">Publish Quiz</Label>
+                    <Label htmlFor="published" className="text-base font-medium cursor-pointer">Publish Quiz</Label>
                   </div>
                 </div>
-                <div className="bg-gray-50/80 p-6 rounded-xl shadow-inner">
-                  <h4 className="text-xl font-medium text-gray-900 mb-4">Quiz Summary</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-lg">
-                    <div>
-                      <p className="text-gray-700"><strong>Title:</strong> {quizConfig.title || 'Not set'}</p>
-                      <p className="text-gray-700"><strong>Course:</strong> {quizConfig.course || 'Not selected'}</p>
-                      <p className="text-gray-700"><strong>Subjects:</strong> {Array.isArray(quizConfig.subjects) ? (quizConfig.subjects.includes('all-subjects') ? 'All Subjects' : quizConfig.subjects.join(', ') || 'Not selected') : 'Not selected'}</p>
-                      <p className="text-gray-700"><strong>Chapters:</strong> {Array.isArray(quizConfig.chapters) ? (quizConfig.chapters.includes('all-chapters') ? 'All Chapters' : quizConfig.chapters.join(', ') || 'None selected') : 'None selected'}</p>
-                      <p className="text-gray-700"><strong>Questions:</strong> {quizConfig.selectedQuestions.length} / {quizConfig.totalQuestions}</p>
-                      <p className="text-gray-700"><strong>Duration:</strong> {quizConfig.duration} minutes</p>
-                      <p className="text-gray-700"><strong>Published:</strong> {quizConfig.published ? 'Yes' : 'No'}</p>
+
+                <div className="bg-white/40 dark:bg-black/40 p-6 rounded-2xl border border-white/10 backdrop-blur-sm">
+                  <h4 className="text-xl font-bold mb-6 flex items-center gap-2">
+                    <span className="w-1 h-6 bg-blue-500 rounded-full inline-block"></span>
+                    Quiz Summary
+                  </h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm">
+                    <div className="space-y-3">
+                      <div className="flex justify-between border-b border-white/5 pb-2">
+                        <span className="text-muted-foreground">Title</span>
+                        <span className="font-semibold text-right">{quizConfig.title || 'Not set'}</span>
+                      </div>
+                      <div className="flex justify-between border-b border-white/5 pb-2">
+                        <span className="text-muted-foreground">Course</span>
+                        <span className="font-semibold text-right">{quizConfig.course || 'Not selected'}</span>
+                      </div>
+                      <div className="flex justify-between border-b border-white/5 pb-2">
+                        <span className="text-muted-foreground">Subjects</span>
+                        <span className="font-semibold text-right truncate max-w-[200px]">{Array.isArray(quizConfig.subjects) ? (quizConfig.subjects.includes('all-subjects') ? 'All Subjects' : quizConfig.subjects.join(', ') || 'Not selected') : 'Not selected'}</span>
+                      </div>
+                      <div className="flex justify-between border-b border-white/5 pb-2">
+                        <span className="text-muted-foreground">Series</span>
+                        <span className="font-semibold text-right truncate max-w-[200px]">
+                          {Array.isArray(quizConfig.series) && quizConfig.series.length > 0
+                            ? `${quizConfig.series.length} series selected`
+                            : 'None'}
+                        </span>
+                      </div>
+                      <div className="flex justify-between border-b border-white/5 pb-2">
+                        <span className="text-muted-foreground">Question Count</span>
+                        <span className="font-semibold text-right">{quizConfig.selectedQuestions.length} / {quizConfig.totalQuestions}</span>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-gray-700"><strong>Access:</strong> {quizConfig.accessType}</p>
-                      <p className="text-gray-700"><strong>Result Visibility:</strong> {quizConfig.resultVisibility}</p>
-                      <p className="text-gray-700"><strong>Max Attempts:</strong> {quizConfig.maxAttempts}</p>
-                      <p className="text-gray-700"><strong>Shuffle Questions:</strong> {quizConfig.shuffleQuestions ? 'Yes' : 'No'}</p>
+                    <div className="space-y-3">
+                      <div className="flex justify-between border-b border-white/5 pb-2">
+                        <span className="text-muted-foreground">Duration</span>
+                        <span className="font-semibold text-right">{quizConfig.duration} minutes</span>
+                      </div>
+                      <div className="flex justify-between border-b border-white/5 pb-2">
+                        <span className="text-muted-foreground">Access Type</span>
+                        <span className="font-semibold text-right capitalize">{quizConfig.accessType}</span>
+                      </div>
+                      <div className="flex justify-between border-b border-white/5 pb-2">
+                        <span className="text-muted-foreground">Result Visibility</span>
+                        <span className="font-semibold text-right capitalize">{quizConfig.resultVisibility}</span>
+                      </div>
+                      <div className="flex justify-between border-b border-white/5 pb-2">
+                        <span className="text-muted-foreground">Shuffle</span>
+                        <span className="font-semibold text-right">{quizConfig.shuffleQuestions ? 'Yes' : 'No'}</span>
+                      </div>
+                      <div className="flex justify-between border-b border-white/5 pb-2">
+                        <span className="text-muted-foreground">Status</span>
+                        <Badge variant={quizConfig.published ? "default" : "secondary"}>
+                          {quizConfig.published ? 'Published' : 'Draft'}
+                        </Badge>
+                      </div>
                     </div>
                   </div>
                 </div>
-                <div className="flex justify-end space-x-4">
+
+                <div className="flex justify-end space-x-4 pt-4">
                   <Button
                     variant="outline"
-                    className="border-gray-300 hover:bg-gray-100 transition-all duration-200"
+                    className="h-12 px-6 border-white/20 dark:border-white/10 hover:bg-white/10 dark:hover:bg-white/5"
                     onClick={() => router.back()}
                   >
                     <X className="h-5 w-5 mr-2" /> Cancel
                   </Button>
                   <Button
                     onClick={handleCreateOrUpdateQuiz}
-                    className="bg-gradient-to-r from-blue-600 to-indigo-700 hover:from-blue-700 hover:to-indigo-800 text-white transition-all duration-200"
+                    className="h-12 px-8 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-lg shadow-blue-500/25"
                   >
                     {isEditMode ? 'Update Quiz' : 'Create Quiz'}
                   </Button>
