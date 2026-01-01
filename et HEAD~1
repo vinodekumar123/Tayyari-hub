@@ -1,0 +1,117 @@
+[33mcommit 31f07ed207bc2ae788b881652c79d0711fadc106[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m)[m
+Author: Vinode Narain <tayyarihub1@gmail.com>
+Date:   Fri Jan 2 04:40:53 2026 +0500
+
+    feat: redesign Legends section, update footer contact, and fix hydration errors
+
+ .env.local | 15 [31m---------------[m
+ 1 file changed, 15 deletions(-)
+
+[33mcommit c84ba5306722e58c8989d399b97e565cde0820da[m
+Author: Vinode Narain <tayyarihub1@gmail.com>
+Date:   Fri Jan 2 04:30:38 2026 +0500
+
+    Initial commit
+
+ (firestore.rules)                                  |  160 [32m+[m[31m-[m
+ .env.local                                         |   15 [32m+[m
+ .env.local.template                                |   47 [32m+[m
+ .github/copilot-instructions.md                    |   43 [32m+[m
+ .gitignore                                         |    2 [32m+[m
+ TAYYARIHUB_FEATURES.md                             |   73 [32m+[m
+ app/admin/content/page.tsx                         |  338 [32m++++[m
+ app/admin/courses/page.tsx                         |  316 [32m++[m[31m--[m
+ app/admin/layout.tsx                               |  103 [32m+[m[31m-[m
+ app/admin/mockquestions/create/page.tsx            | 1621 [32m++++++++++++[m[31m--------[m
+ app/admin/mockquestions/questionbank/page.tsx      | 1260 [32m+++++++++[m[31m------[m
+ app/admin/mockquize/create/page.tsx                |    2 [32m+[m[31m-[m
+ app/admin/questions/auto-tagger/page.tsx           |  581 [32m+++++++[m
+ app/admin/questions/create/page.tsx                | 1423 [32m++++++++[m[31m---------[m
+ app/admin/questions/questionbank/page.tsx          | 1513 [32m++++++++++++[m[31m------[m
+ app/admin/quizzes/create/page.tsx                  |  702 [32m+++++[m[31m----[m
+ app/admin/quizzes/quizebank/page.tsx               |  955 [32m++++++[m[31m------[m
+ app/admin/reports/page.tsx                         |  850 [32m++++++++++[m
+ app/admin/results/page.tsx                         |  262 [32m++[m[31m--[m
+ app/admin/results/quizescore/page.tsx              |  980 [32m+++++[m[31m-------[m
+ app/admin/settings/page.tsx                        |   76 [32m+[m
+ app/admin/statistics/page.tsx                      |  463 [32m++++++[m
+ app/admin/students/foradmin/page.tsx               |  532 [32m++++[m[31m---[m
+ app/admin/students/page.tsx                        | 1472 [32m+++++++++++[m[31m-------[m
+ app/admin/students/responses/page.tsx              |  741 [32m++++++[m[31m---[m
+ app/admin/students/results/page.tsx                |  134 [32m+[m[31m-[m
+ app/admin/students/user-responses/page.tsx         |  202 [32m++[m[31m-[m
+ app/admin/tasks/page.tsx                           |  446 [32m++++++[m
+ app/admin/users/sessions/page.tsx                  |  317 [32m++++[m
+ app/api/ai/auto-tag/route.ts                       |   83 [32m+[m
+ app/api/ai/generate/route.ts                       |  122 [32m++[m
+ app/api/quizzes/route.ts                           |   67 [32m+[m
+ app/api/students/[id]/route.ts                     |   69 [32m+[m
+ app/api/students/bulk-delete/route.ts              |  173 [32m+++[m
+ app/api/students/route.ts                          |   74 [32m+[m
+ app/api/test/route.ts                              |   16 [32m+[m
+ app/auth/login/page.tsx                            |  264 [32m++[m[31m--[m
+ app/auth/onboarding/page.tsx                       |   79 [32m+[m[31m-[m
+ app/auth/register/page.tsx                         |  280 [32m++[m[31m--[m
+ app/dashboard/admin/community/page.tsx             |  280 [32m++++[m
+ app/dashboard/admin/my-stats/page.tsx              |  128 [32m++[m
+ app/dashboard/admin/my-tasks/page.tsx              |  173 [32m+++[m
+ app/dashboard/admin/page.tsx                       |  317 [32m++[m[31m--[m
+ app/dashboard/community/[postId]/page.tsx          |  261 [32m++++[m
+ app/dashboard/community/page.tsx                   |  292 [32m++++[m
+ app/dashboard/layout.tsx                           |   18 [32m+[m[31m-[m
+ app/dashboard/leaderboard/page.tsx                 |  197 [32m+++[m
+ app/dashboard/student/community/page.tsx           |  301 [32m++++[m
+ app/dashboard/student/flashcards/page.tsx          |  396 [32m+++++[m
+ app/dashboard/student/layout.tsx                   |   11 [32m+[m
+ app/dashboard/student/page.tsx                     |  772 [32m++++++[m[31m----[m
+ app/dashboard/student/reports/page.tsx             |  347 [32m+++++[m
+ app/dashboard/student/settings/page.tsx            |  201 [32m+++[m
+ app/dashboard/study/page.tsx                       |  221 [32m+++[m
+ app/dashboard/teacher/community/page.tsx           |  301 [32m++++[m
+ app/dashboard/teacher/page.tsx                     |  390 [32m+++++[m
+ app/dashboard/teacher/reports/page.tsx             |  550 [32m+++++++[m
+ app/dashboard/teacher/stats/page.tsx               |  145 [32m++[m
+ app/dashboard/teacher/tasks/page.tsx               |  186 [32m+++[m
+ app/firebase.ts                                    |   12 [32m+[m[31m-[m
+ app/layout.tsx                                     |    4 [32m+[m[31m-[m
+ app/lib/analytics.ts                               |   87 [32m++[m
+ app/lib/student-stats.ts                           |    4 [32m+[m[31m-[m
+ app/page.tsx                                       |   59 [32m+[m[31m-[m
+ app/quiz/create-mock/page.tsx                      |  555 [32m+++[m[31m----[m
+ app/quiz/results/page.tsx                          |  397 [32m+++[m[31m--[m
+ app/quiz/start/page.tsx                            |  955 [32m+++++++[m[31m-----[m
+ check-data.js                                      |   63 [32m+[m
+ components/Home/courses.tsx                        |  684 [32m++++++[m[31m---[m
+ components/Home/decorations/BackgroundPatterns.tsx |  101 [32m++[m
+ components/Home/decorations/FloatingElements.tsx   |   67 [32m+[m
+ components/Home/features-bento.tsx                 |  394 [32m+++++[m
+ components/Home/features-pillars.tsx               |  210 [32m+++[m
+ components/Home/footer.tsx                         |  166 [32m+[m[31m-[m
+ components/Home/hero-modern.tsx                    |  100 [32m++[m
+ components/Home/hero.tsx                           |  100 [32m+[m[31m-[m
+ components/Home/navbar.tsx                         |  102 [32m+[m[31m-[m
+ components/Home/pricing-bundles.tsx                |  475 [32m++++++[m
+ components/Home/reviews.tsx                        |  312 [32m++[m[31m--[m
+ components/Home/screenshot.tsx                     |   96 [32m+[m[31m-[m
+ components/Home/series-schedule.tsx                |  242 [32m+++[m
+ components/Home/whatsapp.tsx                       |  166 [32m+[m[31m-[m
+ components/Home/why-to-join.tsx                    |  207 [32m+[m[31m--[m
+ components/admin/CsvImporter.tsx                   |  471 [32m++++++[m
+ components/admin/students/StudentFilters.tsx       |  123 [32m++[m
+ components/admin/students/StudentStats.tsx         |   70 [32m+[m
+ components/admin/students/StudentTable.tsx         |  276 [32m++++[m
+ components/notifications/NotificationBell.tsx      |   94 [32m++[m
+ components/notifications/NotificationItem.tsx      |   71 [32m+[m
+ components/ui/button.tsx                           |    3 [32m+[m[31m-[m
+ components/ui/input.tsx                            |    5 [32m+[m[31m-[m
+ components/ui/progress.tsx                         |    5 [32m+[m[31m-[m
+ components/ui/scroll-reveal.tsx                    |   32 [32m+[m
+ components/ui/sidebar.tsx                          |  222 [32m++[m[31m-[m
+ components/ui/skeleton-cards.tsx                   |  126 [32m++[m
+ components/ui/spotlight.tsx                        |  122 [32m++[m
+ components/ui/text-generate-effect.tsx             |   58 [32m+[m
+ components/ui/unauthorized-modal.tsx               |   47 [32m+[m
+ components/ui/wavy-background.tsx                  |  174 [32m+++[m
+ debug-questions.js                                 |   48 [32m+[m
+ fix-encoding.ps1                                   |   15 [32m+[m
+ hooks/useFcmToken.ts                             
