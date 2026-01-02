@@ -123,16 +123,21 @@ export default function StudentStudyZone() {
     return (
         <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-8">
             {/* Header */}
-            <div className="relative group rounded-3xl overflow-hidden p-8 mb-8">
-                <div className="absolute inset-0 bg-gradient-to-r from-blue-600 to-indigo-600 opacity-90" />
-                <div className="relative z-10 text-white">
-                    <h1 className="text-4xl font-black mb-2">Study Zone</h1>
-                    <p className="text-blue-100 font-medium max-w-2xl">
-                        Access premium notes, video lectures, and resources tailored for your enrolled series.
-                    </p>
+            <div className='relative group'>
+                <div className='absolute inset-0 bg-gradient-to-r from-[#004AAD] via-[#0066FF] to-[#00B4D8] rounded-3xl blur-xl opacity-20 dark:opacity-30 group-hover:opacity-30 dark:group-hover:opacity-40 transition-opacity duration-500' />
+                <div className={`relative ${glassmorphism.light} p-8 rounded-3xl border border-[#004AAD]/20 dark:border-[#0066FF]/30`}>
+                    <div className='flex items-center justify-between'>
+                        <div>
+                            <h1 className='text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-[#004AAD] via-[#0066FF] to-[#00B4D8] dark:from-[#0066FF] dark:via-[#00B4D8] dark:to-[#66D9EF] mb-2'>
+                                Study Zone
+                            </h1>
+                            <p className='text-muted-foreground font-semibold flex items-center gap-2'>
+                                <FileText className='w-5 h-5 text-[#00B4D8] dark:text-[#66D9EF]' />
+                                Access premium notes, video lectures, and resources tailored for your enrolled series.
+                            </p>
+                        </div>
+                    </div>
                 </div>
-                {/* Decorative Circle */}
-                <div className="absolute top-0 right-0 w-64 h-64 bg-white opacity-10 rounded-full -translate-y-1/2 translate-x-1/3 blur-3xl" />
             </div>
 
             {/* Filters */}

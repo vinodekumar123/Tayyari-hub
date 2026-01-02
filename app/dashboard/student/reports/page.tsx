@@ -155,13 +155,23 @@ export default function StudentReportsPage() {
     return (
         <div className="min-h-screen bg-background text-foreground bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-blue-50 via-background to-background dark:from-blue-950/20 dark:via-background dark:to-background p-6 md:p-12">
             <div className="max-w-5xl mx-auto space-y-8">
-                <header>
-                    <h1 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-gray-900 to-gray-600 dark:from-white dark:to-gray-300 flex items-center gap-3">
-                        <Flag className="w-8 h-8 text-indigo-600 dark:text-indigo-400" />
-                        Reported Questions
-                    </h1>
-                    <p className="text-gray-500 dark:text-gray-400 mt-2">Track the status of your reported issues and view admin replies.</p>
-                </header>
+                {/* Header */}
+                <div className='relative group'>
+                    <div className='absolute inset-0 bg-gradient-to-r from-[#004AAD] via-[#0066FF] to-[#00B4D8] rounded-3xl blur-xl opacity-20 dark:opacity-30 group-hover:opacity-30 dark:group-hover:opacity-40 transition-opacity duration-500' />
+                    <div className={`relative ${glassmorphism.light} p-8 rounded-3xl border border-[#004AAD]/20 dark:border-[#0066FF]/30`}>
+                        <div className='flex items-center justify-between'>
+                            <div>
+                                <h1 className='text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-[#004AAD] via-[#0066FF] to-[#00B4D8] dark:from-[#0066FF] dark:via-[#00B4D8] dark:to-[#66D9EF] mb-2'>
+                                    Reported Questions
+                                </h1>
+                                <p className='text-muted-foreground font-semibold flex items-center gap-2'>
+                                    <Flag className='w-5 h-5 text-[#00B4D8] dark:text-[#66D9EF]' />
+                                    Track the status of your reported issues and view admin replies.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
 
                 {/* Filters */}
                 <div className={`${glassmorphism.light} p-5 rounded-2xl border border-white/20 dark:border-white/10 shadow-sm flex flex-col md:flex-row gap-4 items-center justify-between`}>
