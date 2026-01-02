@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState, useMemo } from 'react';
+import Image from 'next/image';
 import { db, auth } from '@/app/firebase';
 import { collection, query, orderBy, onSnapshot, doc, updateDoc, serverTimestamp, getDoc, getDocs, where, documentId } from 'firebase/firestore';
 import { onAuthStateChanged, User } from 'firebase/auth';
@@ -192,7 +193,7 @@ export default function AdminReportsPage() {
         };
 
         fetchMissingSubjects();
-    }, [reports]);
+    }, [reports, questionsCache]);
 
     // Extract unique subjects
     const uniqueSubjects = useMemo(() => {
@@ -761,7 +762,9 @@ export default function AdminReportsPage() {
                                             {questionDetails?.images && questionDetails.images.length > 0 && (
                                                 <div className="mt-4 grid gap-2">
                                                     {questionDetails.images.map((img, i) => (
-                                                        <img key={i} src={img} alt={`Question image ${i + 1}`} className="rounded-lg border border-gray-200 dark:border-white/10 max-h-[300px] object-contain" />
+                                                        <div key={i} className="rounded-lg border border-gray-200 dark:border-white/10 max-h-[300px] overflow-hidden">
+                                                            <Image src={img} alt={`Question image ${i + 1}`} width={800} height={600} className="object-contain" unoptimized={true} />
+                                                        </div>
                                                     ))}
                                                 </div>
                                             )}
@@ -810,7 +813,7 @@ export default function AdminReportsPage() {
                                                 <span>Reported by: {selectedReport.studentName}</span>
                                                 <span>{selectedReport.createdAt?.seconds ? format(new Date(selectedReport.createdAt.seconds * 1000), 'MMM d, p') : ''}</span>
                                             </div>
-                                            <p className="text-red-900 dark:text-red-200 text-sm font-medium">"{selectedReport.issue}"</p>
+                                            <p className="text-red-900 dark:text-red-200 text-sm font-medium">&quot;{selectedReport.issue}&quot;</p>
                                         </div>
 
                                         <div className="space-y-2 pt-4">

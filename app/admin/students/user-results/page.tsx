@@ -98,7 +98,7 @@ const UserQuizResultsPage: React.FC = () => {
       ) : (
         <div className="space-y-4">
           {attempts.map((attempt) => {
-            const meta = quizMetas[attempt.quizId] || {};
+            const meta = quizMetas[attempt.quizId] || ({} as QuizMeta);
             const date = attempt.submittedAt
               ? new Date(attempt.submittedAt.seconds * 1000)
               : null;

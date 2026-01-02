@@ -130,7 +130,7 @@ export default function Page() {
 
   useEffect(() => {
     fetchAllData();
-  }, []);
+  }, [fetchAllData]);
 
   // --- Handlers ---
 

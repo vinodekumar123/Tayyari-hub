@@ -297,7 +297,7 @@ const FeaturesBento = () => {
                     Everything You Need to <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-teal-500">Ace MDCAT</span>
                 </h1>
                 <p className="text-lg text-slate-600 dark:text-slate-400 max-w-2xl mx-auto">
-                    Tayyari Hub isn't just a website; it's a complete digital ecosystem designed to replace traditional academies with smarter, faster, and 24/7 preparation.
+                    Tayyari Hub isn&apos;t just a website; it&apos;s a complete digital ecosystem designed to replace traditional academies with smarter, faster, and 24/7 preparation.
                 </p>
             </div>
 

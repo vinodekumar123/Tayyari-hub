@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { db } from '@/app/firebase';
 import { doc, getDoc, collection, query, where, orderBy, getDocs, addDoc, serverTimestamp, updateDoc, increment, arrayUnion, arrayRemove } from 'firebase/firestore';
 import { ForumPost, ForumReply } from '@/types';
@@ -27,21 +27,7 @@ export default function ThreadPage() {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [currentUserRole, setCurrentUserRole] = useState<'student' | 'admin' | 'teacher'>('student');
 
-    useEffect(() => {
-        if (postId && user) {
-            // Check role - simplified for now, ideally strictly checked on backend or claims
-            // In a real app we'd fetch the user's role from their profile claim or doc
-            // For now, assume admin claim is on user object or we fetch doc
-            const checkRole = async () => {
-                const snap = await getDoc(doc(db, 'users', user.uid));
-                if (snap.exists() && snap.data().admin) setCurrentUserRole('admin');
-            };
-            checkRole();
-            fetchThread();
-        }
-    }, [postId, user]);
-
-    const fetchThread = async () => {
+    const fetchThread = useCallback(async () => {
         try {
             if (typeof postId !== 'string') return;
 
@@ -69,7 +55,21 @@ export default function ThreadPage() {
         } catch (error) {
             console.error(error);
         }
-    };
+    }, [postId, router]);
+
+    useEffect(() => {
+        if (postId && user) {
+            // Check role - simplified for now, ideally strictly checked on backend or claims
+            // In a real app we'd fetch the user's role from their profile claim or doc
+            // For now, assume admin claim is on user object or we fetch doc
+            const checkRole = async () => {
+                const snap = await getDoc(doc(db, 'users', user.uid));
+                if (snap.exists() && snap.data().admin) setCurrentUserRole('admin');
+            };
+            checkRole();
+            fetchThread();
+        }
+    }, [postId, user, fetchThread]);
 
     const handlePostReply = async () => {
         if (!replyContent.trim()) return;

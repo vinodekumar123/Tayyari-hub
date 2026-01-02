@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { db, auth } from '@/app/firebase';
 import { collection, getDocs, query, where, doc, updateDoc, increment, arrayUnion, getDoc } from 'firebase/firestore';
 import { StudyMaterial } from '@/types';
@@ -22,13 +22,7 @@ export default function StudentStudyZone() {
     const [filterType, setFilterType] = useState('all');
     const [search, setSearch] = useState('');
 
-    useEffect(() => {
-        if (user?.uid) {
-            fetchData();
-        }
-    }, [user]);
-
-    const fetchData = async () => {
+    const fetchData = useCallback(async () => {
         try {
             setLoading(true);
 
@@ -58,7 +52,13 @@ export default function StudentStudyZone() {
         } finally {
             setLoading(false);
         }
-    };
+    }, [user?.uid]);
+
+    useEffect(() => {
+        if (user?.uid) {
+            fetchData();
+        }
+    }, [fetchData, user?.uid]);
 
     const handleInteraction = async (material: StudyMaterial, action: 'view' | 'download') => {
         try {

@@ -97,7 +97,7 @@ const ReviewCard = ({ review }: { review: typeof testimonials[0] }) => {
           <Quote className="w-8 h-8 text-slate-200 dark:text-slate-800 mb-2 absolute top-6 right-6 rotate-12" />
 
           <p className="text-slate-600 dark:text-slate-300 italic text-base leading-relaxed mb-6 flex-1 relative z-10">
-            "{review.quote}"
+            &quot;{review.quote}&quot;
           </p>
 
           {/* Footer */}

@@ -183,9 +183,10 @@ function ForAdminStudentResultsContent() {
 
               if (rawAnswers) {
                 if (!Array.isArray(rawAnswers) && typeof rawAnswers === 'object') {
-                  Object.entries(rawAnswers).forEach(([k, v]) => {
+                  Object.entries(rawAnswers).forEach(([k, val]) => {
+                    const v = val as any;
                     if (v && typeof v === 'object' && (v.selected !== undefined || v.answer !== undefined || v.value !== undefined || v.response !== undefined)) {
-                      answersMap[k] = (v as any).selected ?? (v as any).answer ?? (v as any).value ?? (v as any).response ?? null;
+                      answersMap[k] = v.selected ?? v.answer ?? v.value ?? v.response ?? null;
                     } else {
                       answersMap[k] = v;
                     }
@@ -365,7 +366,7 @@ function ForAdminStudentResultsContent() {
     };
 
     fetchStudentResults();
-  }, [studentId]);
+  }, [studentId, db]);
 
   // Derived filtered results
   const filteredResults = useMemo(() => {

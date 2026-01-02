@@ -6,10 +6,10 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Sidebar } from '@/components/ui/sidebar';
-import { 
-  Clock, 
-  Play, 
-  Pause, 
+import {
+  Clock,
+  Play,
+  Pause,
   BookOpen,
   Timer,
   AlertCircle,
@@ -25,7 +25,7 @@ import { useRouter } from 'next/navigation';
 export default function ActiveQuizzes() {
   const router = useRouter();
 
- 
+
   const activeQuizzes = [
     {
       id: 1,
@@ -65,7 +65,7 @@ export default function ActiveQuizzes() {
     const [minutes, seconds] = timeString.split(':').map(Number);
     const totalMinutes = minutes;
     const totalSeconds = seconds;
-    
+
     if (totalMinutes < 10) {
       return { time: timeString, color: 'text-red-600', urgent: true };
     } else if (totalMinutes < 30) {
@@ -91,7 +91,7 @@ export default function ActiveQuizzes() {
               <h1 className="text-2xl font-bold text-gray-900">Active Quizzes</h1>
               <p className="text-gray-600">Continue your ongoing assessments</p>
             </div>
-            
+
             <div className="flex items-center space-x-4">
               <Button variant="ghost" size="sm" className="relative">
                 <Bell className="h-5 w-5" />
@@ -117,7 +117,7 @@ export default function ActiveQuizzes() {
               {activeQuizzes.map((quiz) => {
                 const timeInfo = formatTime(quiz.timeRemaining);
                 const progress = getProgressPercentage(quiz.completedQuestions, quiz.totalQuestions);
-                
+
                 return (
                   <Card key={quiz.id} className="glass-card border-0 shadow-xl hover:shadow-2xl transition-all duration-300">
                     <CardHeader className="pb-4">
@@ -131,14 +131,14 @@ export default function ActiveQuizzes() {
                             <Badge variant="outline">{quiz.subject}</Badge>
                             <Badge className={
                               quiz.difficulty === 'Easy' ? 'bg-green-100 text-green-800' :
-                              quiz.difficulty === 'Medium' ? 'bg-yellow-100 text-yellow-800' :
-                              'bg-red-100 text-red-800'
+                                quiz.difficulty === 'Medium' ? 'bg-yellow-100 text-yellow-800' :
+                                  'bg-red-100 text-red-800'
                             }>
                               {quiz.difficulty}
                             </Badge>
                           </div>
                         </div>
-                        
+
                         <div className="text-right">
                           <div className={`text-3xl font-bold ${timeInfo.color} flex items-center space-x-2`}>
                             <Timer className="h-6 w-6" />
@@ -154,7 +154,7 @@ export default function ActiveQuizzes() {
                         </div>
                       </div>
                     </CardHeader>
-                    
+
                     <CardContent className="space-y-6">
                       {/* Progress Section */}
                       <div className="space-y-3">
@@ -209,7 +209,7 @@ export default function ActiveQuizzes() {
                             <div className="col-span-2">
                               <div className="flex items-center text-blue-600">
                                 <AlertCircle className="h-4 w-4 mr-2" />
-                                <span>Quiz not started yet. Click "Start Quiz" to begin.</span>
+                                <span>Quiz not started yet. Click &quot;Start Quiz&quot; to begin.</span>
                               </div>
                             </div>
                           )}
@@ -253,7 +253,7 @@ export default function ActiveQuizzes() {
                 <Clock className="h-10 w-10 text-gray-400" />
               </div>
               <h3 className="text-lg font-medium text-gray-900 mb-2">No active quizzes</h3>
-              <p className="text-gray-600 mb-6">You don't have any ongoing quizzes at the moment.</p>
+              <p className="text-gray-600 mb-6">You don&apos;t have any ongoing quizzes at the moment.</p>
               <Button className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-[1.02] font-medium" asChild>
                 <Link href="/quiz/available">
                   <BookOpen className="h-4 w-4 mr-2" />

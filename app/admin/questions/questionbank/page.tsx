@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import {
   collection,
   getDocs,
@@ -296,7 +297,7 @@ export default function QuestionBankPage() {
       fetchQuestions(false);
     }, 500);
     return () => clearTimeout(timer);
-  }, [searchQuery, filterCourse, filterSubject, filterDifficulty, filterYear, filterStatus, showDeleted]);
+  }, [searchQuery, filterCourse, filterSubject, filterDifficulty, filterYear, filterStatus, showDeleted, fetchQuestions]);
 
   const fetchStats = async (ids: string[]) => {
     if (ids.length === 0) return;
@@ -1115,9 +1116,15 @@ function QuestionAnalyticsSheet({ question, onClose }: { question: Question | nu
                 usedInQuizzes.map(quiz => (
                   <div key={quiz.id} className="flex items-center justify-between p-3 bg-white border rounded-lg hover:border-blue-200 transition-colors">
                     <span className="text-sm font-medium text-gray-700 truncate">{quiz.title}</span>
-                    <Button variant="ghost" size="sm" onClick={() => router.push(`/admin/quizzes/create?id=${quiz.id}`)} className="text-blue-600 h-8">
-                      View Quiz
-                    </Button>
+                    <Link href={`/admin/quizzes/create?id=${quiz.id}`} passHref>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-blue-600 h-8"
+                      >
+                        View Quiz
+                      </Button>
+                    </Link>
                   </div>
                 ))
               ) : (

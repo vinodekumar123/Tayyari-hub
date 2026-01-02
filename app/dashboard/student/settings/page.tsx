@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { db } from '@/app/firebase';
 import { collection, query, where, getDocs, updateDoc, doc, orderBy, deleteDoc, increment, serverTimestamp } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
@@ -38,16 +38,7 @@ export default function StudentSettingsPage() {
     const auth = getAuth(app);
     const user = auth.currentUser;
 
-    useEffect(() => {
-        setCurrentDeviceId(localStorage.getItem('tayyari_device_id') || '');
-        if (user) {
-            fetchMySessions();
-        } else {
-            setLoading(false);
-        }
-    }, [user]);
-
-    const fetchMySessions = async () => {
+    const fetchMySessions = useCallback(async () => {
         if (!user) return;
         setLoading(true);
         try {
@@ -66,7 +57,16 @@ export default function StudentSettingsPage() {
         } finally {
             setLoading(false);
         }
-    };
+    }, [user]);
+
+    useEffect(() => {
+        setCurrentDeviceId(localStorage.getItem('tayyari_device_id') || '');
+        if (user) {
+            fetchMySessions();
+        } else {
+            setLoading(false);
+        }
+    }, [user, fetchMySessions]);
 
     const handleRevokeSession = async (sessionId: string) => {
         if (!confirm('Are you sure you want to log out this device?')) return;
@@ -120,10 +120,10 @@ export default function StudentSettingsPage() {
                         <CardHeader>
                             <CardTitle className="flex items-center gap-2">
                                 <Smartphone className="w-5 h-5 text-indigo-500" />
-                                Where you're logged in
+                                Where you&apos;re logged in
                             </CardTitle>
                             <CardDescription>
-                                Maximize security by logging out of devices you don't recognize.
+                                Maximize security by logging out of devices you don&apos;t recognize.
                                 Limit: 3 Active Devices.
                             </CardDescription>
                         </CardHeader>

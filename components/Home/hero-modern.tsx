@@ -9,8 +9,9 @@ import { GridPattern, GradientMesh } from "./decorations/BackgroundPatterns";
 import { Spotlight } from "@/components/ui/spotlight";
 import { TextGenerateEffect } from "@/components/ui/text-generate-effect";
 
+const COLORS = ["#13FFAA", "#1E67C6", "#CE84CF", "#DD335C"];
+
 const HeroModern = () => {
-    const COLORS = ["#13FFAA", "#1E67C6", "#CE84CF", "#DD335C"];
     const color = useMotionValue(COLORS[0]);
     const backgroundImage = useMotionTemplate`radial-gradient(125% 125% at 50% 0%, transparent 50%, ${color})`;
 

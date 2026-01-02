@@ -116,11 +116,7 @@ export default function CreateUserQuizPage() {
         setSubjects(sArr);
         setChaptersBySubject(chaptersObj);
 
-        if (sArr.length > 0 && selectedSubjects.length === 0) {
-          // Optional: Pre-select first subject?
-          // setSelectedSubjects([sArr[0]]);
-          // setSelectedChapters(chaptersObj[sArr[0]]?.slice(0, 1) || []);
-        }
+        // no-op: do not auto-select subjects on mount to avoid surprising UX
       } catch (err) {
         console.error('Failed to load mock-questions meta', err);
         setError('Failed to load subjects/chapters. Try again later.');

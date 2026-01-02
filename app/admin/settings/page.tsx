@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 import {
   collection,
@@ -14,12 +14,14 @@ import { db, auth } from '../../firebase';
 import * as RadixSelect from '@radix-ui/react-select';
 import { toast } from 'sonner';
 
+import type { FormState, SubjectItem } from '@/types';
+
 export default function TeacherProfilePage() {
   const [userId, setUserId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  const [form, setForm] = useState({
+  const [form, setForm] = useState<FormState>({
     fullName: '',
     email: '',
     phone: '',
@@ -36,14 +38,69 @@ export default function TeacherProfilePage() {
       book: '',
       teacher: '',
     },
+    subjects: [],
   });
 
   const [allCourses, setAllCourses] = useState<any[]>([]);
-  const [allSubjects, setAllSubjects] = useState<any[]>([]);
+  const [allSubjects, setAllSubjects] = useState<SubjectItem[]>([]);
   const [availableSubjects, setAvailableSubjects] = useState<string[]>([]);
   const [availableChapters, setAvailableChapters] = useState<string[]>([]);
   const difficulties = ['Easy', 'Medium', 'Hard'];
   const years = Array.from({ length: new Date().getFullYear() - 2000 + 1 }, (_, i) => (2000 + i).toString());
+
+  const fetchCoursesFromFirestore = useCallback(async () => {
+    const snapshot = await getDocs(collection(db, 'courses'));
+    const courseData = snapshot.docs.map((doc) => ({
+      id: doc.id,
+      ...doc.data(),
+    }));
+    setAllCourses(courseData);
+  }, []);
+
+  const fetchAllSubjects = useCallback(async () => {
+    const snapshot = await getDocs(collection(db, 'subjects'));
+    const subjects = snapshot.docs.map((doc) => ({
+      id: doc.id,
+      name: (doc.data() as any).name || '',
+      ...(doc.data() as any),
+    }));
+    setAllSubjects(subjects);
+    setAvailableSubjects(subjects.map((s: any) => s.name));
+  }, []);
+
+  const fetchUserData = useCallback(async (uid: string) => {
+    try {
+      const userRef = doc(db, 'users', uid);
+      const snapshot = await getDoc(userRef);
+      if (snapshot.exists()) {
+          const data = snapshot.data();
+          setForm((prev) => ({
+            ...prev,
+            ...data,
+            metadata: {
+              ...prev.metadata,
+              ...(data.metadata || {}),
+            },
+            subjects: Array.isArray(data.subjects) ? data.subjects : prev.subjects,
+          }));
+
+          if (data.subjects && Array.isArray(data.subjects) && data.subjects.length > 0) {
+            const assignedIds = new Set(data.subjects);
+            const validSubjects = allSubjects.filter(s => assignedIds.has(s.id) || assignedIds.has(s.name));
+            if (validSubjects.length > 0) {
+              setAvailableSubjects(validSubjects.map(s => s.name));
+            } else {
+              const assignedNames = data.subjects;
+              setAvailableSubjects(Array.isArray(assignedNames) ? assignedNames : []);
+            }
+          }
+      }
+    } catch (err) {
+      toast.error('Failed to load profile.');
+    } finally {
+      setLoading(false);
+    }
+  }, [allSubjects]);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
@@ -58,29 +115,10 @@ export default function TeacherProfilePage() {
     fetchAllSubjects();
 
     return () => unsubscribe();
-  }, []);
-
-  const fetchCoursesFromFirestore = async () => {
-    const snapshot = await getDocs(collection(db, 'courses'));
-    const courseData = snapshot.docs.map((doc) => ({
-      id: doc.id,
-      ...doc.data(),
-    }));
-    setAllCourses(courseData);
-  };
-
-  const fetchAllSubjects = async () => {
-    const snapshot = await getDocs(collection(db, 'subjects'));
-    const subjects = snapshot.docs.map((doc) => ({
-      id: doc.id,
-      ...doc.data(),
-    }));
-    setAllSubjects(subjects);
-    // Initial set, will be overridden by user effect if user exists
-    setAvailableSubjects(subjects.map((s) => s.name));
-  };
+  }, [fetchUserData, fetchCoursesFromFirestore, fetchAllSubjects]);
 
   // Filter subjects whenever allSubjects or user form data changes
+  const assignedSubjects = (form as any).subjects;
   useEffect(() => {
     // We check form.subjects if that exists, or we need to store assigned IDs separately.
     // The current form structure puts user fields in root of form. 
@@ -88,7 +126,7 @@ export default function TeacherProfilePage() {
     // Looking at fetchUserData: setForm({ ...form, ...data }) puts firestore 'subjects' into 'form.subjects'.
     // Let's add 'subjects' to the form interface implicitly used here.
 
-    const assigned = (form as any).subjects;
+    const assigned = assignedSubjects;
 
     if (assigned && Array.isArray(assigned) && assigned.length > 0 && allSubjects.length > 0) {
       const assignedSet = new Set(assigned);
@@ -124,79 +162,20 @@ export default function TeacherProfilePage() {
         // Current code sets allSubjects by default.
       }
     }
-  }, [allSubjects, (form as any).subjects, loading, userId]);
+  }, [allSubjects, assignedSubjects, loading, userId]);
 
-  const fetchUserData = async (uid: string) => {
-    try {
-      const userRef = doc(db, 'users', uid);
-      const snapshot = await getDoc(userRef);
-      if (snapshot.exists()) {
-        const data = snapshot.data();
-        setForm({
-          ...form,
-          ...data,
-          metadata: {
-            course: '',
-            courseId: '',
-            subject: '',
-            subjectId: '',
-            chapter: '',
-            chapterId: '',
-            topic: '',
-            difficulty: '',
-            year: '',
-            book: '',
-            teacher: '',
-            ...(data.metadata || {}),
-          },
-        });
-
-        // Filter subjects based on assignment
-        if (data.subjects && Array.isArray(data.subjects) && data.subjects.length > 0) {
-          // data.subjects matches IDs from subjects collection? Or Names?
-          // Assuming data.subjects from "assignedSubjects" in other files are IDs
-          // Let's check logic: In teacher dashboard we saw it's IDs.
-          // However, to be safe, filter by ID if it matches, or Name if it matches.
-
-          const assignedIds = new Set(data.subjects);
-
-          // Filter allSubjects (which are objects {id, name, ...})
-          // If assignedIds contains the ID, keep it.
-
-          // Wait, allSubjects might not be populated yet if this runs fast. 
-          // But allSubjects is fetched in mount.
-          // Better to do this filtering logic in a useEffect that watches [allSubjects, form.subjects/userId] 
-          // BUT simpler: do it here if possible, or just set a local state "userAssignedSubjectIds".
-
-          const validSubjects = allSubjects.filter(s => assignedIds.has(s.id) || assignedIds.has(s.name));
-          if (validSubjects.length > 0) {
-            setAvailableSubjects(validSubjects.map(s => s.name));
-          } else {
-            // Fallback: if no matches found (maybe strings vs ids mismatch), just show all? 
-            // Or show none? The user requested restriction. 
-            // If data.subjects are names (legacy), we support that too.
-            const assignedNames = data.subjects;
-            setAvailableSubjects(assignedNames);
-          }
-        }
-      }
-    } catch (err) {
-      toast.error('Failed to load profile.');
-    } finally {
-      setLoading(false);
-    }
-  };
+  
 
   const handleInputChange = (field: string, value: any) => {
     setForm((prev) => ({
       ...prev,
-      metadata: { ...(prev.metadata || {}), [field]: value },
+      metadata: { ...prev.metadata, [field]: value },
     }));
   };
 
   const handleSave = async () => {
     if (!userId) return;
-    setSaving(true);
+      setSaving(true);
     try {
       await updateDoc(doc(db, 'users', userId), {
         ...form,

@@ -1,3 +1,51 @@
+export interface Question {
+  id: string;
+  subject?: string;
+  chapter?: string;
+  questionText?: string;
+  options?: any[];
+  correctAnswer?: string;
+  explanation?: string;
+  createdAt?: any;
+}
+
+export interface QuizConfig {
+  title: string;
+  course: string;
+  subject: string;
+  chapter: string;
+  totalQuestions: number;
+  duration: number;
+  maxPerSubject: number;
+}
+
+export interface Metadata {
+  course?: string;
+  courseId?: string;
+  subject?: string;
+  subjectId?: string;
+  chapter?: string;
+  chapterId?: string;
+  topic?: string;
+  difficulty?: string;
+  year?: string;
+  book?: string;
+  teacher?: string;
+}
+
+export interface FormState {
+  fullName: string;
+  email: string;
+  phone: string;
+  metadata: Metadata;
+  subjects?: string[];
+}
+
+export interface SubjectItem {
+  id: string;
+  name: string;
+  chapters?: Record<string, any>;
+}
 export interface Course {
     id: string;
     name: string;

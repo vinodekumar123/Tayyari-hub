@@ -1,27 +1,28 @@
 "use client";
 import React, { useState, useMemo } from 'react';
+// Move static test lists to module scope so they are stable across renders
+const availableTests = [
+  { name: 'BIOLOGY SERIES (Chapter-wise)', tests: '100+', mcqs: '100/ch', subject: 'Biology', class: 'XI & XII', type: 'Subject', free: false },
+  { name: 'CHEMISTRY SERIES (Chapter-wise)', tests: '100+', mcqs: '100/ch', subject: 'Chemistry', class: 'XI & XII', type: 'Subject', free: false },
+  { name: 'PHYSICS SERIES (Chapter-wise)', tests: '100+', mcqs: '100/ch', subject: 'Physics', class: 'XI & XII', type: 'Subject', free: false },
+  { name: 'ENGLISH SERIES', tests: 10, mcqs: 500, subject: 'English', class: 'All', type: 'Subject', free: false },
+  { name: 'LOGICAL REASONING', tests: 10, mcqs: 500, subject: 'Logical', class: 'All', type: 'Subject', free: false },
+  { name: 'GENERAL TESTS (XI)', tests: 6, mcqs: 50, subject: 'All', class: 'XI', type: 'Complete', free: false },
+  { name: 'GENERAL TESTS (XII)', tests: 6, mcqs: 50, subject: 'All', class: 'XII', type: 'Complete', free: false },
+  { name: '20,000 MCQ BANK', tests: 'Unlimited', mcqs: '20k+', subject: 'All', class: 'All', type: 'Bank', free: true }
+];
+
+// Upcoming tests data (Improvers Series)
+const upcomingTests = [
+  { name: 'IMPROVERS SERIES 1 (General Tests)', date: 'Starting Soon', mcqs: 180, type: 'Full', class: 'Repeater', free: false },
+  { name: 'IMPROVERS SERIES 2 (Full Syllabus)', date: 'Mid Session', mcqs: 200, type: 'Full', class: 'Repeater', free: false },
+  { name: 'FLP SERIES (26 Mocks)', date: 'Exam Season', mcqs: 200, type: 'Mock', class: 'All', free: false },
+  { name: 'PHYSICAL TESTS (Hyderabad)', date: 'On-Ground', mcqs: 200, type: 'Physical', class: 'All', free: false }
+];
 import { Calendar, Filter, BookOpen, Users } from 'lucide-react';
 
 const TestSchedule = () => {
-  // Available tests data (Freshers Series)
-  const availableTests = [
-    { name: 'BIOLOGY SERIES (Chapter-wise)', tests: '100+', mcqs: '100/ch', subject: 'Biology', class: 'XI & XII', type: 'Subject', free: false },
-    { name: 'CHEMISTRY SERIES (Chapter-wise)', tests: '100+', mcqs: '100/ch', subject: 'Chemistry', class: 'XI & XII', type: 'Subject', free: false },
-    { name: 'PHYSICS SERIES (Chapter-wise)', tests: '100+', mcqs: '100/ch', subject: 'Physics', class: 'XI & XII', type: 'Subject', free: false },
-    { name: 'ENGLISH SERIES', tests: 10, mcqs: 500, subject: 'English', class: 'All', type: 'Subject', free: false },
-    { name: 'LOGICAL REASONING', tests: 10, mcqs: 500, subject: 'Logical', class: 'All', type: 'Subject', free: false },
-    { name: 'GENERAL TESTS (XI)', tests: 6, mcqs: 50, subject: 'All', class: 'XI', type: 'Complete', free: false },
-    { name: 'GENERAL TESTS (XII)', tests: 6, mcqs: 50, subject: 'All', class: 'XII', type: 'Complete', free: false },
-    { name: '20,000 MCQ BANK', tests: 'Unlimited', mcqs: '20k+', subject: 'All', class: 'All', type: 'Bank', free: true }
-  ];
-
-  // Upcoming tests data (Improvers Series)
-  const upcomingTests = [
-    { name: 'IMPROVERS SERIES 1 (General Tests)', date: 'Starting Soon', mcqs: 180, type: 'Full', class: 'Repeater', free: false },
-    { name: 'IMPROVERS SERIES 2 (Full Syllabus)', date: 'Mid Session', mcqs: 200, type: 'Full', class: 'Repeater', free: false },
-    { name: 'FLP SERIES (26 Mocks)', date: 'Exam Season', mcqs: 200, type: 'Mock', class: 'All', free: false },
-    { name: 'PHYSICAL TESTS (Hyderabad)', date: 'On-Ground', mcqs: 200, type: 'Physical', class: 'All', free: false }
-  ];
+  // Available/upcoming tests are defined in module scope for stable identity
 
   // Filter states
   const [filters, setFilters] = useState({

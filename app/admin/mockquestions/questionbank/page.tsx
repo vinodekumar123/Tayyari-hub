@@ -250,7 +250,7 @@ export default function MockQuestionBankPage() {
       fetchQuestions(false);
     }, 500);
     return () => clearTimeout(timer);
-  }, [searchQuery, filterCourse, filterSubject, filterDifficulty, filterYear, filterStatus, showDeleted]);
+  }, [searchQuery, filterCourse, filterSubject, filterDifficulty, filterYear, filterStatus, showDeleted, fetchQuestions]);
 
   const fetchStats = async (ids: string[]) => {
     if (ids.length === 0) return;

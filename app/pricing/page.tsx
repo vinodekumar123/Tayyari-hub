@@ -79,19 +79,19 @@ export default function PricingPage() {
               <div className="text-center mb-8">
                 <div className="bg-gradient-to-r from-blue-500 to-purple-600 rounded-2xl p-6 text-white relative">
                   <p className="text-lg opacity-90 mb-2">Premium Access Price</p>
-                  
+
                   {/* Original Price */}
                   <div className="text-5xl font-bold mb-2 text-yellow-300">
                     PKR {originalPrice}
                   </div>
-                  
+
                   <p className="opacity-90">Upto Mdcat-2025 Access • No Recurring Fees</p>
                 </div>
               </div>
 
               {/* Features */}
               <div className="space-y-4 mb-8">
-                <h3 className="font-semibold text-slate-800 text-lg">What you'll get:</h3>
+                <h3 className="font-semibold text-slate-800 text-lg">What you&apos;ll get:</h3>
                 {premiumFeatures.map((feature, index) => (
                   <div key={index} className="flex items-center gap-3 p-3 rounded-lg bg-slate-50/50 hover:bg-slate-100/50 transition-colors">
                     <feature.icon className={`w-5 h-5 ${feature.color}`} />
@@ -108,8 +108,8 @@ export default function PricingPage() {
                     <p className="text-blue-800 font-medium mb-1">Privacy Protected</p>
                     <p className="text-blue-700">
                       <strong>Notice:</strong> Read our{' '}
-                      <Link 
-                        href="/privacy-policy" 
+                      <Link
+                        href="/privacy-policy"
                         className="underline hover:no-underline font-semibold text-blue-600"
                       >
                         Privacy Policy

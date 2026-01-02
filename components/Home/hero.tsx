@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Trophy, Users, BarChart3, Globe, ArrowRight, Sparkles, Zap, Star } from 'lucide-react';
 
 const TayyariHubHero = () => {
@@ -10,11 +10,11 @@ const TayyariHubHero = () => {
   const [isVisible, setIsVisible] = useState(false);
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
 
-  const texts = [
+  const texts = useMemo(() => [
     'Your Mock Test Partner',
     'Your FLP Partner',
     'MDCAT 2026 Preparation'
-  ];
+  ], []);
 
   useEffect(() => {
     setIsVisible(true);
