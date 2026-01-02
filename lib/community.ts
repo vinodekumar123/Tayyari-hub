@@ -9,8 +9,7 @@ export const POINTS = {
 
 export const sendNotification = async (recipientId: string, title: string, message: string, type: 'info' | 'success' | 'warning' | 'error' = 'info', link?: string) => {
     try {
-        await addDoc(collection(db, 'notifications'), {
-            recipientId,
+        await addDoc(collection(db, 'users', recipientId, 'notifications'), {
             title,
             message,
             type,

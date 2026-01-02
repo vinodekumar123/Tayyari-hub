@@ -146,7 +146,7 @@ export interface EnrollmentRecord {
     enrolledByAdminName: string;
     enrolledAt: any;
     // Status
-    status: 'active' | 'expired' | 'cancelled' | 'refunded';
+    status: 'active' | 'expired' | 'cancelled' | 'refunded' | 'revoked';
     statusHistory: {
         status: string;
         changedBy: string;
