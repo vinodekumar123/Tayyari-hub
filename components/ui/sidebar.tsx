@@ -6,7 +6,7 @@ import Link from 'next/link';
 import {
   BookOpen, Users, Trophy, BarChart3, Settings, Plus,
   Database, Home, ChevronDown, ChevronRight, LogOut,
-  ClipboardList, UserCircle, Menu, X, FileBarChart, Flag
+  ClipboardList, UserCircle, Menu, X, FileBarChart, Flag, Calendar
 } from 'lucide-react';
 import logo from "../../app/assets/logo.png";
 import Image from "next/image";
@@ -161,6 +161,7 @@ export function Sidebar() {
       title: 'Learning Resources',
       items: [
         { icon: BookOpen, label: 'Study Material', href: '/dashboard/study' },
+        { icon: Calendar, label: 'Schedule', href: '/dashboard/student/schedule' },
         { icon: BookOpen, label: 'Flashcards', href: '/dashboard/student/flashcards' },
       ],
     },
