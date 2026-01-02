@@ -55,6 +55,7 @@ import {
   SelectItem,
 } from '@/components/ui/select';
 import { Search, BookOpen, Award, Calendar, TrendingUp, Filter, ChevronRight, BarChart3 } from 'lucide-react';
+import { glassmorphism } from '@/lib/design-tokens';
 
 const ADMIN = 'admin';
 const USER = 'user';
@@ -365,16 +366,21 @@ export default function UnifiedResultsPage() {
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:from-slate-950 dark:via-slate-900 dark:to-indigo-950 transition-colors duration-300">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
-        <div className="mb-8">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="p-2 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-xl shadow-lg">
-              <BarChart3 className="w-6 h-6 text-white" />
+        <div className='relative group mb-8'>
+          <div className='absolute inset-0 bg-gradient-to-r from-[#004AAD] via-[#0066FF] to-[#00B4D8] rounded-3xl blur-xl opacity-20 dark:opacity-30 group-hover:opacity-30 dark:group-hover:opacity-40 transition-opacity duration-500' />
+          <div className={`relative ${glassmorphism.light} p-8 rounded-3xl border border-[#004AAD]/20 dark:border-[#0066FF]/30`}>
+            <div className='flex items-center justify-between'>
+              <div>
+                <h1 className='text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-[#004AAD] via-[#0066FF] to-[#00B4D8] dark:from-[#0066FF] dark:via-[#00B4D8] dark:to-[#66D9EF] mb-2'>
+                  Quiz Results Dashboard
+                </h1>
+                <p className='text-muted-foreground font-semibold flex items-center gap-2'>
+                  <BarChart3 className='w-5 h-5 text-[#00B4D8] dark:text-[#66D9EF]' />
+                  Track your progress and review your performance
+                </p>
+              </div>
             </div>
-            <h1 className="text-4xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 dark:from-white dark:to-gray-300 bg-clip-text text-transparent">
-              Quiz Results Dashboard
-            </h1>
           </div>
-          <p className="text-gray-600 dark:text-gray-400 ml-14">Track your progress and review your performance</p>
         </div>
 
         {/* Stats Cards */}

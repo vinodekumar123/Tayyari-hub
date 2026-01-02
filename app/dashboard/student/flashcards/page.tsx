@@ -12,6 +12,7 @@ import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Bookmark, Trash2, RotateCcw, X, Eye, EyeOff, Search, Clock, BookOpen, BarChart3, Grid, CheckCircle } from 'lucide-react';
 import { toast } from 'sonner';
+import { glassmorphism } from '@/lib/design-tokens';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend } from 'recharts';
 import { format } from 'date-fns';
@@ -162,19 +163,27 @@ export default function FlashcardsPage() {
 
     return (
         <div className="p-6 md:p-12 max-w-7xl mx-auto space-y-8 animate-in fade-in duration-500">
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                <div>
-                    <h1 className="text-3xl font-extrabold text-gray-900 dark:text-white flex items-center gap-3">
-                        <Bookmark className="w-8 h-8 text-indigo-600 dark:text-indigo-400" />
-                        My Flashcards
-                    </h1>
-                    <p className="text-gray-500 dark:text-gray-400 mt-1">Review your saved questions and concepts.</p>
-                </div>
-                <div className="flex items-center gap-4">
-                    <Card className="bg-indigo-50 border-indigo-100 dark:bg-indigo-900/20 dark:border-indigo-900/50 px-4 py-2">
-                        <div className="text-indigo-600 dark:text-indigo-400 font-bold text-2xl">{analytics.total}</div>
-                        <div className="text-xs text-indigo-400 dark:text-indigo-500 font-medium uppercase tracking-wider">Saved Cards</div>
-                    </Card>
+            {/* Header */}
+            <div className='relative group'>
+                <div className='absolute inset-0 bg-gradient-to-r from-[#004AAD] via-[#0066FF] to-[#00B4D8] rounded-3xl blur-xl opacity-20 dark:opacity-30 group-hover:opacity-30 dark:group-hover:opacity-40 transition-opacity duration-500' />
+                <div className={`relative ${glassmorphism.light} p-8 rounded-3xl border border-[#004AAD]/20 dark:border-[#0066FF]/30`}>
+                    <div className='flex flex-col md:flex-row items-start md:items-center justify-between gap-4'>
+                        <div>
+                            <h1 className='text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-[#004AAD] via-[#0066FF] to-[#00B4D8] dark:from-[#0066FF] dark:via-[#00B4D8] dark:to-[#66D9EF] mb-2'>
+                                My Flashcards
+                            </h1>
+                            <p className='text-muted-foreground font-semibold flex items-center gap-2'>
+                                <Bookmark className='w-5 h-5 text-[#00B4D8] dark:text-[#66D9EF]' />
+                                Review your saved questions and concepts.
+                            </p>
+                        </div>
+                        <div className="flex items-center gap-4">
+                            <Card className="bg-indigo-50 border-indigo-100 dark:bg-indigo-900/20 dark:border-indigo-900/50 px-4 py-2">
+                                <div className="text-indigo-600 dark:text-indigo-400 font-bold text-2xl">{analytics.total}</div>
+                                <div className="text-xs text-indigo-400 dark:text-indigo-500 font-medium uppercase tracking-wider">Saved Cards</div>
+                            </Card>
+                        </div>
+                    </div>
                 </div>
             </div>
 
