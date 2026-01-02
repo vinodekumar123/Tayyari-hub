@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useMemo, useRef, useState, useCallback } from 'react';
 import dynamic from 'next/dynamic';
 import 'react-quill-new/dist/quill.snow.css';
 import { Button } from '@/components/ui/button';
@@ -26,7 +26,7 @@ export default function RichTextEditor({ value, onChange, placeholder, readOnly 
     const [uploading, setUploading] = useState(false);
 
     // Custom Image Handler
-    const imageHandler = () => {
+    const imageHandler = useCallback(() => {
         const input = document.createElement('input');
         input.setAttribute('type', 'file');
         input.setAttribute('accept', 'image/*');
@@ -61,7 +61,7 @@ export default function RichTextEditor({ value, onChange, placeholder, readOnly 
                 setUploading(false);
             }
         };
-    };
+    }, [user]);
 
     const modules = useMemo(() => ({
         toolbar: {
@@ -79,7 +79,7 @@ export default function RichTextEditor({ value, onChange, placeholder, readOnly 
         clipboard: {
             matchVisual: false,
         }
-    }), []);
+    }), [imageHandler]);
 
     const formats = [
         'header',
@@ -100,6 +100,7 @@ export default function RichTextEditor({ value, onChange, placeholder, readOnly 
             )}
             <div className="rich-text-editor-wrapper">
                 <ReactQuill
+                    // @ts-ignore
                     ref={quillRef}
                     theme="snow"
                     value={value}
