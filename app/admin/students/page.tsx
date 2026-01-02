@@ -361,7 +361,8 @@ export default function StudentsPage() {
     fetchStudents(true);
     // Scroll to top when searching/filtering
     window.scrollTo({ top: 0, behavior: 'smooth' });
-  }, [debouncedSearchTerm, itemsPerPage, filterType, courseFilter, sortField, sortDirection, fetchStudents]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedSearchTerm, itemsPerPage, filterType, courseFilter, sortField, sortDirection]);
 
   // Selection handlers
   const handleSelectAll = () => {

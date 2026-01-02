@@ -44,10 +44,17 @@ export default function LoginPage() {
           const userSnap = await getDoc(userRef);
           if (userSnap.exists()) {
             const userData = userSnap.data();
+
+            // Check for required fields
+            const requiredFields = ['fullName', 'fatherName', 'phone', 'district', 'course'];
+            const isProfileComplete = requiredFields.every(field => userData[field] && userData[field].trim() !== '');
+
             if (userData.admin === true) {
               router.push('/dashboard/admin');
-            } else {
+            } else if (isProfileComplete) {
               router.push('/dashboard/student');
+            } else {
+              router.push('/auth/onboarding');
             }
           } else {
             router.push('/auth/onboarding');

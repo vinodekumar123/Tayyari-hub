@@ -16,7 +16,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { formatDistanceToNow } from 'date-fns';
+import { formatDistanceToNow, format } from 'date-fns';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { glassmorphism } from '@/lib/design-tokens';
 
@@ -75,7 +75,7 @@ export default function StudentSettingsPage() {
         if (!user) return;
         try {
             const enrollRef = collection(db, 'enrollments');
-            const q = query(enrollRef, where('studentId', '==', user.uid), where('status', 'in', ['active','paid','enrolled']));
+            const q = query(enrollRef, where('studentId', '==', user.uid), where('status', 'in', ['active', 'paid', 'enrolled']));
             const snap = await getDocs(q);
             const items = snap.docs.map(d => ({ seriesId: d.data().seriesId, seriesName: d.data().seriesName || d.data().series || 'Unknown', enrolledAt: d.data().enrolledAt || d.data().paymentDate || d.data().createdAt, status: d.data().status }));
             setEnrolledSeries(items as any);

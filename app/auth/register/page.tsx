@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createUserWithEmailAndPassword, signInWithPopup } from "firebase/auth";
-import { auth, provider } from "../../firebase";
+import { auth, provider, db } from "../../firebase";
+import { doc, getDoc } from "firebase/firestore";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -46,9 +47,30 @@ export default function RegisterPage() {
   const handleGoogleSignup = async () => {
     setIsLoading(true);
     try {
-      await signInWithPopup(auth, provider);
-      router.push("/auth/onboarding");
+      const result = await signInWithPopup(auth, provider);
+      const user = result.user;
+
+      // Check if user exists and is complete
+      const userRef = doc(db, 'users', user.uid);
+      const userSnap = await getDoc(userRef);
+
+      if (userSnap.exists()) {
+        const userData = userSnap.data();
+        const requiredFields = ['fullName', 'fatherName', 'phone', 'district', 'course'];
+        const isProfileComplete = requiredFields.every(field => userData[field] && userData[field].trim() !== '');
+
+        if (userData.admin === true) {
+          router.push('/dashboard/admin');
+        } else if (isProfileComplete) {
+          router.push('/dashboard/student');
+        } else {
+          router.push('/auth/onboarding');
+        }
+      } else {
+        router.push("/auth/onboarding");
+      }
     } catch (err: any) {
+      console.error(err);
       setError("Google signup failed.");
     } finally {
       setIsLoading(false);
