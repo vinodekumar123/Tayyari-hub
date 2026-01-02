@@ -9,7 +9,7 @@ interface User {
     phone?: string;
     admin?: boolean | string;
     superadmin?: boolean; // Added superadmin field
-    role?: 'admin' | 'student';
+    role?: 'admin' | 'student' | 'teacher';
     photoURL?: string | null;
     stats?: {
         totalQuizzes: number;

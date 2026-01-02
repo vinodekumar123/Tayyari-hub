@@ -9,15 +9,16 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
-    DollarSign, Briefcase, FileSignature, CheckCircle, Clock, Activity
+    DollarSign, Briefcase, FileSignature, CheckCircle, Clock, Activity, MessageSquare, ThumbsUp
 } from 'lucide-react';
-import { Task } from '@/types';
+import { Task, ForumPost } from '@/types';
 import { cn } from '@/lib/utils';
 import { glassmorphism } from '@/lib/design-tokens';
 import { toast } from 'sonner';
 
 export default function TeacherStatsPage() {
     const [tasks, setTasks] = useState<Task[]>([]);
+    const [communityStats, setCommunityStats] = useState({ questions: 0, answers: 0, points: 0 });
     const [loading, setLoading] = useState(true);
     const [user, setUser] = useState<any>(null);
 
@@ -37,6 +38,23 @@ export default function TeacherStatsPage() {
             const snap = await getDocs(q);
             const myTasks = snap.docs.map(d => ({ id: d.id, ...d.data() } as Task));
             setTasks(myTasks);
+
+            // Fetch Community Stats
+            const postsQ = query(collection(db, 'forum_posts'), where('authorId', '==', uid));
+            const repliesQ = query(collection(db, 'forum_replies'), where('authorId', '==', uid));
+            const userSnap = await getDocs(query(collection(db, 'users'), where('uid', '==', uid)));
+
+            const [postsSnap, repliesSnap] = await Promise.all([getDocs(postsQ), getDocs(repliesQ)]);
+
+            // Get points from user object in state or fetch if critical
+            // We use the passed uid which should match user.uid
+
+            setCommunityStats({
+                questions: postsSnap.size,
+                answers: repliesSnap.size,
+                points: user?.points || 0
+            });
+
         } catch (e) {
             console.error(e);
             toast.error("Failed to load stats");
@@ -90,9 +108,13 @@ export default function TeacherStatsPage() {
                     </CardContent>
                 </Card>
                 <Card className="bg-purple-50 border-purple-200">
-                    <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-purple-800">Avg Rating</CardTitle></CardHeader>
+                    <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-purple-800">Community Points</CardTitle></CardHeader>
                     <CardContent>
-                        <div className="text-3xl font-bold text-purple-900">{avgRating.toFixed(1)} <span className="text-sm">★</span></div>
+                        <div className="text-3xl font-bold text-purple-900">{user?.points || 0}</div>
+                        <div className="text-xs text-purple-700 mt-1 flex gap-2">
+                            <span className="flex items-center gap-1"><CheckCircle className="w-3 h-3" /> {communityStats.answers} Answers</span>
+                            <span className="flex items-center gap-1"><MessageSquare className="w-3 h-3" /> {communityStats.questions} Questions</span>
+                        </div>
                     </CardContent>
                 </Card>
             </div>
