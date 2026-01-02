@@ -1,16 +1,18 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { 
-  BarChart3, 
-  TrendingUp, 
-  Users, 
-  Trophy, 
+import { db } from '@/app/firebase';
+import { collection, getCountFromServer, query, where, getDocs, orderBy, limit } from 'firebase/firestore';
+import {
+  BarChart3,
+  TrendingUp,
+  Users,
+  Trophy,
   BookOpen,
   Calendar,
   Download,
@@ -20,7 +22,10 @@ import {
   Clock,
   Award,
   Zap,
-  Brain
+  Brain,
+  MessageSquare,
+  CheckCircle,
+  HelpCircle
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -66,6 +71,39 @@ export default function AdminAnalytics() {
     ]
   };
 
+  const [communityStats, setCommunityStats] = useState({
+    totalPosts: 0,
+    totalReplies: 0,
+    verifiedAnswers: 0,
+    solvedQuestions: 0
+  });
+
+  useEffect(() => {
+    const fetchCommunityStats = async () => {
+      try {
+        const postsColl = collection(db, 'forum_posts');
+        const repliesColl = collection(db, 'forum_replies');
+
+        const [postsSnap, repliesSnap, verifiedSnap, solvedSnap] = await Promise.all([
+          getCountFromServer(postsColl),
+          getCountFromServer(repliesColl),
+          getCountFromServer(query(repliesColl, where('isVerified', '==', true))),
+          getCountFromServer(query(postsColl, where('isSolved', '==', true)))
+        ]);
+
+        setCommunityStats({
+          totalPosts: postsSnap.data().count,
+          totalReplies: repliesSnap.data().count,
+          verifiedAnswers: verifiedSnap.data().count,
+          solvedQuestions: solvedSnap.data().count
+        });
+      } catch (e) {
+        console.error("Failed to fetch community stats", e);
+      }
+    };
+    fetchCommunityStats();
+  }, []);
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-purple-50">
       {/* Header */}
@@ -80,7 +118,7 @@ export default function AdminAnalytics() {
                 <span className="text-xl font-bold text-gray-900">Analytics Dashboard</span>
               </Link>
             </div>
-            
+
             <div className="flex items-center space-x-4">
               <Select value={timeRange} onValueChange={setTimeRange}>
                 <SelectTrigger className="w-32">
@@ -185,6 +223,7 @@ export default function AdminAnalytics() {
             <TabsTrigger value="performance" className="rounded-xl font-medium">Course Performance</TabsTrigger>
             <TabsTrigger value="subjects" className="rounded-xl font-medium">Subject Analysis</TabsTrigger>
             <TabsTrigger value="leaderboard" className="rounded-xl font-medium">Top Performers</TabsTrigger>
+            <TabsTrigger value="community" className="rounded-xl font-medium">Community</TabsTrigger>
           </TabsList>
 
           <TabsContent value="engagement" className="space-y-6">
@@ -200,11 +239,11 @@ export default function AdminAnalytics() {
                   {analyticsData.studentEngagement.map((day, index) => (
                     <div key={index} className="flex-1 flex flex-col items-center space-y-2">
                       <div className="w-full space-y-1">
-                        <div 
+                        <div
                           className="bg-gradient-to-t from-blue-500 to-blue-300 rounded-t-lg transition-all duration-500 hover:from-blue-600 hover:to-blue-400"
                           style={{ height: `${(day.active / 250) * 200}px` }}
                         />
-                        <div 
+                        <div
                           className="bg-gradient-to-t from-green-500 to-green-300 rounded-t-lg transition-all duration-500 hover:from-green-600 hover:to-green-400"
                           style={{ height: `${(day.completed / 250) * 200}px` }}
                         />
@@ -248,7 +287,7 @@ export default function AdminAnalytics() {
                           <span className="font-semibold">{course.avgScore}%</span>
                         </div>
                         <div className="w-full bg-gray-200 rounded-full h-3">
-                          <div 
+                          <div
                             className={`h-3 rounded-full bg-gradient-to-r ${course.color} transition-all duration-500`}
                             style={{ width: `${course.avgScore}%` }}
                           />
@@ -260,7 +299,7 @@ export default function AdminAnalytics() {
                           <span className="font-semibold">{course.completion}%</span>
                         </div>
                         <div className="w-full bg-gray-200 rounded-full h-3">
-                          <div 
+                          <div
                             className="h-3 rounded-full bg-gradient-to-r from-green-500 to-emerald-500 transition-all duration-500"
                             style={{ width: `${course.completion}%` }}
                           />
@@ -298,7 +337,7 @@ export default function AdminAnalytics() {
                         <div className="text-2xl font-bold text-gray-900 mb-1">{subject.avgScore}%</div>
                         <Badge variant={
                           subject.difficulty === 'Easy' ? 'secondary' :
-                          subject.difficulty === 'Medium' ? 'default' : 'destructive'
+                            subject.difficulty === 'Medium' ? 'default' : 'destructive'
                         }>
                           {subject.difficulty}
                         </Badge>
@@ -350,6 +389,47 @@ export default function AdminAnalytics() {
                 </div>
               </CardContent>
             </Card>
+          </TabsContent>
+
+          <TabsContent value="community" className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+              <Card className="glass-card border-0 shadow-xl">
+                <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-blue-800">Total Questions</CardTitle></CardHeader>
+                <CardContent>
+                  <div className="flex items-center justify-between">
+                    <div className="text-3xl font-bold text-blue-900">{communityStats.totalPosts}</div>
+                    <HelpCircle className="h-8 w-8 text-blue-200" />
+                  </div>
+                </CardContent>
+              </Card>
+              <Card className="glass-card border-0 shadow-xl">
+                <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-emerald-800">Total Answers</CardTitle></CardHeader>
+                <CardContent>
+                  <div className="flex items-center justify-between">
+                    <div className="text-3xl font-bold text-emerald-900">{communityStats.totalReplies}</div>
+                    <MessageSquare className="h-8 w-8 text-emerald-200" />
+                  </div>
+                </CardContent>
+              </Card>
+              <Card className="glass-card border-0 shadow-xl">
+                <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-purple-800">Verified Answers</CardTitle></CardHeader>
+                <CardContent>
+                  <div className="flex items-center justify-between">
+                    <div className="text-3xl font-bold text-purple-900">{communityStats.verifiedAnswers}</div>
+                    <CheckCircle className="h-8 w-8 text-purple-200" />
+                  </div>
+                </CardContent>
+              </Card>
+              <Card className="glass-card border-0 shadow-xl">
+                <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-orange-800">Solved Ratio</CardTitle></CardHeader>
+                <CardContent>
+                  <div className="flex items-center justify-between">
+                    <div className="text-3xl font-bold text-orange-900">{communityStats.totalPosts ? Math.round((communityStats.solvedQuestions / communityStats.totalPosts) * 100) : 0}%</div>
+                    <Target className="h-8 w-8 text-orange-200" />
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
           </TabsContent>
         </Tabs>
       </div>

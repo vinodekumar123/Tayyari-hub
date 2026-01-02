@@ -14,9 +14,12 @@ import {
 } from 'recharts';
 import {
   Trophy, Medal, RefreshCw, Activity, ClipboardList, Clock,
-  CheckCircle, Zap, Target, BookOpen, ChevronRight, TrendingUp, PlayCircle, AlertTriangle
+  CheckCircle, Zap, Target, BookOpen, ChevronRight, TrendingUp, PlayCircle, AlertTriangle, CalendarDays
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import { ScheduleViewer } from '@/components/dashboard/ScheduleViewer';
+import { ScheduleNotificationManager } from '@/components/dashboard/ScheduleNotificationManager';
+import { Button } from '@/components/ui/button';
 
 
 
@@ -30,6 +33,8 @@ export default function UltraFastStudentDashboard() {
 
   const [seriesStats, setSeriesStats] = useState<any[]>([]);
   const [loadingStats, setLoadingStats] = useState(true);
+
+  const [selectedScheduleSeries, setSelectedScheduleSeries] = useState<{ id: string, name: string } | null>(null);
 
   useEffect(() => {
     const hour = new Date().getHours();
@@ -248,6 +253,7 @@ export default function UltraFastStudentDashboard() {
 
   return (
     <div className="flex min-h-screen bg-background flex-col md:flex-row">
+      <ScheduleNotificationManager />
 
       {loading ? (
         <DashboardSkeleton />
@@ -557,6 +563,18 @@ export default function UltraFastStudentDashboard() {
                           style={{ width: `${series.progress}%` }}
                         />
                       </div>
+
+                      <div className="pt-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="w-full border-[#004AAD]/20 hover:bg-[#004AAD]/5 text-[#004AAD] dark:text-[#00B4D8]"
+                          onClick={() => setSelectedScheduleSeries({ id: series.id, name: series.name })}
+                        >
+                          <CalendarDays className="w-4 h-4 mr-2" />
+                          View Schedule
+                        </Button>
+                      </div>
                     </div>
                   </CardContent>
                 </Card>
@@ -652,6 +670,15 @@ export default function UltraFastStudentDashboard() {
           </div>
 
         </div>
+      )}
+
+      {selectedScheduleSeries && (
+        <ScheduleViewer
+          isOpen={!!selectedScheduleSeries}
+          onClose={() => setSelectedScheduleSeries(null)}
+          seriesId={selectedScheduleSeries.id}
+          seriesName={selectedScheduleSeries.name}
+        />
       )}
     </div>
   );
