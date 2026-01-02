@@ -3,8 +3,12 @@
 import { useEffect, useState, useCallback } from 'react';
 import { db } from '@/app/firebase';
 import { collection, query, where, getDocs, updateDoc, doc, orderBy, deleteDoc, increment, serverTimestamp } from 'firebase/firestore';
-import { getAuth } from 'firebase/auth';
+import { getAuth, updateProfile, reauthenticateWithCredential, EmailAuthProvider, updatePassword } from 'firebase/auth';
 import { app } from '@/app/firebase';
+import { getDoc } from 'firebase/firestore';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { toast } from 'sonner';
 import {
     Shield, Smartphone, Monitor, Globe, Clock,
     Trash2, LogOut, CheckCircle, AlertTriangle
@@ -37,6 +41,12 @@ export default function StudentSettingsPage() {
     const [currentDeviceId, setCurrentDeviceId] = useState('');
     const auth = getAuth(app);
     const user = auth.currentUser;
+    const [profile, setProfile] = useState({ fullName: '', phone: '', district: '', email: '' });
+    const [saving, setSaving] = useState(false);
+    const [pwLoading, setPwLoading] = useState(false);
+    const [currentPassword, setCurrentPassword] = useState('');
+    const [newPassword, setNewPassword] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
 
     const fetchMySessions = useCallback(async () => {
         if (!user) return;
@@ -66,6 +76,22 @@ export default function StudentSettingsPage() {
         } else {
             setLoading(false);
         }
+        // fetch profile
+        const fetchProfile = async () => {
+            if (!user) return;
+            try {
+                const udoc = await getDoc(doc(db, 'users', user.uid));
+                if (udoc.exists()) {
+                    const data: any = udoc.data();
+                    setProfile({ fullName: data.fullName || data.full_name || '', phone: data.phone || '', district: data.district || '', email: data.email || user.email || '' });
+                } else {
+                    setProfile({ fullName: user.displayName || '', phone: '', district: '', email: user.email || '' });
+                }
+            } catch (err) {
+                console.error('Failed to load profile', err);
+            }
+        };
+        fetchProfile();
     }, [user, fetchMySessions]);
 
     const handleRevokeSession = async (sessionId: string) => {
@@ -85,6 +111,48 @@ export default function StudentSettingsPage() {
             fetchMySessions();
         } catch (error) {
             console.error("Error revoking session:", error);
+        }
+    };
+
+    const handleSaveProfile = async () => {
+        if (!user) return;
+        setSaving(true);
+        try {
+            await updateDoc(doc(db, 'users', user.uid), {
+                fullName: profile.fullName,
+                phone: profile.phone,
+                district: profile.district,
+                updatedAt: serverTimestamp()
+            });
+            // also update auth profile displayName
+            try { await updateProfile(user, { displayName: profile.fullName }); } catch (e) { }
+            toast.success('Profile updated');
+        } catch (err) {
+            console.error('Failed to save profile', err);
+            toast.error('Failed to save profile');
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const handleChangePassword = async () => {
+        if (!user) return;
+        if (!currentPassword) return toast.error('Enter current password');
+        if (!newPassword || newPassword.length < 6) return toast.error('New password must be at least 6 characters');
+        if (newPassword !== confirmPassword) return toast.error('Passwords do not match');
+        setPwLoading(true);
+        try {
+            const cred = EmailAuthProvider.credential(user.email || '', currentPassword);
+            await reauthenticateWithCredential(user, cred);
+            await updatePassword(user, newPassword);
+            setCurrentPassword(''); setNewPassword(''); setConfirmPassword('');
+            toast.success('Password updated');
+        } catch (err: any) {
+            console.error('Password change failed', err);
+            const msg = err?.code || err?.message || 'Password update failed';
+            toast.error(String(msg));
+        } finally {
+            setPwLoading(false);
         }
     };
 
@@ -190,8 +258,52 @@ export default function StudentSettingsPage() {
                             <CardDescription>Update your personal information and password.</CardDescription>
                         </CardHeader>
                         <CardContent>
-                            {/* Placeholder for future profile updates */}
-                            <p className="text-slate-500">Profile update features coming soon.</p>
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                <div className="space-y-4">
+                                    <div>
+                                        <Label>Full name</Label>
+                                        <Input value={profile.fullName} onChange={(e) => setProfile(p => ({ ...p, fullName: e.target.value }))} />
+                                    </div>
+                                    <div>
+                                        <Label>Email</Label>
+                                        <Input value={profile.email} readOnly />
+                                    </div>
+                                    <div>
+                                        <Label>Phone</Label>
+                                        <Input value={profile.phone} onChange={(e) => setProfile(p => ({ ...p, phone: e.target.value }))} />
+                                    </div>
+                                    <div>
+                                        <Label>District / Location</Label>
+                                        <Input value={profile.district} onChange={(e) => setProfile(p => ({ ...p, district: e.target.value }))} />
+                                    </div>
+                                    <div className="pt-2">
+                                        <Button onClick={handleSaveProfile} disabled={saving}>
+                                            {saving ? 'Saving...' : 'Save Profile'}
+                                        </Button>
+                                    </div>
+                                </div>
+
+                                <div className="space-y-4">
+                                    <h3 className="text-lg font-semibold">Change Password</h3>
+                                    <div>
+                                        <Label>Current password</Label>
+                                        <Input type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} />
+                                    </div>
+                                    <div>
+                                        <Label>New password</Label>
+                                        <Input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
+                                    </div>
+                                    <div>
+                                        <Label>Confirm new password</Label>
+                                        <Input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} />
+                                    </div>
+                                    <div className="pt-2">
+                                        <Button variant="secondary" onClick={handleChangePassword} disabled={pwLoading}>
+                                            {pwLoading ? 'Updating...' : 'Change Password'}
+                                        </Button>
+                                    </div>
+                                </div>
+                            </div>
                         </CardContent>
                     </Card>
                 </TabsContent>
