@@ -142,23 +142,7 @@ export default function StudentsPage() {
     return () => unsubscribeAuth();
   }, []);
 
-  if (accessDenied) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold text-red-600">Access Denied</h1>
-          <p>Teachers do not have permission to view Student Management.</p>
-          <Button className="mt-4" onClick={() => router.push('/dashboard/admin')}>Go Back</Button>
-        </div>
-      </div>
-    );
-    // Or use UnauthorizedModal if imported. 
-    // Note: I need to import UnauthorizedModal. 
-    // Since I can't easily add import at top without reading, I'll use a simple UI or try to use dynamic import or just standard UI for now as fall back. 
-    // Actually, I can render the UnauthorizedModal if I had it. 
-    // PROMPT SAID: "Integrating Unauthorized Modal... Implement the UnauthorizedModal on pages..."
-    // So I MUST use it. 
-  }
+  // Early return moved to render to avoid conditional hooks violation
 
   // Fetch courses
   useEffect(() => {
@@ -237,7 +221,7 @@ export default function StudentsPage() {
   }, [historyModal, currentStudent]);
 
   // Fetch students (Filters + Robust Search)
-  const fetchStudents = async (reset = false) => {
+  const fetchStudents = useCallback(async (reset = false) => {
     try {
       setLoading(true);
 
@@ -343,7 +327,7 @@ export default function StudentsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [debouncedSearchTerm, itemsPerPage, filterType, courseFilter, sortField, sortDirection, lastVisible]);
 
   // Infinite Scroll Sentinel
   const observerTarget = useRef<HTMLDivElement>(null);
@@ -358,16 +342,17 @@ export default function StudentsPage() {
       { threshold: 0.1 }
     );
 
-    if (observerTarget.current) {
-      observer.observe(observerTarget.current);
+    const target = observerTarget.current;
+    if (target) {
+      observer.observe(target);
     }
 
     return () => {
-      if (observerTarget.current) {
-        observer.unobserve(observerTarget.current);
+      if (target) {
+        observer.unobserve(target);
       }
     };
-  }, [lastVisible, hasMore, loading, students]);
+  }, [lastVisible, hasMore, loading, fetchStudents]);
 
   useEffect(() => {
     // Reset pagination on filter change
@@ -376,7 +361,7 @@ export default function StudentsPage() {
     fetchStudents(true);
     // Scroll to top when searching/filtering
     window.scrollTo({ top: 0, behavior: 'smooth' });
-  }, [debouncedSearchTerm, itemsPerPage, filterType, courseFilter, sortField, sortDirection]);
+  }, [debouncedSearchTerm, itemsPerPage, filterType, courseFilter, sortField, sortDirection, fetchStudents]);
 
   // Selection handlers
   const handleSelectAll = () => {
@@ -676,6 +661,18 @@ export default function StudentsPage() {
     }
   };
 
+  if (accessDenied) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-red-600">Access Denied</h1>
+          <p>Teachers do not have permission to view Student Management.</p>
+          <Button className="mt-4" onClick={() => router.push('/dashboard/admin')}>Go Back</Button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className='w-full max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6'>
       {/* Hidden Receipt Template - Positioned off-screen but rendered */}
@@ -773,7 +770,7 @@ export default function StudentsPage() {
           {/* Footer */}
           <div className="text-center relative z-10 mt-auto">
             <p className="text-slate-400 text-sm font-medium">Thank you for learning with Tayyari Hub!</p>
-            <p className="text-slate-300 text-xs mt-2">Computer Generated Receipt • {new Date().toLocaleTimeString()}</p>
+            <p className="text-slate-300 text-xs mt-2">Computer Generated Receipt &bull; {new Date().toLocaleTimeString()}</p>
           </div>
         </div>
       </div>
@@ -874,7 +871,7 @@ export default function StudentsPage() {
                 <Input id="fullName" placeholder="Full Name" value={editData.fullName || ''} onChange={e => setEditData({ ...editData, fullName: e.target.value })} />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="fatherName">Father's Name</Label>
+                <Label htmlFor="fatherName">Father&apos;s Name</Label>
                 <Input id="fatherName" placeholder="Father's Name" value={editData.fatherName || ''} onChange={e => setEditData({ ...editData, fatherName: e.target.value })} />
               </div>
             </div>
@@ -1030,7 +1027,7 @@ export default function StudentsPage() {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            <Label>Type "DELETE" to confirm</Label>
+            <Label>Type &quot;DELETE&quot; to confirm</Label>
             <Input value={deleteConfirmText} onChange={e => setDeleteConfirmText(e.target.value)} />
           </div>
           <DialogFooter>

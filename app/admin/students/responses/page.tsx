@@ -488,7 +488,7 @@ const ResultPageContent: React.FC = () => {
           <div>
             <h1 className="text-3xl font-bold tracking-tight text-foreground">{quiz.title}</h1>
             <p className="text-muted-foreground mt-1 text-sm font-medium uppercase tracking-wide">
-              {quiz.subject} • Result Analysis
+              {quiz.subject} &bull; Result Analysis
             </p>
           </div>
           <Badge className={`text-sm font-semibold px-4 py-1.5 rounded-full shadow-lg ${remarkColor} text-white hover:${remarkColor}`}>
@@ -638,7 +638,7 @@ const ResultPageContent: React.FC = () => {
                   </div>
                   <h3 className="text-xl font-bold text-foreground mb-2">Perfect Score on Attempted!</h3>
                   <p className="text-muted-foreground max-w-sm">
-                    You didn't get any questions wrong. That's an outstanding achievement!
+                    You didn&apos;t get any questions wrong. That&apos;s an outstanding achievement!
                   </p>
                 </div>
               ) : (
@@ -683,9 +683,9 @@ const ResultPageContent: React.FC = () => {
             </DialogDescription>
           </DialogHeader>
           <div className="py-4 space-y-4">
-            <div className="p-4 bg-muted/50 rounded-lg border border-border text-sm text-foreground/80 italic font-medium leading-relaxed">
+            <div className="p-4 bg-muted/50 rounded-lg border border-border text-sm text-foreground/80 italic font-medium">
               <span className="text-muted-foreground not-italic block text-xs mb-1 font-bold uppercase">Selected Question:</span>
-              "{selectedQuestionForReport?.questionText.replace(/<[^>]+>/g, '').substring(0, 150)}{selectedQuestionForReport?.questionText && selectedQuestionForReport.questionText.length > 150 ? '...' : ''}"
+              &quot;{selectedQuestionForReport?.questionText.replace(/<[^>]+>/g, '').substring(0, 150)}{selectedQuestionForReport?.questionText && selectedQuestionForReport.questionText.length > 150 ? '...' : ''}&quot;
             </div>
             <div className="space-y-2">
               <label className="text-sm font-semibold text-foreground">Issue Description</label>

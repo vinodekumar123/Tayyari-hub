@@ -36,6 +36,7 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Student } from '@/types';
+import Image from 'next/image';
 import { glassmorphism, animations } from '@/lib/design-tokens';
 import { format } from 'date-fns';
 
@@ -172,11 +173,14 @@ export function StudentTable({
                                     </TableCell>
                                     <TableCell>
                                         <div className='flex items-center gap-3'>
-                                            <div className='h-10 w-10 rounded-full overflow-hidden border-2 border-white dark:border-gray-800 shadow-sm flex-shrink-0'>
-                                                <img
+                                            <div className='h-10 w-10 rounded-full overflow-hidden border-2 border-white dark:border-gray-800 shadow-sm flex-shrink-0 relative'>
+                                                <Image
                                                     src={student.profileImage || `https://ui-avatars.com/api/?name=${encodeURIComponent(student.fullName || 'User')}&background=random`}
-                                                    alt={student.fullName}
-                                                    className='h-full w-full object-cover'
+                                                    alt={student.fullName || 'User'}
+                                                    className='object-cover'
+                                                    width={40}
+                                                    height={40}
+                                                    unoptimized={true}
                                                 />
                                             </div>
                                             <div>

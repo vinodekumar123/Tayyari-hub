@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { db } from '@/app/firebase';
 import { collection, query, where, orderBy, limit, getDocs } from 'firebase/firestore';
 import { Student } from '@/types';
@@ -25,11 +25,7 @@ export default function LeaderboardPage() {
     const [loading, setLoading] = useState(true);
     const [userRank, setUserRank] = useState<number | null>(null);
 
-    useEffect(() => {
-        fetchLeaderboard();
-    }, [user]);
-
-    const fetchLeaderboard = async () => {
+    const fetchLeaderboard = useCallback(async () => {
         try {
             setLoading(true);
             // OPTIMIZATION: In a real large-scale app, we would have a scheduled function
@@ -83,7 +79,11 @@ export default function LeaderboardPage() {
         } finally {
             setLoading(false);
         }
-    };
+    }, [user]);
+
+    useEffect(() => {
+        fetchLeaderboard();
+    }, [fetchLeaderboard]);
 
     const getRankIcon = (rank: number) => {
         if (rank === 1) return <Crown className="h-6 w-6 text-yellow-500 fill-yellow-500" />;

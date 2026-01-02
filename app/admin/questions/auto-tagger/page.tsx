@@ -127,7 +127,7 @@ export default function AutoTaggerPage() {
             // Reset Stats
             resetStats();
         }
-    }, [selectedSubject]);
+    }, [selectedSubject, allSubjects]);
 
     const resetStats = () => {
         setStatus('idle');

@@ -10,12 +10,18 @@ if (!admin.apps.length) {
     try {
         console.log('🔵 Initializing Firebase Admin SDK...');
 
-        // Try to load service account from JSON file
+        // Try to load service account from JSON file using a non-dynamic read (avoid webpack critical dependency)
         const serviceAccountPath = path.join(process.cwd(), 'serviceAccountKey.json');
 
         if (fs.existsSync(serviceAccountPath)) {
             console.log('✅ Found serviceAccountKey.json file');
-            const serviceAccount = require(serviceAccountPath);
+            const raw = fs.readFileSync(serviceAccountPath, 'utf8');
+            const serviceAccount = JSON.parse(raw);
+
+            // Normalize private key if it contains escaped newline characters
+            if (serviceAccount.private_key && typeof serviceAccount.private_key === 'string') {
+                serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, '\n');
+            }
 
             admin.initializeApp({
                 credential: admin.credential.cert(serviceAccount),
@@ -33,9 +39,13 @@ if (!admin.apps.length) {
                     const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY);
                     console.log('✅ Parsed FIREBASE_SERVICE_ACCOUNT_KEY from environment');
 
+                    if (serviceAccount.private_key && typeof serviceAccount.private_key === 'string') {
+                        serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, '\n');
+                    }
+
                     admin.initializeApp({
                         credential: admin.credential.cert(serviceAccount),
-                        projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+                        projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || serviceAccount.project_id,
                     });
 
                     isInitialized = true;

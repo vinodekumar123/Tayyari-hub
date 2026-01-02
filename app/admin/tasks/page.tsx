@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import {
     collection, query, where, getDocs, addDoc, updateDoc, doc,
@@ -62,28 +62,7 @@ export default function AdminTasksPage() {
     };
 
     // --- Init ---
-    useEffect(() => {
-        const unsub = onAuthStateChanged(auth, async (user) => {
-            if (user) {
-                setCurrentUser(user);
-                const userDoc = await getDoc(doc(db, 'users', user.uid));
-                if (userDoc.exists()) {
-                    const data = userDoc.data();
-                    const isSup = data.role === 'superadmin' || data.superadmin === true;
-                    setIsSuperAdmin(isSup);
-                    if (data.role !== 'admin' && !isSup && data.admin !== true) {
-                        router.push('/dashboard/teacher'); // Redirect if not admin
-                    }
-                }
-                fetchData();
-            } else {
-                router.push('/');
-            }
-        });
-        return () => unsub();
-    }, []);
-
-    const fetchData = async () => {
+    const fetchData = useCallback(async () => {
         setLoading(true);
         try {
             // Fetch Potential Assignees
@@ -131,7 +110,28 @@ export default function AdminTasksPage() {
         } finally {
             setLoading(false);
         }
-    };
+    }, [isSuperAdmin]);
+
+    useEffect(() => {
+        const unsub = onAuthStateChanged(auth, async (user) => {
+            if (user) {
+                setCurrentUser(user);
+                const userDoc = await getDoc(doc(db, 'users', user.uid));
+                if (userDoc.exists()) {
+                    const data = userDoc.data();
+                    const isSup = data.role === 'superadmin' || data.superadmin === true;
+                    setIsSuperAdmin(isSup);
+                    if (data.role !== 'admin' && !isSup && data.admin !== true) {
+                        router.push('/dashboard/teacher'); // Redirect if not admin
+                    }
+                }
+                fetchData();
+            } else {
+                router.push('/');
+            }
+        });
+        return () => unsub();
+    }, [router, fetchData]);
 
     // --- Actions ---
 
@@ -303,7 +303,7 @@ export default function AdminTasksPage() {
                                     {task.status === 'reviewed' && (
                                         <div className="mt-4 p-3 bg-yellow-50 dark:bg-yellow-900/10 rounded-lg">
                                             <div className="flex mb-1">{renderStars(task.rating || 0)}</div>
-                                            <p className="text-xs italic">"{task.reviewFeedback}"</p>
+                                            <p className="text-xs italic">&quot;{task.reviewFeedback}&quot;</p>
                                         </div>
                                     )}
                                 </CardContent>

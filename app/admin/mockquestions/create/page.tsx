@@ -122,7 +122,9 @@ const ReactQuill = dynamic(
       } catch (e) { }
     }
 
-    return ({ forwardedRef, ...props }: any) => <RQ ref={forwardedRef} {...props} />;
+    const QuillComponent = ({ forwardedRef, ...props }: any) => <RQ ref={forwardedRef} {...props} />;
+    QuillComponent.displayName = 'QuillComponent';
+    return QuillComponent;
   },
   { ssr: false, loading: () => <div className="h-64 bg-gray-100 animate-pulse rounded-md" /> }
 );
@@ -346,15 +348,15 @@ export default function CreateQuestionPage() {
     }
   };
 
-  const validate = () => {
+  const validate = useCallback(() => {
     if (!questionData.questionText) { toast.error("Question text is required"); return false; }
     if (!questionData.correctAnswer) { toast.error("Correct answer required"); return false; }
     if (questionData.options.some(o => !o)) { toast.error("All options must be filled"); return false; }
     if (!questionData.course || !questionData.subject) { toast.error("Metadata missing"); return false; }
     return true;
-  };
+  }, [questionData]);
 
-  const handleSave = async (status: 'draft' | 'published' = 'published') => {
+  const handleSave = useCallback(async (status: 'draft' | 'published' = 'published') => {
     if (!validate()) return;
     setIsSaving(true);
     try {
@@ -387,7 +389,7 @@ export default function CreateQuestionPage() {
     } finally {
       setIsSaving(false);
     }
-  };
+  }, [validate, questionData, id, router]);
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -615,7 +617,7 @@ export default function CreateQuestionPage() {
     };
     document.addEventListener('keydown', down);
     return () => document.removeEventListener('keydown', down);
-  }, [questionData]);
+  }, [handleSave]);
 
   // Render
   return (

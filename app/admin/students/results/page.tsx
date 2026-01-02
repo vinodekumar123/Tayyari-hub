@@ -92,7 +92,7 @@ export default function UnifiedResultsPage() {
         setUserCourse(course);
       }
     });
-  }, [router]);
+  }, [router, auth, db]);
 
   // --------- Subject/Chapter Filters ----------
   useEffect(() => {
@@ -124,7 +124,7 @@ export default function UnifiedResultsPage() {
     };
 
     fetchSubjects();
-  }, [userCourse]);
+  }, [userCourse, db]);
 
   useEffect(() => {
     const fetchChapters = async () => {
@@ -142,7 +142,7 @@ export default function UnifiedResultsPage() {
     };
 
     fetchChapters();
-  }, [selectedSubject, subjectMap]);
+  }, [selectedSubject, subjectMap, db]);
 
   // --------- Fetch Admin Quizzes (adminResults) ----------
   useEffect(() => {
@@ -229,7 +229,7 @@ export default function UnifiedResultsPage() {
     };
 
     fetchResults();
-  }, [userId]);
+  }, [userId, db]);
 
   // --------- Fetch User Quizzes (userResults) ----------
   useEffect(() => {

@@ -35,23 +35,25 @@ import { Badge } from '@/components/ui/badge';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'; // Assuming you have a RadioGroup component
 
 // Helper to format date
-const formatDate = (timestamp) => {
+const formatDate = (timestamp: any) => {
   if (!timestamp) return '';
   const date = timestamp instanceof Timestamp ? timestamp.toDate() : new Date(timestamp);
   return date.toLocaleDateString();
 };
 
+import type { Question, QuizConfig, SubjectItem } from '@/types';
+
 export default function CreateMockQuiz() {
   const router = useRouter();
   const [userCourse, setUserCourse] = useState('');
-  const [subjects, setSubjects] = useState<any[]>([]);
+  const [subjects, setSubjects] = useState<SubjectItem[]>([]);
   const [chapters, setChapters] = useState<string[]>([]);
-  const [questions, setQuestions] = useState<any[]>([]);
-  const [filteredQuestions, setFilteredQuestions] = useState<any[]>([]);
+  const [questions, setQuestions] = useState<Question[]>([]);
+  const [filteredQuestions, setFilteredQuestions] = useState<Question[]>([]);
   const [selectedQuestions, setSelectedQuestions] = useState<string[]>([]);
   const [userId, setUserId] = useState<string | null>(null);
 
-  const [quizConfig, setQuizConfig] = useState({
+  const [quizConfig, setQuizConfig] = useState<QuizConfig>({
     title: '',
     course: '',
     subject: '',
@@ -69,7 +71,8 @@ export default function CreateMockQuiz() {
   const subjectQuestionCounts = useMemo(() => {
     const counts: Record<string, number> = {};
     questions.forEach((q) => {
-      counts[q.subject] = (counts[q.subject] || 0) + 1;
+      const key = q.subject || 'Unknown';
+      counts[key] = (counts[key] || 0) + 1;
     });
     return counts;
   }, [questions]);
@@ -153,11 +156,11 @@ export default function CreateMockQuiz() {
       let q = collection(db, 'mock-questions');
       let questionQuery = query(q, orderBy('createdAt', 'desc'));
       const questionDocs = await getDocs(questionQuery);
-      const filtered: any[] = questionDocs.docs
+      const filtered: Question[] = questionDocs.docs
         .map((d) => ({
           id: d.id,
-          ...d.data(),
-          createdAt: d.data().createdAt ? d.data().createdAt : null,
+          ...(d.data() as any),
+          createdAt: (d.data() as any).createdAt ? (d.data() as any).createdAt : null,
         }))
         .filter(
           (q) =>
@@ -173,8 +176,8 @@ export default function CreateMockQuiz() {
             .map((q) =>
               q.createdAt
                 ? (q.createdAt instanceof Timestamp
-                    ? q.createdAt.toDate().toISOString().slice(0, 10)
-                    : new Date(q.createdAt).toISOString().slice(0, 10))
+                  ? q.createdAt.toDate().toISOString().slice(0, 10)
+                  : new Date(q.createdAt).toISOString().slice(0, 10))
                 : null
             )
             .filter(Boolean)
@@ -219,10 +222,11 @@ export default function CreateMockQuiz() {
 
   // --- Auto Select: pick top N (maxPerSubject) most recent questions per subject ---
   const handleAutoSelect = () => {
-    const questionsBySubject: Record<string, any[]> = {};
+    const questionsBySubject: Record<string, Question[]> = {};
     filteredQuestions.forEach((q) => {
-      if (!questionsBySubject[q.subject]) questionsBySubject[q.subject] = [];
-      questionsBySubject[q.subject].push(q);
+      const key = q.subject || 'Unknown';
+      if (!questionsBySubject[key]) questionsBySubject[key] = [];
+      questionsBySubject[key].push(q);
     });
 
     let selected: string[] = [];
@@ -433,13 +437,13 @@ export default function CreateMockQuiz() {
                 acc[subject].push(q);
                 return acc;
               }, {} as Record<string, any[]>)
-            ).map(([subjectName, subjectQuestions]) => (
+            ).map(([subjectName, subjectQuestions]: [string, any[]]) => (
               <div key={subjectName}>
                 <h3 className="text-lg font-semibold text-blue-700 mb-3 border-b pb-1">
                   📘 {subjectName} <span className="text-xs text-gray-400">({subjectQuestions.length})</span>
                 </h3>
                 <div className="space-y-3">
-                  {/* RadioGroup for large radios: allow single or multiple depending on UX, here we use checkbox for multi-select */}
+                  <div className="text-xs text-gray-500 mb-2">Select questions below:</div>
                   {subjectQuestions.map((q) => (
                     <div key={q.id} className="flex items-start gap-3 p-4 bg-gray-50 border rounded-xl hover:shadow">
                       <Checkbox

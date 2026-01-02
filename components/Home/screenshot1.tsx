@@ -2,38 +2,31 @@
 
 import React, { useState, useMemo } from "react";
 import { Calendar, Clock, BookOpen, Users, Filter, Search } from "lucide-react";
+// Move test data to module scope for stable identity
+const testData = [
+  { title: 'Screenshot Test 1', subtitle: 'Fast Practice', img: '/test1.png' },
+  { title: 'Screenshot Test 2', subtitle: 'Deep Work', img: '/test2.png' },
+  { title: 'Screenshot Test 3', subtitle: 'Timed Mode', img: '/test3.png' }
+];
+
+// derive scheduledTests at module scope
+const scheduledTests = testData.map((t, idx) => ({
+  id: idx + 1,
+  subject: t.title,
+  testName: t.subtitle,
+  date: 'TBA',
+  type: 'Free',
+  gap: ''
+}));
 
 const TayyariHubTimetable = () => {
   const [selectedSubject, setSelectedSubject] = useState("all");
   const [selectedType, setSelectedType] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
 
-  const testData = [
-    { id: 1, subject: "Biology XI", testName: "Biology XI Test 1", date: "7 Aug, 2025", type: "Free", gap: "" },
-    { id: 2, subject: "Biology XI", testName: "Biology XI Test 2", date: "8 Aug, 2025", type: "Paid", gap: "9-10 August, 2025" },
-    { id: 3, subject: "Chemistry XI", testName: "Chemistry XI Test 1", date: "11 Aug, 2025", type: "Paid", gap: "" },
-    { id: 4, subject: "Chemistry XI", testName: "Chemistry XI Test 2", date: "12 Aug, 2025", type: "Paid", gap: "13-14 August, 2025" },
-    { id: 5, subject: "Physics XI", testName: "Physics XI Test 1", date: "15 Aug, 2025", type: "Paid", gap: "" },
-    { id: 6, subject: "Physics XI", testName: "Physics XI Test 2", date: "16 Aug, 2025", type: "Paid", gap: "17-18 August, 2025" },
-    { id: 7, subject: "Whole XI Syllabus", testName: "Whole XI Test 1", date: "19 Aug, 2025", type: "Paid", gap: "" },
-    { id: 8, subject: "Whole XI Syllabus", testName: "Whole XI Test 2", date: "21 Aug, 2025", type: "Paid", gap: "" },
-    { id: 9, subject: "Biology XII", testName: "Biology XII Test 1", date: "22 Aug, 2025", type: "Paid", gap: "" },
-    { id: 10, subject: "Biology XII", testName: "Biology XII Test 2", date: "23 Aug, 2025", type: "Paid", gap: "24-25 August, 2025" },
-    { id: 11, subject: "Chemistry XII", testName: "Chemistry XII Test 1", date: "26 Aug, 2025", type: "Paid", gap: "" },
-    { id: 12, subject: "Chemistry XII", testName: "Chemistry XII Test 2", date: "27 Aug, 2025", type: "Paid", gap: "28-29 August, 2025" },
-    { id: 13, subject: "Physics XII", testName: "Physics XII Test 1", date: "30 Aug, 2025", type: "Paid", gap: "" },
-    { id: 14, subject: "Physics XII", testName: "Physics XII Test 2", date: "31 Aug, 2025", type: "Paid", gap: "1-2 September, 2025" },
-    { id: 15, subject: "Whole XII Syllabus", testName: "Whole XII Test 1", date: "3 Sep, 2025", type: "Paid", gap: "" },
-    { id: 16, subject: "Whole XII Syllabus", testName: "Whole XII Test 2", date: "5 Sep, 2025", type: "Paid", gap: "" },
-    { id: 17, subject: "FLP Mocks", testName: "FLP Mock 1", date: "7 Sep, 2025", type: "Free", gap: "" },
-    { id: 18, subject: "FLP Mocks", testName: "FLP Mock 2", date: "15 Sep, 2025", type: "Paid", gap: "" },
-    { id: 19, subject: "FLP Mocks", testName: "FLP Mock 3", date: "19 Sep, 2025", type: "Paid", gap: "" },
-    { id: 20, subject: "FLP Mocks", testName: "FLP Mock 4", date: "23 Sep, 2025", type: "Paid", gap: "" },
-    { id: 21, subject: "FLP Mocks", testName: "FLP Mock 5", date: "27 Sep, 2025", type: "Paid", gap: "" },
-    { id: 22, subject: "FLP Mocks", testName: "FLP Mock 6", date: "30 Sep, 2025", type: "Paid", gap: "" }
-  ];
+  // Use module-scope `testData` defined above
 
-  const subjects = [...new Set(testData.map((test) => test.subject))];
+  const subjects = [...new Set(scheduledTests.map((test) => test.subject))];
 
   const getSubjectColor = (subject) => {
     const colors = {
@@ -60,7 +53,7 @@ const TayyariHubTimetable = () => {
   };
 
   const filteredTests = useMemo(() => {
-    return testData.filter((test) => {
+    return scheduledTests.filter((test) => {
       const matchesSubject = selectedSubject === "all" || test.subject === selectedSubject;
       const matchesType = selectedType === "all" || test.type.toLowerCase() === selectedType;
       const matchesSearch =

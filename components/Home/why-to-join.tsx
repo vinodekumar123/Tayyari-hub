@@ -11,7 +11,7 @@ const TayyariHubBenefits = () => {
       (entries) => {
         entries.forEach((entry) => {
           if (entry.isIntersecting) {
-            setVisibleItems(prev => new Set([...prev, parseInt(entry.target.dataset.index)]));
+            setVisibleItems(prev => new Set([...prev, parseInt((entry.target as HTMLElement).dataset.index || '0')]));
           }
         });
       },
@@ -129,7 +129,7 @@ const TayyariHubBenefits = () => {
             </h1>
 
             <p className="text-xl text-gray-700 max-w-3xl mx-auto leading-relaxed">
-              Pakistan's premier MDCAT preparation platform designed specifically for medical aspirants.
+              Pakistan&apos;s premier MDCAT preparation platform designed specifically for medical aspirants.
               Join thousands of successful students who chose excellence.
             </p>
           </div>

@@ -269,18 +269,19 @@ function QuizStudentScoresContent() {
 
       const head = [
         [
-          { content: '#', rowSpan: 2, styles: { halign: 'center', valign: 'middle' } },
-          { content: 'Name', rowSpan: 2, styles: { valign: 'middle' } },
-          { content: "Father's Name", rowSpan: 2, styles: { valign: 'middle' } },
-          { content: 'District', rowSpan: 2, styles: { valign: 'middle' } },
-          ...(showSubjectsInExport ? [{ content: 'Subject Breakdown', colSpan: subjects.length, styles: { halign: 'center' } }] : []),
-          { content: 'Performance', colSpan: 3, styles: { halign: 'center' } }
+          { content: '#', rowSpan: 2, styles: { halign: 'center' as const, valign: 'middle' as const } },
+          { content: 'Name', rowSpan: 2, styles: { valign: 'middle' as const } },
+          { content: "Father's Name", rowSpan: 2, styles: { valign: 'middle' as const } },
+          { content: 'District', rowSpan: 2, styles: { valign: 'middle' as const } },
+          ...(showSubjectsInExport ? [{ content: 'Subject Breakdown', colSpan: subjects.length, styles: { halign: 'center' as const } }] : []),
+          { content: 'Performance', colSpan: 3, styles: { halign: 'center' as const } }
         ],
         [
-          ...(showSubjectsInExport ? subjects.map(s => ({ content: s, styles: { halign: 'center', fontSize: 8 } })) : []),
-          { content: 'Correct', styles: { halign: 'center', textColor: [22, 163, 74] } },
-          { content: 'Wrong', styles: { halign: 'center', textColor: [220, 38, 38] } },
-          { content: 'Total', styles: { halign: 'center' } }
+          ...(showSubjectsInExport ? subjects.map(s => ({ content: s, styles: { halign: 'center' as const, fontSize: 8 } })) : []),
+          { content: 'Correct', styles: { halign: 'center' as const, textColor: [22, 163, 74] as [number, number, number] } },
+          { content: 'Wrong', styles: { halign: 'center' as const, textColor: [220, 38, 38] as [number, number, number] } },
+          { content: 'Total', styles: { halign: 'center' as const } }
+
         ]
       ];
 
@@ -325,7 +326,7 @@ function QuizStudentScoresContent() {
           fillColor: [255, 255, 255]
         },
         columnStyles: {
-          0: { cellWidth: 12, halign: 'center' }, // S.No
+          0: { cellWidth: 12, halign: 'center' as const }, // S.No
           1: { cellWidth: 40 }, // Name
           2: { cellWidth: 40 }, // Father Name
           3: { cellWidth: 35 }  // District
@@ -475,7 +476,7 @@ function QuizStudentScoresContent() {
                   <tr className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-800">
                     <th className="px-6 py-4 text-left font-semibold text-slate-600 w-12">#</th>
                     <th className="px-6 py-4 text-left font-semibold text-slate-600">Student Name</th>
-                    <th className="px-6 py-4 text-left font-semibold text-slate-600">Father's Name</th>
+                    <th className="px-6 py-4 text-left font-semibold text-slate-600">Father&apos;s Name</th>
                     <th className="px-6 py-4 text-left font-semibold text-slate-600">District</th>
                     {subjects.map(s => (
                       <th key={s} className="px-4 py-4 text-center font-semibold text-slate-600 text-xs uppercase tracking-wider">{s.slice(0, 4)}</th>

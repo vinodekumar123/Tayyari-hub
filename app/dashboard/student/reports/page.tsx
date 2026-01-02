@@ -130,7 +130,7 @@ export default function StudentReportsPage() {
             }
         };
         fetchMissingData();
-    }, [reports.length]); // Run when reports are loaded
+    }, [reports]); // Run when reports are loaded
 
     if (loading) {
         return (

@@ -90,6 +90,8 @@ const StartQuizPageContent: React.FC = () => {
   const [attemptCount, setAttemptCount] = useState(0);
   const hasSubmittedRef = useRef(false);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const restoredRef = useRef(false);
+  const handleSubmitRef = useRef<((force?: boolean) => Promise<void>) | null>(null);
   const [pageStartTime, setPageStartTime] = useState<number>(Date.now());
   const [timeLogs, setTimeLogs] = useState<Record<string, number>>({});
 
@@ -164,16 +166,22 @@ const StartQuizPageContent: React.FC = () => {
     if (!quizId || !user) return;
     const backupKey = `quiz_backup_${user.uid}_${quizId}`;
 
-    // Load backup on mount if empty state
+    // Restore only once on mount if there is a saved backup; avoid directly reading `answers` to satisfy lint rules
+    if (restoredRef.current) return;
     const saved = localStorage.getItem(backupKey);
-    if (saved && Object.keys(answers).length === 0) {
+    if (saved) {
       try {
         const { answers: savedAnswers, flags: savedFlags } = JSON.parse(saved);
-        if (savedAnswers) setAnswers(prev => ({ ...prev, ...savedAnswers }));
-        if (savedFlags) setFlags(prev => ({ ...prev, ...savedFlags }));
+        if (savedAnswers) {
+          setAnswers(prev => (Object.keys(prev).length === 0 ? { ...prev, ...savedAnswers } : prev));
+        }
+        if (savedFlags) {
+          setFlags(prev => (Object.keys(prev).length === 0 ? { ...prev, ...savedFlags } : prev));
+        }
         toast.info("Restored progress from local backup");
       } catch (e) { console.error("Backup load failed", e); }
     }
+    restoredRef.current = true;
   }, [quizId, user]);
 
   // Save to backup on change
@@ -314,7 +322,8 @@ const StartQuizPageContent: React.FC = () => {
     if (loading || !quiz || showTimeoutModal || showSubmissionModal || !hasLoadedTime) return;
 
     if (timeLeft <= 0) {
-      handleSubmit();
+      // call via ref to avoid adding handleSubmit to effect deps
+      handleSubmitRef.current?.();
       return;
     }
 
@@ -323,7 +332,7 @@ const StartQuizPageContent: React.FC = () => {
       setTimeLeft((prev) => {
         if (prev <= 1) {
           clearInterval(timerRef.current!);
-          handleSubmit();
+          handleSubmitRef.current?.();
           return 0;
         }
         return prev - 1;
@@ -488,6 +497,10 @@ const StartQuizPageContent: React.FC = () => {
       // Don't reset isSubmitting here, wait for redirect
     }, 2000);
   };
+
+  // Keep a stable ref to the latest handleSubmit so effects (timer) can call it without needing it in deps
+  // Assign directly to avoid creating a useEffect dep on `handleSubmit`.
+  handleSubmitRef.current = handleSubmit;
 
 
 
@@ -777,7 +790,7 @@ const StartQuizPageContent: React.FC = () => {
       <header className={`bg-white dark:bg-gray-900 border-b dark:border-gray-800 sticky top-0 z-40 shadow-sm transition-all duration-300`}>
         {!isOnline && (
           <div className="bg-red-500 text-white px-4 py-2 text-center text-sm font-medium flex items-center justify-center gap-2 animate-in slide-in-from-top">
-            <WifiOff className="w-4 h-4" /> You are offline. Don't worry, your answers are saved locally and will sync when you reconnect.
+            <WifiOff className="w-4 h-4" /> You are offline. Don&apos;t worry, your answers are saved locally and will sync when you reconnect.
           </div>
         )}
 

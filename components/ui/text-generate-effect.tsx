@@ -22,7 +22,7 @@ export const TextGenerateEffect = ({
         if (isInView) {
             controls.start("visible");
         }
-    }, [isInView]);
+    }, [isInView, controls]);
 
     const variants = {
         hidden: { opacity: 0 },

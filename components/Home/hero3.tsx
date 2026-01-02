@@ -4,17 +4,17 @@ import React, { useState, useEffect } from 'react';
 import { Star, Clock, BookOpen, Users, Award, Phone, Facebook } from 'lucide-react';
 
 const TayyariHubAnnouncement = () => {
-  const [timeLeft, setTimeLeft] = useState({});
+  const [timeLeft, setTimeLeft] = useState<Record<string, number>>({});
   const [currentTestIndex, setCurrentTestIndex] = useState(0);
 
   // Countdown timer
   useEffect(() => {
     const targetDate = new Date('2025-09-14T23:59:59');
-    
+
     const timer = setInterval(() => {
       const now = new Date().getTime();
       const distance = targetDate.getTime() - now;
-      
+
       if (distance > 0) {
         setTimeLeft({
           days: Math.floor(distance / (1000 * 60 * 60 * 24)),
@@ -40,7 +40,7 @@ const TayyariHubAnnouncement = () => {
       setCurrentTestIndex((prev) => (prev + 1) % featuredTests.length);
     }, 3000);
     return () => clearInterval(interval);
-  }, []);
+  }, [featuredTests.length]);
 
   const testCategories = [
     {
@@ -52,7 +52,7 @@ const TayyariHubAnnouncement = () => {
       ]
     },
     {
-      title: "Chemistry XI", 
+      title: "Chemistry XI",
       icon: "⚗️",
       tests: [
         { name: "Chemistry XI Test 1", status: "PAID", live: true },
@@ -61,7 +61,7 @@ const TayyariHubAnnouncement = () => {
     },
     {
       title: "Physics XI",
-      icon: "📐", 
+      icon: "📐",
       tests: [
         { name: "Physics XI Test 1", status: "PAID", live: true },
         { name: "Physics XI Test 2", status: "PAID", live: true }
@@ -100,7 +100,7 @@ const TayyariHubAnnouncement = () => {
       ]
     },
     {
-      title: "Whole XII Syllabus", 
+      title: "Whole XII Syllabus",
       icon: "📖",
       tests: [
         { name: "Whole XII Test 1", status: "PAID", live: true },
@@ -133,11 +133,11 @@ const TayyariHubAnnouncement = () => {
           <div className="inline-flex items-center gap-2 bg-gradient-to-r from-yellow-400 to-orange-500 text-black px-6 py-2 rounded-full font-bold text-lg mb-6 animate-bounce">
             📢 ANNOUNCEMENT: 50% OFF TAYYARI HUB TEST SERIES 2025 📢
           </div>
-          
+
           <h1 className="text-4xl md:text-6xl font-extrabold bg-gradient-to-r from-cyan-400 via-purple-400 to-pink-400 bg-clip-text text-transparent mb-4 animate-pulse">
             MDCAT Test Series 2025
           </h1>
-          
+
           <p className="text-xl md:text-2xl text-gray-300 max-w-4xl mx-auto leading-relaxed">
             Tayyari Hub, in collaboration with <span className="text-cyan-400 font-semibold">Medico Engineer</span>, proudly presents the most structured and powerful practice system for MDCAT aspirants 🚀
           </p>
@@ -146,7 +146,7 @@ const TayyariHubAnnouncement = () => {
         {/* Featured Test Carousel */}
         <div className="mb-12">
           <div className="relative h-32 bg-gradient-to-r from-gray-800/50 to-gray-700/50 rounded-2xl border border-gray-600 overflow-hidden">
-            <div 
+            <div
               className={`absolute inset-0 bg-gradient-to-r ${featuredTests[currentTestIndex].color} opacity-90 flex items-center justify-center transition-all duration-1000`}
             >
               <div className="text-center">
@@ -175,7 +175,7 @@ const TayyariHubAnnouncement = () => {
         {/* Test Categories Grid */}
         <div className="grid md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mb-12">
           {testCategories.map((category, index) => (
-            <div 
+            <div
               key={category.title}
               className="bg-gradient-to-br from-gray-800/80 to-gray-700/80 rounded-xl p-6 border border-gray-600 hover:border-purple-500 transition-all duration-300 transform hover:scale-105 hover:shadow-2xl"
               style={{ animationDelay: `${index * 100}ms` }}
@@ -189,11 +189,10 @@ const TayyariHubAnnouncement = () => {
                   <div key={testIndex} className="flex justify-between items-center bg-gray-700/50 rounded-lg p-3">
                     <span className="text-sm">{test.name}</span>
                     <div className="flex gap-2">
-                      <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
-                        test.status === 'FREE' 
-                          ? 'bg-green-500 text-white' 
+                      <span className={`px-2 py-1 rounded-full text-xs font-semibold ${test.status === 'FREE'
+                          ? 'bg-green-500 text-white'
                           : 'bg-blue-500 text-white'
-                      }`}>
+                        }`}>
                         {test.status}
                       </span>
                       {test.live && <span className="px-2 py-1 rounded-full text-xs font-semibold bg-red-500 text-white animate-pulse">LIVE</span>}
@@ -212,7 +211,7 @@ const TayyariHubAnnouncement = () => {
           </h2>
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
             {flpMocks.map((mock, index) => (
-              <div 
+              <div
                 key={index}
                 className="bg-gradient-to-br from-gray-800/80 to-gray-700/80 rounded-xl p-4 border border-gray-600 hover:border-yellow-500 transition-all duration-300 transform hover:scale-105"
               >
@@ -221,11 +220,10 @@ const TayyariHubAnnouncement = () => {
                     <h4 className="font-semibold text-white">{mock.name}</h4>
                     <p className={`text-sm ${mock.color}`}>{mock.date}</p>
                   </div>
-                  <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                    mock.status === 'FREE' 
-                      ? 'bg-green-500 text-white' 
+                  <span className={`px-3 py-1 rounded-full text-xs font-semibold ${mock.status === 'FREE'
+                      ? 'bg-green-500 text-white'
                       : 'bg-blue-500 text-white'
-                  }`}>
+                    }`}>
                     {mock.status}
                   </span>
                 </div>
@@ -248,7 +246,7 @@ const TayyariHubAnnouncement = () => {
               { icon: <BookOpen className="w-6 h-6" />, title: "Last Days Review Notes", desc: "Specially designed for quick revision" },
               { icon: <Award className="w-6 h-6" />, title: "Real Exam Simulation", desc: "Exact MDCAT exam format preparation" }
             ].map((feature, index) => (
-              <div 
+              <div
                 key={index}
                 className="bg-gradient-to-br from-purple-800/50 to-blue-800/50 rounded-xl p-6 border border-purple-500/30 hover:border-purple-400 transition-all duration-300 transform hover:scale-105"
               >
@@ -282,14 +280,14 @@ const TayyariHubAnnouncement = () => {
 
         {/* CTA Section */}
         <div className="text-center mb-8">
-          
-      <a
-  href="/auth/login"
-  className="bg-green-600 hover:bg-green-700 text-white font-bold py-4 px-8 rounded-2xl text-xl shadow-md inline-block mb-10"
->
-  👉 Register now at: TayyariHub.com
-</a>
-    
+
+          <a
+            href="/auth/login"
+            className="bg-green-600 hover:bg-green-700 text-white font-bold py-4 px-8 rounded-2xl text-xl shadow-md inline-block mb-10"
+          >
+            👉 Register now at: TayyariHub.com
+          </a>
+
           <div className="flex justify-center gap-6 flex-wrap">
             <div className="flex items-center gap-2 bg-gray-800/50 px-4 py-2 rounded-lg">
               <Phone className="w-5 h-5 text-green-400" />

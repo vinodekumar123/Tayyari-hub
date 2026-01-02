@@ -205,7 +205,7 @@ export default function TeacherReportsPage() {
             }
         };
         fetchMissingSubjects();
-    }, [reports]);
+    }, [reports, questionsCache]);
 
     // Derived State
     // Resolve teacher subject IDs to Names for the dropdown
@@ -520,7 +520,7 @@ export default function TeacherReportsPage() {
                                         <div className="text-xs text-red-700 dark:text-red-400 font-semibold uppercase flex items-center gap-2">
                                             <AlertCircle className="w-3 h-3" /> Student Issue
                                         </div>
-                                        <p className="text-red-900 dark:text-red-200 text-sm mt-1">"{selectedReport.issue}"</p>
+                                        <p className="text-red-900 dark:text-red-200 text-sm mt-1">&quot;{selectedReport.issue}&quot;</p>
                                     </div>
                                     <div className="space-y-2">
                                         <Label>Your Reply</Label>

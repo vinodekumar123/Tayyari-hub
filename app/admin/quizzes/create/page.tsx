@@ -926,63 +926,66 @@ function CreateQuizContent() {
                   </div>
                 </div>
                 <div className="space-y-8">
-                  {Object.entries(groupedQuestions).map(([subject, questions]) => (
-                    <div key={subject} className="space-y-4">
-                      <div className="border-b border-white/10 pb-2 flex items-center">
-                        <h3 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400">{subject}</h3>
-                        <Badge variant="secondary" className="ml-3 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300">{questions.length}</Badge>
-                      </div>
-                      {questions.map((question) => {
-                        const isSelected = quizConfig.selectedQuestions.some((q) => q.id === question.id);
-                        return (
-                          <div
-                            key={question.id}
-                            className={`group relative p-4 rounded-xl border transition-all duration-200 cursor-pointer ${isSelected
-                              ? 'bg-blue-50/50 dark:bg-blue-900/10 border-blue-500/50 shadow-[0_0_15px_rgba(59,130,246,0.1)]'
-                              : 'bg-white/40 dark:bg-black/20 border-white/10 hover:border-blue-500/30 hover:bg-white/60 dark:hover:bg-white/5'
-                              }`}
-                            onClick={() => handleQuestionSelection(question)}
-                          >
-                            <div className="flex items-start gap-4">
-                              <Checkbox
-                                checked={isSelected}
-                                className={`mt-1 h-5 w-5 rounded-md border-2 ${isSelected ? 'border-blue-500 bg-blue-500 text-white' : 'border-gray-400 dark:border-gray-500'}`}
-                              />
-                              <div className="flex-1 space-y-2">
-                                <div className="flex items-start justify-between gap-4">
-                                  <div
-                                    className="font-medium text-foreground text-base line-clamp-2"
-                                    dangerouslySetInnerHTML={{ __html: question.questionText || 'Untitled Question' }}
-                                  />
-                                  <div className="flex flex-col gap-2 shrink-0">
-                                    {question.accessType === 'paid' ? (
-                                      <Badge className="bg-gradient-to-r from-amber-500 to-yellow-500 text-white border-0">Premium</Badge>
-                                    ) : question.seriesId ? (
-                                      <Badge variant="outline" className="border-purple-500 text-purple-600 dark:text-purple-400">Series</Badge>
-                                    ) : (
-                                      <Badge variant="secondary" className="bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400">Free</Badge>
-                                    )}
+                  {Object.entries(groupedQuestions).map(([subject, rawQuestions]) => {
+                    const questions = rawQuestions as any[];
+                    return (
+                      <div key={subject} className="space-y-4">
+                        <div className="border-b border-white/10 pb-2 flex items-center">
+                          <h3 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400">{subject}</h3>
+                          <Badge variant="secondary" className="ml-3 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300">{questions.length}</Badge>
+                        </div>
+                        {questions.map((question) => {
+                          const isSelected = quizConfig.selectedQuestions.some((q) => q.id === question.id);
+                          return (
+                            <div
+                              key={question.id}
+                              className={`group relative p-4 rounded-xl border transition-all duration-200 cursor-pointer ${isSelected
+                                ? 'bg-blue-50/50 dark:bg-blue-900/10 border-blue-500/50 shadow-[0_0_15px_rgba(59,130,246,0.1)]'
+                                : 'bg-white/40 dark:bg-black/20 border-white/10 hover:border-blue-500/30 hover:bg-white/60 dark:hover:bg-white/5'
+                                }`}
+                              onClick={() => handleQuestionSelection(question)}
+                            >
+                              <div className="flex items-start gap-4">
+                                <Checkbox
+                                  checked={isSelected}
+                                  className={`mt-1 h-5 w-5 rounded-md border-2 ${isSelected ? 'border-blue-500 bg-blue-500 text-white' : 'border-gray-400 dark:border-gray-500'}`}
+                                />
+                                <div className="flex-1 space-y-2">
+                                  <div className="flex items-start justify-between gap-4">
+                                    <div
+                                      className="font-medium text-foreground text-base line-clamp-2"
+                                      dangerouslySetInnerHTML={{ __html: question.questionText || 'Untitled Question' }}
+                                    />
+                                    <div className="flex flex-col gap-2 shrink-0">
+                                      {question.accessType === 'paid' ? (
+                                        <Badge className="bg-gradient-to-r from-amber-500 to-yellow-500 text-white border-0">Premium</Badge>
+                                      ) : question.seriesId ? (
+                                        <Badge variant="outline" className="border-purple-500 text-purple-600 dark:text-purple-400">Series</Badge>
+                                      ) : (
+                                        <Badge variant="secondary" className="bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400">Free</Badge>
+                                      )}
+                                    </div>
                                   </div>
-                                </div>
-                                <div className="flex items-center flex-wrap gap-2 text-sm">
-                                  <Badge variant="outline" className="bg-white/30 dark:bg-black/20 border-white/20">
-                                    {question.chapter || 'No Chapter'}
-                                  </Badge>
-                                  <Badge className={getDifficultyColor(question.difficulty ?? 'Easy')}>
-                                    {question.difficulty ?? 'Easy'}
-                                  </Badge>
-                                  <span className="text-muted-foreground text-xs flex items-center gap-1">
-                                    <Eye className="w-3 h-3" />
-                                    Used in {question.usedInQuizzes || 0} quizzes
-                                  </span>
+                                  <div className="flex items-center flex-wrap gap-2 text-sm">
+                                    <Badge variant="outline" className="bg-white/30 dark:bg-black/20 border-white/20">
+                                      {question.chapter || 'No Chapter'}
+                                    </Badge>
+                                    <Badge className={getDifficultyColor(question.difficulty ?? 'Easy')}>
+                                      {question.difficulty ?? 'Easy'}
+                                    </Badge>
+                                    <span className="text-muted-foreground text-xs flex items-center gap-1">
+                                      <Eye className="w-3 h-3" />
+                                      Used in {question.usedInQuizzes || 0} quizzes
+                                    </span>
+                                  </div>
                                 </div>
                               </div>
                             </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  ))}
+                          );
+                        })}
+                      </div>
+                    );
+                  })}
 
                   {/* Load More Button */}
                   <div className="flex justify-center pt-8">

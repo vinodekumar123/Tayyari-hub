@@ -81,7 +81,9 @@ const ReactQuill = dynamic(
       } catch (e) { }
     }
 
-    return ({ forwardedRef, ...props }: any) => <RQ ref={forwardedRef} {...props} />;
+    const QuillComponent = ({ forwardedRef, ...props }: any) => <RQ ref={forwardedRef} {...props} />;
+    QuillComponent.displayName = 'QuillComponent';
+    return QuillComponent;
   },
   { ssr: false, loading: () => <div className="h-64 bg-gray-100 animate-pulse rounded-md" /> }
 );

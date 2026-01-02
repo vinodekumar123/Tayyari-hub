@@ -47,13 +47,13 @@ export default function StudentProfilePage() {
         // ⚡ try cache first
         const cachedSnap = await getDocFromCache(ref).catch(() => null);
         if (cachedSnap?.exists()) {
-          setForm({ ...form, ...cachedSnap.data() } as any);
+          setForm(prev => ({ ...prev, ...cachedSnap.data() } as any));
         }
 
         // 🟢 realtime sync from server
         const unsubscribeSnap = onSnapshot(ref, async (snap) => {
           if (snap.exists()) {
-            setForm({ ...form, ...snap.data() } as any);
+            setForm(prev => ({ ...prev, ...snap.data() } as any));
           } else {
             // auto-create if missing
             await setDoc(ref, {

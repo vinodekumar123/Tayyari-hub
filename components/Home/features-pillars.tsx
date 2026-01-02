@@ -106,7 +106,7 @@ const FeaturesPillars = () => {
                     </h2>
 
                     <p className="text-lg text-slate-600 leading-relaxed">
-                        We don't just provide content—we provide a complete environment designed to keep you consistent, motivated, and exam-ready.
+                        We don&apos;t just provide content—we provide a complete environment designed to keep you consistent, motivated, and exam-ready.
                     </p>
                 </div>
 
