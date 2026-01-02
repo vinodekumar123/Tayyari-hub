@@ -38,6 +38,7 @@ import { useRouter } from 'next/navigation';
 import { Student, Course, Series, EnrollmentRecord, BulkDeleteResponse } from '@/types';
 import { TableSkeleton } from '@/components/ui/skeleton-cards';
 import { brandColors, glassmorphism } from '@/lib/design-tokens';
+import { sendNotification } from '@/lib/community';
 import { toast } from 'react-hot-toast';
 import { format } from 'date-fns';
 import html2canvas from 'html2canvas';
@@ -583,6 +584,16 @@ export default function StudentsPage() {
         enrolledAt: new Date().toISOString(),
         status: 'active'
       });
+
+      // Send Notification to Student
+      await sendNotification(
+        currentStudent.id,
+        'Course Enrollment Successful',
+        `You have been successfully enrolled in ${selectedSeries.name}. You can now access the content in your Study Zone.`,
+        'success',
+        '/dashboard/study'
+      );
+
       toast.success(`Enrolled in ${selectedSeries.name}`);
       setEnrollModal(false);
     } catch (error) {
