@@ -8,6 +8,8 @@ import { useParams, useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
+import RichTextEditor from '@/components/RichTextEditor';
+import parse from 'html-react-parser';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { toast } from 'sonner';
@@ -373,7 +375,9 @@ export default function ThreadPage() {
                     </div>
                 </CardHeader>
                 <CardContent className="pt-4">
-                    <p className="text-lg whitespace-pre-wrap leading-relaxed text-foreground/90">{post.content}</p>
+                    <div className="text-lg leading-relaxed text-foreground/90 prose dark:prose-invert max-w-none">
+                        {parse(post.content)}
+                    </div>
 
                     <div className="flex items-center gap-2 mt-6 pt-4 border-t">
                         <div className="flex items-center rounded-md border bg-background overflow-hidden">
@@ -436,8 +440,8 @@ export default function ThreadPage() {
                                     )}
                                 </div>
 
-                                <div className="mt-3 text-sm leading-relaxed text-foreground/90 whitespace-pre-wrap">
-                                    {reply.content}
+                                <div className="mt-3 text-sm leading-relaxed text-foreground/90 prose dark:prose-invert max-w-none">
+                                    {parse(reply.content)}
                                 </div>
 
                                 <div className="flex items-center gap-3 mt-4">
@@ -468,11 +472,10 @@ export default function ThreadPage() {
                         <CardTitle className="text-lg">Your Answer</CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-4">
-                        <Textarea
+                        <RichTextEditor
                             value={replyContent}
-                            onChange={e => setReplyContent(e.target.value)}
+                            onChange={setReplyContent}
                             placeholder="Write a clear and helpful explanation..."
-                            className="min-h-[120px] resize-y bg-background focus:bg-background"
                         />
                         <div className="flex justify-end">
                             <Button onClick={handlePostReply} disabled={isSubmitting || !replyContent.trim()} className="bg-purple-600 hover:bg-purple-700 font-semibold px-8">

@@ -8,6 +8,8 @@ import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/componen
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import RichTextEditor from '@/components/RichTextEditor';
+import parse from 'html-react-parser';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
@@ -216,7 +218,9 @@ export default function CommunityPage() {
     };
 
     const filteredPosts = posts.filter(p => {
-        const matchSearch = p.title.toLowerCase().includes(search.toLowerCase()) || p.content.toLowerCase().includes(search.toLowerCase());
+        // Strip HTML tags for search
+        const contentText = p.content.replace(/<[^>]*>?/gm, '');
+        const matchSearch = p.title.toLowerCase().includes(search.toLowerCase()) || contentText.toLowerCase().includes(search.toLowerCase());
         const matchSubject = subjectFilter === 'all' || p.subject === subjectFilter;
         return matchSearch && matchSubject;
     });
@@ -280,15 +284,20 @@ export default function CommunityPage() {
 
                             <div className="space-y-2">
                                 <label className="text-sm font-medium">Details</label>
-                                <Textarea value={newContent} onChange={e => setNewContent(e.target.value)} placeholder="Describe your doubt in detail..." className="min-h-[150px]" />
+                                <RichTextEditor
+                                    value={newContent}
+                                    onChange={setNewContent}
+                                    placeholder="Describe your doubt in detail..."
+                                />
+                                <Button className="w-full" onClick={handleCreatePost} disabled={isAsking}>
+                                    {isAsking ? 'Posting...' : 'Post Question'}
+                                </Button>
                             </div>
-                            <Button className="w-full" onClick={handleCreatePost} disabled={isAsking}>
-                                {isAsking ? 'Posting...' : 'Post Question'}
-                            </Button>
                         </div>
                     </DialogContent>
                 </Dialog>
             </div>
+
 
             {/* Filters and Search */}
             <div className="flex flex-col sm:flex-row gap-4 bg-white dark:bg-gray-900 p-4 rounded-xl border shadow-sm">
@@ -353,9 +362,9 @@ export default function CommunityPage() {
                                         <h3 className="text-lg font-bold text-foreground mb-2 group-hover:text-purple-600 transition-colors line-clamp-1">
                                             {post.title}
                                         </h3>
-                                        <p className="text-muted-foreground text-sm line-clamp-2 mb-4">
-                                            {post.content}
-                                        </p>
+                                        <div className="text-muted-foreground text-sm line-clamp-2 mb-4 prose dark:prose-invert max-w-none">
+                                            {parse(post.content)}
+                                        </div>
 
                                         <div className="flex items-center gap-4 text-xs font-medium text-muted-foreground">
                                             <div className="flex items-center gap-1 hover:text-foreground">

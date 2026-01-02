@@ -154,18 +154,18 @@ export function Sidebar() {
       title: 'Student Panel',
       items: [
         { icon: Home, label: 'Dashboard', href: '/dashboard/student' },
-        { icon: BookOpen, label: 'Study Zone', href: '/dashboard/study' },
-        { icon: Users, label: 'Community', href: '/dashboard/student/community' },
-        { icon: Trophy, label: 'Leaderboard', href: '/dashboard/leaderboard' },
+        { icon: BookOpen, label: 'My Courses', href: '/dashboard/study' },
         { icon: Trophy, label: 'Quizzes', href: '/admin/quizzes/quizebank' },
-        // New student-only items requested:
         { icon: Plus, label: 'Create Your Own Test', href: '/quiz/create-mock' },
         { icon: BookOpen, label: 'Flashcards', href: '/dashboard/student/flashcards' },
         { icon: Trophy, label: 'Your Created Tests', href: '/admin/quizzes/user-created-quizzes' },
+        { icon: Users, label: 'Community', href: '/dashboard/student/community' },
+        { icon: Trophy, label: 'Leaderboard', href: '/dashboard/leaderboard' },
         { icon: ClipboardList, label: 'Results', href: '/admin/students/results' },
         { icon: Flag, label: 'My Reports', href: '/dashboard/student/reports' },
         { icon: UserCircle, label: 'Settings & Security', href: '/dashboard/student/settings' },
       ],
+
     },
   ];
 
@@ -318,22 +318,30 @@ export function Sidebar() {
           md:translate-x-0 md:static md:flex`}
       >
         {/* Header */}
-        <div className="p-4 border-b flex items-center justify-between">
-          {!collapsed ? (
-            <div className="flex items-center space-x-3">
-              <Image src={logo} alt="Tayyari Hub Logo" className="h-10 w-auto" priority />
-            </div>
-          ) : (
-            <BookOpen className="h-6 w-6 text-purple-700" />
-          )}
+        {/* Header */}
+        <div className="p-4 border-b flex flex-col gap-4">
+          <div className="w-full">
+            {!collapsed ? (
+              <div className="flex items-center space-x-3">
+                <Image src={logo} alt="Tayyari Hub Logo" className="h-12 w-auto" priority />
+              </div>
+            ) : (
+              <BookOpen className="h-6 w-6 text-purple-700" />
+            )}
+          </div>
 
-          <div className="flex items-center space-x-2">
+          <div className={`flex items-center ${collapsed ? 'justify-center flex-col gap-2' : 'justify-between w-full'}`}>
+            {/* Mobile Close */}
             <Button variant="ghost" size="icon" onClick={() => setMobileOpen(false)} className="md:hidden">
               <X className="h-5 w-5" />
             </Button>
-            <div className="flex items-center gap-1">
-              <NotificationBell />
-              <ModeToggle />
+
+            <div className={`flex items-center gap-2 ${!collapsed && 'w-full justify-between'}`}>
+              {/* User Info or just controls */}
+              <div className="flex items-center gap-2">
+                <NotificationBell />
+                <ModeToggle />
+              </div>
             </div>
           </div>
         </div>
