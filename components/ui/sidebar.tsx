@@ -47,7 +47,7 @@ export function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
 
-  const [expandedSections, setExpandedSections] = useState<string[]>(['main', 'content', 'users', 'settings', 'student']);
+  const [expandedSections, setExpandedSections] = useState<string[]>(['main', 'content', 'users', 'settings', 'student_dashboard', 'student_learning', 'student_practice', 'student_performance', 'student_community', 'student_account']);
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [showSignOutDialog, setShowSignOutDialog] = useState(false);
@@ -150,22 +150,51 @@ export function Sidebar() {
 
   const studentMenu: Section[] = [
     {
-      section: 'student',
-      title: 'Student Panel',
+      section: 'student_dashboard',
+      title: 'Dashboard',
       items: [
         { icon: Home, label: 'Dashboard', href: '/dashboard/student' },
-        { icon: BookOpen, label: 'My Courses', href: '/dashboard/study' },
+      ],
+    },
+    {
+      section: 'student_learning',
+      title: 'Learning Resources',
+      items: [
+        { icon: BookOpen, label: 'Study Material', href: '/dashboard/study' },
+        { icon: BookOpen, label: 'Flashcards', href: '/dashboard/student/flashcards' },
+      ],
+    },
+    {
+      section: 'student_practice',
+      title: 'Tests & Practice',
+      items: [
         { icon: Trophy, label: 'Quizzes', href: '/admin/quizzes/quizebank' },
         { icon: Plus, label: 'Create Your Own Test', href: '/quiz/create-mock' },
-        { icon: BookOpen, label: 'Flashcards', href: '/dashboard/student/flashcards' },
         { icon: Trophy, label: 'Your Created Tests', href: '/admin/quizzes/user-created-quizzes' },
-        { icon: Users, label: 'Community', href: '/dashboard/student/community' },
-        { icon: Trophy, label: 'Leaderboard', href: '/dashboard/leaderboard' },
+      ],
+    },
+    {
+      section: 'student_performance',
+      title: 'Performance & Progress',
+      items: [
         { icon: ClipboardList, label: 'Results', href: '/admin/students/results' },
         { icon: Flag, label: 'My Reports', href: '/dashboard/student/reports' },
+        { icon: Trophy, label: 'Leaderboard', href: '/dashboard/leaderboard' },
+      ],
+    },
+    {
+      section: 'student_community',
+      title: 'Community',
+      items: [
+        { icon: Users, label: 'Community', href: '/dashboard/student/community' },
+      ],
+    },
+    {
+      section: 'student_account',
+      title: 'Account',
+      items: [
         { icon: UserCircle, label: 'Settings & Security', href: '/dashboard/student/settings' },
       ],
-
     },
   ];
 
