@@ -69,6 +69,21 @@ export default function StudentSettingsPage() {
         }
     }, [user]);
 
+    const [enrolledSeries, setEnrolledSeries] = useState<{ seriesId: string; seriesName: string; enrolledAt?: any; status?: string; }[]>([]);
+
+    const fetchEnrollments = useCallback(async () => {
+        if (!user) return;
+        try {
+            const enrollRef = collection(db, 'enrollments');
+            const q = query(enrollRef, where('studentId', '==', user.uid), where('status', 'in', ['active','paid','enrolled']));
+            const snap = await getDocs(q);
+            const items = snap.docs.map(d => ({ seriesId: d.data().seriesId, seriesName: d.data().seriesName || d.data().series || 'Unknown', enrolledAt: d.data().enrolledAt || d.data().paymentDate || d.data().createdAt, status: d.data().status }));
+            setEnrolledSeries(items as any);
+        } catch (err) {
+            console.error('Failed to load enrollments', err);
+        }
+    }, [user]);
+
     useEffect(() => {
         setCurrentDeviceId(localStorage.getItem('tayyari_device_id') || '');
         if (user) {
@@ -92,7 +107,8 @@ export default function StudentSettingsPage() {
             }
         };
         fetchProfile();
-    }, [user, fetchMySessions]);
+        fetchEnrollments();
+    }, [user, fetchMySessions, fetchEnrollments]);
 
     const handleRevokeSession = async (sessionId: string) => {
         if (!confirm('Are you sure you want to log out this device?')) return;
@@ -303,6 +319,26 @@ export default function StudentSettingsPage() {
                                         </Button>
                                     </div>
                                 </div>
+                            </div>
+                            <div className="mt-6">
+                                <h4 className="text-base font-semibold">Enrolled Series</h4>
+                                {enrolledSeries.length === 0 ? (
+                                    <p className="text-sm text-slate-500">You are not enrolled in any series.</p>
+                                ) : (
+                                    <div className="mt-3 space-y-2">
+                                        {enrolledSeries.map((s) => (
+                                            <div key={s.seriesId} className="flex items-center justify-between p-3 rounded-lg border bg-white/50 dark:bg-slate-900/50">
+                                                <div>
+                                                    <div className="font-semibold">{s.seriesName}</div>
+                                                    <div className="text-xs text-muted-foreground">{s.enrolledAt ? format(new Date(s.enrolledAt?.seconds ? s.enrolledAt.seconds * 1000 : s.enrolledAt), 'MMM dd, yyyy') : ''}</div>
+                                                </div>
+                                                <div>
+                                                    <Badge variant={s.status === 'active' ? 'default' : 'secondary'}>{s.status || 'active'}</Badge>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
                             </div>
                         </CardContent>
                     </Card>
