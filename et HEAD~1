@@ -114,4 +114,2169 @@ Date:   Fri Jan 2 04:30:38 2026 +0500
  components/ui/wavy-background.tsx                  |  174 [32m+++[m
  debug-questions.js                                 |   48 [32m+[m
  fix-encoding.ps1                                   |   15 [32m+[m
- hooks/useFcmToken.ts                             
+ hooks/useFcmToken.ts                               |   56 [32m+[m
+ hooks/useNotifications.ts                          |   73 [32m+[m
+ lib/auth-middleware.ts                             |  116 [32m++[m
+ lib/design-tokens.ts                               |  173 [32m+++[m
+ lib/firebase-admin.ts                              |   67 [32m+[m
+ lib/sessionUtils.ts                                |  332 [32m++++[m
+ list-my-models.js                                  |   28 [32m+[m
+ middleware.ts                                      |   87 [32m++[m
+ next-env.d.ts                                      |    2 [32m+[m[31m-[m
+ next.config.js                                     |   79 [32m+[m[31m-[m
+ package-lock.json                                  |  800 [32m++++++++[m[31m--[m
+ package.json                                       |   33 [32m+[m[31m-[m
+ public/firebase-messaging-sw.js                    |   27 [32m+[m
+ public/sitemap-0.xml                               |   75 [32m+[m[31m-[m
+ public/testimonials/younis_memon.png               |  Bin [31m0[m -> [32m744423[m bytes
+ stores/useCacheStore.ts                            |  142 [32m++[m
+ stores/useNotificationStore.ts                     |   25 [32m+[m
+ stores/useUIStore.ts                               |   92 [32m++[m
+ stores/useUserStore.ts                             |   95 [32m++[m
+ tailwind.config.ts                                 |    1 [32m+[m
+ test-gemini-http.js                                |   29 [32m+[m
+ test-gemini-simple.js                              |   36 [32m+[m
+ tsc_errors.log                                     |  Bin [31m0[m -> [32m13990[m bytes
+ tsconfig.json                                      |    5 [32m+[m[31m-[m
+ tsconfig.tsbuildinfo                               |    1 [32m+[m
+ types/index.ts                                     |  215 [32m+++[m
+ 127 files changed, 24795 insertions(+), 7657 deletions(-)
+
+[33mcommit 0096b8d2141adc2d8d231b0bed6967c3cac8d88d[m[33m ([m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m
+Author: Vinode Narain <tayyarihub1@gmail.com>
+Date:   Sun Dec 21 12:12:19 2025 +0500
+
+    student dashboard redesign
+
+ app/dashboard/student/page.tsx | 490 [32m+++++++++++++++++++++++[m[31m------------------[m
+ public/sitemap-0.xml           |  72 [32m+++[m[31m---[m
+ 2 files changed, 314 insertions(+), 248 deletions(-)
+
+[33mcommit e8fcc0f74bfdb36a5123286e731525bf2e4f07c7[m
+Author: Vinode Narain <tayyarihub1@gmail.com>
+Date:   Sun Dec 21 11:46:30 2025 +0500
+
+    dark mode
+
+ app/admin/layout.tsx           |  2 [32m+[m[31m-[m
+ app/dashboard/student/page.tsx | 65 [32m+++++++++++++++++++[m[31m-------------------[m
+ app/layout.tsx                 | 19 [32m+++++++++[m[31m--[m
+ components/Home/navbar.tsx     |  2 [32m+[m[31m-[m
+ components/mode-toggle.tsx     | 40 [32m+++++++++++++++++++++++[m
+ components/theme-provider.tsx  |  8 [32m+++++[m
+ components/ui/sidebar.tsx      | 28 [32m++++++++[m[31m--------[m
+ public/sitemap-0.xml           | 72 [32m+++++++++++++++++++++[m[31m---------------------[m
+ 8 files changed, 149 insertions(+), 87 deletions(-)
+
+[33mcommit 665e88a115bb2dba5ce51d89f0950dad88d18ce7[m
+Author: Vinode Narain <tayyarihub1@gmail.com>
+Date:   Sun Dec 21 01:15:00 2025 +0500
+
+    adcance dashboard
+
+ app/admin/layout.tsx           |   3 [32m+[m[31m-[m
+ app/dashboard/admin/page.tsx   |   3 [32m+[m[31m-[m
+ app/dashboard/student/page.tsx | 400 [32m+++++++++++++++++++++++++++[m[31m--------------[m
+ public/sitemap-0.xml           |  72 [32m++++[m[31m----[m
+ 4 files changed, 303 insertions(+), 175 deletions(-)
+
+[33mcommit 8241ee7f0d5d7b7ee3c976c66123001b1c7dcfc3[m
+Author: Vinode Narain <tayyarihub1@gmail.com>
+Date:   Sun Dec 21 00:17:12 2025 +0500
+
+    your commit message here
+
+ app/admin/layout.tsx | 24 [32m+++++++++++++++++++++[m[31m---[m
+ 1 file changed, 21 insertions(+), 3 deletions(-)
+
+[33mcommit 596db7a0792dc4f80408edae1a82c7d258bbc241[m
+Author: Vinode Narain <tayyarihub1@gmail.com>
+Date:   Sat Dec 20 22:24:22 2025 +0500
+
+    stats and fast loading dashboard
+
+ app/admin/courses/page.tsx        |    2 [32m+[m[31m-[m
+ app/dashboard/student/page.tsx    |  489 [32m+++++++[m[31m---------[m
+ app/lib/student-stats.ts          |  126 [32m+++++[m
+ app/quiz/start-user-quiz/page.tsx |   16 [32m+[m
+ app/quiz/start/page.tsx           |   17 [32m+[m
+ firebase-debug.log                |  121 [32m++++[m
+ firebase.json                     |   34 [32m+[m[31m-[m
+ firestore-debug.log               |    0
+ functions/index.js                |  124 [31m----[m
+ functions/package.json            |   11 [31m-[m
+ package-lock.json                 | 1122 [32m++++++++++++++++++++++++++++++++++++[m[31m-[m
+ package.json                      |    1 [32m+[m
+ public/sitemap-0.xml              |   72 [32m+[m[31m--[m
+ 13 files changed, 1671 insertions(+), 464 deletions(-)
+
+[33mcommit db22ebbb4918072af2b6ab1cc45870a23a44071e[m
+Author: Vinode Narain <tayyarihub1@gmail.com>
+Date:   Sat Dec 20 17:22:14 2025 +0500
+
+    Describe what you changed
+
+ app/admin/layout.tsx         | 41 [32m+++++++++++++++++++++++++++++++++++++++++[m
+ app/dashboard/admin/page.tsx | 28 [32m+++++++++++++++++++++++++[m[31m---[m
+ 2 files changed, 66 insertions(+), 3 deletions(-)
+
+[33mcommit ba70c02c44a1778c42e8a2d5c87ba2489251c1d2[m
+Author: Vinode Narain <tayyarihub1@gmail.com>
+Date:   Sat Dec 20 17:07:30 2025 +0500
+
+    Describe what you changed
+
+ app/admin/courses/page.tsx | 67 [32m++++++++++++++++++++++++++++++++++[m[31m------------[m
+ 1 file changed, 50 insertions(+), 17 deletions(-)
+
+[33mcommit cefc8f5e0eb2a3574e4ceea57fcc4136cab2b9cd[m
+Author: Vinode Narain <tayyarihub1@gmail.com>
+Date:   Sat Dec 20 16:58:54 2025 +0500
+
+    Describe what you changed
+
+ app/admin/courses/page.tsx | 150 [32m++++++++++++++++++++++++++++++++++++++[m[31m-------[m
+ 1 file changed, 129 insertions(+), 21 deletions(-)
+
+[33mcommit 27d8f1e0ea3bcd38ccc37a0343a98feff0ee55fc[m
+Author: Vinode Narain <tayyarihub1@gmail.com>
+Date:   Sat Dec 20 16:45:31 2025 +0500
+
+    Describe what you changed
+
+ app/admin/mockquestions/create/page.tsx |   4 [32m+[m[31m-[m
+ app/admin/questions/create/page.tsx     |   4 [32m+[m[31m-[m
+ app/globals.css                         |  65 [32m+++++++++++[m[31m---[m
+ package-lock.json                       | 148 [32m+++[m[31m-----------------------------[m
+ package.json                            |   2 [32m+[m[31m-[m
+ public/sitemap-0.xml                    |  72 [32m++++++++[m[31m--------[m
+ 6 files changed, 104 insertions(+), 191 deletions(-)
+
+[33mcommit 700316400ecd20b0de16385590e022203ba67e99[m
+Author: Vinode Narain <tayyarihub1@gmail.com>
+Date:   Sat Dec 20 16:31:22 2025 +0500
+
+    Describe what you changed
+
+ app/admin/questions/create/page.tsx        | 21 [32m++++++[m[31m----[m
+ app/admin/quizzes/create/page.tsx          | 55 [32m++++++++++++++[m[31m-----------[m
+ app/admin/results/quizescore/page.tsx      | 14 [32m+++++[m[31m--[m
+ app/admin/students/foradmin/page.tsx       | 42 [32m+++++++++++[m[31m--------[m
+ app/admin/students/responses/page.tsx      | 65 [32m++++++++++++++++[m[31m--------------[m
+ app/admin/students/user-responses/page.tsx | 44 [32m+++++++++++[m[31m---------[m
+ app/quiz/results/page.tsx                  | 27 [32m++++++++[m[31m-----[m
+ app/quiz/start-user-quiz/page.tsx          | 12 [32m+++++[m[31m-[m
+ app/quiz/start/page.tsx                    | 12 [32m+++++[m[31m-[m
+ next-env.d.ts                              |  3 [32m+[m[31m-[m
+ public/robots.txt                          |  9 [32m+++++[m
+ public/sitemap-0.xml                       | 39 [32m++++++++++++++++++[m
+ public/sitemap.xml                         |  4 [32m++[m
+ tsconfig.json                              | 26 [32m+++++++++[m[31m---[m
+ 14 files changed, 252 insertions(+), 121 deletions(-)
+
+[33mcommit 1ec04fe0754edb174c3c8acfffd89a1babe9ad12[m
+Author: Vinode Narain <tayyarihub1@gmail.com>
+Date:   Sat Dec 20 16:21:48 2025 +0500
+
+    Describe what you changed
+
+ app/admin/mockquestions/create/page.tsx | 10 [32m+++++++++[m[31m-[m
+ 1 file changed, 9 insertions(+), 1 deletion(-)
+
+[33mcommit d6ba0ad62c830a521ddd05f022be95da54692634[m
+Author: Vinode Narain <tayyarihub1@gmail.com>
+Date:   Sat Dec 20 16:18:51 2025 +0500
+
+    create mock page update
+
+ app/admin/mockquestions/create/page.tsx | 4 [32m++[m[31m--[m
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+[33mcommit 4c3a9e22d88fa9e5e1c628dd053ce6fce53a13ed[m
+Author: Vinode Narain <tayyarihub1@gmail.com>
+Date:   Sat Dec 20 16:13:40 2025 +0500
+
+    course page update
+
+ app/globals.css | 3 [32m++[m[31m-[m
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+[33mcommit 0b35fb21db83095875b8aec58b331dd0f4f90354[m
+Author: Vinode Narain <tayyarihub1@gmail.com>
+Date:   Sat Dec 20 16:10:24 2025 +0500
+
+    course page corrected
+
+ app/admin/quizzes/user-created-quizzes/page.tsx |   4 [32m+[m[31m-[m
+ app/admin/students/user-responses/page.tsx      | 114 [32m+++++++++++[m[31m-------------[m
+ app/admin/students/user-results/page.tsx        |   4 [32m+[m[31m-[m
+ app/quiz/create-mock/page.tsx                   |  19 [32m++[m[31m--[m
+ app/quiz/start-user-quiz/page.tsx               |  14 [32m++[m[31m-[m
+ app/quiz/start/page.tsx                         |  20 [32m++[m[31m---[m
+ 6 files changed, 81 insertions(+), 94 deletions(-)
+
+[33mcommit d5c76a6101e54b9fc2c6df697622d78fcce38a7c[m
+Merge: f457811 e9888a3
+Author: Vinode Narain <tayyarihub1@gmail.com>
+Date:   Sat Dec 20 15:55:49 2025 +0500
+
+    Merge branch 'main' of https://github.com/vinodekumar123/Tayyari-hub
+
+[33mcommit f4578117130f42eacf61e4ffd62a459333610739[m
+Author: Vinode Narain <tayyarihub1@gmail.com>
+Date:   Sat Dec 20 15:54:50 2025 +0500
+
+    course page update with series add
+
+ app/admin/courses/page.tsx     | 1451 [32m++++[m[31m----[m
+ app/dashboard/student/page.tsx |    2 [32m+[m[31m-[m
+ package-lock.json              | 7180 [32m+++++++++++++++++++++++[m[31m-----------------[m
+ package.json                   |    8 [32m+[m[31m-[m
+ 4 files changed, 5019 insertions(+), 3622 deletions(-)
+
+[33mcommit e9888a3e2bf90167ca7a313400e73de3cc15fb93[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Fri Dec 19 20:22:29 2025 +0500
+
+    Update page.tsx
+
+ app/dashboard/student/page.tsx | 184 [32m++++++[m[31m-----------------------------------[m
+ 1 file changed, 24 insertions(+), 160 deletions(-)
+
+[33mcommit a557bb603ebbf528e0c806adb0405561518c26fc[m
+Merge: 22acd58 64b8325
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Fri Dec 19 20:04:47 2025 +0500
+
+    Merge pull request #8 from vinodekumar123/create-your-own-test
+    
+    Create your own test
+
+[33mcommit 64b832597cefd9031335f9e11af0ee8d33103163[m
+Merge: 0ca878e 22acd58
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Fri Dec 19 20:04:29 2025 +0500
+
+    Merge branch 'main' into create-your-own-test
+
+[33mcommit 0ca878edb780aaa33f878b9a93c5725078522016[m[33m ([m[1;31morigin/create-your-own-test[m[33m)[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Sat Nov 8 19:13:18 2025 +0500
+
+    Update sidebar.tsx
+
+ components/ui/sidebar.tsx | 2 [32m+[m[31m-[m
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+[33mcommit 94547d92f863ad0124c24801cf597a110c532e4c[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Sat Nov 8 19:09:06 2025 +0500
+
+    Add new student-only items to sidebar
+
+ components/ui/sidebar.tsx | 7 [32m++++[m[31m---[m
+ 1 file changed, 4 insertions(+), 3 deletions(-)
+
+[33mcommit 5afc4590b9e6e536503af75767bbe2c3caaf855a[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Sat Nov 8 18:57:43 2025 +0500
+
+    Update page.tsx
+
+ app/quiz/create-mock/page.tsx | 431 [32m+++++++++++++++++++++[m[31m---------------------[m
+ 1 file changed, 214 insertions(+), 217 deletions(-)
+
+[33mcommit 5ee9eb1adc5612577b393a7db62bc9c5e4d61389[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Sat Nov 8 18:31:21 2025 +0500
+
+    Refactor layout by removing Sidebar component
+    
+    Removed Sidebar component and adjusted layout structure for user-created quizzes page.
+
+ app/admin/quizzes/user-created-quizzes/page.tsx | 350 [32m++++++++++++[m[31m------------[m
+ 1 file changed, 172 insertions(+), 178 deletions(-)
+
+[33mcommit b5ab296b39803f37a1f1b854e1cf670aef399e58[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Sat Nov 8 18:26:45 2025 +0500
+
+    Refactor layout to include Sidebar component
+
+ app/admin/quizzes/user-created-quizzes/page.tsx | 350 [32m++++++++++++[m[31m------------[m
+ 1 file changed, 178 insertions(+), 172 deletions(-)
+
+[33mcommit cab85dfc9c9afc42a230f15aadb2e643be17b5b4[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Thu Nov 6 19:38:10 2025 +0500
+
+    Update page.tsx
+
+ app/quiz/create-mock/page.tsx | 355 [32m++++++++++++++++++++++++++++[m[31m--------------[m
+ 1 file changed, 240 insertions(+), 115 deletions(-)
+
+[33mcommit 27d624f2edad36c6b9df2f8d91948c9c8889c938[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Thu Nov 6 19:31:29 2025 +0500
+
+    Update button navigation to create mock quiz page
+
+ app/admin/quizzes/user-created-quizzes/page.tsx | 2 [32m+[m[31m-[m
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+[33mcommit 4cc86176c2cbdfbc33e41e4403ff4effe2444999[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Thu Nov 6 19:25:52 2025 +0500
+
+    Update page.tsx
+
+ app/admin/quizzes/user-created-quizzes/page.tsx | 122 [32m+++++++++++++[m[31m-----------[m
+ 1 file changed, 64 insertions(+), 58 deletions(-)
+
+[33mcommit 32f15e8f1f52b8a01cd8b22bbdb254ad720621fc[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Thu Nov 6 19:22:08 2025 +0500
+
+    Update page.tsx
+
+ app/admin/quizzes/user-created-quizzes/page.tsx | 296 [32m++++++++++++++++[m[31m--------[m
+ 1 file changed, 195 insertions(+), 101 deletions(-)
+
+[33mcommit 8550508fb3fc5fb15ab57f61d49cc15390c7e733[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Thu Nov 6 19:17:53 2025 +0500
+
+    Refactor quiz attempt status handling
+
+ app/admin/quizzes/user-created-quizzes/page.tsx | 79 [32m+++++++++++++[m[31m------------[m
+ 1 file changed, 42 insertions(+), 37 deletions(-)
+
+[33mcommit 8efd921bb9302f86c9fd1a9a2958d4539de923ca[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Thu Nov 6 19:10:25 2025 +0500
+
+    Update page.tsx
+
+ app/admin/quizzes/user-created-quizzes/page.tsx | 189 [32m+++++++++++++++++[m[31m-------[m
+ 1 file changed, 138 insertions(+), 51 deletions(-)
+
+[33mcommit ab27cfbfc47c801508103164b26205574f5e5b06[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Thu Nov 6 19:03:28 2025 +0500
+
+    Update page.tsx
+
+ app/admin/quizzes/user-created-quizzes/page.tsx | 317 [32m+++++++++[m[31m---------------[m
+ 1 file changed, 116 insertions(+), 201 deletions(-)
+
+[33mcommit 4c2ecaf9c19e4c1d679da0bbff36dcdb061c1b33[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Thu Nov 6 18:56:51 2025 +0500
+
+    Refactor user-created quizzes page component
+
+ app/admin/quizzes/user-created-quizzes/page.tsx | 317 [32m+++++++++++++++[m[31m---------[m
+ 1 file changed, 201 insertions(+), 116 deletions(-)
+
+[33mcommit cbe4aa92269d48366c8eb00cfb938f1acacabf42[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Thu Nov 6 18:48:38 2025 +0500
+
+    Update page.tsx
+
+ app/admin/quizzes/user-created-quizzes/page.tsx | 60 [32m++++++++++++++[m[31m-----------[m
+ 1 file changed, 34 insertions(+), 26 deletions(-)
+
+[33mcommit e373d9aa4a6dd1058e8b3f736d586cbde8484000[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Thu Nov 6 18:33:55 2025 +0500
+
+    Update page.tsx
+
+ app/admin/quizzes/user-created-quizzes/page.tsx | 723 [32m++++[m[31m--------------------[m
+ 1 file changed, 117 insertions(+), 606 deletions(-)
+
+[33mcommit 22acd583731925961ee9826d6bff3a3815fc5a15[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Tue Oct 21 19:46:52 2025 +0500
+
+    Update page.tsx
+
+ app/quiz/start/page.tsx | 233 [32m++++++++++++++++++++++++++++++++++[m[31m--------------[m
+ 1 file changed, 167 insertions(+), 66 deletions(-)
+
+[33mcommit 74199f40ae426bbe11c6a332fcb0e204edecba53[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Tue Oct 21 19:30:30 2025 +0500
+
+    Update page.tsx
+
+ app/quiz/start/page.tsx | 233 [32m++++++++++++++++++++++++++++++++++[m[31m--------------[m
+ 1 file changed, 167 insertions(+), 66 deletions(-)
+
+[33mcommit 315da5f17a1b8065c22543ecb3e0ef50dc8c58ff[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Wed Oct 15 12:33:59 2025 +0500
+
+    Update page.tsx
+
+ app/admin/questions/questionbank/page.tsx | 962 [32m++++++++++[m[31m--------------------[m
+ 1 file changed, 308 insertions(+), 654 deletions(-)
+
+[33mcommit b3c2674c4e3e8c14beb00331c7240d06fa2ae484[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Fri Oct 10 02:50:05 2025 +0500
+
+    Update page.tsx
+
+ app/admin/questions/questionbank/page.tsx | 2 [32m++[m
+ 1 file changed, 2 insertions(+)
+
+[33mcommit fa87930e7210705a14a778c743c2f5a58cea8cf1[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Fri Oct 10 02:46:13 2025 +0500
+
+    Update package.json
+
+ package.json | 1 [32m+[m
+ 1 file changed, 1 insertion(+)
+
+[33mcommit bba7188ca2194f3a167f72de5c52c7540ce6c4e9[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Fri Oct 10 02:42:50 2025 +0500
+
+    Update page.tsx
+
+ app/admin/questions/questionbank/page.tsx | 923 [32m+++++++++++++++++++++[m[31m---------[m
+ 1 file changed, 659 insertions(+), 264 deletions(-)
+
+[33mcommit 3f667a1ebc6c31b18aee9d29134b1194c71434c0[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Fri Oct 10 02:33:32 2025 +0500
+
+    Update page.tsx
+
+ app/admin/questions/questionbank/page.tsx | 885 [32m+++++++++[m[31m---------------------[m
+ 1 file changed, 274 insertions(+), 611 deletions(-)
+
+[33mcommit 2b334eefd2475e8cc702971feff645611f0674f5[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Fri Oct 10 02:32:13 2025 +0500
+
+    Update page.tsx
+
+ app/admin/questions/questionbank/page.tsx | 2 [32m+[m[31m-[m
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+[33mcommit 11c82325fd9c5ea7a717860b3e59a5b4bdbd9629[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Fri Oct 10 02:20:06 2025 +0500
+
+    Update page.tsx
+
+ app/admin/questions/questionbank/page.tsx | 1 [32m+[m
+ 1 file changed, 1 insertion(+)
+
+[33mcommit 70d51998c4002df0d394893af22b1b80b436f241[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Fri Oct 10 02:16:13 2025 +0500
+
+    Update page.tsx
+
+ app/admin/questions/questionbank/page.tsx | 522 [32m+++++++++++++++++++[m[31m-----------[m
+ 1 file changed, 340 insertions(+), 182 deletions(-)
+
+[33mcommit e8772e39b2107f5ba6da4b370c860e8a6b42e655[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Fri Oct 10 02:12:01 2025 +0500
+
+    Update page.tsx
+
+ app/admin/questions/questionbank/page.tsx | 564 [32m++++++++++[m[31m--------------------[m
+ 1 file changed, 185 insertions(+), 379 deletions(-)
+
+[33mcommit 8ea632976217f80ef7916b771b03c170b8d62d6a[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Fri Oct 10 02:04:20 2025 +0500
+
+    Update package.json
+
+ package.json | 3 [32m++[m[31m-[m
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+[33mcommit 4dce5e6f6bfb2510d4c0e864b13fc24ddbe255ac[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Fri Oct 10 02:01:43 2025 +0500
+
+    Update page.tsx
+
+ app/admin/questions/questionbank/page.tsx | 853 [32m++++++++++++++++++++[m[31m----------[m
+ 1 file changed, 587 insertions(+), 266 deletions(-)
+
+[33mcommit 0d4261df4c403a4f77b0e01da9074a6e92741957[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Mon Oct 6 03:29:39 2025 +0500
+
+    Update page.tsx
+
+ app/admin/results/quizescore/page.tsx | 139 [32m+++++++++++++++++++++++++++[m[31m-------[m
+ 1 file changed, 113 insertions(+), 26 deletions(-)
+
+[33mcommit d262cbe01e24c56cf7a8be3718c3def137a853fc[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Mon Oct 6 03:25:06 2025 +0500
+
+    Update page.tsx
+
+ app/admin/results/quizescore/page.tsx | 391 [32m++++++++[m[31m--------------------------[m
+ 1 file changed, 92 insertions(+), 299 deletions(-)
+
+[33mcommit c016c3a103f533be59a54033ac8c3aa542a9854b[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Mon Oct 6 03:18:48 2025 +0500
+
+    Update page.tsx
+
+ app/admin/results/quizescore/page.tsx | 515 [32m++++++++++++++++++++[m[31m--------------[m
+ 1 file changed, 298 insertions(+), 217 deletions(-)
+
+[33mcommit 9240fd867f132186abccab3bffb9bb7fa43f9410[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Mon Oct 6 03:12:35 2025 +0500
+
+    Update page.tsx
+
+ app/admin/results/quizescore/page.tsx | 737 [32m++++++++++[m[31m------------------------[m
+ 1 file changed, 209 insertions(+), 528 deletions(-)
+
+[33mcommit a0dfe04de16e8c6d8cd2919161589b7c310e31bf[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Mon Oct 6 03:03:28 2025 +0500
+
+    Update page.tsx
+
+ app/admin/results/quizescore/page.tsx | 585 [32m++++++++++++++++++++++++++++++[m[31m----[m
+ 1 file changed, 515 insertions(+), 70 deletions(-)
+
+[33mcommit fec279abb57a803fa938eb7a61afc2b23cd2f3d0[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Mon Oct 6 03:00:40 2025 +0500
+
+    Update page.tsx
+
+ app/admin/results/quizescore/page.tsx | 387 [32m+++++[m[31m-----------------------------[m
+ 1 file changed, 52 insertions(+), 335 deletions(-)
+
+[33mcommit 42e771c87a5444b509ace10b3eb153e81f866afd[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Mon Oct 6 02:57:55 2025 +0500
+
+    Update page.tsx
+
+ app/admin/results/quizescore/page.tsx | 863 [32m++++++++++++++++[m[31m------------------[m
+ 1 file changed, 408 insertions(+), 455 deletions(-)
+
+[33mcommit 007580694d987d6d37e97c6bccaa73ecdc66db17[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Mon Oct 6 02:47:54 2025 +0500
+
+    Update page.tsx
+
+ app/admin/results/quizescore/page.tsx | 566 [32m+++++++++++++++++++++++++++[m[31m-------[m
+ 1 file changed, 448 insertions(+), 118 deletions(-)
+
+[33mcommit 5b552855c3398ec869d063fda37f351b54640a73[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Mon Oct 6 02:39:51 2025 +0500
+
+    Update page.tsx
+
+ app/admin/results/quizescore/page.tsx | 197 [32m++++++++++++++++++[m[31m----------------[m
+ 1 file changed, 107 insertions(+), 90 deletions(-)
+
+[33mcommit e9fe6f93c8ba746398ed5152512195d65961aace[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Mon Oct 6 02:33:47 2025 +0500
+
+    Update package.json
+
+ package.json | 8 [32m++[m[31m------[m
+ 1 file changed, 2 insertions(+), 6 deletions(-)
+
+[33mcommit 92be4beae13ebeff8f9de103962072a9110eab4d[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Mon Oct 6 02:26:32 2025 +0500
+
+    Update page.tsx
+
+ app/admin/results/quizescore/page.tsx | 96 [32m+++++++++++++++++++[m[31m----------------[m
+ 1 file changed, 51 insertions(+), 45 deletions(-)
+
+[33mcommit a4aa0534ee3497f590de3495fe965f0375106e6d[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Mon Oct 6 02:22:05 2025 +0500
+
+    Update page.tsx
+
+[33mcommit 1eb7b00394c0a0071e894b387a378d366f1b0773[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Mon Oct 6 02:21:35 2025 +0500
+
+    Update package.json
+
+ package.json | 3 [32m+++[m
+ 1 file changed, 3 insertions(+)
+
+[33mcommit 0d37cb769c6546646ac952a5c44b1804f5db2c5d[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Mon Oct 6 02:15:58 2025 +0500
+
+    Update page.tsx
+
+ app/admin/results/quizescore/page.tsx | 636 [32m+++++++++++++++++++++[m[31m-------------[m
+ 1 file changed, 403 insertions(+), 233 deletions(-)
+
+[33mcommit 9b78f2c3f565e7686c1a5e155cf490cf0fa79767[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Mon Oct 6 02:06:20 2025 +0500
+
+    Update package.json
+
+ package.json | 2 [32m++[m
+ 1 file changed, 2 insertions(+)
+
+[33mcommit 2298e242e726416adb2419d348acce99de28fba6[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Mon Oct 6 02:02:29 2025 +0500
+
+    Update page.tsx
+
+ app/admin/results/quizescore/page.tsx | 186 [32m++++++++++++++++++++++++++[m[31m--------[m
+ 1 file changed, 141 insertions(+), 45 deletions(-)
+
+[33mcommit a7992c94f2f675fd6746186081b161f74c74a7f4[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Sun Oct 5 20:40:19 2025 +0500
+
+    Delete Functions directory
+
+ Functions/.eslintrc.js      |   28 [31m-[m
+ Functions/.gitignore        |    2 [31m-[m
+ Functions/index.js          |  162 [31m--[m
+ Functions/package-lock.json | 3419 [31m-------------------------------------------[m
+ Functions/package.json      |   14 [31m-[m
+ Functions/runBatches.js     |   41 [31m-[m
+ 6 files changed, 3666 deletions(-)
+
+[33mcommit 869ff115209a76139e233a4522697ae255d116f5[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Sat Oct 4 20:45:27 2025 +0500
+
+    Update index.js
+
+ Functions/index.js | 51 [32m+++++++++++++++++++++++++++[m[31m------------------------[m
+ 1 file changed, 27 insertions(+), 24 deletions(-)
+
+[33mcommit e2211d3cd2bd699ead1edae7296063ed2212b8bc[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Sat Oct 4 20:03:44 2025 +0500
+
+    Update page.tsx
+
+ app/dashboard/student/page.tsx | 435 [32m++++++[m[31m-----------------------------------[m
+ 1 file changed, 63 insertions(+), 372 deletions(-)
+
+[33mcommit 53bfd963ae2a64acaf3e2b6aa180588cb56c0b17[m
+Author: Vinode Narain <tayyarihub1@gmail.com>
+Date:   Sat Oct 4 19:57:09 2025 +0500
+
+    Updated Firebase functions and installed Axios
+
+ (firestore.indexes.json)    |    28 [32m+[m
+ (firestore.rules)           |     9 [32m+[m
+ .firebaserc                 |     5 [32m+[m
+ Functions/.eslintrc.js      |    28 [32m+[m
+ Functions/.gitignore        |     2 [32m+[m
+ Functions/index.js          |   159 [32m+[m
+ Functions/package-lock.json |  3419 [32m+++++++[m
+ Functions/package.json      |    14 [32m+[m
+ Functions/runBatches.js     |    41 [32m+[m
+ firebase.json               |    24 [32m+[m
+ package-lock.json           | 21435 [32m+++++++++++++++++++++[m[31m---------------------[m
+ package.json                |   185 [32m+[m[31m-[m
+ runBatches.js               |    41 [32m+[m
+ 13 files changed, 14741 insertions(+), 10649 deletions(-)
+
+[33mcommit 586db1e6232f93597881c1d916442eeed7b5f266[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Sat Oct 4 16:21:11 2025 +0500
+
+    Update index.js
+
+ functions/index.js | 79 [32m+++++++++++++++++++++++++++++++++++++++++++[m[31m-----------[m
+ 1 file changed, 63 insertions(+), 16 deletions(-)
+
+[33mcommit 9b91f3398738530e605b51a7c0090d4c3574bc67[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Sat Oct 4 16:06:04 2025 +0500
+
+    Create package.json
+
+ functions/package.json | 11 [32m+++++++++++[m
+ 1 file changed, 11 insertions(+)
+
+[33mcommit fa5b7e7c59469c79bb10b9361dc781a79985a084[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Sat Oct 4 16:03:40 2025 +0500
+
+    Create index.js
+
+ functions/index.js | 77 [32m++++++++++++++++++++++++++++++++++++++++++++++++++++++[m
+ 1 file changed, 77 insertions(+)
+
+[33mcommit 6f3b78d3f32f05c006a4ee574c057dba569f2aae[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Sat Oct 4 00:22:38 2025 +0500
+
+    Update page.tsx
+
+ app/quiz/create-mock/page.tsx | 189 [32m++++++++++++++++++++[m[31m----------------------[m
+ 1 file changed, 89 insertions(+), 100 deletions(-)
+
+[33mcommit edc878b6be809cc1ada24809e28d632ceb6fac6d[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Fri Oct 3 23:47:06 2025 +0500
+
+    Update page.tsx
+
+ app/quiz/create-mock/page.tsx | 147 [32m+++++++++++++++++++++++++++++++++++[m[31m-------[m
+ 1 file changed, 124 insertions(+), 23 deletions(-)
+
+[33mcommit 85643c3620fe0f8f5049894e500ffce46db98124[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Fri Oct 3 23:14:09 2025 +0500
+
+    Update page.tsx
+
+ app/dashboard/student/page.tsx | 847 [32m++++++++++++++++++++++++++++++[m[31m-----------[m
+ 1 file changed, 631 insertions(+), 216 deletions(-)
+
+[33mcommit 0a951aab49945a345e973fece26e439290fdab65[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Fri Oct 3 23:09:29 2025 +0500
+
+    Update page.tsx
+
+ app/dashboard/student/page.tsx | 728 [32m++++++++++++++++[m[31m-------------------------[m
+ 1 file changed, 291 insertions(+), 437 deletions(-)
+
+[33mcommit f5c938b9290fa85b9f2b9b074ad640ba827d2b9f[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Fri Oct 3 20:57:58 2025 +0500
+
+    Update page.tsx
+
+ app/dashboard/student/page.tsx | 328 [32m++++++++++++++[m[31m---------------------------[m
+ 1 file changed, 108 insertions(+), 220 deletions(-)
+
+[33mcommit 64d6cbc82333503698dd4d5bc6dd852554803959[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Fri Oct 3 20:53:18 2025 +0500
+
+    Update page.tsx
+
+ app/dashboard/student/page.tsx | 105 [32m++++++++++[m[31m-------------------------------[m
+ 1 file changed, 26 insertions(+), 79 deletions(-)
+
+[33mcommit ec3cb3a750444a66a4435262d73907ce71447153[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Fri Oct 3 20:35:31 2025 +0500
+
+    Update page.tsx
+
+ app/dashboard/student/page.tsx | 310 [32m+++++++++++++++++++++++++++++[m[31m------------[m
+ 1 file changed, 223 insertions(+), 87 deletions(-)
+
+[33mcommit d9f76485311f09f400550d4354da1d64c4f74b06[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Fri Oct 3 20:32:27 2025 +0500
+
+    Update page.tsx
+
+ app/dashboard/student/page.tsx | 374 [32m+++++++[m[31m----------------------------------[m
+ 1 file changed, 60 insertions(+), 314 deletions(-)
+
+[33mcommit 82f99e5548babb1cbe1d04becdd5e42204e73010[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Fri Oct 3 20:21:17 2025 +0500
+
+    Update page.tsx
+
+ app/dashboard/student/page.tsx | 79 [32m++++++++++[m[31m--------------------------------[m
+ 1 file changed, 19 insertions(+), 60 deletions(-)
+
+[33mcommit d1075b65d88330acddc0cd032d89003290b476b3[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Fri Oct 3 20:09:56 2025 +0500
+
+    Update page.tsx
+
+ app/dashboard/student/page.tsx | 1169 [32m++++++++++++++++++++++++[m[31m----------------[m
+ 1 file changed, 690 insertions(+), 479 deletions(-)
+
+[33mcommit c9154bdee9d00f5a58bef887b93627a9487f308e[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Fri Oct 3 19:54:23 2025 +0500
+
+    Update page.tsx
+
+ app/dashboard/student/page.tsx | 85 [32m++++++++++++++++++++++++++++++++[m[31m----------[m
+ 1 file changed, 65 insertions(+), 20 deletions(-)
+
+[33mcommit aa5f11c4d3dfd0d22f76f4781ff95fc270525ca1[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Fri Oct 3 19:49:01 2025 +0500
+
+    Update page.tsx
+
+ app/dashboard/student/page.tsx | 212 [32m+++++++++++++++++++++++++++++++++++++[m[31m----[m
+ 1 file changed, 194 insertions(+), 18 deletions(-)
+
+[33mcommit f9b78e5af56a29997d8fe0187ff6c246cd8925c0[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Fri Oct 3 19:45:03 2025 +0500
+
+    Update page.tsx
+
+ app/dashboard/student/page.tsx | 827 [32m++++++++++++++[m[31m---------------------------[m
+ 1 file changed, 277 insertions(+), 550 deletions(-)
+
+[33mcommit 0123f953155d22e6f382234c2ac6b8a54e6108b4[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Fri Oct 3 19:30:34 2025 +0500
+
+    Update page.tsx
+
+ app/admin/students/user-responses/page.tsx | 2 [32m+[m[31m-[m
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+[33mcommit 1d1eb989cfdba324364de68b31a63b18afa6ee10[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Fri Oct 3 19:22:54 2025 +0500
+
+    Update page.tsx
+
+ app/admin/students/user-responses/page.tsx | 305 [32m++++++++++++++++++++++++++[m[31m---[m
+ 1 file changed, 275 insertions(+), 30 deletions(-)
+
+[33mcommit c61820168cc496a049ca0c7850277246c74006f9[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Fri Oct 3 19:19:32 2025 +0500
+
+    Update page.tsx
+
+ app/admin/students/results/page.tsx | 12 [32m++++++++++[m[31m--[m
+ 1 file changed, 10 insertions(+), 2 deletions(-)
+
+[33mcommit aa4db4555c58b868387214de77982d501d3f3699[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Fri Oct 3 19:15:02 2025 +0500
+
+    Update page.tsx
+
+ app/admin/students/user-responses/page.tsx | 300 [32m+++[m[31m--------------------------[m
+ 1 file changed, 32 insertions(+), 268 deletions(-)
+
+[33mcommit 3c891c9757bf1602fce663a0f36fa0b3cdfe21b5[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Fri Oct 3 19:04:50 2025 +0500
+
+    Update page.tsx
+
+ app/quiz/create-mock/page.tsx | 165 [32m+++++++++++++++++++++++++++++++[m[31m-----------[m
+ 1 file changed, 123 insertions(+), 42 deletions(-)
+
+[33mcommit a0103a3f352715dbd1c159656d7d98edb7ebbd5b[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Fri Oct 3 04:01:51 2025 +0500
+
+    Update page.tsx
+
+ app/quiz/create-mock/page.tsx | 199 [32m+++++++++++++++[m[31m---------------------------[m
+ 1 file changed, 72 insertions(+), 127 deletions(-)
+
+[33mcommit 2d60300fc40737a8679e93d470538c23cef28063[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Fri Oct 3 03:59:42 2025 +0500
+
+    Update page.tsx
+
+ app/quiz/create-mock/page.tsx | 6 [32m++[m[31m----[m
+ 1 file changed, 2 insertions(+), 4 deletions(-)
+
+[33mcommit b0832749aa846c5f750fb71c4474de400d6d91e6[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Fri Oct 3 03:54:33 2025 +0500
+
+    Update page.tsx
+
+ app/quiz/create-mock/page.tsx | 147 [32m++++++++++++++[m[31m----------------------------[m
+ 1 file changed, 48 insertions(+), 99 deletions(-)
+
+[33mcommit cf388190bfe05038858b3dfed5ce33e3c1ae5be5[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Fri Oct 3 03:51:18 2025 +0500
+
+    Update page.tsx
+
+ app/quiz/create-mock/page.tsx | 42 [32m+++++++++++++++++++++++++++[m[31m---------------[m
+ 1 file changed, 27 insertions(+), 15 deletions(-)
+
+[33mcommit a5181f4b79a90cdd3d95464f2330b65e212a9791[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Fri Oct 3 03:45:22 2025 +0500
+
+    Update page.tsx
+
+[33mcommit 10a0f58f5350dbc9af65db0cb45a4f856f86d6f7[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Fri Oct 3 03:43:17 2025 +0500
+
+    Update page.tsx
+
+ app/admin/quizzes/user-created-quizzes/page.tsx | 895 [32m+++++++++++++++[m[31m---------[m
+ 1 file changed, 568 insertions(+), 327 deletions(-)
+
+[33mcommit 7b1f4c9fdb83b6252fb04f68897ab26c56cd3376[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Fri Oct 3 03:38:32 2025 +0500
+
+    Update page.tsx
+
+ app/quiz/create-mock/page.tsx | 82 [32m+++++++++++++++++++++++[m[31m--------------------[m
+ 1 file changed, 43 insertions(+), 39 deletions(-)
+
+[33mcommit 41ef9eed516295c063cf8d982aa8b935f0002345[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Fri Oct 3 03:28:36 2025 +0500
+
+    Update page.tsx
+
+ app/quiz/create-mock/page.tsx | 6 [32m+++[m[31m---[m
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+[33mcommit 18df46238ac3031a7372276906c767a79ca650eb[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Fri Oct 3 03:18:04 2025 +0500
+
+    Update page.tsx
+
+ app/quiz/create-mock/page.tsx | 11 [32m+++++++[m[31m----[m
+ 1 file changed, 7 insertions(+), 4 deletions(-)
+
+[33mcommit 8a20b70da1f3a25594af0487f1be0e0cfb15a385[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Fri Oct 3 02:56:31 2025 +0500
+
+    Update page.tsx
+
+ app/admin/quizzes/user-created-quizzes/page.tsx | 2 [32m+[m[31m-[m
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+[33mcommit 5329eef17f53b20448711200912dd4bdf1164585[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Fri Oct 3 02:52:20 2025 +0500
+
+    Update page.tsx
+
+ app/admin/students/results/page.tsx | 443 [32m+++++++++++++++++++++++++[m[31m-----------[m
+ 1 file changed, 314 insertions(+), 129 deletions(-)
+
+[33mcommit c8e4c2501f92275fc823e9180c2ff46151f968e4[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Fri Oct 3 02:49:11 2025 +0500
+
+    Update page.tsx
+
+ app/admin/students/user-responses/page.tsx | 4 [32m++[m[31m--[m
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+[33mcommit 86b2dfdc53daf596b49ab6a626861dfb2a5c607c[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Fri Oct 3 02:46:19 2025 +0500
+
+    Update page.tsx
+
+ app/admin/students/user-responses/page.tsx | 11 [32m++++++++[m[31m---[m
+ 1 file changed, 8 insertions(+), 3 deletions(-)
+
+[33mcommit f62a74f0e33c8d16485e9135a167c557333cdc7b[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Fri Oct 3 02:43:29 2025 +0500
+
+    Update page.tsx
+
+[33mcommit b0be2686e1dc7bfc692385a797692f8e03657398[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Fri Oct 3 02:40:56 2025 +0500
+
+    Update page.tsx
+
+ app/admin/students/user-responses/page.tsx | 25 [32m++++++++++++++++[m[31m---------[m
+ 1 file changed, 16 insertions(+), 9 deletions(-)
+
+[33mcommit 757a36742cd53df34e486fcfbdad39cf69bf9f2a[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Fri Oct 3 02:36:59 2025 +0500
+
+    Update page.tsx
+
+ app/admin/students/user-responses/page.tsx | 174 [32m++++++++++++++[m[31m---------------[m
+ 1 file changed, 86 insertions(+), 88 deletions(-)
+
+[33mcommit 60bef9ff630052c44958ee027210eb75fe00984c[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Fri Oct 3 02:31:03 2025 +0500
+
+    Update page.tsx
+
+ app/admin/students/user-responses/page.tsx | 562 [32m++++++++++++++++++[m[31m-----------[m
+ 1 file changed, 361 insertions(+), 201 deletions(-)
+
+[33mcommit 9c83933675deed3d551fb8e84c1d7abc6bb43809[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Fri Oct 3 02:20:15 2025 +0500
+
+    Update page.tsx
+
+ app/admin/quizzes/user-created-quizzes/page.tsx | 356 [32m+++++++++++++++++[m[31m-------[m
+ 1 file changed, 260 insertions(+), 96 deletions(-)
+
+[33mcommit b92b8a006ac57b29b3805ae6ce68e5312143b6b8[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Fri Oct 3 02:01:26 2025 +0500
+
+    Update page.tsx
+
+ app/admin/students/results/page.tsx | 257 [32m+++++++++++++++++++++[m[31m---------------[m
+ 1 file changed, 152 insertions(+), 105 deletions(-)
+
+[33mcommit 2826228ebb96aa6b7417914f86210477d570900c[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Fri Oct 3 01:50:30 2025 +0500
+
+    Create page.tsx
+
+ app/admin/students/user-results/page.tsx | 144 [32m+++++++++++++++++++++++++++++++[m
+ 1 file changed, 144 insertions(+)
+
+[33mcommit 26d9bd9cfcee800ab1de6a2436bef1428c31e64c[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Fri Oct 3 01:43:30 2025 +0500
+
+    Update page.tsx
+
+ app/admin/students/results/page.tsx | 26 [32m+++++++++++++++++[m[31m---------[m
+ 1 file changed, 17 insertions(+), 9 deletions(-)
+
+[33mcommit d589019dd8e0f72a42d66d216b0753b501218cd1[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Fri Oct 3 01:32:12 2025 +0500
+
+    Update page.tsx
+
+ app/admin/students/results/page.tsx | 91 [32m++++++++++++++++++++++++++++++[m[31m-------[m
+ 1 file changed, 75 insertions(+), 16 deletions(-)
+
+[33mcommit d1351f9308cef21062827e4e4ca823444ebe1d68[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Fri Oct 3 01:26:59 2025 +0500
+
+    Update page.tsx
+
+ app/admin/quizzes/user-created-quizzes/page.tsx | 2 [32m+[m[31m-[m
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+[33mcommit cb4de244ba82c54495efa6728c9210d0c4fa7dda[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Fri Oct 3 01:22:41 2025 +0500
+
+    Update page.tsx
+
+ app/quiz/start-user-quiz/page.tsx | 357 [32m++++++++++++++++++++++++++++++++++++[m[31m--[m
+ 1 file changed, 339 insertions(+), 18 deletions(-)
+
+[33mcommit 7667c4deb55afa479f4f6c8341f54c89f0d5d85f[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Fri Oct 3 01:19:37 2025 +0500
+
+    Update page.tsx
+
+ app/admin/quizzes/user-created-quizzes/page.tsx | 547 [32m++++++++[m[31m----------------[m
+ 1 file changed, 186 insertions(+), 361 deletions(-)
+
+[33mcommit 6844d1f2cf3a60d382d15881dd0294e06a9ee173[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Fri Oct 3 01:15:01 2025 +0500
+
+    Update page.tsx
+
+ app/quiz/start-user-quiz/page.tsx | 380 [32m+++++[m[31m---------------------------------[m
+ 1 file changed, 48 insertions(+), 332 deletions(-)
+
+[33mcommit 9d9bcfb46430af6fc4fa588e109083fa046503fa[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Fri Oct 3 01:07:01 2025 +0500
+
+    Update page.tsx
+
+ app/quiz/start-user-quiz/page.tsx | 2 [32m+[m[31m-[m
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+[33mcommit f7941b12ac00e37bb57c17f581c9486e784e21d7[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Fri Oct 3 01:03:07 2025 +0500
+
+    Update page.tsx
+
+ app/quiz/start-user-quiz/page.tsx | 2 [32m+[m[31m-[m
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+[33mcommit 2a04ae436e1ec1bd7e85c46327037913f9b654e1[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Fri Oct 3 00:57:42 2025 +0500
+
+    Update page.tsx
+
+ app/admin/quizzes/user-created-quizzes/page.tsx | 539 [32m++++++++++++++++[m[31m--------[m
+ 1 file changed, 361 insertions(+), 178 deletions(-)
+
+[33mcommit c0fb4546fc2fbad4864d1887383c7ba5774a881d[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Fri Oct 3 00:54:40 2025 +0500
+
+    Update page.tsx
+
+ app/quiz/create-mock/page.tsx | 54 [32m++++++++++++++++++++++++++++++++++[m[31m---------[m
+ 1 file changed, 43 insertions(+), 11 deletions(-)
+
+[33mcommit d3d389f66b068ecd27db0ac5265572341a2c61fd[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Thu Oct 2 19:13:05 2025 +0500
+
+    Update page.tsx
+
+ app/admin/quizzes/user-created-quizzes/page.tsx | 29 [32m++++++++++++++++++++[m[31m-----[m
+ 1 file changed, 23 insertions(+), 6 deletions(-)
+
+[33mcommit 224f51b827a3928a91e2b9a4e95a072b05bfc490[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Thu Oct 2 19:09:54 2025 +0500
+
+    Update page.tsx
+
+ app/admin/quizzes/user-created-quizzes/page.tsx | 383 [32m++++++++++[m[31m--------------[m
+ 1 file changed, 165 insertions(+), 218 deletions(-)
+
+[33mcommit 8ad504efe9771f1cb3690b845c632c47ad6e135f[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Thu Oct 2 18:56:36 2025 +0500
+
+    Update page.tsx
+
+ app/admin/quizzes/user-created-quizzes/page.tsx | 75 [32m++++++++++++++++[m[31m---------[m
+ 1 file changed, 47 insertions(+), 28 deletions(-)
+
+[33mcommit a8f5147d98636bcce167f7a9fb752b7881222a6b[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Thu Oct 2 18:55:11 2025 +0500
+
+    Update page.tsx
+
+[33mcommit 49f6024819111271fdd505688624f58d1f3527e6[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Thu Oct 2 18:47:49 2025 +0500
+
+    Update page.tsx
+
+[33mcommit 0a2d3c588e1eb3a14be87c6c1aebd9e4b9fb5130[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Thu Oct 2 18:46:10 2025 +0500
+
+    Update page.tsx
+
+ app/admin/quizzes/user-created-quizzes/page.tsx | 317 [32m+++++++++++++++[m[31m---------[m
+ 1 file changed, 201 insertions(+), 116 deletions(-)
+
+[33mcommit a748a8f4d207398d05e1bac4ba67e69aee261854[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Thu Oct 2 18:21:04 2025 +0500
+
+    Update page.tsx
+
+[33mcommit 6d5dfb44946913910886b443bf5d5918eff03cbc[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Thu Oct 2 18:13:46 2025 +0500
+
+    Update page.tsx
+
+ app/quiz/create-mock/page.tsx | 203 [32m+++++++++++++++++++++++++++[m[31m---------------[m
+ 1 file changed, 130 insertions(+), 73 deletions(-)
+
+[33mcommit 7c22b753ced8edb475050a91a1242ead34e83571[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Thu Oct 2 18:00:51 2025 +0500
+
+    Update page.tsx
+
+ app/admin/students/user-responses/page.tsx | 177 [32m++++++++++++++++++++[m[31m---------[m
+ 1 file changed, 124 insertions(+), 53 deletions(-)
+
+[33mcommit 56c9a8d2ae77c6dd78410ca559b7951a8fbf642c[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Thu Oct 2 17:55:13 2025 +0500
+
+    Update page.tsx
+
+ app/admin/students/user-responses/page.tsx | 150 [32m+++++++++++++++++++++++++++[m[31m--[m
+ 1 file changed, 141 insertions(+), 9 deletions(-)
+
+[33mcommit ef3ddd33e6007f4cf52dd340bfab5435dbc6bba5[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Thu Oct 2 17:50:50 2025 +0500
+
+    Update package.json
+
+ package.json | 1 [32m+[m
+ 1 file changed, 1 insertion(+)
+
+[33mcommit 28aa002e19fef432cfb6cf64f84bd773106ee767[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Wed Oct 1 01:13:42 2025 +0500
+
+    Create page.tsx
+
+ app/admin/students/user-responses/page.tsx | 203 [32m+++++++++++++++++++++++++++++[m
+ 1 file changed, 203 insertions(+)
+
+[33mcommit c9ecda26b1d1337d13c6b5d27021ad28eb31fd8e[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Wed Oct 1 01:00:58 2025 +0500
+
+    Update page.tsx
+
+ app/quiz/start-user-quiz/page.tsx | 12 [32m++++++[m[31m------[m
+ 1 file changed, 6 insertions(+), 6 deletions(-)
+
+[33mcommit fc861d8fddcc4a5f57d9f18a8a5453228f464964[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Tue Sep 30 21:03:12 2025 +0500
+
+    Delete app/admin/students/user-responses/[id]/result directory
+
+ .../students/user-responses/[id]/result/page.tsx   | 449 [31m---------------------[m
+ 1 file changed, 449 deletions(-)
+
+[33mcommit 6e8dbf532d91a2f5535c7ad52693f364bd139918[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Tue Sep 30 21:00:41 2025 +0500
+
+    Rename app/admin/students/user-responses/page.tsx to app/admin/students/user-responses/[id]/result/page.tsx
+
+ app/admin/students/user-responses/{ => [id]/result}/page.tsx | 0
+ 1 file changed, 0 insertions(+), 0 deletions(-)
+
+[33mcommit 4e1c18122e6d2566f129000db26a0176db3c9d25[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Tue Sep 30 20:59:03 2025 +0500
+
+    Create page.tsx
+
+ app/admin/students/user-responses/page.tsx | 449 [32m+++++++++++++++++++++++++++++[m
+ 1 file changed, 449 insertions(+)
+
+[33mcommit e7dc9b8ea4289f936d3d9086ab3e6debcbae6799[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Tue Sep 30 20:31:09 2025 +0500
+
+    Update page.tsx
+
+[33mcommit df9d31e5d518674e5744b02047d90e858fa89430[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Tue Sep 30 20:25:59 2025 +0500
+
+    Update page.tsx
+
+ app/quiz/start-user-quiz/page.tsx | 95 [32m+++++++++++++++++[m[31m----------------------[m
+ 1 file changed, 41 insertions(+), 54 deletions(-)
+
+[33mcommit ca5bc4b4216dfd72174fb2b3191d16e395403148[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Tue Sep 30 20:12:34 2025 +0500
+
+    Update page.tsx
+
+ app/quiz/start-user-quiz/page.tsx | 202 [32m++++++++++++++++++[m[31m--------------------[m
+ 1 file changed, 96 insertions(+), 106 deletions(-)
+
+[33mcommit 940cc60c42e0487c7275da5814022a91f8f7fa38[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Tue Sep 30 01:50:22 2025 +0500
+
+    Update page.tsx
+
+ app/admin/quizzes/user-created-quizzes/page.tsx | 2 [32m+[m[31m-[m
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+[33mcommit 7573bf1bcc4ce528b722b00b875cc580d007aad1[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Tue Sep 30 01:45:45 2025 +0500
+
+    Update page.tsx
+
+ app/quiz/start-user-quiz/page.tsx | 184 [32m++++++++++++++++++++++++[m[31m--------------[m
+ 1 file changed, 116 insertions(+), 68 deletions(-)
+
+[33mcommit 72a3cce53320c542d81f15fdae41e1903db5c954[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Tue Sep 30 01:23:21 2025 +0500
+
+    Update page.tsx
+
+ app/admin/quizzes/user-created-quizzes/page.tsx | 2 [32m+[m[31m-[m
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+[33mcommit c7a9b59decb7d9b526395080b96e66125d8ed78e[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Tue Sep 30 01:17:30 2025 +0500
+
+    Update page.tsx
+
+ app/admin/quizzes/user-created-quizzes/page.tsx | 21 [32m++++++++++++++[m[31m-------[m
+ 1 file changed, 14 insertions(+), 7 deletions(-)
+
+[33mcommit deaba09ef35495a82fe666e7d2252592fd5a58cd[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Tue Sep 30 01:15:21 2025 +0500
+
+    Update page.tsx
+
+ app/admin/quizzes/user-created-quizzes/page.tsx | 2 [32m+[m[31m-[m
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+[33mcommit 28a2c733cb08296c478f9d19b6cab1472a7c07e4[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Tue Sep 30 01:12:16 2025 +0500
+
+    Update page.tsx
+
+ app/admin/quizzes/user-created-quizzes/page.tsx | 7 [32m+[m[31m------[m
+ 1 file changed, 1 insertion(+), 6 deletions(-)
+
+[33mcommit 2b5901e8d4b7426cf24fda1caa9f17a2bdc63ba7[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Tue Sep 30 01:11:35 2025 +0500
+
+    Update page.tsx
+
+ app/admin/quizzes/user-created-quizzes/page.tsx | 3 [32m++[m[31m-[m
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+[33mcommit a3de1e2b5240d5e85c860556b058ffc0d37b6516[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Tue Sep 30 01:05:14 2025 +0500
+
+    Update page.tsx
+
+ app/admin/quizzes/user-created-quizzes/page.tsx | 2 [32m+[m[31m-[m
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+[33mcommit 374d6e37c05e1e0c9aa60d13821d9c05db7d79e1[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Tue Sep 30 00:53:40 2025 +0500
+
+    Update page.tsx
+
+ app/admin/quizzes/user-created-quizzes/page.tsx | 4 [32m++[m[31m--[m
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+[33mcommit fbce9e452d819d20d5877ff2402feece18864c5d[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Tue Sep 30 00:48:51 2025 +0500
+
+    Update page.tsx
+
+ app/quiz/start-user-quiz/page.tsx | 4 [32m++[m[31m--[m
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+[33mcommit 9cf040d551e615e11841e8a38cf80dfe854e135c[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Tue Sep 30 00:35:01 2025 +0500
+
+    Update page.tsx
+
+ app/quiz/start-user-quiz/page.tsx | 2 [32m+[m[31m-[m
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+[33mcommit 00773924aec1390e32def7346449a1294c38892f[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Tue Sep 30 00:22:18 2025 +0500
+
+    Update page.tsx
+
+ app/quiz/create-mock/page.tsx | 2 [32m+[m[31m-[m
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+[33mcommit 758222e2b8ea41caf2fcac86847dc6debc9d8e48[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Tue Sep 30 00:18:24 2025 +0500
+
+    Update page.tsx
+
+ app/admin/quizzes/user-created-quizzes/page.tsx | 2 [32m+[m[31m-[m
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+[33mcommit ce5b712ac082c43e2ae78294e0839a5486d93e9c[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Tue Sep 30 00:08:01 2025 +0500
+
+    Update page.tsx
+
+ app/admin/quizzes/user-created-quizzes/page.tsx | 2 [32m+[m[31m-[m
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+[33mcommit 9a3ae84d467a65f0e47b17467a67a62688e7ff15[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Tue Sep 30 00:04:22 2025 +0500
+
+    Update page.tsx
+
+ app/admin/quizzes/user-created-quizzes/page.tsx | 2 [32m+[m[31m-[m
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+[33mcommit 2df2efdc77482ac83ee217822b7fabdf1a054fd0[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Tue Sep 30 00:01:47 2025 +0500
+
+    Update page.tsx
+
+ app/admin/quizzes/user-created-quizzes/page.tsx | 2 [32m+[m[31m-[m
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+[33mcommit abbc6a9b09b1846a252261d91f396189ec35f9b5[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Mon Sep 29 23:57:07 2025 +0500
+
+    Update page.tsx
+
+ app/admin/quizzes/user-created-quizzes/page.tsx | 2 [32m+[m[31m-[m
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+[33mcommit 479da0763711c54e4c6489a4e81d1ecaf52d09f6[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Mon Sep 29 23:55:19 2025 +0500
+
+    Update page.tsx
+
+ app/admin/quizzes/user-created-quizzes/page.tsx | 51 [32m++++++++++++++[m[31m-----------[m
+ 1 file changed, 28 insertions(+), 23 deletions(-)
+
+[33mcommit 6e86af3155eaaca051468bd31fe418d94e20169f[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Mon Sep 29 23:50:02 2025 +0500
+
+    Update page.tsx
+
+ app/admin/quizzes/user-created-quizzes/page.tsx | 2 [32m+[m[31m-[m
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+[33mcommit 61ab09272efc30c918384d3f324a51d7cd5f22d2[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Mon Sep 29 23:45:47 2025 +0500
+
+    Create page.tsx
+
+ app/admin/quizzes/user-created-quizzes/page.tsx | 138 [32m++++++++++++++++++++++++[m
+ 1 file changed, 138 insertions(+)
+
+[33mcommit db869494ac06a95f6508e1bb0cde5cb82e3d9fa0[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Mon Sep 29 23:39:06 2025 +0500
+
+    Update page.tsx
+
+ app/quiz/start-user-quiz/page.tsx | 2 [32m+[m[31m-[m
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+[33mcommit 1f088cfbc89517b47ca332796f93b12fae7eb1df[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Mon Sep 29 23:36:24 2025 +0500
+
+    Create page.tsx
+
+ app/quiz/start-user-quiz/page.tsx | 526 [32m++++++++++++++++++++++++++++++++++++++[m
+ 1 file changed, 526 insertions(+)
+
+[33mcommit a108c8bf887dfcd1ce205acd9adbe7f4e8e2f9f7[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Mon Sep 29 23:34:39 2025 +0500
+
+    Rename start-user-quiz to extra
+
+ app/quiz/{start-user-quiz => extra} | 0
+ 1 file changed, 0 insertions(+), 0 deletions(-)
+
+[33mcommit 90e3c7ca198c976cd22900194571e561485030be[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Mon Sep 29 23:24:46 2025 +0500
+
+    Create start-user-quiz
+
+ app/quiz/start-user-quiz | 526 [32m+++++++++++++++++++++++++++++++++++++++++++++++[m
+ 1 file changed, 526 insertions(+)
+
+[33mcommit b4b05d6a9e9b69fb28ab1df4f500d3145c64757e[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Mon Sep 29 19:36:25 2025 +0500
+
+    Update page.tsx
+
+ app/quiz/create-mock/page.tsx | 656 [32m++++++++++++++++++[m[31m------------------------[m
+ 1 file changed, 286 insertions(+), 370 deletions(-)
+
+[33mcommit a64457b847d8a161fdfb67fa23a88647b6090c1f[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Wed Sep 24 00:16:13 2025 +0500
+
+    Update package.json
+
+ package.json | 2 [32m++[m
+ 1 file changed, 2 insertions(+)
+
+[33mcommit 29f45f285e3ed0ae04163892be752d03d70c913f[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Wed Sep 24 00:10:46 2025 +0500
+
+    Update page.tsx
+
+ app/admin/students/foradmin/page.tsx | 898 [32m++++++++++++++++++++[m[31m---------------[m
+ 1 file changed, 512 insertions(+), 386 deletions(-)
+
+[33mcommit 644d993efc221a749082f135c34e7ea9ea886107[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Wed Sep 24 00:08:24 2025 +0500
+
+    Update page.tsx
+
+ app/admin/courses/page.tsx | 262 [32m++++++++++++++++++++++++++++++[m[31m---------------[m
+ 1 file changed, 175 insertions(+), 87 deletions(-)
+
+[33mcommit c84018fa511fe2ec913fda887f0cc47ba830f16b[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Mon Sep 22 02:28:39 2025 +0500
+
+    Update page.tsx
+
+ app/admin/students/foradmin/page.tsx | 766 [32m++++++++++++++++++++++++++++++[m[31m-----[m
+ 1 file changed, 673 insertions(+), 93 deletions(-)
+
+[33mcommit 7db96ad09d6bd26ed230dbdf9d79a9f34fff95e0[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Sun Sep 21 23:35:07 2025 +0500
+
+    Update page.tsx
+
+ app/dashboard/student/page.tsx | 35 [32m++++++++++++++++++++[m[31m---------------[m
+ 1 file changed, 20 insertions(+), 15 deletions(-)
+
+[33mcommit d764eba16445612aef0405dabf66e52fe21530a3[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Sun Sep 21 23:31:08 2025 +0500
+
+    Update page.tsx
+
+ app/dashboard/student/page.tsx | 2 [32m+[m[31m-[m
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+[33mcommit 032d3a49254feeeeeda223e7973b06f9df4c4f9b[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Sun Sep 21 23:26:02 2025 +0500
+
+    Update page.tsx
+
+ app/dashboard/student/page.tsx | 6 [32m+++[m[31m---[m
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+[33mcommit e940d2568ff1a6163a52d99b9223ef8b3d61cbd3[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Sun Sep 21 23:07:14 2025 +0500
+
+    Update page.tsx
+
+ app/quiz/start/page.tsx | 47 [32m++++++++++++++++++++++++++[m[31m---------------------[m
+ 1 file changed, 26 insertions(+), 21 deletions(-)
+
+[33mcommit d7b60618e43a0919a338086f8e891ede14f0a85a[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Sun Sep 21 23:04:20 2025 +0500
+
+    Delete app/dashboard/quiz directory
+
+ app/dashboard/quiz/layout.tsx       |  16 [31m--[m
+ app/dashboard/quiz/results/page.tsx | 200 [31m-------------------------[m
+ app/dashboard/quiz/start/page.tsx   | 288 [31m------------------------------------[m
+ 3 files changed, 504 deletions(-)
+
+[33mcommit 8148a8aedc3272b285364c20f492f15f7fb148b3[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Sun Sep 21 23:00:54 2025 +0500
+
+    Update page.tsx
+
+ app/dashboard/quiz/start/page.tsx | 752 [32m++++++[m[31m--------------------------------[m
+ 1 file changed, 114 insertions(+), 638 deletions(-)
+
+[33mcommit 2010042bdff3db9bfe2212cfbb2a2ad41c5b4301[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Sun Sep 21 22:57:40 2025 +0500
+
+    Update page.tsx
+
+ app/quiz/start/page.tsx | 18 [32m+++++++++[m[31m---------[m
+ 1 file changed, 9 insertions(+), 9 deletions(-)
+
+[33mcommit 2fd1d1f2ad3a51b81df44ace8a82b7d6f04efdd4[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Sun Sep 21 22:54:08 2025 +0500
+
+    Update page.tsx
+
+ app/quiz/start/page.tsx | 63 [32m+++++++++++++++++++++++[m[31m--------------------------[m
+ 1 file changed, 29 insertions(+), 34 deletions(-)
+
+[33mcommit ed9b2910e7b76176e2434b036c7e11b91f2c536e[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Sun Sep 21 22:51:37 2025 +0500
+
+    Update page.tsx
+
+ app/quiz/start/page.tsx | 427 [32m++++++++++[m[31m--------------------------------------[m
+ 1 file changed, 84 insertions(+), 343 deletions(-)
+
+[33mcommit bbdc4e2fbf7a16d1759ffa178ad2983306c48473[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Sun Sep 21 22:49:30 2025 +0500
+
+    Update page.tsx
+
+ app/dashboard/quiz/start/page.tsx | 63 [32m++++++++++++++++++[m[31m---------------------[m
+ 1 file changed, 29 insertions(+), 34 deletions(-)
+
+[33mcommit 8fd7dcdaa5e1d10d16cc26854deb4bb7158a489e[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Sun Sep 21 22:44:29 2025 +0500
+
+    Update page.tsx
+
+ app/dashboard/quiz/start/page.tsx | 45 [32m++++++++++++++++++++++[m[31m-----------------[m
+ 1 file changed, 25 insertions(+), 20 deletions(-)
+
+[33mcommit 67e9b084c75f2fab6dc8006c7a06b3f3bc820e09[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Sun Sep 21 22:39:20 2025 +0500
+
+    Update page.tsx
+
+ app/dashboard/quiz/start/page.tsx | 2 [32m+[m[31m-[m
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+[33mcommit 40d31e228d2ab734bf68c7e83efdf82bb550ab58[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Sun Sep 21 21:50:25 2025 +0500
+
+    Update page.tsx
+
+ app/dashboard/quiz/start/page.tsx | 746 [32m++++++++++++++++++++++++++++++++[m[31m------[m
+ 1 file changed, 635 insertions(+), 111 deletions(-)
+
+[33mcommit 2defcd0fc578d39a2c613512be50c9fdf9ccd009[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Sun Sep 21 21:48:40 2025 +0500
+
+    Update page.tsx
+
+[33mcommit 1cb768f7bd92a0834bc64dfd9bc876abe6087c56[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Sun Sep 21 21:15:08 2025 +0500
+
+    Update page.tsx
+
+ app/quiz/start/page.tsx | 121 [32m++++++++++++++++++++++++++++++[m[31m------------------[m
+ 1 file changed, 77 insertions(+), 44 deletions(-)
+
+[33mcommit 518a6c5b2ac96cdd6071bb4063e7d9a81570b1d8[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Sun Sep 21 21:06:21 2025 +0500
+
+    Update page.tsx
+
+ app/quiz/start/page.tsx | 31 [32m++++++++++++++++[m[31m---------------[m
+ 1 file changed, 16 insertions(+), 15 deletions(-)
+
+[33mcommit 58520483cd5340f6561d55183c21156d745857ff[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Sun Sep 21 21:02:53 2025 +0500
+
+    Update page.tsx
+
+ app/quiz/start/page.tsx | 18 [32m+++++++++++[m[31m-------[m
+ 1 file changed, 11 insertions(+), 7 deletions(-)
+
+[33mcommit a5889f03d076e9fd9550f469d0d47c3036aeb4e0[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Sun Sep 21 20:56:18 2025 +0500
+
+    Update page.tsx
+
+ app/quiz/start/page.tsx | 2 [32m+[m[31m-[m
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+[33mcommit cd1f030710484c0595e9f50028d55211ac77344d[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Sun Sep 21 20:53:31 2025 +0500
+
+    Update page.tsx
+
+ app/quiz/start/page.tsx | 160 [32m+++++++++++++++++++++++++++[m[31m---------------------[m
+ 1 file changed, 91 insertions(+), 69 deletions(-)
+
+[33mcommit f610554c27cb046159e292fe79656a92d07a9f7b[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Sun Sep 21 20:43:49 2025 +0500
+
+    Update page.tsx
+
+ app/quiz/start/page.tsx | 4 [32m++[m[31m--[m
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+[33mcommit 005082dde508de0b2bbf1d67cdb44884ec1791af[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Sun Sep 21 20:34:34 2025 +0500
+
+    Update page.tsx
+
+ app/quiz/start/page.tsx | 71 [32m++++++++++++++++++++++++++[m[31m-----------------------[m
+ 1 file changed, 38 insertions(+), 33 deletions(-)
+
+[33mcommit 552a3e2fbe9049b1e63b89d7bc02bb19a38ffbe8[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Sun Sep 21 20:26:06 2025 +0500
+
+    Update page.tsx
+
+[33mcommit 345501c0c85222fc50fb86ce4e7ba3e8ccdd6512[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Sun Sep 21 20:23:31 2025 +0500
+
+    Update page.tsx
+
+ app/quiz/start/page.tsx | 533 [32m+++++++++++++++++++++++++++++++++++++++++++[m[31m-----[m
+ 1 file changed, 477 insertions(+), 56 deletions(-)
+
+[33mcommit 9bc8eafd12e37b8d39f414b168da8d88087d4245[m
+Merge: 49d59c0 5ea6804
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Sun Sep 21 17:08:52 2025 +0500
+
+    Merge pull request #4 from vinodekumar123/responses
+    
+    Update page.tsx
+
+[33mcommit 5ea68048539eead24b1e63a1df6935cbe81bf47b[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Sun Sep 21 17:02:07 2025 +0500
+
+    Update page.tsx
+
+ app/admin/students/responses/page.tsx | 363 [32m++++++++++++++++++++++++++++[m[31m------[m
+ 1 file changed, 305 insertions(+), 58 deletions(-)
+
+[33mcommit 49d59c06436ecf46b958ccf999215cad4c8e2e09[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Mon Sep 15 14:29:19 2025 +0500
+
+    Update pricing.tsx
+
+ components/Home/pricing.tsx | 10 [32m++++[m[31m------[m
+ 1 file changed, 4 insertions(+), 6 deletions(-)
+
+[33mcommit efc8bfa70a791946b28f3a7abb7c5d46d6ce0c2f[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Mon Sep 15 14:26:07 2025 +0500
+
+    Update page.tsx
+
+ app/pricing/page.tsx | 2 [32m+[m[31m-[m
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+[33mcommit cd65a853b6d254112f5e94d779a099042e0100d4[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Mon Sep 15 14:22:37 2025 +0500
+
+    Update page.tsx
+
+ app/pricing/page.tsx | 89 [32m+++++[m[31m-----------------------------------------------[m
+ 1 file changed, 7 insertions(+), 82 deletions(-)
+
+[33mcommit 869fc4e19f868f54b905d5d5f156f79837520885[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Mon Sep 15 14:19:39 2025 +0500
+
+    Update pricing.tsx
+
+ components/Home/pricing.tsx | 2 [32m+[m[31m-[m
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+[33mcommit 77438033f401600c0a5b631dde8af1d8e659b174[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Mon Sep 15 14:14:46 2025 +0500
+
+    Update screenshot.tsx
+
+ components/Home/screenshot.tsx | 1 [32m+[m
+ 1 file changed, 1 insertion(+)
+
+[33mcommit 6cddf6c5936c1bc1ddaa64557da539cc8250468d[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Mon Sep 15 14:13:21 2025 +0500
+
+    Rename screenshot2 to screenshot.tsx
+
+ components/Home/{screenshot2 => screenshot.tsx} | 0
+ 1 file changed, 0 insertions(+), 0 deletions(-)
+
+[33mcommit bbe92bfc059dfa839659533a7dabac452e5ebfb3[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Mon Sep 15 14:12:54 2025 +0500
+
+    Rename screenshot.tsx to screenshot1.tsx
+
+ components/Home/{screenshot.tsx => screenshot1.tsx} | 0
+ 1 file changed, 0 insertions(+), 0 deletions(-)
+
+[33mcommit ec8054d9c3b0940848977bd7b054c2d9082edc2b[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Mon Sep 15 14:12:36 2025 +0500
+
+    Create screenshot2
+
+ components/Home/screenshot2 | 280 [32m++++++++++++++++++++++++++++++++++++++++++++[m
+ 1 file changed, 280 insertions(+)
+
+[33mcommit bfe94b21003cfa9a8bff047547119f0a6c5e51d8[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Mon Sep 15 14:03:24 2025 +0500
+
+    Update why-to-join.tsx
+
+ components/Home/why-to-join.tsx | 2 [32m+[m[31m-[m
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+[33mcommit 2ce6121c614a30611f0d3e1cf14b03d5d8b1683d[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Mon Sep 15 14:02:36 2025 +0500
+
+    Update hero.tsx
+
+ components/Home/hero.tsx | 2 [32m+[m[31m-[m
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+[33mcommit 2fab57c7b871cfe736433f6d908147ab2b7c5494[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Mon Sep 15 14:00:40 2025 +0500
+
+    Rename hero-INACTIVE.tsx to hero.tsx
+
+ components/Home/{hero-INACTIVE.tsx => hero.tsx} | 0
+ 1 file changed, 0 insertions(+), 0 deletions(-)
+
+[33mcommit dd888b0b8e5173cda25cbe102f2c4fc176c81336[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Mon Sep 15 13:59:45 2025 +0500
+
+    Rename hero.tsx to hero3.tsx
+
+ components/Home/{hero.tsx => hero3.tsx} | 0
+ 1 file changed, 0 insertions(+), 0 deletions(-)
+
+[33mcommit 08dcc7767b8bb9ebbbceb25c1580af83815e87c6[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Thu Sep 11 08:02:16 2025 +0500
+
+    Update page.tsx
+
+ app/pricing/page.tsx | 99 [32m+++++++++++++++++++++++++++++++++++++++++++++[m[31m-------[m
+ 1 file changed, 87 insertions(+), 12 deletions(-)
+
+[33mcommit 4687d49a93b222564a27783039deedbe5bdbe41c[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Thu Sep 11 02:38:15 2025 +0500
+
+    Update pricing.tsx
+
+ components/Home/pricing.tsx | 9 [32m++++++[m[31m---[m
+ 1 file changed, 6 insertions(+), 3 deletions(-)
+
+[33mcommit 43254588ce5123541a86b6f482f74a181b0c0d74[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Thu Sep 11 02:31:00 2025 +0500
+
+    Update hero.tsx
+
+ components/Home/hero.tsx | 2 [32m+[m[31m-[m
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+[33mcommit a031a6429ca36efdc39beaf67b2c750339cc756a[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Thu Sep 11 02:26:42 2025 +0500
+
+    Update hero.tsx
+
+ components/Home/hero.tsx | 9 [32m++++++[m[31m---[m
+ 1 file changed, 6 insertions(+), 3 deletions(-)
+
+[33mcommit 658ef8dabfaaa5387e5eedbc99e44ad824caeeaa[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Thu Sep 11 02:21:11 2025 +0500
+
+    Update hero.tsx
+
+ components/Home/hero.tsx | 6 [32m+++[m[31m---[m
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+[33mcommit 06f38ba4cd7c271006c264210a4954ea72a1e149[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Thu Sep 11 02:17:23 2025 +0500
+
+    Update hero.tsx
+
+ components/Home/hero.tsx | 9 [32m+++++[m[31m----[m
+ 1 file changed, 5 insertions(+), 4 deletions(-)
+
+[33mcommit 7c07744e54fd05539e87fda92662cf70ea5c6199[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Thu Sep 11 02:14:51 2025 +0500
+
+    Update hero.tsx
+
+ components/Home/hero.tsx | 2 [32m+[m[31m-[m
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+[33mcommit 9cf10da147cfd58a46925d44cd0bb866d1fd4673[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Thu Sep 11 02:12:27 2025 +0500
+
+    Update hero.tsx
+
+ components/Home/hero.tsx | 6 [32m+++[m[31m---[m
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+[33mcommit 3b41f8fb379aaf1ba160ae82f2cdbfbbb0aacbd6[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Thu Sep 11 02:10:42 2025 +0500
+
+    Create hero.tsx
+
+ components/Home/hero.tsx | 312 [32m+++++++++++++++++++++++++++++++++++++++++++++++[m
+ 1 file changed, 312 insertions(+)
+
+[33mcommit 48874e2e4abecb577bc4b65aac711455c9a98e40[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Thu Sep 11 02:09:55 2025 +0500
+
+    Rename hero.tsx to hero-INACTIVE.tsx
+
+ components/Home/{hero.tsx => hero-INACTIVE.tsx} | 0
+ 1 file changed, 0 insertions(+), 0 deletions(-)
+
+[33mcommit 03b7d224b22aef6c1669a21778310eaf13e7cfc8[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Thu Sep 11 01:51:58 2025 +0500
+
+    Update screenshot.tsx
+
+ components/Home/screenshot.tsx | 10 [32m+++++[m[31m-----[m
+ 1 file changed, 5 insertions(+), 5 deletions(-)
+
+[33mcommit e5ee22367af955012f6e46316b5558f95f01bb27[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Wed Sep 10 01:10:15 2025 +0500
+
+    Update next-sitemap.config.js
+
+ next-sitemap.config.js | 2 [32m+[m[31m-[m
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+[33mcommit e891e8e36316fa53aa4d815aa474ef0455694b3b[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Tue Sep 9 21:51:10 2025 +0500
+
+    Update package.json
+
+ package.json | 5 [32m+++[m[31m--[m
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+[33mcommit 0afcd8cddddf0327f8720d70c3ce19ca410a1f43[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Tue Sep 9 21:48:26 2025 +0500
+
+    Create next-sitemap.config.js
+
+ next-sitemap.config.js | 6 [32m++++++[m
+ 1 file changed, 6 insertions(+)
+
+[33mcommit ded952d6da10a560e6e24d303e28cd1c155b7ab2[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Tue Sep 9 21:46:18 2025 +0500
+
+    Update package.json
+
+ package.json | 7 [32m+++[m[31m----[m
+ 1 file changed, 3 insertions(+), 4 deletions(-)
+
+[33mcommit 955ad536179ab9c44b11ae4d8e2eeb6dff4fd2ef[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Tue Sep 9 21:25:59 2025 +0500
+
+    Update layout.tsx
+
+ app/layout.tsx | 4 [32m+++[m[31m-[m
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+[33mcommit 3b025d57c61ea3f15e239108195fecdaed1619d6[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Tue Sep 9 21:23:25 2025 +0500
+
+    Update layout.tsx
+
+ app/layout.tsx | 2 [32m+[m[31m-[m
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+[33mcommit 2bf419c119f8f33f8d3502498100b835ac5bcc78[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Tue Sep 9 21:20:24 2025 +0500
+
+    Update layout.tsx
+
+ app/layout.tsx | 2 [32m+[m[31m-[m
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+[33mcommit 2dce44fe6861a4d385bcd3f130bd192f05bfca45[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Tue Sep 9 21:19:43 2025 +0500
+
+    Update package.json
+
+ package.json | 1 [32m+[m
+ 1 file changed, 1 insertion(+)
+
+[33mcommit 4248ac33d1316a08718805c84cb9b7a18f3e2c64[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Tue Sep 9 21:16:22 2025 +0500
+
+    Update package.json
+
+ package.json | 1 [32m+[m
+ 1 file changed, 1 insertion(+)
+
+[33mcommit 6d86c3304f60b4f77c1ff717d5a8e51dd6041f31[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Tue Sep 9 21:11:15 2025 +0500
+
+    Update layout.tsx
+
+ app/layout.tsx | 44 [32m++++++++++++++[m[31m------------------------------[m
+ 1 file changed, 14 insertions(+), 30 deletions(-)
+
+[33mcommit ab0bd46a54a82cc292c6e2699354827519a4cd47[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Tue Sep 9 20:59:15 2025 +0500
+
+    Update layout.tsx
+
+ app/layout.tsx | 20 [32m+++++++++++++++++++[m[31m-[m
+ 1 file changed, 19 insertions(+), 1 deletion(-)
+
+[33mcommit 7ce8ba7729e1175c299faa3f57b1f0f9e0642a31[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Tue Sep 9 20:05:23 2025 +0500
+
+    Update hero.tsx
+
+ components/Home/hero.tsx | 2 [32m+[m[31m-[m
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+[33mcommit 7b6a8df8f3e0bccc755b88b0b1d12a683f40bed8[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Tue Sep 9 16:30:29 2025 +0500
+
+    Update hero.tsx
+
+ components/Home/hero.tsx | 4 [32m++[m[31m--[m
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+[33mcommit 8b31c4d6e8c63b81bf5b3cec1ef84cbd1bf91cff[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Tue Sep 9 16:20:53 2025 +0500
+
+    Update hero.tsx
+
+ components/Home/hero.tsx | 2 [32m+[m[31m-[m
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+[33mcommit 07fd64568da362a5154aec75151178e0f2ce8eec[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Tue Sep 9 16:05:22 2025 +0500
+
+    Update hero.tsx
+
+ components/Home/hero.tsx | 4 [32m++[m[31m--[m
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+[33mcommit ca1e1aa81ce7f2fc1c998c3b57830c3cc183598d[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Tue Sep 9 16:02:28 2025 +0500
+
+    Update hero.tsx
+
+ components/Home/hero.tsx | 23 [32m++++++++++++[m[31m-----------[m
+ 1 file changed, 12 insertions(+), 11 deletions(-)
+
+[33mcommit 8556d4b60a898d1bb6bc690fe423b387d741af81[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Tue Sep 9 15:57:07 2025 +0500
+
+    Update hero.tsx
+
+ components/Home/hero.tsx | 4 [32m+++[m[31m-[m
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+[33mcommit 8a01a9a289ec4b84f16b157fbe67506bde32ab4b[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Tue Sep 9 15:56:11 2025 +0500
+
+    Update hero.tsx
+
+ components/Home/hero.tsx | 19 [32m++++++++++[m[31m---------[m
+ 1 file changed, 10 insertions(+), 9 deletions(-)
+
+[33mcommit 78be7fb90db9f01a65a7fecdc1988524ae96e4c0[m
+Author: vinodekumar123 <tayyarihub1@gmail.com>
+Date:   Tue Sep 9 15:51:49 2025 +0500
+
+    Update hero.tsx
+
+ components/Home/hero.tsx | 2 [32m++[m
+ 1 file changed, 2 insertions(+)
+
+[33mcommit 1651ae420ac036b2e388823d
