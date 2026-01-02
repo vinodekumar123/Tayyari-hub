@@ -52,8 +52,15 @@ export function ScheduleViewer({ seriesId, seriesName, isOpen, onClose }: Schedu
 
                 const items: ScheduleItem[] = snapshot.docs.map(doc => {
                     const data = doc.data();
-                    const start = new Date(`${data.startDate}T${data.startTime || '00:00'}`);
-                    const end = new Date(`${data.endDate}T${data.endTime || '23:59'}`);
+                    let start, end;
+                    try {
+                        start = new Date(`${data.startDate}T${data.startTime || '00:00:00'}`);
+                        end = new Date(`${data.endDate}T${data.endTime || '23:59:59'}`);
+                    } catch (e) {
+                        // Fallback or skip invalid
+                        start = new Date();
+                        end = new Date();
+                    }
 
                     let status: 'upcoming' | 'live' | 'completed' = 'upcoming';
                     if (now > end) status = 'completed';

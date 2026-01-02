@@ -12,6 +12,7 @@ import { Flag, MessageSquare, CheckCircle, Clock, AlertCircle, BookOpen, Layers,
 import { format } from 'date-fns';
 import { toast } from 'sonner';
 import { glassmorphism } from '@/lib/design-tokens';
+import parse from 'html-react-parser';
 
 interface Report {
     id: string;
@@ -308,9 +309,9 @@ export default function StudentReportsPage() {
                                     <div className="space-y-3">
                                         <h3 className="text-sm font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">Your Report</h3>
                                         {report.issue ? (
-                                            <p className="text-gray-700 dark:text-gray-300 leading-relaxed bg-red-50/50 dark:bg-red-900/10 p-4 rounded-xl border border-red-100 dark:border-red-900/20">
-                                                {report.issue}
-                                            </p>
+                                            <div className="text-gray-700 dark:text-gray-300 leading-relaxed bg-red-50/50 dark:bg-red-900/10 p-4 rounded-xl border border-red-100 dark:border-red-900/20 prose dark:prose-invert max-w-none">
+                                                {parse(report.issue)}
+                                            </div>
                                         ) : (
                                             <p className="text-gray-400 italic bg-gray-50 dark:bg-white/5 p-4 rounded-xl border border-gray-100 dark:border-white/10">
                                                 No description provided
@@ -329,9 +330,9 @@ export default function StudentReportsPage() {
                                                         <h4 className="font-bold text-gray-900 dark:text-gray-100">Admin Reply</h4>
                                                         <span className="text-xs text-gray-500 dark:text-gray-400 font-medium">By {report.adminName || 'Admin'}</span>
                                                     </div>
-                                                    <p className="text-gray-700 dark:text-gray-300 leading-relaxed bg-indigo-50/50 dark:bg-indigo-900/10 p-4 rounded-xl border border-indigo-100 dark:border-indigo-900/20">
-                                                        {report.adminReply}
-                                                    </p>
+                                                    <div className="text-gray-700 dark:text-gray-300 leading-relaxed bg-indigo-50/50 dark:bg-indigo-900/10 p-4 rounded-xl border border-indigo-100 dark:border-indigo-900/20 prose dark:prose-invert max-w-none">
+                                                        {parse(report.adminReply)}
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>

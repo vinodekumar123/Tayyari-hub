@@ -11,12 +11,18 @@ export function ScheduleNotificationManager() {
             if (!user) return;
 
             try {
-                // 1. Fetch all upcoming or live quizzes
-                // Optimization: In a real app with thousands of quizzes, we'd need better filtering (e.g. by enrolled course).
-                // For now, we fetch quizzes that are either live or starting soon.
-                // We'll fetch all quizzes and filter in memory for simplicity to ensure we catch everything, 
-                // assuming reasonable dataset size for now.
-                const quizzesSnap = await getDocs(collection(db, 'quizzes'));
+                // 1. Fetch User Profile to get Course/Enrolled Series
+                const userDoc = await getDoc(doc(db, 'users', user.uid));
+                if (!userDoc.exists()) return;
+                const userData = userDoc.data();
+                const userCourseId = userData.course; // Assuming course ID is stored here
+
+                // 2. Fetch quizzes strictly for this course to avoid leaks
+                // We fetch all "published" quizzes and filter in memory for complex matchers (string vs object course)
+                // In production, ensure 'course' is standardized to ID string for 'where' queries.
+                const quizzesRef = collection(db, 'quizzes');
+                const quizzesSnap = await getDocs(quizzesRef);
+
                 const now = new Date();
                 const ONE_HOUR = 60 * 60 * 1000;
                 const TWENTY_FOUR_HOURS = 24 * 60 * 60 * 1000;
@@ -25,10 +31,24 @@ export function ScheduleNotificationManager() {
 
                 for (const qDoc of quizzesSnap.docs) {
                     const quiz = qDoc.data();
+
+                    // FILTER: Check if quiz belongs to user's course
+                    const quizCourseId = typeof quiz.course === 'object' ? quiz.course.id : quiz.course;
+
+                    // Strict filtering: Only show if course matches OR if it's a "General" quiz (optional logic)
+                    if (quizCourseId !== userCourseId) continue;
+
                     if (!quiz.startDate) continue;
 
-                    const start = new Date(`${quiz.startDate}T${quiz.startTime || '00:00'}`);
-                    const end = new Date(`${quiz.endDate}T${quiz.endTime || '23:59'}`);
+                    let start: Date, end: Date;
+                    try {
+                        start = new Date(`${quiz.startDate}T${quiz.startTime || '00:00:00'}`);
+                        end = new Date(`${quiz.endDate}T${quiz.endTime || '23:59:59'}`);
+                    } catch (e) {
+                        console.warn(`Invalid date for quiz ${qDoc.id}`, e);
+                        continue;
+                    }
+
                     const diff = start.getTime() - now.getTime();
 
                     // Live Notification
@@ -63,12 +83,7 @@ export function ScheduleNotificationManager() {
                     }
                 }
 
-                // 2. batch write notifications if they don't exist
-                // check existence one by one to avoid overwriting 'read' status if it exists
-                // or just setDoc with merge: true but carefully.
-                // Actually, if we setDoc every time, it might reset 'read' status if we are not careful.
-                // We only want to create IF NOT EXISTS.
-
+                // 3. batch write notifications if they don't exist
                 for (const notif of notifications) {
                     const notifRef = doc(db, 'users', user.uid, 'notifications', notif.id);
                     const notifSnap = await getDoc(notifRef);
