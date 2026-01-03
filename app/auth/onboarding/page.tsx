@@ -1,0 +1,311 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { auth, db } from '../../firebase';
+import {
+  doc,
+  setDoc,
+  updateDoc,
+  serverTimestamp,
+  getDoc,
+  collection,
+  onSnapshot,
+} from 'firebase/firestore';
+import { onAuthStateChanged } from 'firebase/auth';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Button } from '@/components/ui/button';
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
+import { Mail, User, Phone, MapPin } from 'lucide-react';
+import { toast } from 'sonner';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+
+export default function OnboardingPage() {
+  const router = useRouter();
+  const [userId, setUserId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const [form, setForm] = useState({
+    fullName: '',
+    fatherName: '',
+    email: '',
+    phone: '',
+    district: '',
+    course: '',
+  });
+  const [courses, setCourses] = useState<{ id: string; name: string }[]>(
+    []
+  );
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (!user) {
+        router.push('/auth/login');
+        setLoading(false);
+        return;
+      }
+
+      setUserId(user.uid);
+      setForm((prev) => ({ ...prev, email: user.email || '' }));
+
+      try {
+        const userSnap = await getDoc(doc(db, 'users', user.uid));
+        if (userSnap.exists()) {
+          const data = userSnap.data();
+          const required = [
+            'fullName',
+            'fatherName',
+            'email',
+            'phone',
+            'district',
+            'course',
+          ];
+          const isProfileComplete = required.every(field => data[field] && data[field].trim() !== '');
+          const role = data.role;
+
+          if (role === 'admin' || role === 'superadmin' || data.admin === true) {
+            router.push('/dashboard/admin');
+          } else if (role === 'teacher' || data.teacher === true) {
+            router.push('/dashboard/teacher');
+          } else if (isProfileComplete) {
+            router.push('/dashboard/student');
+          } else {
+            setForm((prev) => ({
+              ...prev,
+              ...data,
+              email: user.email || prev.email,
+            }));
+          }
+        }
+      } catch (error) {
+        console.error('Error checking user data:', error);
+        toast.error('Failed to load user data. Please try again.');
+      } finally {
+        setLoading(false);
+      }
+    });
+
+    const unsubscribeCourses = onSnapshot(
+      collection(db, 'courses'),
+      (snapshot) => {
+        const courseData = snapshot.docs.map((doc) => ({
+          id: doc.id,
+          name: doc.data().name as string,
+        }));
+        setCourses(courseData);
+      }
+    );
+
+    return () => {
+      unsubscribe();
+      unsubscribeCourses();
+    };
+  }, [router]);
+
+  const handleChange = (field: keyof typeof form, value: string) => {
+    setForm((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!userId) return;
+
+    const requiredFields = [
+      'fullName',
+      'fatherName',
+      'email',
+      'phone',
+      'district',
+      'course',
+    ];
+    const isEmpty = requiredFields.some(
+      (field) => !form[field as keyof typeof form]
+    );
+
+    if (isEmpty) {
+      toast.error('Please fill in all required fields.');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await setDoc(doc(db, 'users', userId), {
+        ...form,
+        uid: userId,
+        createdAt: serverTimestamp(),
+        plan: 'free',
+      });
+
+      const userSnap = await getDoc(doc(db, 'users', userId));
+      const data = userSnap.exists() ? userSnap.data() : {};
+      const role = data.role;
+
+      if (data.admin || role === 'admin' || role === 'superadmin') {
+        router.push('/dashboard/admin');
+      } else if (role === 'teacher' || data.teacher) {
+        router.push('/dashboard/teacher');
+      } else {
+        router.push('/dashboard/student');
+      }
+
+    } catch (error) {
+      console.error('Error saving onboarding data:', error);
+      toast.error('Failed to save your information. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center p-4 relative">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="flex flex-col items-center gap-4">
+            <div className="w-12 h-12 border-4 border-t-primary border-gray-200 rounded-full animate-spin" />
+            <p className="text-white text-lg font-semibold">Loading...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-white flex items-center justify-center px-4 py-12 relative">
+      <Card className="w-full max-w-md sm:max-w-lg md:max-w-2xl shadow-xl">
+        <CardHeader>
+          <CardTitle className="text-xl sm:text-2xl font-bold text-center">
+            Complete Your Profile
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <div className="space-y-2">
+              <Label htmlFor="fullName">Full Name</Label>
+              <div className="relative">
+                <User className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+                <Input
+                  id="fullName"
+                  placeholder="Your full name"
+                  value={form.fullName}
+                  onChange={(e) => handleChange('fullName', e.target.value)}
+                  className="pl-10 h-12 rounded-xl text-sm sm:text-base"
+                  required
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="fatherName">Father&apos;s Name</Label>
+              <div className="relative">
+                <User className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+                <Input
+                  id="fatherName"
+                  placeholder="Your father's name"
+                  value={form.fatherName}
+                  onChange={(e) => handleChange('fatherName', e.target.value)}
+                  className="pl-10 h-12 rounded-xl text-sm sm:text-base"
+                  required
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="phone">Phone Number</Label>
+              <div className="relative">
+                <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+                <Input
+                  id="phone"
+                  type="tel"
+                  placeholder="Your phone number"
+                  value={form.phone}
+                  onChange={(e) => handleChange('phone', e.target.value)}
+                  className="pl-10 h-12 rounded-xl text-sm sm:text-base"
+                  required
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="district">District</Label>
+              <div className="relative">
+                <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+                <Input
+                  id="district"
+                  placeholder="Your district"
+                  value={form.district}
+                  onChange={(e) => handleChange('district', e.target.value)}
+                  className="pl-10 h-12 rounded-xl text-sm sm:text-base"
+                  required
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="course">Course</Label>
+              <Select
+                value={form.course}
+                onValueChange={(value) => handleChange('course', value)}
+              >
+                <SelectTrigger className="h-12 rounded-xl text-sm sm:text-base">
+                  <SelectValue placeholder="Select a course" />
+                </SelectTrigger>
+                <SelectContent>
+                  {courses.map((course) => (
+                    <SelectItem key={course.id} value={course.name}>
+                      {course.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="email">Email Address</Label>
+              <div className="relative">
+                <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+                <Input
+                  id="email"
+                  type="email"
+                  value={form.email}
+                  readOnly
+                  className="pl-10 h-12 bg-gray-100 text-gray-500 cursor-not-allowed rounded-xl text-sm sm:text-base"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-4">
+              <Button
+                type="submit"
+                disabled={loading}
+                className="w-32 h-12 bg-primary text-white rounded-xl"
+              >
+                {loading ? (
+                  <div className="flex items-center justify-center gap-2">
+                    <div className="w-5 h-5 border-2 border-t-white border-gray-400 rounded-full animate-spin" />
+                    Saving...
+                  </div>
+                ) : (
+                  'Submit'
+                )}
+              </Button>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
+
+
+    </div>
+  );
+}

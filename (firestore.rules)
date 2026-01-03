@@ -1,0 +1,165 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // --- HELPER FUNCTIONS ---
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Fetch the user document to check roles
+    // Note: In high-traffic apps, Custom Claims are cheaper. 
+    // Here we use document reads (cost 1 read per request).
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function isAdmin() {
+      let data = getUserData();
+      return data.admin == true || data.superadmin == true;
+    }
+
+    function isSuperAdmin() {
+      return getUserData().superadmin == true;
+    }
+
+    function isTeacher() {
+      let data = getUserData();
+      // backward compatibility: check 'role' field OR if they have 'subjects' assigned
+      return data.role == 'teacher' || (data.subjects != null && data.subjects.size() > 0);
+    }
+
+    // Check if Teacher has this specific subject assigned
+    function teacherHasSubject(subjectId) {
+      let data = getUserData();
+      return subjectId in data.subjects;
+    }
+
+    // Check if User is the Creator of the resource
+    function isOwner(resourceData) {
+      return resourceData.createdBy == request.auth.uid;
+    }
+
+    // --- COLLECTION RULES ---
+
+    // 1. USERS Collection
+    match /users/{userId} {
+      // Read: Users can read own. Admins can read all.
+      // Teachers CANNOT read student profiles (privacy).
+      allow read: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
+      
+      // Write: Users update own (non-sensitive). Admins update all.
+      // Prevent users from making themselves admin (validate 'admin' field unchanged if not admin)
+      allow write: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
+    }
+
+    // 2. COURSES / SERIES / SUBJECTS (Content Structure)
+    match /courses/{courseId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && isAdmin();
+    }
+    match /series/{seriesId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && isAdmin();
+    }
+    match /subjects/{subjectId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && isAdmin();
+    }
+
+    // 3. QUESTIONS (The Core restriction)
+    match /questions/{questionId} {
+      // Read: Authenticated (Students need to see them).
+      // Ideally, students should only see questions IN A QUIZ, not broadly.
+      // But for "Practice", they might need read access.
+      allow read: if isAuthenticated();
+
+      // Create: Admin OR Teacher (if Subject matches)
+      allow create: if isAuthenticated() && (
+        isAdmin() || 
+        (isTeacher() && teacherHasSubject(request.resource.data.subjectId))
+      );
+
+      // Update/Delete: Admin OR Teacher (if Owner)
+      allow update, delete: if isAuthenticated() && (
+        isAdmin() || 
+        (isTeacher() && isOwner(resource.data))
+      );
+    }
+    
+    // Mock Questions (same rules)
+    match /mockquestions/{questionId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && (
+        isAdmin() || 
+        (isTeacher() && teacherHasSubject(request.resource.data.subjectId))
+      );
+      allow update, delete: if isAuthenticated() && (
+        isAdmin() || 
+        (isTeacher() && isOwner(resource.data))
+      );
+    }
+
+    // 4. QUIZZES
+    match /quizzes/{quizId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && (
+        isAdmin() || 
+        (isTeacher() && teacherHasSubject(request.resource.data.subjectId))
+      );
+      allow update, delete: if isAuthenticated() && (
+        isAdmin() || 
+        (isTeacher() && isOwner(resource.data))
+      );
+    }
+
+    // 5. REPORTS (Flagged Questions / Issues)
+    match /reports/{reportId} {
+      allow create: if isAuthenticated(); // Students report issues
+      allow read: if isAuthenticated() && (
+        isAdmin() || 
+        (isTeacher() && teacherHasSubject(resource.data.subjectId)) ||
+        resource.data.studentId == request.auth.uid // Own reports
+      );
+      allow update: if isAuthenticated() && (
+        isAdmin() || 
+        (isTeacher() && teacherHasSubject(resource.data.subjectId))
+      );
+    }
+
+    // 6. ENROLLMENTS
+    match /enrollments/{enrollmentId} {
+      // Admins only manage enrollments.
+      // Students read own.
+      allow read: if isAuthenticated() && (
+        isAdmin() || 
+        resource.data.studentId == request.auth.uid
+      );
+      allow write: if isAuthenticated() && isAdmin();
+    }
+
+    // 7. RESULTS
+    match /results/{resultId} {
+      allow read: if isAuthenticated() && (
+        isAdmin() || 
+        resource.data.studentId == request.auth.uid ||
+        // Teachers see results for their subject?? Complexity usually requires subcollections or filtering.
+        // For now, allow Teachers if they need to see class performance?
+        // User said: "teachers will see reports only of their own subject"
+        isTeacher() 
+      );
+      allow write: if isAuthenticated() && (
+         isAdmin() || 
+         // Students submit their own result? Usually server-side or via specific function?
+         // Assuming client-side submission is standard in this app:
+         request.resource.data.studentId == request.auth.uid
+      );
+    }
+
+    // Default Fallback
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -1,0 +1,44 @@
+// app/layout.tsx
+import './globals.css'
+import type { Metadata } from 'next'
+import { Inter } from 'next/font/google'
+import { Analytics } from '@vercel/analytics/next'
+import { SpeedInsights } from '@vercel/speed-insights/next'
+
+import { ThemeProvider } from '@/components/theme-provider'
+import { Toaster } from '@/components/ui/sonner'
+
+const inter = Inter({ subsets: ['latin'] })
+
+export const metadata: Metadata = {
+  title: 'Tayyari Hub',
+  description: 'Best Platform for MDCAT, LAT and ECAT Entry Test Preparation',
+}
+
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode
+}) {
+  return (
+    <html lang="en" suppressHydrationWarning>
+      <body className={inter.className}>
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="system"
+          enableSystem
+          disableTransitionOnChange
+        >
+          {children}
+          <Toaster />
+          {process.env.NODE_ENV === 'production' && (
+            <>
+              <Analytics />
+              <SpeedInsights />
+            </>
+          )}
+        </ThemeProvider>
+      </body>
+    </html>
+  )
+}
