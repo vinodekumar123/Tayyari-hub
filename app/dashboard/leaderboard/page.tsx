@@ -95,21 +95,16 @@ export default function LeaderboardPage() {
     return (
         <div className="max-w-5xl mx-auto p-4 md:p-8 space-y-8">
             {/* Header */}
-            <div className='relative group mb-8'>
-                <div className='absolute inset-0 bg-gradient-to-r from-[#004AAD] via-[#0066FF] to-[#00B4D8] rounded-3xl blur-xl opacity-20 dark:opacity-30 group-hover:opacity-30 dark:group-hover:opacity-40 transition-opacity duration-500' />
-                <div className={`relative ${glassmorphism.light} p-8 rounded-3xl border border-[#004AAD]/20 dark:border-[#0066FF]/30`}>
-                    <div className='flex items-center justify-between'>
-                        <div>
-                            <h1 className='text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-[#004AAD] via-[#0066FF] to-[#00B4D8] dark:from-[#0066FF] dark:via-[#00B4D8] dark:to-[#66D9EF] mb-2'>
-                                Hall of Fame
-                            </h1>
-                            <p className='text-muted-foreground font-semibold flex items-center gap-2'>
-                                <Trophy className='w-5 h-5 text-[#00B4D8] dark:text-[#66D9EF]' />
-                                Top performers across all series. Keep learning, keep climbing!
-                            </p>
-                        </div>
-                    </div>
+            <div className="text-center space-y-4 mb-8">
+                <div className="inline-block p-4 rounded-full bg-blue-100 dark:bg-blue-900/30 mb-2">
+                    <Trophy className="h-12 w-12 text-[#004AAD] dark:text-[#00B4D8]" />
                 </div>
+                <h1 className="text-4xl font-black bg-clip-text text-transparent bg-gradient-to-r from-[#004AAD] to-[#00B4D8]">
+                    Hall of Fame
+                </h1>
+                <p className="text-muted-foreground font-medium max-w-xl mx-auto">
+                    Top performers across all series. Keep learning, keep climbing!
+                </p>
             </div>
 
             {/* User Rank Card */}

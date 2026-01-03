@@ -48,9 +48,12 @@ export default function LoginPage() {
             // Check for required fields
             const requiredFields = ['fullName', 'fatherName', 'phone', 'district', 'course'];
             const isProfileComplete = requiredFields.every(field => userData[field] && userData[field].trim() !== '');
+            const userRole = userData.role;
 
-            if (userData.admin === true) {
+            if (userRole === 'superadmin' || userRole === 'admin' || userData.admin === true) {
               router.push('/dashboard/admin');
+            } else if (userRole === 'teacher' || userData.teacher === true) {
+              router.push('/dashboard/teacher');
             } else if (isProfileComplete) {
               router.push('/dashboard/student');
             } else {

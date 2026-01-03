@@ -9,7 +9,7 @@ interface User {
     phone?: string;
     admin?: boolean | string;
     superadmin?: boolean; // Added superadmin field
-    role?: 'admin' | 'student' | 'teacher';
+    role?: 'admin' | 'student' | 'superadmin' | 'teacher';
     photoURL?: string | null;
     stats?: {
         totalQuizzes: number;
@@ -69,19 +69,19 @@ export const useUserStore = create<UserStore>()(
             isAdmin: () => {
                 const { user } = get();
                 if (!user) return false;
-                return user.admin === true || user.admin === 'true' || user.role === 'admin';
+                return user.role === 'admin' || user.role === 'superadmin' || user.admin === true || user.admin === 'true';
             },
 
             isStudent: () => {
                 const { user } = get();
                 if (!user) return false;
-                return user.role === 'student' || (!user.admin && !user.role);
+                return user.role === 'student' || (!user.admin && !user.role && !user.superadmin);
             },
 
             isSuperAdmin: () => {
                 const { user } = get();
                 if (!user) return false;
-                return user.superadmin === true; // Strict check for superadmin
+                return user.role === 'superadmin' || user.superadmin === true;
             },
         }),
         {

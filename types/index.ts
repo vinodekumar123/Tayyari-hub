@@ -1,50 +1,50 @@
 export interface Question {
-    id: string;
-    subject?: string;
-    chapter?: string;
-    questionText?: string;
-    options?: any[];
-    correctAnswer?: string;
-    explanation?: string;
-    createdAt?: any;
+  id: string;
+  subject?: string;
+  chapter?: string;
+  questionText?: string;
+  options?: any[];
+  correctAnswer?: string;
+  explanation?: string;
+  createdAt?: any;
 }
 
 export interface QuizConfig {
-    title: string;
-    course: string;
-    subject: string;
-    chapter: string;
-    totalQuestions: number;
-    duration: number;
-    maxPerSubject: number;
+  title: string;
+  course: string;
+  subject: string;
+  chapter: string;
+  totalQuestions: number;
+  duration: number;
+  maxPerSubject: number;
 }
 
 export interface Metadata {
-    course?: string;
-    courseId?: string;
-    subject?: string;
-    subjectId?: string;
-    chapter?: string;
-    chapterId?: string;
-    topic?: string;
-    difficulty?: string;
-    year?: string;
-    book?: string;
-    teacher?: string;
+  course?: string;
+  courseId?: string;
+  subject?: string;
+  subjectId?: string;
+  chapter?: string;
+  chapterId?: string;
+  topic?: string;
+  difficulty?: string;
+  year?: string;
+  book?: string;
+  teacher?: string;
 }
 
 export interface FormState {
-    fullName: string;
-    email: string;
-    phone: string;
-    metadata: Metadata;
-    subjects?: string[];
+  fullName: string;
+  email: string;
+  phone: string;
+  metadata: Metadata;
+  subjects?: string[];
 }
 
 export interface SubjectItem {
-    id: string;
-    name: string;
-    chapters?: Record<string, any>;
+  id: string;
+  name: string;
+  chapters?: Record<string, any>;
 }
 export interface Course {
     id: string;
@@ -146,7 +146,7 @@ export interface EnrollmentRecord {
     enrolledByAdminName: string;
     enrolledAt: any;
     // Status
-    status: 'active' | 'expired' | 'cancelled' | 'refunded' | 'revoked';
+    status: 'active' | 'expired' | 'cancelled' | 'refunded';
     statusHistory: {
         status: string;
         changedBy: string;
@@ -241,20 +241,10 @@ export interface ForumPost {
     chapter?: string;
     province?: string;
     tags: string[];
-
-    // Voting
     upvotes: number;
     upvotedBy: string[]; // Array of UIDs
-    downvotes: number;
-    downvotedBy: string[]; // Array of UIDs
-
-    // Status
-    status: 'open' | 'answered' | 'closed' | 'deleted';
-    isSolved: boolean; // Keep for backward compatibility or easy queries
-
-    // Meta
     replyCount: number;
-    views: number;
+    isSolved: boolean;
     createdAt: any;
 }
 
@@ -265,22 +255,9 @@ export interface ForumReply {
     authorId: string;
     authorName: string; // Snapshot for performance
     authorRole: 'student' | 'admin' | 'teacher';
-
-    // Verification
     isVerified: boolean; // Verified by Faculty
-    verifiedBy?: {
-        uid: string;
-        name: string;
-        role: string;
-        at: any;
-    };
-
-    // Voting
     upvotes: number;
     upvotedBy: string[];
-    downvotes: number;
-    downvotedBy: string[];
-
     createdAt: any;
 }
 

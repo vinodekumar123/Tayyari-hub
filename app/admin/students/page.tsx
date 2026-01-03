@@ -31,15 +31,13 @@ import {
   Users,
   Download,
   Trash2,
-  X,
-  Ban
+  X
 } from 'lucide-react';
 import { onAuthStateChanged, sendPasswordResetEmail } from 'firebase/auth';
 import { useRouter } from 'next/navigation';
 import { Student, Course, Series, EnrollmentRecord, BulkDeleteResponse } from '@/types';
 import { TableSkeleton } from '@/components/ui/skeleton-cards';
 import { brandColors, glassmorphism } from '@/lib/design-tokens';
-import { sendNotification } from '@/lib/community';
 import { toast } from 'react-hot-toast';
 import { format } from 'date-fns';
 import html2canvas from 'html2canvas';
@@ -570,22 +568,6 @@ export default function StudentsPage() {
     try {
       const selectedSeries = seriesList.find(s => s.id === enrollmentData.seriesId);
       if (!selectedSeries) throw new Error('Series not found');
-
-      // Check for existing active enrollment
-      const existingQuery = query(
-        collection(db, 'enrollments'),
-        where('studentId', '==', currentStudent.id),
-        where('seriesId', '==', selectedSeries.id),
-        where('status', '==', 'active')
-      );
-      const existingDocs = await getDocs(existingQuery);
-
-      if (!existingDocs.empty) {
-        toast.error('Student is already enrolled in this series!');
-        setEnrollLoading(false);
-        return;
-      }
-
       await addDoc(collection(db, 'enrollments'), {
         studentId: currentStudent.id,
         studentName: currentStudent.fullName,
@@ -601,16 +583,6 @@ export default function StudentsPage() {
         enrolledAt: new Date().toISOString(),
         status: 'active'
       });
-
-      // Send Notification to Student
-      await sendNotification(
-        currentStudent.id,
-        'Course Enrollment Successful',
-        `You have been successfully enrolled in ${selectedSeries.name}. You can now access the content in your Study Zone.`,
-        'success',
-        '/dashboard/study'
-      );
-
       toast.success(`Enrolled in ${selectedSeries.name}`);
       setEnrollModal(false);
     } catch (error) {
@@ -1039,36 +1011,6 @@ export default function StudentsPage() {
                   >
                     <Download className="w-4 h-4 text-blue-600" />
                   </Button>
-
-                  {rec.status === 'active' && (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      title="Revoke Enrollment"
-                      onClick={async () => {
-                        if (!confirm(`Revoke enrollment for ${rec.seriesName}?`)) return;
-                        try {
-                          await updateDoc(doc(db, 'enrollments', rec.id), { status: 'revoked' });
-
-                          // Notify Student
-                          await sendNotification(
-                            rec.studentId,
-                            'Enrollment Revoked',
-                            `Your enrollment in ${rec.seriesName} has been revoked by admin.`,
-                            'warning'
-                          );
-
-                          setEnrollmentHistory(prev => prev.map(p => p.id === rec.id ? { ...p, status: 'revoked' } : p));
-                          toast.success('Enrollment revoked');
-                        } catch (e) {
-                          console.error(e);
-                          toast.error('Failed to revoke');
-                        }
-                      }}
-                    >
-                      <Ban className="w-4 h-4 text-red-600" />
-                    </Button>
-                  )}
                 </div>
               </div>
             ))}

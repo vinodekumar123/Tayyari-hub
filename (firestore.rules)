@@ -54,12 +54,6 @@ service cloud.firestore {
       allow write: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
     }
 
-    match /users/{userId}/notifications/{notificationId} {
-      allow read: if isAuthenticated() && (request.auth.uid == userId);
-      // Admin can write (send), User can write (mark read)
-      allow write: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
-    }
-
     // 2. COURSES / SERIES / SUBJECTS (Content Structure)
     match /courses/{courseId} {
       allow read: if isAuthenticated();

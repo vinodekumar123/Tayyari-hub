@@ -20,14 +20,8 @@ export function useFcmToken() {
 
                 if (permission === 'granted') {
                     const messaging = getMessaging(app);
-
-                    // Explicitly register service worker to prevent timeout errors
-                    const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
-
-                    // Try fetching token with explicit registration
-                    const currentToken = await getToken(messaging, {
-                        serviceWorkerRegistration: registration
-                    }).catch((err) => {
+                    // Try fetching token without VAPID key first (uses manifest/default config)
+                    const currentToken = await getToken(messaging).catch((err) => {
                         console.error("FCM Token Error:", err);
                         return null;
                     });
