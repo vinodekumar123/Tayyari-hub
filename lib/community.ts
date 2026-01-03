@@ -13,7 +13,7 @@ export const sendNotification = async (recipientId: string, title: string, messa
             title,
             message,
             type,
-            link,
+            link: link || null,
             read: false,
             createdAt: serverTimestamp()
         });

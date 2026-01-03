@@ -16,13 +16,16 @@ import {
   Trophy, Medal, RefreshCw, Activity, ClipboardList, Clock,
   CheckCircle, Zap, Target, BookOpen, ChevronRight, TrendingUp, PlayCircle, AlertTriangle, CalendarDays,
   LayoutDashboard,
-  GraduationCap
+  GraduationCap,
+  Sparkles,
+  Sun, Moon
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { ScheduleViewer } from '@/components/dashboard/ScheduleViewer';
 import { ScheduleNotificationManager } from '@/components/dashboard/ScheduleNotificationManager';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
+import { Badge } from '@/components/ui/badge';
 
 export default function StudentDashboard() {
   const [greeting, setGreeting] = useState('');
@@ -234,18 +237,24 @@ export default function StudentDashboard() {
   if (loading) return <DashboardSkeleton />;
 
   return (
-    <div className="min-h-screen bg-gray-50/50 dark:bg-gray-900/50">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-white dark:from-slate-950 dark:to-slate-900 transition-colors duration-300">
       <ScheduleNotificationManager />
 
       <div className="p-6 md:p-8 max-w-7xl mx-auto space-y-8">
-        {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+
+        {/* Welcome Header */}
+        <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 animate-in fade-in slide-in-from-top-4 duration-700">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-1">
-              {greeting}, {studentData?.fullName?.split(' ')[0] || 'Student'}
+            <h1 className="text-4xl font-extrabold text-gray-900 dark:text-white tracking-tight flex items-center gap-3">
+              {greeting === 'Good Morning' && <Sun className="w-8 h-8 text-amber-500 fill-amber-500/20" />}
+              {greeting === 'Good Afternoon' && <Sun className="w-8 h-8 text-orange-500 fill-orange-500/20" />}
+              {greeting === 'Good Evening' && <Moon className="w-8 h-8 text-indigo-500 fill-indigo-500/20" />}
+              <span>{greeting},</span> <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-violet-600 dark:from-indigo-400 dark:to-violet-400">
+                {(studentData?.fullName && typeof studentData.fullName === 'string') ? studentData.fullName.split(' ')[0] : 'Scholar'}
+              </span>
             </h1>
-            <p className="text-gray-500 dark:text-gray-400">
-              Welcome back to your learning dashboard.
+            <p className="text-gray-500 dark:text-gray-400 mt-2 font-medium">
+              You are doing great! Ready to learn something new today?
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -253,160 +262,184 @@ export default function StudentDashboard() {
               variant="outline"
               size="icon"
               onClick={refreshStats}
-              title="Refresh"
+              title="Refresh Stats"
+              className="rounded-xl hover:bg-white hover:shadow-md transition-all dark:hover:bg-gray-800"
             >
               <RefreshCw className="h-4 w-4" />
             </Button>
             <Link href="/dashboard/leaderboard">
-              <Button variant="outline" className="gap-2">
-                <Trophy className="h-4 w-4 text-amber-500" />
+              <Button variant="outline" className="gap-2 rounded-xl border-amber-200 bg-amber-50/50 hover:bg-amber-100 dark:border-amber-900/30 dark:bg-amber-900/10 dark:hover:bg-amber-900/20 text-amber-700 dark:text-amber-500 hover:shadow-sm transition-all">
+                <Trophy className="h-4 w-4" />
                 Leaderboard
               </Button>
             </Link>
             <Link href="/admin/quizzes/quizebank">
-              <Button className="gap-2 bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm">
-                <PlayCircle className="h-4 w-4" />
+              <Button className="gap-2 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white shadow-lg hover:shadow-indigo-500/25 rounded-xl transition-all duration-300 hover:scale-105">
+                <PlayCircle className="h-4 w-4 fill-white/20" />
                 Start New Quiz
               </Button>
             </Link>
           </div>
         </div>
 
-        {/* Unfinished Quizzes Alert */}
+        {/* Alerts Section */}
         {unfinishedQuizzes.length > 0 && (
-          <div className="grid gap-3">
+          <div className="grid gap-4 animate-in fade-in slide-in-from-top-2 duration-500 delay-100">
             {unfinishedQuizzes.map((quiz) => (
-              <div key={quiz.id} className="bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-900/30 p-4 rounded-xl flex flex-col sm:flex-row items-center justify-between gap-4">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-amber-100 dark:bg-amber-900/30 rounded-full text-amber-600 dark:text-amber-500">
-                    <AlertTriangle className="h-5 w-5" />
+              <div key={quiz.id} className="group bg-white dark:bg-slate-900/50 border border-amber-200 dark:border-amber-900/50 p-1 rounded-2xl shadow-sm hover:shadow-md transition-all">
+                <div className="bg-amber-50/50 dark:bg-amber-900/10 p-4 rounded-xl flex flex-col sm:flex-row items-center justify-between gap-4">
+                  <div className="flex items-center gap-4">
+                    <div className="p-3 bg-white dark:bg-slate-800 rounded-full shadow-sm text-amber-500 ring-4 ring-amber-50 dark:ring-amber-900/20">
+                      <AlertTriangle className="h-6 w-6" />
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                        {quiz.title}
+                        <Badge variant="outline" className="border-amber-200 text-amber-700 bg-amber-50">In Progress</Badge>
+                      </h3>
+                      <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">You have unsaved progress waiting for you.</p>
+                    </div>
                   </div>
-                  <div>
-                    <h3 className="font-semibold text-amber-900 dark:text-amber-100">Unfinished Quiz: {quiz.title}</h3>
-                    <p className="text-sm text-amber-700 dark:text-amber-300">You have unsaved progress.</p>
-                  </div>
+                  <Link href={`/quiz/start?id=${quiz.id}`}>
+                    <Button className="rounded-xl bg-amber-500 hover:bg-amber-600 text-white shadow-md hover:shadow-amber-500/20">
+                      Resume Now
+                    </Button>
+                  </Link>
                 </div>
-                <Link href={`/quiz/start?id=${quiz.id}`}>
-                  <Button variant="secondary" size="sm" className="bg-amber-100 hover:bg-amber-200 text-amber-800 border-transparent dark:bg-amber-900/30 dark:hover:bg-amber-900/50 dark:text-amber-200">
-                    Resume Quiz
-                  </Button>
-                </Link>
               </div>
             ))}
           </div>
         )}
 
         {/* Stats Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          <Card className="shadow-sm hover:shadow-md transition-shadow">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-gray-500 dark:text-gray-400">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 animate-in fade-in slide-in-from-top-4 duration-700 delay-150">
+
+          <Card className="group relative overflow-hidden rounded-2xl border-0 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 bg-white dark:bg-slate-900 ring-1 ring-gray-100 dark:ring-slate-800">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-50 dark:bg-indigo-900/10 rounded-full -mr-16 -mt-16 transition-transform group-hover:scale-150 duration-500" />
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10">
+              <CardTitle className="text-sm font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                 Total Quizzes
               </CardTitle>
-              <ClipboardList className="h-4 w-4 text-indigo-500" />
+              <div className="p-2 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-lg group-hover:bg-indigo-600 group-hover:text-white transition-colors duration-300">
+                <ClipboardList className="h-5 w-5" />
+              </div>
             </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.totalQuizzes + stats.totalMockQuizzes}</div>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+            <CardContent className="relative z-10">
+              <div className="text-3xl font-black text-gray-900 dark:text-white mb-1">{stats.totalQuizzes + stats.totalMockQuizzes}</div>
+              <p className="text-xs font-semibold text-indigo-600/80 dark:text-indigo-400/80 bg-indigo-50 dark:bg-indigo-900/20 inline-block px-2 py-1 rounded-md">
                 {stats.totalQuizzes} Admin • {stats.totalMockQuizzes} Custom
               </p>
             </CardContent>
           </Card>
 
-          <Card className="shadow-sm hover:shadow-md transition-shadow">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-gray-500 dark:text-gray-400">
+          <Card className="group relative overflow-hidden rounded-2xl border-0 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 bg-white dark:bg-slate-900 ring-1 ring-gray-100 dark:ring-slate-800">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-50 dark:bg-emerald-900/10 rounded-full -mr-16 -mt-16 transition-transform group-hover:scale-150 duration-500" />
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10">
+              <CardTitle className="text-sm font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                 Questions Solved
               </CardTitle>
-              <CheckCircle className="h-4 w-4 text-green-500" />
+              <div className="p-2 bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 rounded-lg group-hover:bg-emerald-600 group-hover:text-white transition-colors duration-300">
+                <CheckCircle className="h-5 w-5" />
+              </div>
             </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.totalQuestions + stats.totalMockQuestions}</div>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                {stats.totalCorrect + stats.totalMockCorrect} Correct Answers
+            <CardContent className="relative z-10">
+              <div className="text-3xl font-black text-gray-900 dark:text-white mb-1">{stats.totalQuestions + stats.totalMockQuestions}</div>
+              <p className="text-xs font-semibold text-emerald-600/80 dark:text-emerald-400/80 bg-emerald-50 dark:bg-emerald-900/20 inline-block px-2 py-1 rounded-md">
+                {Math.round((stats.overallAccuracy / 100) * (stats.totalQuestions + stats.totalMockQuestions))} Correct
               </p>
             </CardContent>
           </Card>
 
-          <Card className="shadow-sm hover:shadow-md transition-shadow">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                Average Accuracy
+          <Card className="group relative overflow-hidden rounded-2xl border-0 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 bg-white dark:bg-slate-900 ring-1 ring-gray-100 dark:ring-slate-800">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-blue-50 dark:bg-blue-900/10 rounded-full -mr-16 -mt-16 transition-transform group-hover:scale-150 duration-500" />
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10">
+              <CardTitle className="text-sm font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                Avg. Accuracy
               </CardTitle>
-              <Target className="h-4 w-4 text-blue-500" />
+              <div className="p-2 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-lg group-hover:bg-blue-600 group-hover:text-white transition-colors duration-300">
+                <Target className="h-5 w-5" />
+              </div>
             </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.overallAccuracy}%</div>
-              <div className="w-full bg-gray-100 dark:bg-gray-800 rounded-full h-1.5 mt-2">
+            <CardContent className="relative z-10">
+              <div className="text-3xl font-black text-gray-900 dark:text-white mb-1">{stats.overallAccuracy}%</div>
+              <div className="w-full bg-gray-100 dark:bg-gray-800 rounded-full h-2 mt-2 overflow-hidden">
                 <div
-                  className="bg-blue-500 h-1.5 rounded-full transition-all"
+                  className="bg-gradient-to-r from-blue-500 to-indigo-500 h-2 rounded-full transition-all duration-1000 ease-out"
                   style={{ width: `${stats.overallAccuracy}%` }}
                 />
               </div>
             </CardContent>
           </Card>
 
-          <Card className="shadow-sm hover:shadow-md transition-shadow">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-gray-500 dark:text-gray-400">
+          <Card className="group relative overflow-hidden rounded-2xl border-0 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 bg-white dark:bg-slate-900 ring-1 ring-gray-100 dark:ring-slate-800">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-amber-50 dark:bg-amber-900/10 rounded-full -mr-16 -mt-16 transition-transform group-hover:scale-150 duration-500" />
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10">
+              <CardTitle className="text-sm font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                 Achievements
               </CardTitle>
-              <Medal className="h-4 w-4 text-yellow-500" />
+              <div className="p-2 bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 rounded-lg group-hover:bg-amber-500 group-hover:text-white transition-colors duration-300">
+                <Medal className="h-5 w-5" />
+              </div>
             </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{badges.length}</div>
-              <div className="flex gap-1 mt-2 overflow-hidden">
-                {badges.length > 0 ? (
-                  badges.slice(0, 5).map((b, i) => (
-                    <div key={i} className="h-1.5 w-1.5 rounded-full bg-yellow-500" title={b.name} />
-                  ))
-                ) : (
-                  <span className="text-xs text-gray-400">No badges yet</span>
-                )}
+            <CardContent className="relative z-10">
+              <div className="text-3xl font-black text-gray-900 dark:text-white mb-1">{badges.length}</div>
+              <div className="flex gap-1 mt-2">
+                {badges.slice(0, 5).map((b, i) => (
+                  <div key={i} className="h-2 w-2 rounded-full bg-amber-400 ring-2 ring-white dark:ring-slate-800" title={b.name} />
+                ))}
               </div>
             </CardContent>
           </Card>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Performance Chart */}
-          <Card className="lg:col-span-2 shadow-sm">
+          <Card className="lg:col-span-2 border-0 shadow-sm ring-1 ring-gray-100 dark:ring-slate-800 rounded-2xl bg-white dark:bg-slate-900 animate-in fade-in slide-in-from-left-4 duration-700 delay-200">
             <CardHeader>
-              <CardTitle className="text-lg font-semibold flex items-center gap-2">
-                <Activity className="h-5 w-5 text-indigo-500" />
-                Performance Trend
-              </CardTitle>
-              <CardDescription>Your score history over the last 10 quizzes</CardDescription>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-lg font-bold flex items-center gap-2">
+                    <Activity className="h-5 w-5 text-indigo-500" />
+                    Performance Trend
+                  </CardTitle>
+                  <CardDescription>Your score consistency over time</CardDescription>
+                </div>
+                <Badge variant="outline" className="hidden sm:flex border-indigo-100 bg-indigo-50 text-indigo-700">Last 10 Quizzes</Badge>
+              </div>
             </CardHeader>
             <CardContent>
-              <div className="h-[300px] w-full">
+              <div className="h-[320px] w-full">
                 {performanceTrendData.length > 0 ? (
                   <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={performanceTrendData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                    <AreaChart data={performanceTrendData} margin={{ top: 20, right: 20, left: 0, bottom: 0 }}>
                       <defs>
                         <linearGradient id="colorScore" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#6366f1" stopOpacity={0.1} />
+                          <stop offset="5%" stopColor="#6366f1" stopOpacity={0.2} />
                           <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
                         </linearGradient>
                       </defs>
                       <XAxis dataKey="name" fontSize={12} tickLine={false} axisLine={false} stroke="#94a3b8" />
                       <YAxis fontSize={12} tickLine={false} axisLine={false} stroke="#94a3b8" domain={[0, 100]} />
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" strokeOpacity={0.5} />
                       <Tooltip
                         contentStyle={{
-                          backgroundColor: 'hsl(var(--card))',
-                          borderRadius: '8px',
-                          border: '1px solid hsl(var(--border))',
-                          boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'
+                          backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                          borderRadius: '12px',
+                          border: 'none',
+                          boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
+                          padding: '12px'
                         }}
+                        itemStyle={{ color: '#4f46e5', fontWeight: 600 }}
                       />
-                      <Area type="monotone" dataKey="score" stroke="#6366f1" strokeWidth={2} fillOpacity={1} fill="url(#colorScore)" />
+                      <Area type="monotone" dataKey="score" stroke="#6366f1" strokeWidth={3} fillOpacity={1} fill="url(#colorScore)" activeDot={{ r: 6, strokeWidth: 0, fill: '#4f46e5' }} />
                     </AreaChart>
                   </ResponsiveContainer>
                 ) : (
-                  <div className="h-full flex flex-col items-center justify-center text-gray-400">
-                    <Activity className="h-10 w-10 mb-2 opacity-20" />
-                    <p>No enough data provided yet</p>
+                  <div className="h-full flex flex-col items-center justify-center text-gray-400 gap-2">
+                    <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-full">
+                      <Activity className="h-8 w-8 opacity-40" />
+                    </div>
+                    <p className="font-medium">No quiz data available yet</p>
                   </div>
                 )}
               </div>
@@ -414,30 +447,38 @@ export default function StudentDashboard() {
           </Card>
 
           {/* Subject Radar */}
-          <Card className="shadow-sm">
+          <Card className="lg:col-span-1 border-0 shadow-sm ring-1 ring-gray-100 dark:ring-slate-800 rounded-2xl bg-white dark:bg-slate-900 animate-in fade-in slide-in-from-right-4 duration-700 delay-200">
             <CardHeader>
-              <CardTitle className="text-lg font-semibold flex items-center gap-2">
+              <CardTitle className="text-lg font-bold flex items-center gap-2">
                 <Target className="h-5 w-5 text-pink-500" />
-                Subject Strengths
+                Subject Mastery
               </CardTitle>
-              <CardDescription>Your accuracy by subject</CardDescription>
+              <CardDescription>Top performing subjects</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="h-[300px] w-full">
+              <div className="h-[320px] w-full">
                 {radarData.length > 0 ? (
                   <ResponsiveContainer width="100%" height="100%">
-                    <RadarChart cx="50%" cy="50%" outerRadius="70%" data={radarData}>
+                    <RadarChart cx="50%" cy="50%" outerRadius="75%" data={radarData}>
                       <PolarGrid stroke="#e2e8f0" />
-                      <PolarAngleAxis dataKey="subject" tick={{ fill: '#64748b', fontSize: 11 }} />
+                      <PolarAngleAxis dataKey="subject" tick={{ fill: '#64748b', fontSize: 11, fontWeight: 500 }} />
                       <PolarRadiusAxis angle={30} domain={[0, 100]} tick={false} axisLine={false} />
                       <Radar name="Accuracy" dataKey="A" stroke="#ec4899" strokeWidth={2} fill="#ec4899" fillOpacity={0.2} />
-                      <Tooltip />
+                      <Tooltip
+                        contentStyle={{
+                          borderRadius: '8px',
+                          border: 'none',
+                          boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+                        }}
+                      />
                     </RadarChart>
                   </ResponsiveContainer>
                 ) : (
-                  <div className="h-full flex flex-col items-center justify-center text-gray-400">
-                    <Target className="h-10 w-10 mb-2 opacity-20" />
-                    <p>Take quizzes to see strengths</p>
+                  <div className="h-full flex flex-col items-center justify-center text-gray-400 gap-2">
+                    <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-full">
+                      <Target className="h-8 w-8 opacity-40" />
+                    </div>
+                    <p className="font-medium">Take quizzes to see analytics</p>
                   </div>
                 )}
               </div>
@@ -446,64 +487,80 @@ export default function StudentDashboard() {
         </div>
 
         {/* Series Section */}
-        <div>
-          <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Your Series Progress</h2>
+        <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-700 delay-300">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+              <BookOpen className="h-5 w-5 text-indigo-500" />
+              Your Series
+            </h2>
+            <Link href="/dashboard/study">
+              <Button variant="ghost" size="sm" className="text-indigo-600 hover:text-indigo-700 dark:text-indigo-400">
+                View All Content <ChevronRight className="h-4 w-4 ml-1" />
+              </Button>
+            </Link>
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {seriesStats.map((series) => (
-              <Card key={series.id} className="shadow-sm hover:border-indigo-200 dark:hover:border-indigo-800 transition-colors">
+              <Card key={series.id} className="group border-0 shadow-sm ring-1 ring-gray-100 dark:ring-slate-800 rounded-2xl bg-white dark:bg-slate-900 hover:shadow-lg hover:ring-indigo-100 dark:hover:ring-indigo-900 transition-all duration-300">
                 <CardHeader className="pb-3">
                   <div className="flex justify-between items-start">
-                    <CardTitle className="text-base font-semibold truncate pr-2" title={series.name}>
+                    <CardTitle className="text-base font-bold truncate pr-2 text-gray-800 dark:text-gray-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors" title={series.name}>
                       {series.name}
                     </CardTitle>
-                    <span className="text-xs bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 px-2 py-1 rounded">
+                    <span className="text-[10px] font-bold uppercase tracking-wider bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 px-2 py-1 rounded-md">
                       {series.year}
                     </span>
                   </div>
-                  <CardDescription>
+                  <CardDescription className="font-medium">
                     {series.attempted} of {series.total} quizzes completed
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="space-y-3">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-500">Average Score</span>
-                      <span className="font-semibold text-gray-900 dark:text-gray-100">{series.accuracy}%</span>
+                  <div className="space-y-4">
+                    <div className="flex justify-between text-sm items-end">
+                      <span className="text-gray-500 font-medium">Avg Score</span>
+                      <span className="text-2xl font-bold text-gray-900 dark:text-white">{series.accuracy}<span className="text-sm text-gray-400 font-normal">%</span></span>
                     </div>
-                    <div className="w-full bg-gray-100 dark:bg-gray-800 rounded-full h-2">
+                    <div className="w-full bg-gray-100 dark:bg-gray-800 rounded-full h-2.5 overflow-hidden">
                       <div
-                        className="bg-indigo-600 h-2 rounded-full transition-all"
+                        className="bg-indigo-500 h-full rounded-full transition-all group-hover:bg-indigo-600"
                         style={{ width: `${series.progress}%` }}
                       />
                     </div>
                     <Button
-                      variant="ghost"
-                      className="w-full justify-start text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 p-0 h-auto font-medium"
+                      variant="outline"
+                      className="w-full justify-center group-hover:bg-indigo-50 group-hover:text-indigo-700 group-hover:border-indigo-200 dark:group-hover:bg-indigo-900/30 dark:group-hover:text-indigo-300 dark:group-hover:border-indigo-800 transition-all rounded-xl"
                       onClick={() => setSelectedScheduleSeries({ id: series.id, name: series.name })}
                     >
                       <CalendarDays className="h-4 w-4 mr-2" />
-                      View Schedule
+                      Check Schedule
                     </Button>
                   </div>
                 </CardContent>
               </Card>
             ))}
             {seriesStats.length === 0 && (
-              <div className="col-span-full py-12 text-center bg-gray-50 dark:bg-gray-900/50 rounded-xl border-2 border-dashed border-gray-200 dark:border-gray-800">
-                <GraduationCap className="h-10 w-10 mx-auto text-gray-300 mb-2" />
-                <p className="text-gray-500 font-medium">No series enrollments found</p>
+              <div className="col-span-full py-16 text-center bg-white dark:bg-slate-900/50 rounded-2xl border border-dashed border-gray-200 dark:border-gray-800">
+                <div className="inline-flex p-4 bg-gray-50 dark:bg-gray-800 rounded-full mb-4">
+                  <GraduationCap className="h-8 w-8 text-gray-400" />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">No Series Enrolled</h3>
+                <p className="text-gray-500 mt-1 mb-4">Enroll in a series to start tracking your progress</p>
+                <Link href="/pricing">
+                  <Button>Browse Packages</Button>
+                </Link>
               </div>
             )}
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Accuracy Breakdown */}
-          <Card className="lg:col-span-1 shadow-sm">
+          <Card className="lg:col-span-1 border-0 shadow-sm ring-1 ring-gray-100 dark:ring-slate-800 rounded-2xl bg-white dark:bg-slate-900">
             <CardHeader>
-              <CardTitle className="text-lg font-semibold flex items-center gap-2">
-                <CheckCircle className="h-5 w-5 text-green-500" />
-                Accuracy by Subject
+              <CardTitle className="text-lg font-bold flex items-center gap-2">
+                <CheckCircle className="h-5 w-5 text-emerald-500" />
+                Accuracy Split
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -513,16 +570,19 @@ export default function StudentDashboard() {
                     <BarChart data={barChartData} layout="vertical" margin={{ top: 5, right: 30, left: 40, bottom: 5 }}>
                       <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e2e8f0" />
                       <XAxis type="number" hide />
-                      <YAxis dataKey="name" type="category" width={100} tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} />
-                      <Tooltip cursor={{ fill: '#f1f5f9' }} />
-                      <Bar dataKey="correct" name="Correct" stackId="a" fill="#22c55e" radius={[0, 0, 0, 0]} barSize={20} />
-                      <Bar dataKey="wrong" name="Wrong" stackId="a" fill="#ef4444" radius={[0, 4, 4, 0]} barSize={20} />
-                      <Legend wrapperStyle={{ fontSize: '12px' }} />
+                      <YAxis dataKey="name" type="category" width={100} tick={{ fontSize: 11, fill: '#64748b', fontWeight: 600 }} axisLine={false} tickLine={false} />
+                      <Tooltip cursor={{ fill: '#f8fafc' }} contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }} />
+                      <Bar dataKey="correct" name="Correct" stackId="a" fill="#10b981" radius={[0, 0, 0, 0]} barSize={24} />
+                      <Bar dataKey="wrong" name="Wrong" stackId="a" fill="#ef4444" radius={[0, 6, 6, 0]} barSize={24} />
+                      <Legend wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }} />
                     </BarChart>
                   </ResponsiveContainer>
                 ) : (
-                  <div className="h-full flex items-center justify-center text-gray-400">
-                    <p>No data available</p>
+                  <div className="h-full flex flex-col items-center justify-center text-gray-400 gap-2">
+                    <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-full">
+                      <LayoutDashboard className="h-6 w-6 opacity-40" />
+                    </div>
+                    <p className="font-medium text-sm">No data available</p>
                   </div>
                 )}
               </div>
@@ -530,44 +590,43 @@ export default function StudentDashboard() {
           </Card>
 
           {/* Recent Activity */}
-          <Card className="lg:col-span-2 shadow-sm">
-            <CardHeader>
-              <CardTitle className="text-lg font-semibold flex items-center gap-2">
-                <Clock className="h-5 w-5 text-gray-500" />
+          <Card className="lg:col-span-2 border-0 shadow-sm ring-1 ring-gray-100 dark:ring-slate-800 rounded-2xl bg-white dark:bg-slate-900">
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle className="text-lg font-bold flex items-center gap-2">
+                <Clock className="h-5 w-5 text-indigo-500" />
                 Recent Activity
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
+              <div className="space-y-2">
                 {recentQuizzes.length > 0 ? (
                   recentQuizzes.map((q, i) => (
-                    <div key={i} className="flex items-center justify-between p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors border border-transparent hover:border-gray-100 dark:hover:border-gray-800">
+                    <div key={i} className="group flex items-center justify-between p-3 rounded-xl hover:bg-gray-50 dark:hover:bg-slate-800/50 transition-all duration-200 cursor-pointer border border-transparent hover:border-gray-200 dark:hover:border-slate-700">
                       <div className="flex items-center gap-4">
-                        <div className={`p-2.5 rounded-lg ${q.quizType === 'user' ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/20' : 'bg-indigo-50 text-indigo-600 dark:bg-indigo-900/20'}`}>
+                        <div className={`p-3 rounded-xl transition-colors ${q.quizType === 'user' ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400 group-hover:bg-blue-100' : 'bg-indigo-50 text-indigo-600 dark:bg-indigo-900/20 dark:text-indigo-400 group-hover:bg-indigo-100'}`}>
                           {q.quizType === 'user' ? <ClipboardList className="h-5 w-5" /> : <Trophy className="h-5 w-5" />}
                         </div>
                         <div>
-                          <h4 className="font-medium text-sm text-gray-900 dark:text-white truncate max-w-[200px] sm:max-w-xs">{q.title || `Quiz #${q.attemptNumber}`}</h4>
-                          <p className="text-xs text-gray-500 flex items-center gap-2">
-                            {q.submittedAt?.toDate ? q.submittedAt.toDate().toLocaleDateString() : 'Just now'}
-                            <span>•</span>
-                            <span className={q.score / q.total >= 0.7 ? 'text-green-600 font-medium' : 'text-amber-600 font-medium'}>
-                              {Math.round((q.score / q.total) * 100)}% Score
+                          <h4 className="font-bold text-sm text-gray-900 dark:text-white truncate max-w-[180px] sm:max-w-xs">{q.title || `Quiz #${q.attemptNumber}`}</h4>
+                          <div className="flex items-center gap-3 mt-1">
+                            <span className="text-xs text-gray-500 font-medium">{q.submittedAt?.toDate ? q.submittedAt.toDate().toLocaleDateString() : 'Just now'}</span>
+                            <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${q.score / q.total >= 0.7 ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'}`}>
+                              {Math.round((q.score / q.total) * 100)}%
                             </span>
-                          </p>
+                          </div>
                         </div>
                       </div>
                       <Link href={`/admin/students/results`}>
-                        <Button variant="ghost" size="sm" className="hidden sm:flex" >
-                          View
-                          <ChevronRight className="h-4 w-4 ml-1" />
-                        </Button>
+                        <div className="p-2 rounded-full text-gray-400 hover:bg-white hover:text-indigo-600 hover:shadow-sm transition-all">
+                          <ChevronRight className="h-5 w-5" />
+                        </div>
                       </Link>
                     </div>
                   ))
                 ) : (
-                  <div className="text-center py-12 text-gray-400">
-                    <p>No recent activity</p>
+                  <div className="text-center py-16 text-gray-400">
+                    <HistoryIcon className="h-10 w-10 mx-auto mb-2 opacity-30" />
+                    <p className="font-semibold">No recent activity</p>
                   </div>
                 )}
               </div>
@@ -587,4 +646,25 @@ export default function StudentDashboard() {
       )}
     </div>
   );
+}
+
+function HistoryIcon(props: any) {
+  return (
+    <svg
+      {...props}
+      xmlns="http://www.w3.org/2000/svg"
+      width="24"
+      height="24"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 12" />
+      <path d="M3 3v9h9" />
+      <path d="M12 7v5l4 2" />
+    </svg>
+  )
 }
