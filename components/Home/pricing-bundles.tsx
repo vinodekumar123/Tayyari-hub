@@ -168,6 +168,28 @@ const PricingBundles = () => {
                                                 <div className="font-bold text-xl text-slate-800 dark:text-white">Rs. 1050</div>
                                             </div>
                                         </div>
+
+                                        {/* FLP Series for Freshers */}
+                                        <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-lg transition-all h-full flex flex-col justify-between group">
+                                            <div>
+                                                <div className="flex justify-between items-start mb-2">
+                                                    <span className="inline-block px-2 py-0.5 rounded-md text-[10px] font-bold bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400">
+                                                        Starts 01 July
+                                                    </span>
+                                                </div>
+                                                <div className="flex items-center gap-3 mb-3">
+                                                    <div className="p-3 bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 rounded-2xl flex-shrink-0 group-hover:scale-110 transition-transform"><Trophy className="w-5 h-5" /></div>
+                                                    <div>
+                                                        <h4 className="font-bold text-lg text-slate-900 dark:text-white">FLP Series</h4>
+                                                        <div className="text-slate-500 dark:text-slate-400 text-xs text-balance">26 Full-Length Papers & Mocks</div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div className="self-end text-right">
+                                                <div className="text-xs text-slate-400 line-through">Rs. 2000</div>
+                                                <div className="font-bold text-xl text-slate-800 dark:text-white">Rs. 1400</div>
+                                            </div>
+                                        </div>
                                     </div>
                                 </motion.div>
                             ) : (
@@ -344,6 +366,7 @@ const PricingBundles = () => {
                                         <li className="flex gap-3 text-sm text-slate-600 dark:text-slate-400"><CheckCircle2 className="w-5 h-5 text-green-500 flex-shrink-0" /> All Chapter-wise (Bio,Chem,Phy)</li>
                                         <li className="flex gap-3 text-sm text-slate-600 dark:text-slate-400"><CheckCircle2 className="w-5 h-5 text-green-500 flex-shrink-0" /> English + Logical Reasoning</li>
                                         <li className="flex gap-3 text-sm text-slate-600 dark:text-slate-400"><CheckCircle2 className="w-5 h-5 text-green-500 flex-shrink-0" /> 12 General Tests</li>
+                                        <li className="flex gap-3 text-sm text-slate-600 dark:text-slate-400"><CheckCircle2 className="w-5 h-5 text-green-500 flex-shrink-0" /> 26 FLPs & Mocks</li>
                                         <li className="flex gap-3 text-sm font-bold text-blue-600 bg-blue-50 dark:bg-blue-900/20 p-2 rounded-lg border border-blue-100 dark:border-blue-800"><CheckCircle2 className="w-5 h-5 text-blue-600 dark:text-blue-500 flex-shrink-0" /> Make your Own Test from 20,000 MCQS worth Rs.1500</li>
                                     </ul>
                                 ) : (
