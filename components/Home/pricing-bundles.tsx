@@ -344,6 +344,7 @@ const PricingBundles = () => {
                                         <li className="flex gap-3 text-sm text-slate-600 dark:text-slate-400"><CheckCircle2 className="w-5 h-5 text-green-500 flex-shrink-0" /> All Chapter-wise (Bio,Chem,Phy)</li>
                                         <li className="flex gap-3 text-sm text-slate-600 dark:text-slate-400"><CheckCircle2 className="w-5 h-5 text-green-500 flex-shrink-0" /> English + Logical Reasoning</li>
                                         <li className="flex gap-3 text-sm text-slate-600 dark:text-slate-400"><CheckCircle2 className="w-5 h-5 text-green-500 flex-shrink-0" /> 12 General Tests</li>
+                                        <li className="flex gap-3 text-sm text-slate-600 dark:text-slate-400"><CheckCircle2 className="w-5 h-5 text-green-500 flex-shrink-0" /> FLP Series (26 FLPs & Mocks)</li>
                                         <li className="flex gap-3 text-sm font-bold text-blue-600 bg-blue-50 dark:bg-blue-900/20 p-2 rounded-lg border border-blue-100 dark:border-blue-800"><CheckCircle2 className="w-5 h-5 text-blue-600 dark:text-blue-500 flex-shrink-0" /> Make your Own Test from 20,000 MCQS worth Rs.1500</li>
                                     </ul>
                                 ) : (
