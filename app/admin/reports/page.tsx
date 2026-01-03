@@ -33,8 +33,6 @@ import { format, subDays, isWithinInterval, startOfDay, endOfDay } from 'date-fn
 import { toast } from 'sonner';
 import { glassmorphism, brandColors } from '@/lib/design-tokens';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend } from 'recharts';
-import RichTextEditor from '@/components/RichTextEditor';
-import parse from 'html-react-parser';
 
 interface Report {
     id: string;
@@ -708,7 +706,7 @@ export default function AdminReportsPage() {
                                                 </Badge>
                                             </TableCell>
                                             <TableCell className="max-w-[200px]">
-                                                <div className="font-medium text-gray-900 dark:text-gray-200 truncate">{report.issue.replace(/<[^>]+>/g, '')}</div>
+                                                <div className="font-medium text-gray-900 dark:text-gray-200 truncate">{report.issue}</div>
                                                 <div className="text-xs text-muted-foreground truncate">{report.studentName}</div>
                                             </TableCell>
                                             <TableCell className="max-w-[250px] truncate text-muted-foreground" title={report.questionText.replace(/<[^>]+>/g, '')}>
@@ -815,21 +813,17 @@ export default function AdminReportsPage() {
                                                 <span>Reported by: {selectedReport.studentName}</span>
                                                 <span>{selectedReport.createdAt?.seconds ? format(new Date(selectedReport.createdAt.seconds * 1000), 'MMM d, p') : ''}</span>
                                             </div>
-                                            <div className="text-red-900 dark:text-red-200 text-sm font-medium prose dark:prose-invert max-w-none">
-                                                {parse(selectedReport.issue)}
-                                            </div>
+                                            <p className="text-red-900 dark:text-red-200 text-sm font-medium">&quot;{selectedReport.issue}&quot;</p>
                                         </div>
 
                                         <div className="space-y-2 pt-4">
                                             <Label>Admin Response</Label>
-                                            <div className="mb-4">
-                                                <RichTextEditor
-                                                    value={replyText}
-                                                    onChange={setReplyText}
-                                                    placeholder="Write a message to the student explaining the resolution..."
-                                                    className="min-h-[150px]"
-                                                />
-                                            </div>
+                                            <Textarea
+                                                value={replyText}
+                                                onChange={e => setReplyText(e.target.value)}
+                                                placeholder="Write a message to the student explaining the resolution..."
+                                                className="min-h-[150px] resize-none"
+                                            />
                                         </div>
                                     </div>
 

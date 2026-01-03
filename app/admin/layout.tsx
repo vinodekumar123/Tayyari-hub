@@ -54,8 +54,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               // Include enrollment and plan so whitelisted student pages can filter correctly
               course: userData?.course || null,
               plan: userData?.plan || 'free',
-              superadmin: userData?.superadmin, // Added superadmin field
-              role: (userData?.admin === true || userData?.admin === 'true') ? 'admin' as const : 'student' as const,
+              superadmin: userData?.superadmin || userData?.role === 'superadmin',
+              role: (userData?.role as any) || (userData?.admin ? 'admin' : 'student'),
               photoURL: firebaseUser.photoURL,
               stats: userData?.stats,
             };
@@ -89,14 +89,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 fullName: userData?.fullName || '',
                 phone: userData?.phone,
                 admin: userData?.admin,
-                superadmin: userData?.superadmin,
+                superadmin: userData?.superadmin || userData?.role === 'superadmin', // Ensure superadmin is set
                 course: userData?.course || null,
-                plan: userData?.plan || (isAdmin ? 'admin' : 'teacher'),
-                role: (isAdmin ? 'admin' : (isTeacher ? 'teacher' : 'student')) as any,
+                plan: userData?.plan || (isAdmin ? 'admin' : (isTeacher ? 'teacher' : 'student')),
+                role: (userData?.role as any) || (isAdmin ? 'admin' : (isTeacher ? 'teacher' : 'student')),
                 photoURL: firebaseUser.photoURL,
                 stats: userData?.stats,
               };
-              console.log('✅ Admin Layout: Setting user in Zustand store', { role: userForStore.role });
+              console.log('✅ Admin Layout: Setting user in Zustand store', { role: userForStore.role, superadmin: userForStore.superadmin });
               setUser(userForStore);
             } else {
               console.warn('⛔ Admin Layout: Access denied for user', firebaseUser.uid);

@@ -28,7 +28,6 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { toast } from 'sonner';
-import RichTextEditor from '@/components/RichTextEditor';
 
 interface Question {
   id: string;
@@ -297,14 +296,11 @@ const ResultPageContent: React.FC = () => {
                   <div dangerouslySetInnerHTML={{ __html: selectedQuestionForReport.questionText }} />
                 )}
               </div>
-              <div className="mb-4">
-                <RichTextEditor
-                  value={reportIssue}
-                  onChange={setReportIssue}
-                  placeholder="Describe the mistake... (You can paste images or use the toolbar)"
-                  className="min-h-[200px]"
-                />
-              </div>
+              <Textarea
+                placeholder="Describe the mistake..."
+                value={reportIssue}
+                onChange={(e) => setReportIssue(e.target.value)}
+              />
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setReportModalOpen(false)}>Cancel</Button>

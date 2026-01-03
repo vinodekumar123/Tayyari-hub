@@ -72,11 +72,14 @@ export default function OnboardingPage() {
             'district',
             'course',
           ];
-          const incomplete = required.some((field) => !data[field]);
+          const isProfileComplete = required.every(field => data[field] && data[field].trim() !== '');
+          const role = data.role;
 
-          if (data.admin === true) {
+          if (role === 'admin' || role === 'superadmin' || data.admin === true) {
             router.push('/dashboard/admin');
-          } else if (!incomplete) {
+          } else if (role === 'teacher' || data.teacher === true) {
+            router.push('/dashboard/teacher');
+          } else if (isProfileComplete) {
             router.push('/dashboard/student');
           } else {
             setForm((prev) => ({
@@ -147,9 +150,12 @@ export default function OnboardingPage() {
 
       const userSnap = await getDoc(doc(db, 'users', userId));
       const data = userSnap.exists() ? userSnap.data() : {};
+      const role = data.role;
 
-      if (data.admin) {
+      if (data.admin || role === 'admin' || role === 'superadmin') {
         router.push('/dashboard/admin');
+      } else if (role === 'teacher' || data.teacher) {
+        router.push('/dashboard/teacher');
       } else {
         router.push('/dashboard/student');
       }

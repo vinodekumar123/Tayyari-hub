@@ -2,23 +2,20 @@
 
 import { useState, useEffect } from 'react';
 import { db, auth } from '@/app/firebase';
-import { collection, query, orderBy, limit, getDocs, addDoc, serverTimestamp, where, updateDoc, doc, arrayUnion, arrayRemove, increment, startAfter } from 'firebase/firestore';
+import { collection, query, orderBy, limit, getDocs, addDoc, serverTimestamp, where, updateDoc, doc, arrayUnion, arrayRemove, increment } from 'firebase/firestore';
 import { ForumPost, Subject } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import RichTextEditor from '@/components/RichTextEditor';
-import parse from 'html-react-parser';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { MessageSquare, ThumbsUp, ThumbsDown, Search, Plus, Filter, Tag, CheckCircle, Lock, AlertCircle } from 'lucide-react';
+import { MessageSquare, ThumbsUp, Search, Plus, Filter, Tag, CheckCircle } from 'lucide-react';
 import { useUserStore } from '@/stores/useUserStore';
 import Link from 'next/link';
 import { formatDistanceToNow } from 'date-fns';
-import { awardPoints, POINTS } from '@/lib/community';
 
 const PROVINCES = [
     'Punjab', 'Sindh', 'KPK', 'Balochistan',
@@ -32,11 +29,6 @@ export default function CommunityPage() {
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
     const [subjectFilter, setSubjectFilter] = useState('all');
-
-    // Pagination State
-    const [lastDoc, setLastDoc] = useState<any>(null);
-    const [hasMore, setHasMore] = useState(true);
-    const POSTS_PER_PAGE = 20;
 
     // New Post Form
     const [isAsking, setAsking] = useState(false);
@@ -56,54 +48,18 @@ export default function CommunityPage() {
     const fetchData = async () => {
         try {
             setLoading(true);
-            const postsQuery = query(
-                collection(db, 'forum_posts'),
-                orderBy('createdAt', 'desc'),
-                limit(POSTS_PER_PAGE)
-            );
-
             const [postsSnap, subjectsSnap] = await Promise.all([
-                getDocs(postsQuery),
+                getDocs(query(collection(db, 'forum_posts'), orderBy('createdAt', 'desc'), limit(50))),
                 getDocs(collection(db, 'subjects'))
             ]);
 
-            const newPosts = postsSnap.docs
-                .map(d => ({ id: d.id, ...d.data() } as ForumPost))
-                .filter(p => p.status !== 'deleted');
-            setPosts(newPosts);
-            setLastDoc(postsSnap.docs[postsSnap.docs.length - 1]);
-            setHasMore(postsSnap.docs.length === POSTS_PER_PAGE);
-
+            setPosts(postsSnap.docs.map(d => ({ id: d.id, ...d.data() } as ForumPost)));
             setSubjects(subjectsSnap.docs.map(d => ({ id: d.id, ...d.data() } as Subject)));
         } catch (error) {
             console.error(error);
             toast.error('Failed to load community feed');
         } finally {
             setLoading(false);
-        }
-    };
-
-    const loadMorePosts = async () => {
-        if (!lastDoc) return;
-
-        try {
-            const nextQuery = query(
-                collection(db, 'forum_posts'),
-                orderBy('createdAt', 'desc'),
-                startAfter(lastDoc),
-                limit(POSTS_PER_PAGE)
-            );
-
-            const snap = await getDocs(nextQuery);
-            const newPosts = snap.docs
-                .map(d => ({ id: d.id, ...d.data() } as ForumPost))
-                .filter(p => p.status !== 'deleted');
-
-            setPosts(prev => [...prev, ...newPosts]);
-            setLastDoc(snap.docs[snap.docs.length - 1]);
-            setHasMore(snap.docs.length === POSTS_PER_PAGE);
-        } catch (error) {
-            toast.error("Could not load more posts");
         }
     };
 
@@ -115,13 +71,7 @@ export default function CommunityPage() {
 
         try {
             setAsking(true);
-
-            // Determine Role
-            let role = 'student';
-            if (user?.role === 'admin' || user?.admin) role = 'admin';
-            else if (user?.role === 'teacher') role = 'teacher';
-
-            const newPost: any = {
+            await addDoc(collection(db, 'forum_posts'), {
                 title: newTitle,
                 content: newContent,
                 subject: newSubject,
@@ -129,16 +79,14 @@ export default function CommunityPage() {
                 chapter: newChapter,
                 tags: [],
                 authorId: user?.uid,
-                authorName: user?.fullName || 'Student',
-                authorRole: role,
+                authorName: user?.fullName || 'Student', // Fallback
+                authorRole: 'student', // In real app, check claims
                 upvotes: 0,
                 upvotedBy: [],
                 replyCount: 0,
                 isSolved: false,
                 createdAt: serverTimestamp()
-            };
-
-            const docRef = await addDoc(collection(db, 'forum_posts'), newPost);
+            });
 
             toast.success('Question Posted!');
             setNewTitle('');
@@ -146,13 +94,8 @@ export default function CommunityPage() {
             setNewSubject('');
             setNewProvince('');
             setNewChapter('');
-
-            // Optimistically Prepend
-            setPosts(prev => [{ ...newPost, id: docRef.id, createdAt: { toDate: () => new Date() } }, ...prev]);
-
-            if (user?.uid) {
-                await awardPoints(user.uid, POINTS.CREATE_POST, 'Created Question');
-            }
+            // Optimistically add to list or refetch
+            fetchData();
         } catch (error) {
             toast.error('Failed to post');
         } finally {
@@ -160,67 +103,32 @@ export default function CommunityPage() {
         }
     };
 
-    const handleVote = async (postId: string, currentUpvotedBy: string[] = [], currentDownvotedBy: string[] = [], voteType: 'up' | 'down') => {
-        if (!user) {
-            toast.error("Please login to vote");
-            return;
-        }
-        const uid = user.uid;
-        const isUpvoted = currentUpvotedBy.includes(uid);
-        const isDownvoted = currentDownvotedBy.includes(uid);
-
+    const handleUpvote = async (postId: string, currentUpvotedBy: string[]) => {
+        if (!user) return;
+        const isUpvoted = currentUpvotedBy.includes(user.uid);
         const docRef = doc(db, 'forum_posts', postId);
 
         try {
-            if (voteType === 'up') {
-                if (isUpvoted) {
-                    await updateDoc(docRef, { upvotes: increment(-1), upvotedBy: arrayRemove(uid) });
-                    setPosts(prev => prev.map(p => p.id === postId ? { ...p, upvotes: Math.max(0, p.upvotes - 1), upvotedBy: p.upvotedBy.filter(u => u !== uid) } : p));
-                } else {
-                    const updates: any = { upvotes: increment(1), upvotedBy: arrayUnion(uid) };
-                    if (isDownvoted) {
-                        updates.downvotes = increment(-1);
-                        updates.downvotedBy = arrayRemove(uid);
-                    }
-                    await updateDoc(docRef, updates);
-                    setPosts(prev => prev.map(p => p.id === postId ? {
-                        ...p,
-                        upvotes: p.upvotes + 1,
-                        upvotedBy: [...p.upvotedBy, uid],
-                        downvotes: isDownvoted ? Math.max(0, (p.downvotes || 0) - 1) : (p.downvotes || 0),
-                        downvotedBy: isDownvoted ? (p.downvotedBy || []).filter(u => u !== uid) : (p.downvotedBy || [])
-                    } : p));
-                }
-            } else { // Downvote
-                if (isDownvoted) {
-                    await updateDoc(docRef, { downvotes: increment(-1), downvotedBy: arrayRemove(uid) });
-                    setPosts(prev => prev.map(p => p.id === postId ? { ...p, downvotes: Math.max(0, (p.downvotes || 0) - 1), downvotedBy: (p.downvotedBy || []).filter(u => u !== uid) } : p));
-                } else {
-                    const updates: any = { downvotes: increment(1), downvotedBy: arrayUnion(uid) };
-                    if (isUpvoted) {
-                        updates.upvotes = increment(-1);
-                        updates.upvotedBy = arrayRemove(uid);
-                    }
-                    await updateDoc(docRef, updates);
-                    setPosts(prev => prev.map(p => p.id === postId ? {
-                        ...p,
-                        downvotes: (p.downvotes || 0) + 1,
-                        downvotedBy: [...(p.downvotedBy || []), uid],
-                        upvotes: isUpvoted ? Math.max(0, p.upvotes - 1) : p.upvotes,
-                        upvotedBy: isUpvoted ? p.upvotedBy.filter(u => u !== uid) : p.upvotedBy
-                    } : p));
-                }
+            if (isUpvoted) {
+                await updateDoc(docRef, {
+                    upvotes: increment(-1),
+                    upvotedBy: arrayRemove(user.uid)
+                });
+                setPosts(prev => prev.map(p => p.id === postId ? { ...p, upvotes: p.upvotes - 1, upvotedBy: p.upvotedBy.filter(u => u !== user.uid) } : p));
+            } else {
+                await updateDoc(docRef, {
+                    upvotes: increment(1),
+                    upvotedBy: arrayUnion(user.uid)
+                });
+                setPosts(prev => prev.map(p => p.id === postId ? { ...p, upvotes: p.upvotes + 1, upvotedBy: [...p.upvotedBy, user.uid] } : p));
             }
         } catch (error) {
-            console.error(error);
             toast.error('Action failed');
         }
     };
 
     const filteredPosts = posts.filter(p => {
-        // Strip HTML tags for search
-        const contentText = p.content.replace(/<[^>]*>?/gm, '');
-        const matchSearch = p.title.toLowerCase().includes(search.toLowerCase()) || contentText.toLowerCase().includes(search.toLowerCase());
+        const matchSearch = p.title.toLowerCase().includes(search.toLowerCase()) || p.content.toLowerCase().includes(search.toLowerCase());
         const matchSubject = subjectFilter === 'all' || p.subject === subjectFilter;
         return matchSearch && matchSubject;
     });
@@ -284,20 +192,15 @@ export default function CommunityPage() {
 
                             <div className="space-y-2">
                                 <label className="text-sm font-medium">Details</label>
-                                <RichTextEditor
-                                    value={newContent}
-                                    onChange={setNewContent}
-                                    placeholder="Describe your doubt in detail..."
-                                />
-                                <Button className="w-full" onClick={handleCreatePost} disabled={isAsking}>
-                                    {isAsking ? 'Posting...' : 'Post Question'}
-                                </Button>
+                                <Textarea value={newContent} onChange={e => setNewContent(e.target.value)} placeholder="Describe your doubt in detail..." className="min-h-[150px]" />
                             </div>
+                            <Button className="w-full" onClick={handleCreatePost} disabled={isAsking}>
+                                {isAsking ? 'Posting...' : 'Post Question'}
+                            </Button>
                         </div>
                     </DialogContent>
                 </Dialog>
             </div>
-
 
             {/* Filters and Search */}
             <div className="flex flex-col sm:flex-row gap-4 bg-white dark:bg-gray-900 p-4 rounded-xl border shadow-sm">
@@ -331,24 +234,16 @@ export default function CommunityPage() {
                         <Card className="hover:border-purple-500/50 hover:shadow-lg transition-all duration-300">
                             <CardContent className="p-6">
                                 <div className="flex items-start gap-4">
-                                    {/* Upvote/Downvote Box */}
-                                    <div className="flex flex-col items-center gap-1 min-w-[40px]">
+                                    {/* Upvote Box */}
+                                    <div className="flex flex-col items-center gap-1 min-w-[50px]">
                                         <Button
                                             variant="ghost"
                                             size="sm"
-                                            className={`h-8 w-8 p-0 rounded-full hover:bg-purple-50 hover:text-purple-600 ${post.upvotedBy?.includes(user?.uid || '') ? 'text-purple-600 bg-purple-50' : 'text-muted-foreground'}`}
-                                            onClick={(e) => { e.preventDefault(); handleVote(post.id, post.upvotedBy, post.downvotedBy, 'up'); }}
+                                            className={`h-auto p-2 flex flex-col gap-1 rounded-xl hover:bg-purple-50 hover:text-purple-600 ${post.upvotedBy?.includes(user?.uid || '') ? 'text-purple-600 bg-purple-50' : 'text-muted-foreground'}`}
+                                            onClick={(e) => { e.preventDefault(); handleUpvote(post.id, post.upvotedBy || []); }}
                                         >
-                                            <ThumbsUp className={`h-4 w-4 ${post.upvotedBy?.includes(user?.uid || '') ? 'fill-current' : ''}`} />
-                                        </Button>
-                                        <span className="font-bold text-sm text-foreground">{(post.upvotes || 0) - (post.downvotes || 0)}</span>
-                                        <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            className={`h-8 w-8 p-0 rounded-full hover:bg-red-50 hover:text-red-600 ${post.downvotedBy?.includes(user?.uid || '') ? 'text-red-600 bg-red-50' : 'text-muted-foreground'}`}
-                                            onClick={(e) => { e.preventDefault(); handleVote(post.id, post.upvotedBy, post.downvotedBy, 'down'); }}
-                                        >
-                                            <ThumbsDown className={`h-4 w-4 ${post.downvotedBy?.includes(user?.uid || '') ? 'fill-current' : ''}`} />
+                                            <ThumbsUp className={`h-5 w-5 ${post.upvotedBy?.includes(user?.uid || '') ? 'fill-current' : ''}`} />
+                                            <span className="font-bold text-sm">{post.upvotes || 0}</span>
                                         </Button>
                                     </div>
 
@@ -356,29 +251,24 @@ export default function CommunityPage() {
                                     <div className="flex-1 min-w-0">
                                         <div className="flex items-center gap-2 mb-2">
                                             <Badge variant="outline" className="text-xs font-normal bg-gray-50 dark:bg-gray-800">{post.subject}</Badge>
-                                            <span className="text-xs text-muted-foreground">• Posted by {(post.authorName || 'User')}</span>
+                                            <span className="text-xs text-muted-foreground">• Posted by {post.authorName}</span>
                                             <span className="text-xs text-muted-foreground">• {post.createdAt?.toDate ? formatDistanceToNow(post.createdAt.toDate()) + ' ago' : 'Just now'}</span>
                                         </div>
                                         <h3 className="text-lg font-bold text-foreground mb-2 group-hover:text-purple-600 transition-colors line-clamp-1">
                                             {post.title}
                                         </h3>
-                                        <div className="text-muted-foreground text-sm line-clamp-2 mb-4 prose dark:prose-invert max-w-none">
-                                            {parse(post.content)}
-                                        </div>
+                                        <p className="text-muted-foreground text-sm line-clamp-2 mb-4">
+                                            {post.content}
+                                        </p>
 
                                         <div className="flex items-center gap-4 text-xs font-medium text-muted-foreground">
                                             <div className="flex items-center gap-1 hover:text-foreground">
                                                 <MessageSquare className="h-4 w-4" />
                                                 {post.replyCount || 0} Answers
                                             </div>
-                                            {(post.isSolved || post.status === 'answered') && (
+                                            {post.isSolved && (
                                                 <div className="flex items-center gap-1 text-green-600 bg-green-50 px-2 py-0.5 rounded-full">
                                                     <CheckCircle className="h-3 w-3" /> Solved
-                                                </div>
-                                            )}
-                                            {post.status === 'closed' && (
-                                                <div className="flex items-center gap-1 text-gray-600 bg-gray-100 px-2 py-0.5 rounded-full">
-                                                    <Lock className="h-3 w-3" /> Closed
                                                 </div>
                                             )}
                                         </div>
@@ -394,14 +284,6 @@ export default function CommunityPage() {
                         <MessageSquare className="h-16 w-16 mx-auto mb-4 opacity-20" />
                         <h3 className="text-xl font-bold">No questions found</h3>
                         <p>Be the first to ask a doubt!</p>
-                    </div>
-                )}
-
-                {hasMore && !search && (
-                    <div className="flex justify-center pt-4 pb-8">
-                        <Button variant="outline" onClick={loadMorePosts}>
-                            Load More Questions
-                        </Button>
                     </div>
                 )}
             </div>

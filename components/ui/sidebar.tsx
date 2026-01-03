@@ -6,7 +6,7 @@ import Link from 'next/link';
 import {
   BookOpen, Users, Trophy, BarChart3, Settings, Plus,
   Database, Home, ChevronDown, ChevronRight, LogOut,
-  ClipboardList, UserCircle, Menu, X, FileBarChart, Flag, Calendar
+  ClipboardList, UserCircle, Menu, X, FileBarChart, Flag
 } from 'lucide-react';
 import logo from "../../app/assets/logo.png";
 import Image from "next/image";
@@ -47,7 +47,7 @@ export function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
 
-  const [expandedSections, setExpandedSections] = useState<string[]>(['main', 'content', 'users', 'settings', 'student_dashboard', 'student_learning', 'student_practice', 'student_performance', 'student_community', 'student_account']);
+  const [expandedSections, setExpandedSections] = useState<string[]>(['main', 'content', 'users', 'settings', 'student']);
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [showSignOutDialog, setShowSignOutDialog] = useState(false);
@@ -150,50 +150,20 @@ export function Sidebar() {
 
   const studentMenu: Section[] = [
     {
-      section: 'student_dashboard',
-      title: 'Dashboard',
+      section: 'student',
+      title: 'Student Panel',
       items: [
         { icon: Home, label: 'Dashboard', href: '/dashboard/student' },
-      ],
-    },
-    {
-      section: 'student_learning',
-      title: 'Learning Resources',
-      items: [
-        { icon: BookOpen, label: 'Study Material', href: '/dashboard/study' },
-        { icon: Calendar, label: 'Schedule', href: '/dashboard/student/schedule' },
-        { icon: BookOpen, label: 'Flashcards', href: '/dashboard/student/flashcards' },
-      ],
-    },
-    {
-      section: 'student_practice',
-      title: 'Tests & Practice',
-      items: [
+        { icon: BookOpen, label: 'Study Zone', href: '/dashboard/study' },
+        { icon: Users, label: 'Community', href: '/dashboard/student/community' },
+        { icon: Trophy, label: 'Leaderboard', href: '/dashboard/leaderboard' },
         { icon: Trophy, label: 'Quizzes', href: '/admin/quizzes/quizebank' },
+        // New student-only items requested:
         { icon: Plus, label: 'Create Your Own Test', href: '/quiz/create-mock' },
+        { icon: BookOpen, label: 'Flashcards', href: '/dashboard/student/flashcards' },
         { icon: Trophy, label: 'Your Created Tests', href: '/admin/quizzes/user-created-quizzes' },
-      ],
-    },
-    {
-      section: 'student_performance',
-      title: 'Performance & Progress',
-      items: [
         { icon: ClipboardList, label: 'Results', href: '/admin/students/results' },
         { icon: Flag, label: 'My Reports', href: '/dashboard/student/reports' },
-        { icon: Trophy, label: 'Leaderboard', href: '/dashboard/leaderboard' },
-      ],
-    },
-    {
-      section: 'student_community',
-      title: 'Community',
-      items: [
-        { icon: Users, label: 'Community', href: '/dashboard/student/community' },
-      ],
-    },
-    {
-      section: 'student_account',
-      title: 'Account',
-      items: [
         { icon: UserCircle, label: 'Settings & Security', href: '/dashboard/student/settings' },
       ],
     },
@@ -348,30 +318,22 @@ export function Sidebar() {
           md:translate-x-0 md:static md:flex`}
       >
         {/* Header */}
-        {/* Header */}
-        <div className="p-4 border-b flex flex-col gap-4">
-          <div className="w-full">
-            {!collapsed ? (
-              <div className="flex items-center space-x-3">
-                <Image src={logo} alt="Tayyari Hub Logo" className="h-12 w-auto" priority />
-              </div>
-            ) : (
-              <BookOpen className="h-6 w-6 text-purple-700" />
-            )}
-          </div>
+        <div className="p-4 border-b flex items-center justify-between">
+          {!collapsed ? (
+            <div className="flex items-center space-x-3">
+              <Image src={logo} alt="Tayyari Hub Logo" className="h-10 w-auto" priority />
+            </div>
+          ) : (
+            <BookOpen className="h-6 w-6 text-purple-700" />
+          )}
 
-          <div className={`flex items-center ${collapsed ? 'justify-center flex-col gap-2' : 'justify-between w-full'}`}>
-            {/* Mobile Close */}
+          <div className="flex items-center space-x-2">
             <Button variant="ghost" size="icon" onClick={() => setMobileOpen(false)} className="md:hidden">
               <X className="h-5 w-5" />
             </Button>
-
-            <div className={`flex items-center gap-2 ${!collapsed && 'w-full justify-between'}`}>
-              {/* User Info or just controls */}
-              <div className="flex items-center gap-2">
-                <NotificationBell />
-                <ModeToggle />
-              </div>
+            <div className="flex items-center gap-1">
+              <NotificationBell />
+              <ModeToggle />
             </div>
           </div>
         </div>

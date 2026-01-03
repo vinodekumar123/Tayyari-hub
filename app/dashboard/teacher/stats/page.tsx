@@ -9,72 +9,41 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
-    DollarSign, Briefcase, FileSignature, CheckCircle, Clock, Activity, MessageSquare, ThumbsUp
+    DollarSign, Briefcase, FileSignature, CheckCircle, Clock, Activity
 } from 'lucide-react';
-import { Task, ForumPost } from '@/types';
+import { Task } from '@/types';
 import { cn } from '@/lib/utils';
 import { glassmorphism } from '@/lib/design-tokens';
 import { toast } from 'sonner';
 
 export default function TeacherStatsPage() {
     const [tasks, setTasks] = useState<Task[]>([]);
-    const [communityStats, setCommunityStats] = useState({ questions: 0, answers: 0, points: 0 });
     const [loading, setLoading] = useState(true);
     const [user, setUser] = useState<any>(null);
 
     useEffect(() => {
-        const fetchStats = async (uid: string) => {
-            try {
-                const q = query(collection(db, 'tasks'), where('assignedTo', '==', uid));
-                const snap = await getDocs(q);
-                const myTasks = snap.docs.map(d => ({ id: d.id, ...d.data() } as Task));
-                setTasks(myTasks);
-
-                // Fetch Community Stats
-                const postsQ = query(collection(db, 'forum_posts'), where('authorId', '==', uid));
-                const repliesQ = query(collection(db, 'forum_replies'), where('authorId', '==', uid));
-
-                // Fetch user doc for points if needed, though we have u.points potentially from auth if custom claims,
-                // but usually better to fetch fresh from DB or use the user object if it has it.
-                // onAuthStateChanged user object doesn't have firestore data. 
-                // We should fetch the user doc to get points.
-                const userDocRef = collection(db, 'users');
-                const userQ = query(userDocRef, where('uid', '==', uid));
-                const userSnap = await getDocs(userQ);
-                let userPoints = 0;
-                if (!userSnap.empty) {
-                    userPoints = userSnap.docs[0].data().points || 0;
-                }
-
-                const [postsSnap, repliesSnap] = await Promise.all([getDocs(postsQ), getDocs(repliesQ)]);
-
-                setCommunityStats({
-                    questions: postsSnap.size,
-                    answers: repliesSnap.size,
-                    points: userPoints
-                });
-
-                // Update user state with points for display if needed
-                setUser((prev: any) => ({ ...prev, points: userPoints }));
-
-            } catch (e) {
-                console.error(e);
-                toast.error("Failed to load stats");
-            } finally {
-                setLoading(false);
-            }
-        };
-
         const unsub = onAuthStateChanged(auth, async (u) => {
             if (u) {
                 setUser(u);
                 fetchStats(u.uid);
-            } else {
-                setLoading(false);
             }
         });
         return () => unsub();
     }, []);
+
+    const fetchStats = async (uid: string) => {
+        try {
+            const q = query(collection(db, 'tasks'), where('assignedTo', '==', uid));
+            const snap = await getDocs(q);
+            const myTasks = snap.docs.map(d => ({ id: d.id, ...d.data() } as Task));
+            setTasks(myTasks);
+        } catch (e) {
+            console.error(e);
+            toast.error("Failed to load stats");
+        } finally {
+            setLoading(false);
+        }
+    };
 
     const totalEarnings = tasks.filter(t => t.paymentStatus === 'paid').reduce((acc, t) => acc + (t.paymentAmount || 0), 0);
     const pendingEarnings = tasks.filter(t => t.paymentStatus === 'pending').reduce((acc, t) => acc + (t.paymentAmount || 0), 0);
@@ -121,13 +90,9 @@ export default function TeacherStatsPage() {
                     </CardContent>
                 </Card>
                 <Card className="bg-purple-50 border-purple-200">
-                    <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-purple-800">Community Points</CardTitle></CardHeader>
+                    <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-purple-800">Avg Rating</CardTitle></CardHeader>
                     <CardContent>
-                        <div className="text-3xl font-bold text-purple-900">{communityStats.points}</div>
-                        <div className="text-xs text-purple-700 mt-1 flex gap-2">
-                            <span className="flex items-center gap-1"><CheckCircle className="w-3 h-3" /> {communityStats.answers} Answers</span>
-                            <span className="flex items-center gap-1"><MessageSquare className="w-3 h-3" /> {communityStats.questions} Questions</span>
-                        </div>
+                        <div className="text-3xl font-bold text-purple-900">{avgRating.toFixed(1)} <span className="text-sm">★</span></div>
                     </CardContent>
                 </Card>
             </div>
