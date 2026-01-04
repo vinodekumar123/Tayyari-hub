@@ -11,6 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Trophy, Medal, Crown } from 'lucide-react';
 import { glassmorphism } from '@/lib/design-tokens';
 import { useUserStore } from '@/stores/useUserStore';
+import { UnifiedHeader } from '@/components/unified-header';
 
 interface LeaderboardEntry extends Student {
     rank: number;
@@ -94,18 +95,11 @@ export default function LeaderboardPage() {
 
     return (
         <div className="max-w-5xl mx-auto p-4 md:p-8 space-y-8">
-            {/* Header */}
-            <div className="text-center space-y-4 mb-8">
-                <div className="inline-block p-4 rounded-full bg-blue-100 dark:bg-blue-900/30 mb-2">
-                    <Trophy className="h-12 w-12 text-[#004AAD] dark:text-[#00B4D8]" />
-                </div>
-                <h1 className="text-4xl font-black bg-clip-text text-transparent bg-gradient-to-r from-[#004AAD] to-[#00B4D8]">
-                    Hall of Fame
-                </h1>
-                <p className="text-muted-foreground font-medium max-w-xl mx-auto">
-                    Top performers across all series. Keep learning, keep climbing!
-                </p>
-            </div>
+            <UnifiedHeader
+                title="Hall of Fame"
+                subtitle="Top performers across all series. Keep learning, keep climbing!"
+                icon={<Trophy className="w-6 h-6" />}
+            />
 
             {/* User Rank Card */}
             {user && userRank && (

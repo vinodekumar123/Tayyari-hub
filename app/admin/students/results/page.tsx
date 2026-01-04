@@ -55,6 +55,7 @@ import {
   SelectItem,
 } from '@/components/ui/select';
 import { Search, BookOpen, Award, Calendar, TrendingUp, Filter, ChevronRight, BarChart3 } from 'lucide-react';
+import { UnifiedHeader } from '@/components/unified-header';
 
 const ADMIN = 'admin';
 const USER = 'user';
@@ -365,17 +366,11 @@ export default function UnifiedResultsPage() {
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:from-slate-950 dark:via-slate-900 dark:to-indigo-950 transition-colors duration-300">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
-        <div className="mb-8">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="p-2 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-xl shadow-lg">
-              <BarChart3 className="w-6 h-6 text-white" />
-            </div>
-            <h1 className="text-4xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 dark:from-white dark:to-gray-300 bg-clip-text text-transparent">
-              Quiz Results Dashboard
-            </h1>
-          </div>
-          <p className="text-gray-600 dark:text-gray-400 ml-14">Track your progress and review your performance</p>
-        </div>
+        <UnifiedHeader
+          title="Quiz Results Dashboard"
+          subtitle="Track your progress and review your performance"
+          icon={<BarChart3 className="w-6 h-6" />}
+        />
 
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">

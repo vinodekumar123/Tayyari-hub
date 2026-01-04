@@ -9,6 +9,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Plus, Eye, CheckCircle2, PlayCircle, RotateCw, BookOpen, Clock, FileQuestion, Sparkles, TrendingUp } from 'lucide-react';
+import { UnifiedHeader } from '@/components/unified-header';
 
 interface UserCreatedQuiz {
   id: string;
@@ -146,29 +147,19 @@ const UserCreatedQuizzesPage = () => {
       <div className="relative max-w-7xl mx-auto py-12 px-4 sm:px-6 lg:px-8">
         {/* Header Section */}
         <div className="mb-12">
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
-            <div>
-              <div className="flex items-center gap-3 mb-3">
-                <div className="p-3 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl shadow-lg shadow-blue-500/30">
-                  <Sparkles className="h-7 w-7 text-white" />
-                </div>
-                <h1 className="text-5xl font-bold bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 bg-clip-text text-transparent">
-                  Your Quizzes
-                </h1>
-              </div>
-              <p className="text-gray-600 text-lg ml-16 font-medium">Manage and track your custom test collection</p>
-            </div>
+          <UnifiedHeader
+            title="Your Quizzes"
+            subtitle="Manage and track your custom test collection"
+            icon={<Sparkles className="w-6 h-6" />}
+          >
             <Button
               onClick={() => router.push('/quiz/create-mock')}
-              className="group relative bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white px-8 py-6 rounded-2xl shadow-xl shadow-blue-500/30 transition-all duration-300 hover:scale-105 hover:shadow-2xl hover:shadow-blue-500/40 border-0"
+              className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-lg shadow-blue-500/30 transition-all duration-300 hover:scale-105 border-0"
             >
-              <div className="absolute inset-0 bg-white/20 rounded-2xl blur opacity-0 group-hover:opacity-100 transition-opacity"></div>
-              <div className="relative flex items-center gap-2 font-semibold text-lg">
-                <Plus className="h-5 w-5" />
-                Create New Quiz
-              </div>
+              <Plus className="mr-2 h-5 w-5" />
+              Create New Quiz
             </Button>
-          </div>
+          </UnifiedHeader>
 
           {/* Stats Cards */}
           {totalQuizzes > 0 && (

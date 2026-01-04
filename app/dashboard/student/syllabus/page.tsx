@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { BookOpen, FileDown, Download, CheckCircle, Clock } from 'lucide-react';
 import { glassmorphism } from '@/lib/design-tokens';
 import { Badge } from '@/components/ui/badge';
+import { UnifiedHeader } from '@/components/unified-header';
 
 export default function SyllabusPage() {
     const [activeTab, setActiveTab] = useState('full');
@@ -44,20 +45,16 @@ export default function SyllabusPage() {
 
     return (
         <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-8">
-            {/* Header */}
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                <div>
-                    <h1 className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400">
-                        Course Syllabus
-                    </h1>
-                    <p className="text-muted-foreground mt-1">
-                        Detailed breakdown of your curriculum and progress.
-                    </p>
-                </div>
+            {/* Unified Header */}
+            <UnifiedHeader
+                title="Course Syllabus"
+                subtitle="Detailed breakdown of your curriculum and progress."
+                icon={<BookOpen className="w-6 h-6" />}
+            >
                 <Button className="gap-2 bg-blue-600 hover:bg-blue-700 text-white">
                     <Download className="w-4 h-4" /> Download PDF
                 </Button>
-            </div>
+            </UnifiedHeader>
 
             {/* Main Content */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">

@@ -48,9 +48,10 @@ import {
 } from '@/components/ui/dialog';
 import {
   ArrowRight, BookOpen, Calendar, Clock, Play, Pencil, Eye, Trash2,
-  Search, Filter, RefreshCw, TrendingUp, Award, Zap
+  Search, Filter, RefreshCw, TrendingUp, Award, Zap, Database
 } from 'lucide-react';
 import Link from 'next/link';
+import { UnifiedHeader } from '@/components/unified-header';
 import { toast } from 'react-hot-toast';
 
 // Quiz status helper
@@ -349,6 +350,12 @@ export default function QuizBankPage() {
 
   return (
     <div className="w-full max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+      <UnifiedHeader
+        title="Admin Dashboard"
+        subtitle="Manage Quizzes and Exams"
+        icon={<Database className="w-6 h-6" />}
+      />
+
       {/* Modern Header with Brand Colors */}
       <div className="relative group">
         <div className="absolute inset-0 bg-gradient-to-r from-[#004AAD] via-[#0066FF] to-[#00B4D8] rounded-3xl blur-xl opacity-20 dark:opacity-30 group-hover:opacity-30 dark:group-hover:opacity-40 transition-opacity duration-500" />

@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Flag, MessageSquare, CheckCircle, Clock, AlertCircle, BookOpen, Layers, Check, Filter } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
+import { UnifiedHeader } from '@/components/unified-header';
 import { glassmorphism } from '@/lib/design-tokens';
 
 interface Report {
@@ -154,13 +155,11 @@ export default function StudentReportsPage() {
     return (
         <div className="min-h-screen bg-background text-foreground bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-blue-50 via-background to-background dark:from-blue-950/20 dark:via-background dark:to-background p-6 md:p-12">
             <div className="max-w-5xl mx-auto space-y-8">
-                <header>
-                    <h1 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-gray-900 to-gray-600 dark:from-white dark:to-gray-300 flex items-center gap-3">
-                        <Flag className="w-8 h-8 text-indigo-600 dark:text-indigo-400" />
-                        Reported Questions
-                    </h1>
-                    <p className="text-gray-500 dark:text-gray-400 mt-2">Track the status of your reported issues and view admin replies.</p>
-                </header>
+                <UnifiedHeader
+                    title="Reported Questions"
+                    subtitle="Track the status of your reported issues and view admin replies."
+                    icon={<Flag className="w-6 h-6" />}
+                />
 
                 {/* Filters */}
                 <div className={`${glassmorphism.light} p-5 rounded-2xl border border-white/20 dark:border-white/10 shadow-sm flex flex-col md:flex-row gap-4 items-center justify-between`}>

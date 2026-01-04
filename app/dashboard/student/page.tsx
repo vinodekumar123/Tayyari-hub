@@ -19,7 +19,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import Link from 'next/link';
 
-import { DashboardHeader } from '@/components/student/DashboardHeader';
+import { UnifiedHeader } from '@/components/unified-header';
 
 export default function StudentDashboard() {
   // const [greeting, setGreeting] = useState(''); // Moved to Header
@@ -34,7 +34,7 @@ export default function StudentDashboard() {
   const [userStats, setUserStats] = useState({ total: 0, attempted: 0, accuracy: 0, correct: 0, wrong: 0 });
 
   useEffect(() => {
-    // Greeting logic moved to DashboardHeader
+    // Greeting logic moved to UnifiedHeader
 
     const auth = getAuth();
     const unsub = onAuthStateChanged(auth, (user) => {
@@ -161,7 +161,7 @@ export default function StudentDashboard() {
     <div className="min-h-screen bg-slate-50/[0.6] dark:bg-slate-950 p-4 md:p-8 font-sans text-slate-900 dark:text-slate-100">
 
       {/* 1. New Top Header */}
-      <DashboardHeader studentName={studentData?.fullName} />
+      <UnifiedHeader greeting studentName={studentData?.fullName} />
 
       {/* Modern Header Section (Actions Only now, logic moved) */}
       <div className="flex justify-end items-center gap-3 mb-8 -mt-2"> {/* Moved up slightly to tuck under sticky header nicely or keep distinct */}

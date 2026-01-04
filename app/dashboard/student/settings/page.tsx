@@ -19,6 +19,7 @@ import { Badge } from '@/components/ui/badge';
 import { formatDistanceToNow, format } from 'date-fns';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { glassmorphism } from '@/lib/design-tokens';
+import { UnifiedHeader } from '@/components/unified-header';
 
 interface Session {
     id: string;
@@ -176,22 +177,11 @@ export default function StudentSettingsPage() {
         <div className="p-6 space-y-8 bg-slate-50 dark:bg-slate-950 min-h-screen text-slate-900 dark:text-slate-100">
 
             {/* Unified Header */}
-            <div className='relative group'>
-                <div className='absolute inset-0 bg-gradient-to-r from-[#004AAD] via-[#0066FF] to-[#00B4D8] rounded-3xl blur-xl opacity-20 dark:opacity-30 group-hover:opacity-30 dark:group-hover:opacity-40 transition-opacity duration-500' />
-                <div className={`relative ${glassmorphism.light} p-8 rounded-3xl border border-[#004AAD]/20 dark:border-[#0066FF]/30`}>
-                    <div className='flex items-center justify-between'>
-                        <div>
-                            <h1 className='text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-[#004AAD] via-[#0066FF] to-[#00B4D8] dark:from-[#0066FF] dark:via-[#00B4D8] dark:to-[#66D9EF] mb-2'>
-                                Account & Security
-                            </h1>
-                            <p className='text-muted-foreground font-semibold flex items-center gap-2'>
-                                <Shield className='w-5 h-5 text-[#00B4D8] dark:text-[#66D9EF]' />
-                                Manage your account settings and active sessions.
-                            </p>
-                        </div>
-                    </div>
-                </div>
-            </div>
+            <UnifiedHeader
+                title="Account & Security"
+                subtitle="Manage your account settings and active sessions."
+                icon={<Shield className="w-6 h-6" />}
+            />
 
             <Tabs defaultValue="sessions" className="max-w-4xl">
                 <TabsList className="grid w-full grid-cols-2 lg:w-[400px]">

@@ -17,6 +17,7 @@ import { MessageSquare, ThumbsUp, Search, Plus, Filter, CheckCircle, Users } fro
 import { useUserStore } from '@/stores/useUserStore';
 import Link from 'next/link';
 import { formatDistanceToNow } from 'date-fns';
+import { UnifiedHeader } from '@/components/unified-header';
 import { glassmorphism } from '@/lib/design-tokens';
 
 const PROVINCES = [
@@ -147,79 +148,68 @@ export default function StudentCommunityPage() {
     return (
         <div className="max-w-7xl mx-auto p-4 md:p-8 space-y-6">
             {/* Header */}
-            <div className="relative group">
-                <div className="absolute inset-0 bg-gradient-to-r from-[#004AAD] via-[#0066FF] to-[#00B4D8] rounded-3xl blur-xl opacity-20 dark:opacity-30 group-hover:opacity-30 dark:group-hover:opacity-40 transition-opacity duration-500" />
-                <div className={`relative ${glassmorphism.light} p-8 rounded-3xl border border-[#004AAD]/20 dark:border-[#0066FF]/30`}>
-                    <div className="flex flex-col md:flex-row items-center justify-between gap-6">
-                        <div>
-                            <h1 className="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-[#004AAD] via-[#0066FF] to-[#00B4D8] dark:from-[#0066FF] dark:via-[#00B4D8] dark:to-[#66D9EF] mb-2">
-                                Student Community
-                            </h1>
-                            <p className="text-muted-foreground font-semibold flex items-center gap-2">
-                                <Users className="w-5 h-5 text-[#00B4D8] dark:text-[#66D9EF]" />
-                                Ask doubts, share knowledge, and learn together
-                            </p>
-                        </div>
+            <UnifiedHeader
+                title="Student Community"
+                subtitle="Ask doubts, share knowledge, and learn together"
+                icon={<Users className="w-6 h-6" />}
+            >
+                <Dialog>
+                    <DialogTrigger asChild>
+                        <Button className="bg-gradient-to-r from-[#004AAD] to-[#0066FF] hover:shadow-lg hover:shadow-blue-500/25 transition-all text-white border-none">
+                            <Plus className="mr-2 h-5 w-5" /> Ask a Doubt
+                        </Button>
+                    </DialogTrigger>
+                    <DialogContent className="sm:max-w-[600px]">
+                        <DialogHeader>
+                            <DialogTitle>Ask a Doubt</DialogTitle>
+                        </DialogHeader>
+                        <div className="space-y-4 py-4">
+                            <div className="space-y-2">
+                                <label className="text-sm font-medium">Question Title</label>
+                                <Input value={newTitle} onChange={e => setNewTitle(e.target.value)} placeholder="e.g. How to solve Integration by Parts?" />
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-sm font-medium">Subject</label>
+                                <Select value={newSubject} onValueChange={setNewSubject}>
+                                    <SelectTrigger><SelectValue placeholder="Select Subject" /></SelectTrigger>
+                                    <SelectContent>
+                                        {subjects.map(s => <SelectItem key={s.id} value={s.name}>{s.name}</SelectItem>)}
+                                    </SelectContent>
+                                </Select>
+                            </div>
 
-                        <Dialog>
-                            <DialogTrigger asChild>
-                                <Button className="bg-gradient-to-r from-[#004AAD] to-[#0066FF] hover:shadow-lg hover:shadow-blue-500/25 transition-all text-white border-none">
-                                    <Plus className="mr-2 h-5 w-5" /> Ask a Doubt
-                                </Button>
-                            </DialogTrigger>
-                            <DialogContent className="sm:max-w-[600px]">
-                                <DialogHeader>
-                                    <DialogTitle>Ask a Doubt</DialogTitle>
-                                </DialogHeader>
-                                <div className="space-y-4 py-4">
-                                    <div className="space-y-2">
-                                        <label className="text-sm font-medium">Question Title</label>
-                                        <Input value={newTitle} onChange={e => setNewTitle(e.target.value)} placeholder="e.g. How to solve Integration by Parts?" />
-                                    </div>
-                                    <div className="space-y-2">
-                                        <label className="text-sm font-medium">Subject</label>
-                                        <Select value={newSubject} onValueChange={setNewSubject}>
-                                            <SelectTrigger><SelectValue placeholder="Select Subject" /></SelectTrigger>
-                                            <SelectContent>
-                                                {subjects.map(s => <SelectItem key={s.id} value={s.name}>{s.name}</SelectItem>)}
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
-
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div className="space-y-2">
-                                            <label className="text-sm font-medium">Province (Optional)</label>
-                                            <Select value={newProvince} onValueChange={setNewProvince}>
-                                                <SelectTrigger><SelectValue placeholder="Select Province" /></SelectTrigger>
-                                                <SelectContent>
-                                                    {PROVINCES.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
-                                                </SelectContent>
-                                            </Select>
-                                        </div>
-                                        <div className="space-y-2">
-                                            <label className="text-sm font-medium">Chapter (Optional)</label>
-                                            <Select value={newChapter} onValueChange={setNewChapter} disabled={!newSubject || availableChapters.length === 0}>
-                                                <SelectTrigger><SelectValue placeholder={!newSubject ? "Select Subject First" : availableChapters.length === 0 ? "No Chapters" : "Select Chapter"} /></SelectTrigger>
-                                                <SelectContent>
-                                                    {availableChapters.map((c, i) => <SelectItem key={i} value={c}>{c}</SelectItem>)}
-                                                </SelectContent>
-                                            </Select>
-                                        </div>
-                                    </div>
-
-                                    <div className="space-y-2">
-                                        <label className="text-sm font-medium">Details</label>
-                                        <Textarea value={newContent} onChange={e => setNewContent(e.target.value)} placeholder="Describe your doubt in detail..." className="min-h-[150px]" />
-                                    </div>
-                                    <Button className="w-full" onClick={handleCreatePost} disabled={isAsking}>
-                                        {isAsking ? 'Posting...' : 'Post Question'}
-                                    </Button>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <label className="text-sm font-medium">Province (Optional)</label>
+                                    <Select value={newProvince} onValueChange={setNewProvince}>
+                                        <SelectTrigger><SelectValue placeholder="Select Province" /></SelectTrigger>
+                                        <SelectContent>
+                                            {PROVINCES.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+                                        </SelectContent>
+                                    </Select>
                                 </div>
-                            </DialogContent>
-                        </Dialog>
-                    </div>
-                </div>
-            </div>
+                                <div className="space-y-2">
+                                    <label className="text-sm font-medium">Chapter (Optional)</label>
+                                    <Select value={newChapter} onValueChange={setNewChapter} disabled={!newSubject || availableChapters.length === 0}>
+                                        <SelectTrigger><SelectValue placeholder={!newSubject ? "Select Subject First" : availableChapters.length === 0 ? "No Chapters" : "Select Chapter"} /></SelectTrigger>
+                                        <SelectContent>
+                                            {availableChapters.map((c, i) => <SelectItem key={i} value={c}>{c}</SelectItem>)}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            </div>
+
+                            <div className="space-y-2">
+                                <label className="text-sm font-medium">Details</label>
+                                <Textarea value={newContent} onChange={e => setNewContent(e.target.value)} placeholder="Describe your doubt in detail..." className="min-h-[150px]" />
+                            </div>
+                            <Button className="w-full" onClick={handleCreatePost} disabled={isAsking}>
+                                {isAsking ? 'Posting...' : 'Post Question'}
+                            </Button>
+                        </div>
+                    </DialogContent>
+                </Dialog>
+            </UnifiedHeader>
 
             {/* Filters and Search */}
             <div className={`flex flex-col sm:flex-row gap-4 ${glassmorphism.light} p-4 rounded-xl border border-white/20 dark:border-white/10 shadow-sm`}>

@@ -12,6 +12,7 @@ import { format, isToday, isTomorrow, isPast, addHours } from 'date-fns';
 import { glassmorphism } from '@/lib/design-tokens';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
+import { UnifiedHeader } from '@/components/unified-header';
 
 interface ScheduleGroup {
     dateLabel: string;
@@ -138,14 +139,11 @@ export default function SchedulePage() {
 
     return (
         <div className="max-w-5xl mx-auto p-4 md:p-8 space-y-8">
-            <div>
-                <h1 className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-purple-600 to-blue-600 dark:from-purple-400 dark:to-blue-400 mb-2">
-                    Your Exam Schedule
-                </h1>
-                <p className="text-muted-foreground font-medium">
-                    Stay on track with your personalized quiz timeline.
-                </p>
-            </div>
+            <UnifiedHeader
+                title="Your Exam Schedule"
+                subtitle="Stay on track with your personalized quiz timeline."
+                icon={<Calendar className="w-6 h-6" />}
+            />
 
             <div className="space-y-8">
                 {scheduleGroups.map((group, idx) => (

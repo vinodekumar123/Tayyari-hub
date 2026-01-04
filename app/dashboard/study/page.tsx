@@ -10,9 +10,10 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
-import { FileText, Video, Link as LinkIcon, Download, Eye, Star, Share2, Lock } from 'lucide-react';
+import { FileText, Video, Link as LinkIcon, Download, Eye, Star, Share2, Lock, GraduationCap } from 'lucide-react';
 import { glassmorphism } from '@/lib/design-tokens';
 import { useUserStore } from '@/stores/useUserStore';
+import { UnifiedHeader } from '@/components/unified-header';
 
 export default function StudentStudyZone() {
     const { user } = useUserStore();
@@ -123,17 +124,11 @@ export default function StudentStudyZone() {
     return (
         <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-8">
             {/* Header */}
-            <div className="relative group rounded-3xl overflow-hidden p-8 mb-8">
-                <div className="absolute inset-0 bg-gradient-to-r from-blue-600 to-indigo-600 opacity-90" />
-                <div className="relative z-10 text-white">
-                    <h1 className="text-4xl font-black mb-2">Study Zone</h1>
-                    <p className="text-blue-100 font-medium max-w-2xl">
-                        Access premium notes, video lectures, and resources tailored for your enrolled series.
-                    </p>
-                </div>
-                {/* Decorative Circle */}
-                <div className="absolute top-0 right-0 w-64 h-64 bg-white opacity-10 rounded-full -translate-y-1/2 translate-x-1/3 blur-3xl" />
-            </div>
+            <UnifiedHeader
+                title="Study Zone"
+                subtitle="Access premium notes, video lectures, and resources tailored for your enrolled series."
+                icon={<GraduationCap className="w-6 h-6" />}
+            />
 
             {/* Filters */}
             <div className="flex flex-col sm:flex-row gap-4 justify-between items-center bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm border">

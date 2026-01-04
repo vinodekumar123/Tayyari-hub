@@ -16,6 +16,7 @@ import { MessageSquare, ThumbsUp, Search, Plus, Filter, Tag, CheckCircle } from 
 import { useUserStore } from '@/stores/useUserStore';
 import Link from 'next/link';
 import { formatDistanceToNow } from 'date-fns';
+import { UnifiedHeader } from '@/components/unified-header';
 
 const PROVINCES = [
     'Punjab', 'Sindh', 'KPK', 'Balochistan',
@@ -135,13 +136,12 @@ export default function CommunityPage() {
 
     return (
         <div className="max-w-5xl mx-auto p-4 md:p-8 space-y-6">
-            {/* Header */}
+            <UnifiedHeader title="Community" subtitle="Ask doubts, share knowledge, and learn together." />
+
+            {/* Header Actions */}
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
-                    <h1 className="text-3xl font-black bg-clip-text text-transparent bg-gradient-to-r from-[#004AAD] to-[#00B4D8]">
-                        Tayyari Community
-                    </h1>
-                    <p className="text-muted-foreground">Ask doubts, share knowledge, and learn together.</p>
+                    {/* Title moved to UnifiedHeader */}
                 </div>
 
                 <Dialog>

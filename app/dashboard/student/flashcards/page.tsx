@@ -15,6 +15,7 @@ import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend } from 'recharts';
 import { format } from 'date-fns';
+import { UnifiedHeader } from '@/components/unified-header';
 
 interface Flashcard {
     id: string;
@@ -162,21 +163,21 @@ export default function FlashcardsPage() {
 
     return (
         <div className="p-6 md:p-12 max-w-7xl mx-auto space-y-8 animate-in fade-in duration-500">
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                <div>
-                    <h1 className="text-3xl font-extrabold text-gray-900 dark:text-white flex items-center gap-3">
-                        <Bookmark className="w-8 h-8 text-indigo-600 dark:text-indigo-400" />
-                        My Flashcards
-                    </h1>
-                    <p className="text-gray-500 dark:text-gray-400 mt-1">Review your saved questions and concepts.</p>
-                </div>
+            {/* Unified Header */}
+            <UnifiedHeader
+                title="My Flashcards"
+                subtitle="Review your saved questions and concepts."
+                icon={<BookOpen className="w-6 h-6" />}
+            >
                 <div className="flex items-center gap-4">
-                    <Card className="bg-indigo-50 border-indigo-100 dark:bg-indigo-900/20 dark:border-indigo-900/50 px-4 py-2">
-                        <div className="text-indigo-600 dark:text-indigo-400 font-bold text-2xl">{analytics.total}</div>
-                        <div className="text-xs text-indigo-400 dark:text-indigo-500 font-medium uppercase tracking-wider">Saved Cards</div>
+                    <Card className="bg-indigo-50 border-indigo-100 dark:bg-indigo-900/20 dark:border-indigo-900/50 px-4 py-2 h-10 flex items-center justify-center min-w-[120px]">
+                        <div className="flex items-center gap-2">
+                            <div className="text-indigo-600 dark:text-indigo-400 font-bold text-lg">{analytics.total}</div>
+                            <div className="text-[10px] text-indigo-400 dark:text-indigo-500 font-medium uppercase tracking-wider">Saved Cards</div>
+                        </div>
                     </Card>
                 </div>
-            </div>
+            </UnifiedHeader>
 
             {/* Analytics Section */}
             {analytics.total > 0 && (

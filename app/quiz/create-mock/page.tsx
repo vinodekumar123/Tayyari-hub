@@ -36,6 +36,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { glassmorphism, animations } from '@/lib/design-tokens';
+import { UnifiedHeader } from '@/components/unified-header';
 
 const MAX_QUESTIONS = 100;
 
@@ -376,26 +377,11 @@ export default function CreateUserQuizPage() {
         <div className="w-full max-w-6xl mx-auto px-4 py-8 md:py-12 space-y-8">
 
           {/* Header */}
-          <div className="relative group rounded-3xl overflow-hidden">
-            <div className="absolute inset-0 bg-gradient-to-r from-[#004AAD] via-[#0066FF] to-[#00B4D8] opacity-10 dark:opacity-20 blur-xl" />
-            <div className={`relative ${glassmorphism.light} p-8 md:p-12 border border-primary/10 rounded-3xl flex flex-col md:flex-row items-center justify-between gap-6`}>
-              <div className="space-y-4 text-center md:text-left">
-                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-sm font-semibold">
-                  <Sparkles className="w-4 h-4" />
-                  <span>AI-Powered Custom Mocks</span>
-                </div>
-                <h1 className="text-4xl md:text-5xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-[#004AAD] to-[#00B4D8] dark:from-[#0066FF] dark:to-[#66D9EF]">
-                  Craft Your Perfect Test
-                </h1>
-                <p className="text-lg text-muted-foreground max-w-2xl">
-                  Design a personalized quiz tailored to your exact learning needs. Select subjects, chapters, and difficulty to challenge yourself.
-                </p>
-              </div>
-              <div className="hidden md:block">
-                <Brain className="w-32 h-32 text-primary/20 rotate-12" />
-              </div>
-            </div>
-          </div>
+          <UnifiedHeader
+            title="Craft Your Perfect Test"
+            subtitle="Design a personalized quiz tailored to your exact learning needs. Select subjects, chapters, and difficulty to challenge yourself."
+            icon={<Brain className="w-6 h-6" />}
+          />
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             {/* Left Column: Configuration */}
