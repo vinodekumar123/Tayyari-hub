@@ -1,5 +1,5 @@
 import { db } from '@/app/firebase';
-import { collection, addDoc, doc, updateDoc, increment, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, doc, updateDoc, increment, serverTimestamp, getDoc } from 'firebase/firestore';
 
 export const POINTS = {
     CREATE_POST: 5,
@@ -30,5 +30,27 @@ export const awardPoints = async (userId: string, amount: number, reason: string
         });
     } catch (error) {
         console.error("Failed to award points", error);
+    }
+};
+
+export const checkSeriesEnrollment = async (userId: string): Promise<boolean> => {
+    try {
+        const userRef = doc(db, 'users', userId);
+        const userSnap = await getDoc(userRef);
+
+        if (userSnap.exists()) {
+            const userData = userSnap.data();
+            // Check if user has any series enrollment or plain "premium" flag (legacy support if needed)
+            // Assuming "seriesEnrolled" array or boolean "premium" or "isEnrolled"
+            // Adjust based on your actual data model. Based on recent convos, it's 'seriesEnrolled' or similar.
+            // Let's check for 'enrolledSeries' array or 'isPremium' as fallback
+            if (userData.role === 'admin' || userData.role === 'superadmin' || userData.role === 'teacher') return true;
+
+            return userData.isPremium === true || (Array.isArray(userData.enrolledSeries) && userData.enrolledSeries.length > 0);
+        }
+        return false;
+    } catch (error) {
+        console.error("Failed to check enrollment", error);
+        return false;
     }
 };

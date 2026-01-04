@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { db } from '@/app/firebase';
 import { collection, query, orderBy, limit, getDocs, addDoc, serverTimestamp, updateDoc, doc, arrayUnion, arrayRemove, increment } from 'firebase/firestore';
 import { ForumPost, Subject } from '@/types';
+import { checkSeriesEnrollment } from '@/lib/community';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -70,8 +71,17 @@ export default function StudentCommunityPage() {
             return;
         }
 
+        if (!user) return;
+
         try {
             setAsking(true);
+            const canPost = await checkSeriesEnrollment(user.uid);
+            if (!canPost) {
+                toast.error("Only Series Enrolled students can ask questions.");
+                setAsking(false); // Reset loading state
+                return;
+            }
+
             await addDoc(collection(db, 'forum_posts'), {
                 title: newTitle,
                 content: newContent,

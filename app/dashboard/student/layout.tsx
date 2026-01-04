@@ -1,3 +1,5 @@
+import { QuizNotificationManager } from "@/components/student/QuizNotificationManager";
+
 export default function StudentLayout({
     children,
 }: {
@@ -5,6 +7,7 @@ export default function StudentLayout({
 }) {
     return (
         <>
+            <QuizNotificationManager />
             {children}
         </>
     );

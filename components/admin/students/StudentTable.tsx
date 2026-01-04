@@ -214,10 +214,10 @@ export function StudentTable({
                                         <Badge
                                             variant={student.plan === 'premium' ? 'default' : 'secondary'}
                                             className={student.plan === 'premium'
-                                                ? 'bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600'
+                                                ? 'bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600'
                                                 : ''}
                                         >
-                                            {student.plan === 'premium' ? 'Premium' : 'Free'}
+                                            {student.plan === 'premium' ? 'Enrolled' : 'Free'}
                                         </Badge>
                                     </TableCell>
                                     <TableCell>
@@ -241,6 +241,10 @@ export function StudentTable({
                                                 <DropdownMenuItem onClick={() => onEnroll(student)}>
                                                     <CreditCard className='w-4 h-4 mr-2' />
                                                     Enroll in Series
+                                                </DropdownMenuItem>
+                                                <DropdownMenuItem onClick={() => onEnroll(student)} className="text-orange-600 focus:text-orange-600">
+                                                    <CreditCard className='w-4 h-4 mr-2' />
+                                                    Revoke Series
                                                 </DropdownMenuItem>
                                                 <DropdownMenuItem onClick={() => onHistory(student)}>
                                                     <History className='w-4 h-4 mr-2' />

@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { db } from '@/app/firebase';
 import { doc, getDoc, collection, query, where, orderBy, getDocs, addDoc, serverTimestamp, updateDoc, increment, arrayUnion, arrayRemove } from 'firebase/firestore';
 import { ForumPost, ForumReply } from '@/types';
+import { checkSeriesEnrollment } from '@/lib/community';
 import { useParams, useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -73,8 +74,18 @@ export default function ThreadPage() {
 
     const handlePostReply = async () => {
         if (!replyContent.trim()) return;
+        if (!user) return;
+
         setIsSubmitting(true);
         try {
+            // Check enrollment
+            const canPost = await checkSeriesEnrollment(user.uid);
+            if (!canPost) {
+                toast.error("Only Series Enrolled students can post answers.");
+                setIsSubmitting(false);
+                return;
+            }
+
             await addDoc(collection(db, 'forum_replies'), {
                 postId,
                 content: replyContent,
@@ -122,6 +133,14 @@ export default function ThreadPage() {
 
     const handleUpvote = async (collectionName: 'forum_posts' | 'forum_replies', id: string, currentUpvotedBy: string[]) => {
         if (!user) return;
+
+        // Check enrollment
+        const canVote = await checkSeriesEnrollment(user.uid);
+        if (!canVote) {
+            toast.error("Only Series Enrolled students can vote.");
+            return;
+        }
+
         const isUpvoted = currentUpvotedBy.includes(user.uid);
         const docRef = doc(db, collectionName, id);
 

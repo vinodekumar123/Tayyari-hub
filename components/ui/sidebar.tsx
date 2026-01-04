@@ -6,7 +6,7 @@ import Link from 'next/link';
 import {
   BookOpen, Users, Trophy, BarChart3, Settings, Plus,
   Database, Home, ChevronDown, ChevronRight, LogOut,
-  ClipboardList, UserCircle, Menu, X, FileBarChart, Flag
+  ClipboardList, UserCircle, Menu, X, FileBarChart, Flag, Calendar
 } from 'lucide-react';
 import logo from "../../app/assets/logo.png";
 import Image from "next/image";
@@ -47,7 +47,7 @@ export function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
 
-  const [expandedSections, setExpandedSections] = useState<string[]>(['main', 'content', 'users', 'settings', 'student']);
+  const [expandedSections, setExpandedSections] = useState<string[]>(['main', 'content', 'users', 'settings', 'student', 'main_nav', 'learning', 'practice', 'community', 'performance', 'account']);
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [showSignOutDialog, setShowSignOutDialog] = useState(false);
@@ -150,21 +150,52 @@ export function Sidebar() {
 
   const studentMenu: Section[] = [
     {
-      section: 'student',
-      title: 'Student Panel',
+      section: 'main_nav',
+      title: 'Main Navigation',
       items: [
         { icon: Home, label: 'Dashboard', href: '/dashboard/student' },
+        { icon: Calendar, label: 'Quiz Schedule', href: '/dashboard/student/schedule' },
+      ],
+    },
+    {
+      section: 'learning',
+      title: 'Learning / Study Tools',
+      items: [
+        { icon: BookOpen, label: 'Syllabus', href: '/dashboard/student/syllabus' },
         { icon: BookOpen, label: 'Study Zone', href: '/dashboard/study' },
+        { icon: BookOpen, label: 'Flashcards', href: '/dashboard/student/flashcards' },
+      ],
+    },
+    {
+      section: 'practice',
+      title: 'Practice / Testing',
+      items: [
+        { icon: Trophy, label: 'Quizzes', href: '/admin/quizzes/quizebank' },
+        { icon: Plus, label: 'Create Your Own Test', href: '/quiz/create-mock' },
+        { icon: Trophy, label: 'Your Created Tests', href: '/admin/quizzes/user-created-quizzes' },
+      ],
+    },
+    {
+      section: 'community',
+      title: 'Community / Engagement',
+      items: [
         { icon: Users, label: 'Community', href: '/dashboard/student/community' },
         { icon: Trophy, label: 'Leaderboard', href: '/dashboard/leaderboard' },
-        { icon: Trophy, label: 'Quizzes', href: '/admin/quizzes/quizebank' },
-        // New student-only items requested:
-        { icon: Plus, label: 'Create Your Own Test', href: '/quiz/create-mock' },
-        { icon: BookOpen, label: 'Flashcards', href: '/dashboard/student/flashcards' },
-        { icon: Trophy, label: 'Your Created Tests', href: '/admin/quizzes/user-created-quizzes' },
+      ],
+    },
+    {
+      section: 'performance',
+      title: 'Performance / Reports',
+      items: [
         { icon: ClipboardList, label: 'Results', href: '/admin/students/results' },
         { icon: Flag, label: 'My Reports', href: '/dashboard/student/reports' },
-        { icon: UserCircle, label: 'Settings & Security', href: '/dashboard/student/settings' },
+      ],
+    },
+    {
+      section: 'account',
+      title: 'Account',
+      items: [
+        { icon: Settings, label: 'Settings & Security', href: '/dashboard/student/settings' },
       ],
     },
   ];
@@ -331,10 +362,6 @@ export function Sidebar() {
             <Button variant="ghost" size="icon" onClick={() => setMobileOpen(false)} className="md:hidden">
               <X className="h-5 w-5" />
             </Button>
-            <div className="flex items-center gap-1">
-              <NotificationBell />
-              <ModeToggle />
-            </div>
           </div>
         </div>
 

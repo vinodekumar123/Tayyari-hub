@@ -1,308 +1,222 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { db, auth } from '@/app/firebase';
-import { collection, query, where, getDocs, getDoc, doc } from 'firebase/firestore';
-import { onAuthStateChanged } from 'firebase/auth';
+import { db } from '@/app/firebase';
+import { collection, query, where, getDocs, getDoc, doc, orderBy, Timestamp } from 'firebase/firestore';
+import { useUserStore } from '@/stores/useUserStore';
+import { Quiz } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
-import { Calendar, BookOpen, AlertCircle, Filter, Clock } from 'lucide-react';
+import { Calendar, Clock, BookOpen, AlertCircle, ChevronRight, CheckCircle2 } from 'lucide-react';
+import { format, isToday, isTomorrow, isPast, addHours } from 'date-fns';
 import { glassmorphism } from '@/lib/design-tokens';
-import { motion } from 'framer-motion';
-import { format } from 'date-fns';
-import { toast } from 'sonner';
+import { Button } from '@/components/ui/button';
+import Link from 'next/link';
 
-interface ScheduleItem {
-    id: string;
-    title: string;
-    startDate: string;
-    startTime?: string;
-    subjects: Array<{ name: string } | string>;
-    chapters: Array<{ name: string } | string>;
-    status: 'upcoming' | 'live' | 'completed';
-    seriesName?: string;
+interface ScheduleGroup {
+    dateLabel: string;
+    quizzes: Quiz[];
 }
 
-interface EnrolledSeries {
-    id: string;
-    title: string;
-}
-
-export default function StudentSchedulePage() {
-    const [schedules, setSchedules] = useState<ScheduleItem[]>([]);
+export default function SchedulePage() {
+    const { user } = useUserStore();
+    const [scheduleGroups, setScheduleGroups] = useState<ScheduleGroup[]>([]);
     const [loading, setLoading] = useState(true);
-    const [user, setUser] = useState<any>(null);
-    const [enrolledSeries, setEnrolledSeries] = useState<EnrolledSeries[]>([]);
-    const [filterSeries, setFilterSeries] = useState('all');
+    const [enrolledSeriesIds, setEnrolledSeriesIds] = useState<string[]>([]);
 
-    // 1. Auth & Enrollments
     useEffect(() => {
-        const unsub = onAuthStateChanged(auth, async (u) => {
-            if (u) {
-                setUser(u);
-                fetchEnrollments(u.uid);
-            } else {
-                setLoading(false);
-            }
-        });
-        return () => unsub();
-    }, []);
-
-    const fetchEnrollments = async (uid: string) => {
-        try {
-            const enrolRef = collection(db, 'enrollments');
-            const q = query(enrolRef, where('studentId', '==', uid), where('status', '==', 'active'));
-            const snap = await getDocs(q);
-
-            const seriesIds = snap.docs.map(d => d.data().seriesId);
-
-            // Fetch Series Details for Dropdown
-            const seriesData: EnrolledSeries[] = [];
-            for (const sid of seriesIds) {
-                const sDoc = await getDoc(doc(db, 'series', sid));
-                if (sDoc.exists()) {
-                    seriesData.push({ id: sDoc.id, title: sDoc.data().title });
-                }
-            }
-            setEnrolledSeries(seriesData);
-        } catch (error) {
-            console.error("Error fetching enrollments:", error);
-            toast.error("Failed to load enrolled courses");
-        }
-    };
-
-    // 2. Fetch Schedule based on Filter
-    useEffect(() => {
-        if (!user || enrolledSeries.length === 0) {
-            if (enrolledSeries.length === 0 && user) setLoading(false);
-            return;
-        }
-
         const fetchSchedule = async () => {
-            setLoading(true);
+            if (!user) return;
+
             try {
-                let allItems: ScheduleItem[] = [];
-                const targetSeriesIds = filterSeries === 'all'
-                    ? enrolledSeries.map(s => s.id)
-                    : [filterSeries];
+                setLoading(true);
 
-                // Fetch quizzes for each target series
-                // We do this concurrently
-                const promises = targetSeriesIds.map(async (sid) => {
-                    const q = query(collection(db, 'quizzes'), where('series', 'array-contains', sid));
-                    const snapshot = await getDocs(q);
-                    const seriesTitle = enrolledSeries.find(s => s.id === sid)?.title;
+                // 1. Get User's Enrolled Series
+                const userRef = doc(db, 'users', user.uid);
+                const userSnap = await getDoc(userRef);
+                const userData = userSnap.data();
 
-                    return snapshot.docs.map(doc => {
-                        const data = doc.data();
-                        const now = new Date();
-                        let start, end;
-                        try {
-                            start = new Date(`${data.startDate}T${data.startTime || '00:00:00'}`);
-                            end = new Date(`${data.endDate}T${data.endTime || '23:59:59'}`);
-                        } catch {
-                            start = now; end = now;
-                        }
+                // Allow admin/teacher to see all or mock specific logic? 
+                // For now stick to student logic: Filter by enrolled series.
+                const seriesIds: string[] = userData?.enrolledSeries || [];
+                setEnrolledSeriesIds(seriesIds);
 
-                        let status: 'upcoming' | 'live' | 'completed' = 'upcoming';
-                        if (now > end) status = 'completed';
-                        else if (now >= start && now <= end) status = 'live';
+                // 2. Fetch Quizzes
+                // Note: Firestore 'in' or 'array-contains-any' is limited to 10. 
+                // If a user has > 10 series, we might need multiple queries or client-side filtering.
+                // For this implementation, we'll fetch all published quizzes and filter client-side 
+                // to be robust against series count limits, though less efficient for massive datasets.
+                // Ideally, we'd query by date range (e.g., upcoming month) + series filter.
 
-                        return {
-                            id: doc.id,
-                            title: data.title,
-                            startDate: data.startDate,
-                            startTime: data.startTime,
-                            subjects: data.subjects || [],
-                            chapters: data.chapters || [],
-                            status,
-                            seriesName: seriesTitle
-                        } as ScheduleItem;
-                    });
+                const quizzesRef = collection(db, 'quizzes');
+                // Basic Filter: Published only
+                const q = query(quizzesRef, where('published', '==', true));
+                const querySnapshot = await getDocs(q);
+
+                const allQuizzes: Quiz[] = querySnapshot.docs.map(doc => ({
+                    id: doc.id,
+                    ...doc.data()
+                } as Quiz));
+
+                // 3. Filter and Sort
+                const now = new Date();
+
+                const relevantQuizzes = allQuizzes.filter(quiz => {
+                    // Check Series Enrollment
+                    // If quiz has no series tag, is it free for all? detailed logic can be added. 
+                    // Assuming quizzes MUST belong to a series to appear in "Personalized Schedule".
+                    if (!quiz.series || quiz.series.length === 0) return false;
+
+                    const hasAccess = quiz.series.some(sId => seriesIds.includes(sId));
+                    return hasAccess;
                 });
 
-                const results = await Promise.all(promises);
-                allItems = results.flat();
+                // Sort by Start Date
+                relevantQuizzes.sort((a, b) => {
+                    const dateA = new Date(a.startDate).getTime();
+                    const dateB = new Date(b.startDate).getTime();
+                    return dateA - dateB;
+                });
 
-                // Deduplicate by ID just in case a quiz is in multiple enrolled series (unlikely but safe)
-                const uniqueItems = Array.from(new Map(allItems.map(item => [item.id, item])).values());
+                // 4. Group by Date
+                const groups: Record<string, Quiz[]> = {};
 
-                // Sort by Date
-                uniqueItems.sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime());
-                setSchedules(uniqueItems);
+                relevantQuizzes.forEach(quiz => {
+                    const date = new Date(quiz.startDate);
+                    // Keep only future or recent past (e.g. last 24h) quizzes? 
+                    // Let's show all for now, or maybe filter out way past ones.
+                    // The prompt implies "Upcoming" focus.
+
+                    let label = format(date, 'yyyy-MM-dd');
+                    if (isToday(date)) label = 'Today';
+                    else if (isTomorrow(date)) label = 'Tomorrow';
+                    else label = format(date, 'EEEE, MMMM do');
+
+                    if (!groups[label]) groups[label] = [];
+                    groups[label].push(quiz);
+                });
+
+                // Convert to array
+                const groupArray: ScheduleGroup[] = Object.keys(groups).map(key => ({
+                    dateLabel: key,
+                    quizzes: groups[key]
+                }));
+
+                setScheduleGroups(groupArray);
 
             } catch (error) {
                 console.error("Error fetching schedule:", error);
-                toast.error("Failed to load schedule");
             } finally {
                 setLoading(false);
             }
         };
 
         fetchSchedule();
-    }, [filterSeries, enrolledSeries, user]);
+    }, [user]);
 
-    const getStatusColor = (status: string) => {
-        switch (status) {
-            case 'live': return 'bg-red-500/10 text-red-600 border-red-500/20';
-            case 'completed': return 'bg-green-500/10 text-green-600 border-green-500/20';
-            default: return 'bg-blue-500/10 text-blue-600 border-blue-500/20';
-        }
-    };
+    if (loading) {
+        return <div className="p-8 text-center">Loading Schedule...</div>;
+    }
+
+    if (scheduleGroups.length === 0) {
+        return (
+            <div className="flex flex-col items-center justify-center min-h-[50vh] p-8 text-center space-y-4">
+                <div className="bg-purple-100 p-4 rounded-full">
+                    <Calendar className="w-12 h-12 text-purple-600" />
+                </div>
+                <h2 className="text-2xl font-bold">No Scheduled Quizzes</h2>
+                <p className="text-muted-foreground max-w-md">
+                    It looks like you don&apos;t have any upcoming quizzes for your enrolled series.
+                    Enroll in a series to see your exam schedule!
+                </p>
+                <Link href="/pricing">
+                    <Button>Browse Series</Button>
+                </Link>
+            </div>
+        );
+    }
 
     return (
-        <div className="p-4 md:p-8 space-y-8 max-w-7xl mx-auto">
-            {/* Header */}
-            <div className='relative group'>
-                <div className='absolute inset-0 bg-gradient-to-r from-[#004AAD] via-[#0066FF] to-[#00B4D8] rounded-3xl blur-xl opacity-20 dark:opacity-30 group-hover:opacity-30 dark:group-hover:opacity-40 transition-opacity duration-500' />
-                <div className={`relative ${glassmorphism.light} p-8 rounded-3xl border border-[#004AAD]/20 dark:border-[#0066FF]/30`}>
-                    <div className='flex items-center justify-between'>
-                        <div>
-                            <h1 className='text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-[#004AAD] via-[#0066FF] to-[#00B4D8] dark:from-[#0066FF] dark:via-[#00B4D8] dark:to-[#66D9EF] mb-2'>
-                                My Schedule
-                            </h1>
-                            <p className='text-muted-foreground font-semibold flex items-center gap-2'>
-                                <Calendar className='w-5 h-5 text-[#00B4D8] dark:text-[#66D9EF]' />
-                                Keep track of your upcoming tests, live exams, and completed assessments timeline.
-                            </p>
-                        </div>
-                    </div>
-                </div>
+        <div className="max-w-5xl mx-auto p-4 md:p-8 space-y-8">
+            <div>
+                <h1 className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-purple-600 to-blue-600 dark:from-purple-400 dark:to-blue-400 mb-2">
+                    Your Exam Schedule
+                </h1>
+                <p className="text-muted-foreground font-medium">
+                    Stay on track with your personalized quiz timeline.
+                </p>
             </div>
 
-            {/* Filter Bar */}
-            <div className="bg-white dark:bg-gray-900 p-4 rounded-xl border shadow-sm flex flex-col sm:flex-row justify-between items-center gap-4">
-                <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-                    <Filter className="w-4 h-4" />
-                    Filter by Series:
-                </div>
-                <Select value={filterSeries} onValueChange={setFilterSeries}>
-                    <SelectTrigger className="w-full sm:w-[250px]">
-                        <SelectValue placeholder="All Series" />
-                    </SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="all">All Enrolled Series</SelectItem>
-                        {enrolledSeries.map(s => (
-                            <SelectItem key={s.id} value={s.id}>{s.title}</SelectItem>
-                        ))}
-                    </SelectContent>
-                </Select>
-            </div>
+            <div className="space-y-8">
+                {scheduleGroups.map((group, idx) => (
+                    <div key={idx} className="relative pl-8 border-l-2 border-slate-200 dark:border-slate-800 pb-8 last:pb-0">
+                        {/* Date Bead */}
+                        <div className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-purple-600 ring-4 ring-white dark:ring-slate-950" />
 
-            {/* Timeline */}
-            <div className="relative min-h-[500px]">
-                {loading ? (
-                    <div className="flex flex-col items-center justify-center py-20">
-                        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary"></div>
-                        <p className="text-muted-foreground mt-4">Loading your schedule...</p>
-                    </div>
-                ) : schedules.length === 0 ? (
-                    <div className="text-center py-20 bg-slate-50 dark:bg-slate-900/50 rounded-3xl border border-dashed">
-                        <Calendar className="w-16 h-16 mx-auto mb-4 text-slate-300" />
-                        <h3 className="text-xl font-bold text-slate-700 dark:text-slate-300">No Tests Scheduled</h3>
-                        <p className="text-slate-500">There are no upcoming tests for the selected series.</p>
-                    </div>
-                ) : (
-                    <div className="space-y-8 relative pl-4 md:pl-8">
-                        {/* Timeline Line */}
-                        <div className="absolute left-6 top-4 bottom-4 w-0.5 bg-slate-200 dark:bg-slate-800 hidden md:block"></div>
+                        <h3 className={`text-xl font-bold mb-4 ${group.dateLabel === 'Today' ? 'text-purple-600' : ''}`}>
+                            {group.dateLabel}
+                        </h3>
 
-                        {schedules.map((item, index) => {
-                            const isLive = item.status === 'live';
-                            const isPassed = item.status === 'completed';
+                        <div className="grid gap-4">
+                            {group.quizzes.map(quiz => {
+                                const startDate = new Date(quiz.startDate);
+                                const isLive = isToday(startDate) && new Date() >= startDate && new Date() <= addHours(startDate, quiz.duration / 60); // Approx check
 
-                            return (
-                                <motion.div
-                                    key={item.id}
-                                    initial={{ opacity: 0, x: -20 }}
-                                    animate={{ opacity: 1, x: 0 }}
-                                    transition={{ delay: index * 0.05 }}
-                                    className="relative md:pl-12"
-                                >
-                                    {/* Timeline Dot */}
-                                    {/* Desktop Dot */}
-                                    <div className={`hidden md:flex absolute left-[1.3rem] top-8 w-4 h-4 rounded-full border-4 border-white dark:border-slate-950 z-10 transform -translate-x-1/2
-                                        ${isLive ? 'bg-red-500 ring-4 ring-red-100 dark:ring-red-900' :
-                                            isPassed ? 'bg-green-500 ring-4 ring-green-100 dark:ring-green-900' :
-                                                'bg-blue-500 ring-4 ring-blue-100 dark:ring-blue-900'}`}
-                                    />
-
-                                    <Card className={`overflow-hidden transition-all hover:shadow-lg border-l-4 
-                                        ${isLive ? 'border-l-red-500 shadow-red-500/5' :
-                                            isPassed ? 'border-l-green-500' : 'border-l-blue-500'}`}>
-                                        <CardContent className="p-0">
-                                            <div className="flex flex-col md:flex-row">
-                                                {/* Date Column */}
-                                                <div className="p-6 bg-slate-50 dark:bg-secondary/20 md:w-48 flex-shrink-0 flex flex-col justify-center items-center md:items-start text-center md:text-left border-b md:border-b-0 md:border-r border-slate-100 dark:border-white/5">
-                                                    <span className="text-3xl font-black text-slate-700 dark:text-slate-200">
-                                                        {format(new Date(item.startDate), 'dd')}
-                                                    </span>
-                                                    <span className="text-lg font-medium text-slate-500 uppercase">
-                                                        {format(new Date(item.startDate), 'MMM')}
-                                                    </span>
-                                                    <span className="text-sm text-slate-400 mt-1">
-                                                        {format(new Date(item.startDate), 'EEEE')}
-                                                    </span>
-                                                    {item.startTime && (
-                                                        <Badge variant="secondary" className="mt-3 flex items-center gap-1">
-                                                            <Clock className="w-3 h-3" /> {item.startTime}
+                                return (
+                                    <Card key={quiz.id} className={`${glassmorphism.light} border-l-4 ${isLive ? 'border-l-red-500' : 'border-l-blue-500'} hover:shadow-lg transition-all group`}>
+                                        <CardContent className="p-5 flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
+                                            <div className="space-y-2 flex-1">
+                                                <div className="flex items-center gap-2">
+                                                    {isLive && (
+                                                        <Badge variant="destructive" className="animate-pulse">
+                                                            LIVE NOW
+                                                        </Badge>
+                                                    )}
+                                                    <Badge variant="outline" className="text-xs font-normal">
+                                                        {quiz.subject}
+                                                    </Badge>
+                                                    {quiz.chapter && (
+                                                        <Badge variant="secondary" className="text-xs font-normal">
+                                                            {quiz.chapter}
                                                         </Badge>
                                                     )}
                                                 </div>
 
-                                                {/* Details Column */}
-                                                <div className="p-6 flex-1">
-                                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
-                                                        <div>
-                                                            <div className="flex items-center gap-2 mb-2">
-                                                                <Badge variant="outline" className={`${getStatusColor(item.status)} capitalize`}>
-                                                                    {item.status}
-                                                                </Badge>
-                                                                {item.seriesName && (
-                                                                    <Badge variant="secondary" className="text-xs">
-                                                                        {item.seriesName}
-                                                                    </Badge>
-                                                                )}
-                                                            </div>
-                                                            <h3 className="text-xl font-bold text-foreground">{item.title}</h3>
-                                                        </div>
-                                                    </div>
+                                                <h4 className="text-lg font-bold group-hover:text-blue-600 transition-colors">
+                                                    {quiz.title}
+                                                </h4>
 
-                                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4 bg-slate-50 dark:bg-white/5 p-4 rounded-xl">
-                                                        <div>
-                                                            <p className="text-xs font-semibold text-muted-foreground uppercase mb-2">Subjects</p>
-                                                            <div className="flex flex-wrap gap-1">
-                                                                {item.subjects.map((sub: any, i) => (
-                                                                    <span key={i} className="px-2 py-1 bg-white dark:bg-black border rounded text-xs">
-                                                                        {typeof sub === 'string' ? sub : sub.name}
-                                                                    </span>
-                                                                ))}
-                                                                {item.subjects.length === 0 && <span className="text-xs italic text-muted-foreground">All Subjects</span>}
-                                                            </div>
-                                                        </div>
-                                                        <div>
-                                                            <p className="text-xs font-semibold text-muted-foreground uppercase mb-2">Chapters</p>
-                                                            <div className="flex flex-wrap gap-1">
-                                                                {item.chapters.map((ch: any, i) => (
-                                                                    <span key={i} className="px-2 py-1 bg-white dark:bg-black border rounded text-xs">
-                                                                        {typeof ch === 'string' ? ch : ch.name}
-                                                                    </span>
-                                                                ))}
-                                                                {item.chapters.length === 0 && <span className="text-xs italic text-muted-foreground">All Chapters</span>}
-                                                            </div>
-                                                        </div>
+                                                <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
+                                                    <div className="flex items-center gap-1">
+                                                        <Clock className="w-4 h-4" />
+                                                        {format(startDate, 'h:mm a')}
+                                                    </div>
+                                                    <div className="flex items-center gap-1">
+                                                        <Clock className="w-4 h-4" />
+                                                        {quiz.duration} mins
+                                                    </div>
+                                                    <div className="flex items-center gap-1">
+                                                        <BookOpen className="w-4 h-4" />
+                                                        {quiz.totalQuestions} Qs
                                                     </div>
                                                 </div>
                                             </div>
+
+                                            <div className="flex items-center gap-3">
+                                                <Link href={`/quiz/start/${quiz.id}`}>
+                                                    <Button className={isLive ? "bg-red-600 hover:bg-red-700" : ""}>
+                                                        {isLive ? "Join Quiz" : "View Details"}
+                                                        <ChevronRight className="w-4 h-4 ml-1" />
+                                                    </Button>
+                                                </Link>
+                                            </div>
                                         </CardContent>
                                     </Card>
-                                </motion.div>
-                            );
-                        })}
+                                );
+                            })}
+                        </div>
                     </div>
-                )}
+                ))}
             </div>
         </div>
     );

@@ -41,7 +41,7 @@ export function StudentStats({ students, totalStudents }: StudentStatsProps) {
             <Card className={`${glassmorphism.light} border-l-4 border-l-green-500`}>
                 <CardContent className='p-4 flex items-center justify-between'>
                     <div>
-                        <p className='text-sm text-muted-foreground font-medium'>Premium Users</p>
+                        <p className='text-sm text-muted-foreground font-medium'>Enrolled Users</p>
                         <h3 className='text-2xl font-bold text-green-700'>
                             {students.filter(s => s.plan === 'premium').length}
                         </h3>

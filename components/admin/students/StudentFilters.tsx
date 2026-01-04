@@ -72,7 +72,7 @@ export function StudentFilters({
                                         </SelectTrigger>
                                         <SelectContent>
                                             <SelectItem value='all'>All Students</SelectItem>
-                                            <SelectItem value='premium'>Premium</SelectItem>
+                                            <SelectItem value='premium'>Enrolled</SelectItem>
                                             <SelectItem value='free'>Free</SelectItem>
                                             <SelectItem value='admin'>Admins</SelectItem>
                                         </SelectContent>
