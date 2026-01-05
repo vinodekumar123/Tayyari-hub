@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { motion } from "framer-motion";
+
 
 const floatingIcons = [
     { icon: "🧬", label: "Biology", delay: 0 },
@@ -32,36 +32,22 @@ export const FloatingElements = () => {
 
     return (
         <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden">
-            {elements.map((item, index) => {
-                return (
-                    <motion.div
-                        key={index}
-                        initial={{ opacity: 0, y: 50 }}
-                        animate={{
-                            opacity: [0.3, 0.8, 0.3],
-                            y: [0, -20, 0],
-                            x: [0, index % 2 === 0 ? 10 : -10, 0]
-                        }}
-                        transition={{
-                            duration: item.duration,
-                            repeat: Infinity,
-                            repeatType: "mirror",
-                            ease: "easeInOut",
-                            delay: item.delay
-                        }}
-                        style={{
-                            position: 'absolute',
-                            top: item.top,
-                            left: item.left,
-                            fontSize: '2.5rem',
-                            filter: 'drop-shadow(0 4px 6px rgba(0,0,0,0.1))'
-                        }}
-                        className="hidden md:block select-none"
-                    >
-                        {item.icon}
-                    </motion.div>
-                )
-            })}
+            {elements.map((item, index) => (
+                <div
+                    key={index}
+                    className="absolute hidden md:block select-none animate-float"
+                    style={{
+                        top: item.top,
+                        left: item.left,
+                        fontSize: '2.5rem',
+                        filter: 'drop-shadow(0 4px 6px rgba(0,0,0,0.1))',
+                        animationDuration: `${item.duration}s`,
+                        animationDelay: `${item.delay}s`
+                    }}
+                >
+                    {item.icon}
+                </div>
+            ))}
         </div>
     );
 };

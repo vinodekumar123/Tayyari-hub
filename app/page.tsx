@@ -1,15 +1,17 @@
-import React from "react";
-import HeroSection from "@/components/Home/hero";
-import Navbar from "@/components/Home/navbar";
-import CoursesSection from "@/components/Home/courses";
-import Footer from "@/components/Home/footer";
-import TestimonialSection from "@/components/Home/reviews";
-import FeaturesBento from "@/components/Home/features-bento";
-import SeriesSchedule from "@/components/Home/series-schedule";
-import PricingBundles from "@/components/Home/pricing-bundles";
-import WhatsappInviteSection from "@/components/Home/whatsapp";
+import React, { Suspense } from "react";
 import HeroModern from "@/components/Home/hero-modern";
+import Navbar from "@/components/Home/navbar";
+import Footer from "@/components/Home/footer";
+import dynamic from 'next/dynamic';
 import { ScrollReveal } from "@/components/ui/scroll-reveal";
+
+// Lazy load heavy components
+const CoursesSection = dynamic(() => import("@/components/Home/courses"), { ssr: true });
+const FeaturesBento = dynamic(() => import("@/components/Home/features-bento"), { ssr: true });
+const SeriesSchedule = dynamic(() => import("@/components/Home/series-schedule"), { ssr: true });
+const PricingBundles = dynamic(() => import("@/components/Home/pricing-bundles"), { ssr: true });
+const WhatsappInviteSection = dynamic(() => import("@/components/Home/whatsapp"), { ssr: true });
+const TestimonialSection = dynamic(() => import("@/components/Home/reviews"), { ssr: true });
 
 export default function Home() {
   return (

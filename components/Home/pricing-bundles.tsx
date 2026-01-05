@@ -441,6 +441,88 @@ const PricingBundles = () => {
                     </div>
                 </div>
 
+
+                {/* How to Get Registered Section */}
+                <div className="mb-20">
+                    <div className="text-center mb-10">
+                        <h3 className="text-3xl font-black text-slate-900 dark:text-white mb-4">
+                            How to Get Registered
+                        </h3>
+                        <p className="text-slate-600 dark:text-slate-400 max-w-2xl mx-auto">
+                            Follow these simple steps to start your preparation journey with TayyariHub.
+                        </p>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                        {/* Step 1 */}
+                        <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm relative overflow-hidden group hover:shadow-lg transition-all">
+                            <div className="absolute -right-4 -top-4 w-16 h-16 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center text-4xl font-black text-blue-200 dark:text-blue-800/50 group-hover:scale-110 transition-transform">1</div>
+                            <div className="relative z-10">
+                                <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-2xl flex items-center justify-center text-blue-600 dark:text-blue-400 mb-4">
+                                    <Trophy className="w-6 h-6" />
+                                </div>
+                                <h4 className="text-lg font-bold text-slate-900 dark:text-white mb-2">Create Account</h4>
+                                <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">
+                                    Sign up on our platform to get started.
+                                </p>
+                                <Link href="/auth/register" className="text-sm font-bold text-blue-600 hover:text-blue-700 underline decoration-2 underline-offset-2">
+                                    tayyarihub.com/auth/register
+                                </Link>
+                            </div>
+                        </div>
+
+                        {/* Step 2 */}
+                        <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm relative overflow-hidden group hover:shadow-lg transition-all">
+                            <div className="absolute -right-4 -top-4 w-16 h-16 bg-indigo-100 dark:bg-indigo-900/30 rounded-full flex items-center justify-center text-4xl font-black text-indigo-200 dark:text-indigo-800/50 group-hover:scale-110 transition-transform">2</div>
+                            <div className="relative z-10">
+                                <div className="w-12 h-12 bg-indigo-100 dark:bg-indigo-900/30 rounded-2xl flex items-center justify-center text-indigo-600 dark:text-indigo-400 mb-4">
+                                    <Target className="w-6 h-6" />
+                                </div>
+                                <h4 className="text-lg font-bold text-slate-900 dark:text-white mb-2">Select Bundle</h4>
+                                <p className="text-sm text-slate-600 dark:text-slate-400">
+                                    Decide which series or complete bundle suits your preparation needs best.
+                                </p>
+                            </div>
+                        </div>
+
+                        {/* Step 3 */}
+                        <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm relative overflow-hidden group hover:shadow-lg transition-all">
+                            <div className="absolute -right-4 -top-4 w-16 h-16 bg-purple-100 dark:bg-purple-900/30 rounded-full flex items-center justify-center text-4xl font-black text-purple-200 dark:text-purple-800/50 group-hover:scale-110 transition-transform">3</div>
+                            <div className="relative z-10">
+                                <div className="w-12 h-12 bg-purple-100 dark:bg-purple-900/30 rounded-2xl flex items-center justify-center text-purple-600 dark:text-purple-400 mb-4">
+                                    <Zap className="w-6 h-6" />
+                                </div>
+                                <h4 className="text-lg font-bold text-slate-900 dark:text-white mb-2">Send Payment</h4>
+                                <p className="text-sm text-slate-600 dark:text-slate-400 mb-2">
+                                    Send amount via QR code / Payment Till ID.
+                                </p>
+                                <div className="bg-purple-50 dark:bg-purple-900/20 p-3 rounded-lg border border-purple-100 dark:border-purple-800/50">
+                                    <div className="text-xs text-slate-500 uppercase font-bold">Till ID</div>
+                                    <div className="text-lg font-mono font-black text-purple-700 dark:text-purple-400 select-all">981571591</div>
+                                    <div className="text-xs text-slate-500 mt-1">Title: Tayyari Hub</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Step 4 */}
+                        <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm relative overflow-hidden group hover:shadow-lg transition-all">
+                            <div className="absolute -right-4 -top-4 w-16 h-16 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center text-4xl font-black text-green-200 dark:text-green-800/50 group-hover:scale-110 transition-transform">4</div>
+                            <div className="relative z-10">
+                                <div className="w-12 h-12 bg-green-100 dark:bg-green-900/30 rounded-2xl flex items-center justify-center text-green-600 dark:text-green-400 mb-4">
+                                    <CheckCircle2 className="w-6 h-6" />
+                                </div>
+                                <h4 className="text-lg font-bold text-slate-900 dark:text-white mb-2">Confirm Order</h4>
+                                <p className="text-sm text-slate-600 dark:text-slate-400 mb-3">
+                                    WhatsApp your Name, Email, Series Name & Payment Receipt.
+                                </p>
+                                <a href="https://wa.me/923237507673" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 text-sm font-bold text-green-600 bg-green-50 dark:bg-green-900/20 px-3 py-2 rounded-lg hover:bg-green-100 dark:hover:bg-green-900/40 transition-colors w-full justify-center">
+                                    <span>0323 7507673</span>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 {/* Contact Banner */}
                 <div className="bg-slate-900 rounded-3xl p-8 md:p-12 relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-8 group">
                     <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full blur-3xl translate-x-1/2 -translate-y-1/2 group-hover:bg-white/10 transition-colors duration-500"></div>
@@ -464,7 +546,7 @@ const PricingBundles = () => {
                 </div>
 
             </div>
-        </section>
+        </section >
     );
 };
 

@@ -24,6 +24,7 @@ export const ScrollReveal = ({ children, width = "100%", className = "", delay =
                 initial="hidden"
                 animate={isInView ? "visible" : "hidden"}
                 transition={{ duration: 0.5, delay: delay, ease: "easeOut" }}
+                style={{ willChange: "transform, opacity" }}
             >
                 {children}
             </motion.div>

@@ -170,9 +170,9 @@ export function Sidebar() {
       section: 'practice',
       title: 'Practice / Testing',
       items: [
-        { icon: Trophy, label: 'Quizzes', href: '/admin/quizzes/quizebank' },
+        { icon: Trophy, label: 'Quizzes', href: '/dashboard/student/quiz-bank' },
         { icon: Plus, label: 'Create Your Own Test', href: '/quiz/create-mock' },
-        { icon: Trophy, label: 'Your Created Tests', href: '/admin/quizzes/user-created-quizzes' },
+        { icon: Trophy, label: 'Your Created Tests', href: '/dashboard/student/user-created-quizzes' },
       ],
     },
     {

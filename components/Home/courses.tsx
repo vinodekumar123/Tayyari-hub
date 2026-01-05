@@ -1,64 +1,68 @@
 "use client";
 import React, { useState, useEffect } from "react";
-import { GraduationCap, ShieldCheck, FileText, Terminal, ArrowRight, Sparkles, Zap, Star, TrendingUp, Brain, Target, Clock, Users, Trophy, ChevronRight } from "lucide-react";
+import { GraduationCap, ShieldCheck, FileText, Terminal, ArrowRight, Sparkles, Zap, Star, TrendingUp, Brain, Target, Clock, Users, Trophy, ChevronRight, Activity } from "lucide-react";
 import { motion, useMotionTemplate, useMotionValue, useScroll, useTransform } from "framer-motion";
 
 const courses = [
   {
     title: "MDCAT",
     subtitle: "Medical College Admission Test",
-    description: "AI-powered medical entrance preparation with interactive simulations and personalized learning paths",
-    stats: "95%",
-    label: "Success Rate",
-    students: "5,200+",
+    description: "Prepare for your medical future with our comprehensive question bank, full-length papers, and detailed performance analytics.",
+    stats: "Active",
+    label: "Enroll Now",
+    students: "5,000+",
     gradient: "from-cyan-500 via-blue-500 to-purple-500",
     glowColor: "rgba(6, 182, 212, 0.4)",
     icon: <GraduationCap className="w-6 h-6" />,
-    features: ["3D Anatomy", "Live Sessions", "Mock Tests"],
+    features: ["20k+ MCQs", "Detailed Explanations", "Doubt Solver"],
     pattern: "medical",
-    delay: 0
+    delay: 0,
+    status: "active"
   },
   {
     title: "ECAT",
     subtitle: "Engineering College Admission Test",
-    description: "Next-gen engineering prep with virtual labs, 3D modeling and real-time problem solving",
-    stats: "92%",
-    label: "Success Rate",
-    students: "4,800+",
+    description: "Engineering prep platform currently in development to help you secure admission in top engineering universities (UET, NUST).",
+    stats: "Soon",
+    label: "Status",
+    students: "Waitlist",
     gradient: "from-emerald-500 via-teal-500 to-cyan-500",
     glowColor: "rgba(16, 185, 129, 0.4)",
     icon: <Terminal className="w-6 h-6" />,
-    features: ["Virtual Labs", "CAD Tools", "Physics Sims"],
+    features: ["Coming Soon", "Engineering", "Math/Phys"],
     pattern: "engineering",
-    delay: 0.15
+    delay: 0.15,
+    status: "coming-soon"
   },
   {
     title: "LAT",
     subtitle: "Law Admission Test",
-    description: "Interactive case studies with real courtroom simulations and expert mentor guidance",
-    stats: "89%",
-    label: "Success Rate",
-    students: "3,400+",
+    description: "Dedicated preparation for future lawyers. Comprehensive study material and mock tests coming your way soon.",
+    stats: "Soon",
+    label: "Status",
+    students: "Waitlist",
     gradient: "from-amber-500 via-orange-500 to-red-500",
     glowColor: "rgba(251, 146, 60, 0.4)",
     icon: <FileText className="w-6 h-6" />,
-    features: ["Case Studies", "Mock Trials", "Legal DB"],
+    features: ["Coming Soon", "Legal", "Reasoning"],
     pattern: "law",
-    delay: 0.3
+    delay: 0.3,
+    status: "coming-soon"
   },
   {
     title: "NTS",
     subtitle: "National Testing Service",
-    description: "Adaptive learning with real-time performance analytics and intelligent recommendations",
-    stats: "94%",
-    label: "Success Rate",
-    students: "6,100+",
+    description: "Adaptive learning system for NTS success. We are building a robust platform to help you ace your tests.",
+    stats: "Soon",
+    label: "Status",
+    students: "Waitlist",
     gradient: "from-violet-500 via-purple-500 to-fuchsia-500",
     glowColor: "rgba(139, 92, 246, 0.4)",
     icon: <ShieldCheck className="w-6 h-6" />,
-    features: ["Adaptive AI", "Analytics", "Practice Q's"],
+    features: ["Coming Soon", "GAT/NAT", "General"],
     pattern: "nts",
-    delay: 0.45
+    delay: 0.45,
+    status: "coming-soon"
   },
 ];
 
@@ -276,20 +280,25 @@ const CourseCard = ({ course, index }: { course: any, index: number }) => {
 
             {/* CTA Button */}
             <motion.button
-              whileHover={{ scale: 1.03, y: -2 }}
-              whileTap={{ scale: 0.98 }}
-              className={`relative w-full py-4 px-6 rounded-2xl font-bold text-white bg-gradient-to-r ${course.gradient} shadow-lg hover:shadow-2xl transition-all duration-300 overflow-hidden group/btn`}
+              whileHover={course.status === 'active' ? { scale: 1.03, y: -2 } : {}}
+              whileTap={course.status === 'active' ? { scale: 0.98 } : {}}
+              disabled={course.status !== 'active'}
+              className={`relative w-full py-4 px-6 rounded-2xl font-bold text-white shadow-lg transition-all duration-300 overflow-hidden group/btn ${course.status === 'active'
+                ? `bg-gradient-to-r ${course.gradient} hover:shadow-2xl`
+                : 'bg-slate-300 dark:bg-slate-700 cursor-not-allowed opacity-70'
+                }`}
             >
-              {/* Button shine effect */}
-              <motion.div
-                className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent"
-                initial={{ x: '-100%' }}
-                whileHover={{ x: '100%' }}
-                transition={{ duration: 0.6 }}
-              />
+              {course.status === 'active' && (
+                <motion.div
+                  className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent"
+                  initial={{ x: '-100%' }}
+                  whileHover={{ x: '100%' }}
+                  transition={{ duration: 0.6 }}
+                />
+              )}
               <span className="relative flex items-center justify-center gap-2">
-                <span>Start Learning</span>
-                <ArrowRight className="w-4 h-4 group-hover/btn:translate-x-1 transition-transform" />
+                <span>{course.status === 'active' ? 'Start Learning' : 'Coming Soon'}</span>
+                {course.status === 'active' && <ArrowRight className="w-4 h-4 group-hover/btn:translate-x-1 transition-transform" />}
               </span>
             </motion.button>
           </div>

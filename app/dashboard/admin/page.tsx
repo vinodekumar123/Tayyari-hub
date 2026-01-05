@@ -146,6 +146,8 @@ export default function AdminDashboard() {
   });
 
   // Auth Protection
+  const [authLoading, setAuthLoading] = useState(true);
+
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (user) => {
       if (user) {
@@ -155,6 +157,8 @@ export default function AdminDashboard() {
           const userData = docRef.data();
           if (!docRef.exists() || (userData?.admin !== true && userData?.admin !== 'true')) {
             router.push('/');
+          } else {
+            setAuthLoading(false);
           }
         } catch (e) {
           router.push('/');
@@ -165,6 +169,14 @@ export default function AdminDashboard() {
     });
     return () => unsub();
   }, [router]);
+
+  if (authLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-background">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
 
   // Fast Data Loading
   useEffect(() => {

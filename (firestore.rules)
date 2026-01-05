@@ -49,9 +49,20 @@ service cloud.firestore {
       // Teachers CANNOT read student profiles (privacy).
       allow read: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
       
-      // Write: Users update own (non-sensitive). Admins update all.
-      // Prevent users from making themselves admin (validate 'admin' field unchanged if not admin)
-      allow write: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
+      // Create: Users can create their own profile (on signup)
+      allow create: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
+
+      // Update: Users can update own profile BUT CANNOT change sensitive fields.
+      // Admins can update everything.
+      allow update: if isAuthenticated() && (
+        isAdmin() || 
+        (request.auth.uid == userId && 
+         !request.resource.data.diff(resource.data).affectedKeys().hasAny(['admin', 'superadmin', 'role', 'plan', 'subjects', 'enrolledSeries'])
+        )
+      );
+
+      // Delete: Only Admins can delete users (or users deleting themselves if we wanted, but let's restrict to admin for now)
+      allow delete: if isAuthenticated() && isAdmin();
     }
 
     // 2. COURSES / SERIES / SUBJECTS (Content Structure)

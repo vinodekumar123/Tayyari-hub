@@ -270,12 +270,34 @@ export default function CreateUserQuizPage() {
           subjectAnalytics[subj]?.usedQuestions || []
         );
 
-        const unused = pool.filter((q) => !usedSet.has(q.id));
-        const used = pool.filter((q) => usedSet.has(q.id));
+        // Separate into unused and used
+        let unused = pool.filter((q) => !usedSet.has(q.id));
+        let used = pool.filter((q) => usedSet.has(q.id));
+
+        // Shuffle both arrays to ensure randomness
+        const shuffleArray = (array: MockQuestion[]) => {
+          for (let i = array.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [array[i], array[j]] = [array[j], array[i]];
+          }
+          return array;
+        };
+
+        unused = shuffleArray(unused);
+        used = shuffleArray(used);
+
         const selected: MockQuestion[] = [];
-        for (let i = 0; i < unused.length && selected.length < numThisSubject; i++) selected.push(unused[i]);
-        // Only if not enough unused, take used
-        for (let i = 0; i < used.length && selected.length < numThisSubject; i++) selected.push(used[i]);
+
+        // Priority 1: Add Unused Questions
+        for (let i = 0; i < unused.length && selected.length < numThisSubject; i++) {
+          selected.push(unused[i]);
+        }
+
+        // Priority 2: Fill remaining with Used Questions
+        for (let i = 0; i < used.length && selected.length < numThisSubject; i++) {
+          selected.push(used[i]);
+        }
+
         allSelectedQuestions = allSelectedQuestions.concat(selected);
       }
 

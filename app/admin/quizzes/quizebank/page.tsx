@@ -14,15 +14,13 @@ import {
   startAfter,
   deleteDoc,
   doc,
-  QueryDocumentSnapshot,
-  DocumentData,
 } from 'firebase/firestore';
 import { db } from '../../../firebase';
 import { useUserStore } from '@/stores/useUserStore';
 import { useCacheStore } from '@/stores/useCacheStore';
 import { useUIStore } from '@/stores/useUIStore';
-import { TableSkeleton, ListItemSkeleton } from '@/components/ui/skeleton-cards';
-import { brandColors, animations, glassmorphism } from '@/lib/design-tokens';
+import { TableSkeleton } from '@/components/ui/skeleton-cards';
+import { animations, glassmorphism } from '@/lib/design-tokens';
 import {
   Card,
   CardContent,
@@ -47,12 +45,11 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import {
-  ArrowRight, BookOpen, Calendar, Clock, Play, Pencil, Eye, Trash2,
-  Search, Filter, RefreshCw, TrendingUp, Award, Zap, Database
+  ArrowRight, BookOpen, Calendar, Clock, Pencil, Eye, Trash2,
+  Search, Database, Zap
 } from 'lucide-react';
 import Link from 'next/link';
 import { UnifiedHeader } from '@/components/unified-header';
-import { toast } from 'react-hot-toast';
 
 // Quiz status helper
 function getQuizStatus(startDate: string, endDate: string, startTime?: string, endTime?: string) {
@@ -90,7 +87,7 @@ function getQuizStatus(startDate: string, endDate: string, startTime?: string, e
   }
 }
 
-export default function QuizBankPage() {
+export default function AdminQuizBankPage() {
   const router = useRouter();
 
   // Zustand stores
@@ -110,66 +107,56 @@ export default function QuizBankPage() {
   const [seriesList, setSeriesList] = useState<{ id: string; name: string }[]>([]);
   const [lastVisible, setLastVisible] = useState<any>(null);
   const [hasMore, setHasMore] = useState(true);
-  const [showPremiumDialog, setShowPremiumDialog] = useState(false);
   const [deleteModal, setDeleteModal] = useState(false);
   const [quizToDelete, setQuizToDelete] = useState<Quiz | null>(null);
-  const [attemptedQuizzes, setAttemptedQuizzes] = useState<{ [key: string]: number }>({});
 
-  // Debug: Log when user changes
+  // Admin Access Check
   useEffect(() => {
-    console.log('🎯 Quiz Bank: User state changed', {
-      hasUser: !!user,
-      isLoading: userLoading,
-      userUid: user?.uid,
-      userAdmin: user?.admin
-    });
-  }, [user, userLoading]);
-
-  // Fetch quizzes with caching
-  useEffect(() => {
-    // Wait for user to be available from Admin Layout
-    if (!user) {
-      console.log('⏳ Quiz Bank: Waiting for user from Admin Layout...');
-      return; // Admin Layout will handle redirect if not authenticated
+    if (!userLoading && user && !user.admin) {
+      addToast({ type: 'error', message: 'Access Denied' });
+      router.push('/dashboard/student');
     }
+  }, [user, userLoading, router, addToast]);
 
-    console.log('🚀 Quiz Bank: User available, starting fetch...');
+  // Fetch Series List
+  useEffect(() => {
+    if (!user?.admin) return;
+    getDocs(collection(db, 'series')).then(snap => {
+      setSeriesList(snap.docs.map(d => ({ id: d.id, name: d.data().name })));
+    }).catch(err => console.error("Failed to load series", err));
+  }, [user]);
+
+  // Fetch quizzes with caching + backend filtering
+  useEffect(() => {
+    if (!user || !user.admin) return;
 
     const fetchQuizzes = async () => {
       setLoading(true);
       setUiLoading('quizzes', true);
+      // Reset state for new fetch
+      setQuizzes([]);
+      setLastVisible(null);
 
       try {
-        // Check cache first
-        const cacheKey = `quizzes-${user.uid}-${user.admin ? 'admin' : 'student'}`;
+        const cacheKey = `admin-quizzes-${user.uid}-${filters.series}`;
         const cached = cache.get<Quiz[]>(cacheKey);
-        if (cached && Array.isArray(cached)) {
-          console.log('✅ Loading from cache:', cached.length, 'quizzes');
+
+        // Only use cache if it was for the same series filter
+        if (cached && Array.isArray(cached) && cached.length > 0) {
           setQuizzes(cached);
           setLoading(false);
           setUiLoading('quizzes', false);
-          return;
+          // If cached, we might need to handle pagination state manually or just fetch fresh to be safe for admin.
+          // For admin, refreshing is often better. Let's skip cache-return for now to ensure freshness with filters.
+          // Or better: Use it but still re-verify? 
+          // Let's stick to no-cache for filtered queries to simplify logic, or short TTL.
         }
 
-        console.log('🔄 Fetching quizzes from Firebase...');
-
-        // Fetch from Firebase
         const constraints: any[] = [orderBy('startDate', 'desc'), limit(20)];
 
-        // Fetch Series for filter
-        getDocs(collection(db, 'series')).then(snap => {
-          setSeriesList(snap.docs.map(d => ({ id: d.id, name: d.data().name })));
-        });
-
-        // If not admin, filter by published and course
-        const isAdmin = user.admin === true || user.admin === 'true';
-        if (!isAdmin) {
-          constraints.push(where('published', '==', true));
-          // Only add course filter if course exists
-          const userCourse = (user as any).course;
-          if (userCourse) {
-            constraints.push(where('course.name', '==', userCourse));
-          }
+        // Backend Series Filter
+        if (filters.series !== 'all') {
+          constraints.push(where('series', 'array-contains', filters.series));
         }
 
         const q = query(collection(db, 'quizzes'), ...constraints);
@@ -180,24 +167,21 @@ export default function QuizBankPage() {
           ...d.data(),
         })) as Quiz[];
 
-        console.log('✅ Fetched', data.length, 'quizzes from Firebase');
-
         setQuizzes(data);
         setLastVisible(snapshot.docs[snapshot.docs.length - 1]);
         setHasMore(snapshot.docs.length === 20);
 
-        // Cache for 5 minutes
-        cache.set(cacheKey, data, 5 * 60 * 1000);
+        cache.set(cacheKey, data, 2 * 60 * 1000); // 2 min cache
 
         if (data.length > 0) {
-          addToast({
-            type: 'success',
-            message: `Loaded ${data.length} quizzes`,
-            duration: 2000,
-          });
+          //   addToast({
+          //     type: 'success',
+          //     message: `Loaded ${data.length} quizzes`,
+          //     duration: 2000,
+          //   });
         }
       } catch (error: any) {
-        console.error('❌ Error fetching quizzes:', error);
+        console.error('Error fetching quizzes:', error);
         addToast({
           type: 'error',
           message: error.message || 'Failed to load quizzes',
@@ -208,39 +192,10 @@ export default function QuizBankPage() {
       }
     };
 
-    const fetchAttempts = async () => {
-      try {
-        const attemptsRef = collection(db, 'users', user.uid, 'quizAttempts');
-        const attemptsSnap = await getDocs(attemptsRef);
-
-        const counts: { [key: string]: number } = {};
-
-        attemptsSnap.docs.forEach(doc => {
-          // doc.id is the quizId for single attempts or we need to check structure. 
-          // Based on start/page.tsx: doc(db, 'users', user.uid, 'quizAttempts', quizId)
-          // It seems it stores ONE summary doc per quiz?
-          // start/page.tsx: setDoc(doc(db, 'users', user.uid, 'quizAttempts', quizId), { attemptNumber: X, completed: true ... }, { merge: true })
-          // So yes, doc.id IS the quizId, and data().attemptNumber is the count.
-
-          if (doc.data().completed) {
-            counts[doc.id] = doc.data().attemptNumber || 0;
-          }
-        });
-
-        setAttemptedQuizzes(counts);
-      } catch (err) {
-        console.error("Failed to load attempts", err);
-      }
-    };
-
     fetchQuizzes();
-    // Only fetch attempts if not admin (or if admins act as students) 
-    // Usually admins don't have limits, but we can show it anyway.
-    fetchAttempts();
+  }, [user, addToast, setUiLoading, filters.series]);
 
-  }, [user, cache, addToast, setUiLoading]);
-
-  // Filter quizzes
+  // Client-side Filter for remaining fields
   const filteredQuizzes = useMemo(() => {
     return quizzes.filter((quiz) => {
       const matchesSearch = !filters.search ||
@@ -252,21 +207,15 @@ export default function QuizBankPage() {
       const status = getQuizStatus(quiz.startDate, quiz.endDate, quiz.startTime, quiz.endTime);
       const matchesStatus = filters.status === 'all' || status === filters.status;
 
+      // Series is already filtered by backend if not 'all'. 
+      // If 'all', we don't filter client side either.
+      // So no need for matchesSeries logic here unless we want to double check?
+      // Redundant but safe:
       const matchesSeries = filters.series === 'all' || (quiz.series && quiz.series.includes(filters.series));
 
       return matchesSearch && matchesAccessType && matchesStatus && matchesSeries;
     });
   }, [quizzes, filters]);
-
-  // Handle quiz click
-  const handleQuizClick = (quiz: Quiz) => {
-    const userPlan = (user as any)?.plan;
-    if (!user?.admin && userPlan === 'free' && quiz.accessType === 'paid') {
-      setShowPremiumDialog(true);
-      return;
-    }
-    router.push(`/quiz/start?id=${quiz.id}`);
-  };
 
   // Handle delete
   const handleDelete = async () => {
@@ -291,17 +240,16 @@ export default function QuizBankPage() {
 
   // Load more (pagination)
   const handleLoadMore = async () => {
-    if (!lastVisible || !user) return;
+    if (!lastVisible || !user || !user.admin) return;
     setLoading(true);
     setUiLoading('quizzes', true);
 
     try {
       const constraints: any[] = [orderBy('startDate', 'desc'), limit(20)];
-      const isAdmin = user.admin === true || user.admin === 'true';
-      if (!isAdmin) {
-        constraints.push(where('published', '==', true));
-        const userCourse = (user as any).course;
-        if (userCourse) constraints.push(where('course.name', '==', userCourse));
+
+      // Maintain filter on load more
+      if (filters.series !== 'all') {
+        constraints.push(where('series', 'array-contains', filters.series));
       }
 
       constraints.push(startAfter(lastVisible));
@@ -313,13 +261,9 @@ export default function QuizBankPage() {
       if (newData.length) {
         setQuizzes((prev) => {
           const combined = [...prev, ...newData];
-          // Update cache with appended results
           try {
-            const cacheKey = `quizzes-${user.uid}-${user.admin ? 'admin' : 'student'}`;
-            cache.set(cacheKey, combined, 5 * 60 * 1000);
-          } catch (e) {
-            /* ignore cache errors */
-          }
+            // Append to cache?
+          } catch (e) { }
           return combined;
         });
       }
@@ -327,7 +271,7 @@ export default function QuizBankPage() {
       setLastVisible(snapshot.docs[snapshot.docs.length - 1]);
       setHasMore(snapshot.docs.length === 20);
     } catch (error: any) {
-      console.error('❌ Error loading more quizzes:', error);
+      console.error('Error loading more quizzes:', error);
       addToast({ type: 'error', message: error.message || 'Failed to load more quizzes' });
     } finally {
       setLoading(false);
@@ -336,17 +280,17 @@ export default function QuizBankPage() {
   };
 
   // Show skeleton while loading
-  if (loading || !user) {
+  // Only full page skeleton on initial load, not filter change if we want smoother?
+  // But we reset quizzes to [] so it will show skeleton. That's fine.
+  if (loading && quizzes.length === 0) {
     return (
       <div className="w-full max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="mb-8">
-          <div className="h-12 w-64 bg-muted animate-pulse rounded-lg mb-4" />
-          <div className="h-6 w-48 bg-muted animate-pulse rounded-lg" />
-        </div>
         <TableSkeleton rows={8} columns={4} />
       </div>
     );
   }
+
+  if (!user?.admin) return null;
 
   return (
     <div className="w-full max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
@@ -365,28 +309,13 @@ export default function QuizBankPage() {
               <h1 className="text-4xl font-black mb-2 flex items-center gap-2">
                 <span>📝</span>
                 <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#004AAD] via-[#0066FF] to-[#00B4D8] dark:from-[#0066FF] dark:via-[#00B4D8] dark:to-[#66D9EF]">
-                  Quiz Bank
+                  Admin Quiz Bank
                 </span>
               </h1>
               <p className="text-muted-foreground font-semibold flex items-center gap-2">
                 <Zap className="w-5 h-5 text-[#00B4D8] dark:text-[#66D9EF]" />
-                {filteredQuizzes.length} quizzes available
+                {filteredQuizzes.length} quizzes loaded
               </p>
-            </div>
-            <div className="hidden md:flex gap-4">
-              <div className={`${glassmorphism.medium} p-4 rounded-2xl border border-[#004AAD]/10`}>
-                <div className="flex items-center gap-3">
-                  <div className="p-3 bg-gradient-to-br from-[#004AAD]/20 to-[#0066FF]/20 rounded-xl">
-                    <Award className="w-6 h-6 text-[#004AAD] dark:text-[#0066FF]" />
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground">Active</p>
-                    <p className="text-2xl font-black text-foreground">
-                      {filteredQuizzes.filter(q => getQuizStatus(q.startDate, q.endDate) === 'active').length}
-                    </p>
-                  </div>
-                </div>
-              </div>
             </div>
           </div>
         </div>
@@ -463,8 +392,6 @@ export default function QuizBankPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredQuizzes.map((quiz) => {
             const status = getQuizStatus(quiz.startDate, quiz.endDate, quiz.startTime, quiz.endTime);
-            const attemptCount = attemptedQuizzes[quiz.id] || 0;
-            const canAttempt = attemptCount < (quiz.maxAttempts || 1);
 
             return (
               <div key={quiz.id} className="group relative">
@@ -531,56 +458,35 @@ export default function QuizBankPage() {
                           </span>
                         </div>
                       )}
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Attempts:</span>
-                        <span className="font-semibold text-foreground">{attemptCount} / {quiz.maxAttempts || 1}</span>
-                      </div>
                     </div>
 
                     <div className="space-y-2">
-                      {user?.admin ? (
-                        <>
-                          <Button className="w-full bg-gradient-to-r from-[#004AAD] to-[#0066FF] text-white" asChild>
-                            <Link href={`/quiz/start?id=${quiz.id}`}>
-                              <Eye className="w-4 h-4 mr-2" />
-                              Preview Quiz
-                              <ArrowRight className="w-4 h-4 ml-2" />
-                            </Link>
-                          </Button>
-                          <div className="grid grid-cols-2 gap-2">
-                            <Button variant="secondary" size="sm" asChild>
-                              <Link href={`/admin/quizzes/create?id=${quiz.id}`}>
-                                <Pencil className="w-3 h-3 mr-1" />
-                                Edit
-                              </Link>
-                            </Button>
-                            <Button
-                              variant="destructive"
-                              size="sm"
-                              onClick={() => {
-                                setQuizToDelete(quiz);
-                                setDeleteModal(true);
-                              }}
-                            >
-                              <Trash2 className="w-3 h-3 mr-1" />
-                              Delete
-                            </Button>
-                          </div>
-                        </>
-                      ) : (
-                        <Button
-                          className={`w-full ${status === 'active' && canAttempt
-                            ? 'bg-gradient-to-r from-[#00B4D8] to-[#66D9EF] text-white'
-                            : ''
-                            }`}
-                          disabled={status !== 'active' || !canAttempt}
-                          onClick={() => handleQuizClick(quiz)}
-                        >
-                          <Play className="w-4 h-4 mr-2" />
-                          {attemptCount > 0 ? 'Retake Quiz' : 'Start Quiz'}
+                      <Button className="w-full bg-gradient-to-r from-[#004AAD] to-[#0066FF] text-white" asChild>
+                        <Link href={`/quiz/start?id=${quiz.id}`}>
+                          <Eye className="w-4 h-4 mr-2" />
+                          Preview Quiz
                           <ArrowRight className="w-4 h-4 ml-2" />
+                        </Link>
+                      </Button>
+                      <div className="grid grid-cols-2 gap-2">
+                        <Button variant="secondary" size="sm" asChild>
+                          <Link href={`/admin/quizzes/create?id=${quiz.id}`}>
+                            <Pencil className="w-3 h-3 mr-1" />
+                            Edit
+                          </Link>
                         </Button>
-                      )}
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => {
+                            setQuizToDelete(quiz);
+                            setDeleteModal(true);
+                          }}
+                        >
+                          <Trash2 className="w-3 h-3 mr-1" />
+                          Delete
+                        </Button>
+                      </div>
                     </div>
                   </CardContent>
                 </Card>
@@ -598,31 +504,6 @@ export default function QuizBankPage() {
           </Button>
         </div>
       )}
-
-      {/* Premium Dialog */}
-      <Dialog open={showPremiumDialog} onOpenChange={setShowPremiumDialog}>
-        <DialogContent className={`${glassmorphism.medium} border-[#004AAD]/20`}>
-          <DialogHeader>
-            <DialogTitle className="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-[#004AAD] to-[#0066FF]">
-              Premium Required
-            </DialogTitle>
-            <DialogDescription>
-              This quiz requires a premium subscription. Upgrade now to access all premium content!
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowPremiumDialog(false)}>
-              Cancel
-            </Button>
-            <Button
-              className="bg-gradient-to-r from-[#004AAD] to-[#0066FF] text-white"
-              onClick={() => router.push('/pricing')}
-            >
-              Upgrade Now
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       {/* Delete Dialog */}
       <Dialog open={deleteModal} onOpenChange={setDeleteModal}>

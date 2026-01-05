@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useEffect } from "react";
-import { motion, useMotionTemplate, useMotionValue, animate } from "framer-motion";
+import React from "react";
+import { motion } from "framer-motion";
 import { ArrowRight } from "lucide-react";
 import Link from 'next/link';
 import { FloatingElements } from "./decorations/FloatingElements";
@@ -9,28 +9,15 @@ import { GridPattern, GradientMesh } from "./decorations/BackgroundPatterns";
 import { Spotlight } from "@/components/ui/spotlight";
 import { TextGenerateEffect } from "@/components/ui/text-generate-effect";
 
-const COLORS = ["#13FFAA", "#1E67C6", "#CE84CF", "#DD335C"];
-
 const HeroModern = () => {
-    const color = useMotionValue(COLORS[0]);
-    const backgroundImage = useMotionTemplate`radial-gradient(125% 125% at 50% 0%, transparent 50%, ${color})`;
-
-    useEffect(() => {
-        animate(color, COLORS, {
-            ease: "easeInOut",
-            duration: 10,
-            repeat: Infinity,
-            repeatType: "mirror",
-        });
-    }, [color]);
-
     return (
-        <motion.section
-            style={{
-                backgroundImage,
-            }}
+        <section
             className="relative min-h-[90vh] grid place-content-center overflow-hidden bg-white dark:bg-gray-950 px-4 py-24 text-gray-900 dark:text-gray-200"
         >
+            {/* Animated Gradient Background via CSS */}
+            <div className="absolute inset-0 bg-[radial-gradient(125%_125%_at_50%_0%,transparent_50%,var(--token-color))] animate-gradient-slow opacity-40 pointer-events-none"
+                style={{ '--token-color': '#1E67C6' } as React.CSSProperties}
+            />
             {/* Spotlight Effect */}
             <Spotlight className="-top-40 -left-10 md:-left-32 md:-top-20 h-screen" fill="white" />
 
@@ -94,7 +81,7 @@ const HeroModern = () => {
                     </Link>
                 </motion.div>
             </div>
-        </motion.section>
+        </section>
     );
 };
 

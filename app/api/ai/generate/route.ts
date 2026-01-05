@@ -1,11 +1,20 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { authenticateRequest } from '@/lib/auth-middleware';
 
 // Initialize Gemini
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
     console.log("AI Route Hit");
+
+    // 1. Authenticate Request (Security Fix)
+    const authResult = await authenticateRequest(req);
+    if (!authResult.authenticated) {
+        console.warn(`Unauthorized AI access attempt: ${authResult.error}`);
+        return NextResponse.json({ error: 'Unauthorized', details: authResult.error }, { status: 401 });
+    }
+
     let promptText = "";
     let subjectText = "";
     let difficultyText = "Medium";
@@ -16,7 +25,7 @@ export async function POST(req: Request) {
         subjectText = body.subject;
         difficultyText = body.difficulty;
 
-        console.log("Payload:", { prompt: promptText, subject: subjectText, difficulty: difficultyText });
+        // Log payload selectively if needed, or remove for privacy
 
         // Check Key
         if (!process.env.GEMINI_API_KEY) {

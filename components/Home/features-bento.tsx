@@ -12,38 +12,46 @@ import { SpotlightCard } from "@/components/ui/spotlight";
 const FEATURES_DATA = [
     {
         id: 'core',
-        label: 'Core Preparation',
+        label: 'Self-Assessment',
         color: 'blue',
         icon: <BookOpen className="w-5 h-5" />,
         items: [
-            { title: "Massive Question Bank", desc: "Access 20,000+ high-yield MCQs standardized to PMDC/NUMS patterns." },
-            { title: "Chapter-Wise Tests", desc: "Targeted testing for every single chapter of Bio, Chem, Physics, and English." },
-            { title: "Full-Length Papers (FLPs)", desc: "Simulate exact exam day pressure with complete 200-MCQ mock exams." },
-            { title: "Topic-Wise Filtering", desc: "Drill down into specific topics (e.g., 'Optics' in Physics) for precision study." },
-            { title: "Difficulty Levels", desc: "Questions categorized into Easy, Medium, and Hard to build confidence." },
-            { title: "Negative Marking Mode", desc: "Practice with negative marking enabled to master calculated risk-taking." },
-            { title: "Smart Syllabus Coverage", desc: "Content strictly aligned with the latest PMDC & Provincial Textbooks." },
-            { title: "Past Paper Archives", desc: "Solve the last 10 years of MDCAT past papers topic-by-topic." },
-            { title: "Logical Reasoning Module", desc: "Dedicated section to ace the 'IQ' part of the exam." },
-            { title: "English Vocab Builder", desc: "Specialized tests to master synonyms, antonyms, and completion." },
+            { title: "Extensive Quiz Library", desc: "Access 20,000+ high-yield MCQs standardized to PMDC patterns." },
+            { title: "Topic-Wise Tests", desc: "Create custom quizzes for specific topics to target your weak areas." },
+            { title: "Mock Exams", desc: "Simulate the real exam environment with full-length self-assessment papers." },
+            { title: "Instant Feedback", desc: "Get immediate results and detailed performance analysis after every quiz." },
+            { title: "Difficulty Levels", desc: "Practice with Easy, Medium, and Hard questions to build confidence progressively." },
+            { title: "Negative Marking", desc: "Enable negative marking to master risk management and accuracy." },
+            { title: "Smart Syllabus", desc: "Content strictly aligned with the latest syllabus and textbooks." },
+            { title: "Past Papers", desc: "Solve chapter-wise past papers to understand exam trends." },
         ]
     },
     {
         id: 'analytics',
-        label: 'Smart Tech & Analytics',
+        label: 'Explanations & Analysis',
         color: 'violet',
         icon: <Brain className="w-5 h-5" />,
         items: [
-            { title: "Instant Result Generation", desc: "Get detailed score and percentage within milliseconds of submission." },
-            { title: "AI-Powered Analytics", desc: "Identify weakest chapters automatically based on your error patterns." },
-            { title: "Performance Graphs", desc: "Visual curves showing your score progression over weeks and months." },
-            { title: "Time Management Analytics", desc: "See exactly how much time you spent per question to improve speed." },
-            { title: "Smart Error Logs", desc: "A digital notebook of your mistakes—review only what you got wrong." },
-            { title: "Detailed Solutions", desc: "Step-by-step textual explanations for complex conceptual questions." },
-            { title: "Save & Resume", desc: "Internet died? Battery low? Your test progress is saved automatically." },
-            { title: "Multi-Device Sync", desc: "Start a test on your phone, finish it on your laptop. Seamless." },
-            { title: "Low Data Mode", desc: "Optimized for study on mobile data without draining your package." },
-            { title: "Fast Search", desc: "Instantly find specific questions or concepts from the entire database." },
+            { title: "Detailed Explanations", desc: "Step-by-step textual explanations for every single question." },
+            { title: "Concept Clarity", desc: "Understand the 'Why' behind every answer to build strong concepts." },
+            { title: "Weakness Analysis", desc: "AI identifies your weak topics and suggests targeted practice." },
+            { title: "Performance Graphs", desc: "Track your improvement over time with detailed visual analytics." },
+            { title: "Time Tracking", desc: "Analyze time spent per question to improve your speed and efficiency." },
+            { title: "Error Log", desc: "Automatically save incorrect questions to review and master them later." },
+            { title: "Save & Resume", desc: "Your progress is saved automatically. Resume your test anytime, anywhere." },
+        ]
+    },
+    {
+        id: 'doubt',
+        label: 'Doubt Solving',
+        color: 'teal',
+        icon: <Users className="w-5 h-5" />,
+        items: [
+            { title: "Expert Support", desc: "Get your doubts clarified by subject matter experts and toppers." },
+            { title: "Community Discussions", desc: "Discuss tricky questions with a community of like-minded students." },
+            { title: "Peer Learning", desc: "Share knowledge and learn from the experiences of other aspirants." },
+            { title: "24/7 Access", desc: "Post your queries anytime and get them resolved quickly." },
+            { title: "Verified Answers", desc: "Ensure you earn the correct concepts with teacher-verified solutions." },
         ]
     },
     {
@@ -52,42 +60,22 @@ const FEATURES_DATA = [
         color: 'orange',
         icon: <Trophy className="w-5 h-5" />,
         items: [
-            { title: "XP & Leveling System", desc: "Earn XP for every correct answer and level up your student profile." },
-            { title: "Competitive Leaderboards", desc: "See where you stand against thousands of students in real-time." },
-            { title: "Daily Streaks", desc: "Build a habit! Maintain your 'Study Streak' by practicing daily." },
-            { title: "Achievement Badges", desc: "Unlock badges like 'Physics Wizard' for hitting milestones." },
-            { title: "Hall of Fame", desc: "Top scorers get featured on the main dashboard for everyone to see." },
-            { title: "Challenge Mode", desc: "Challenge a friend or opponent to a 10-minute rapid-fire quiz." },
-            { title: "Daily Goals", desc: "Set your own daily MCQ targets and track your completion." },
+            { title: "XP & Levels", desc: "Earn XP for every correct answer and level up your profile." },
+            { title: "Leaderboards", desc: "Compete with students across the country and see your rank." },
+            { title: "Daily Streaks", desc: "Maintain your study consistency and build a daily habit." },
+            { title: "Badges", desc: "Unlock achievements for reaching practice milestones." },
         ]
     },
     {
         id: 'ux',
-        label: 'UI / UX',
-        color: 'teal',
+        label: 'Platform Experience',
+        color: 'rose',
         icon: <Smartphone className="w-5 h-5" />,
         items: [
-            { title: "Dark Mode Support", desc: "A beautiful, fully integrated dark theme to protect your eyes." },
-            { title: "Zero-Distraction Interface", desc: "Clean, ad-free reading application designed purely for focus." },
-            { title: "Mobile-First Design", desc: "Works just like a native app on your smartphone's browser." },
-            { title: "Bookmark Questions", desc: "Flag difficult questions to revisit them later during revision." },
-            { title: "Custom Test Creator", desc: "Create your own 'mix and match' test from different chapters." },
-            { title: "Report System", desc: "One-click report to our teacher panel for instant correction." },
-            { title: "Guest Trial Access", desc: "Try free demo tests before committing to a paid bundle." },
-        ]
-    },
-    {
-        id: 'premium',
-        label: 'Premium & Community',
-        color: 'rose',
-        icon: <Users className="w-5 h-5" />,
-        items: [
-            { title: "Fresher vs. Improver Bundles", desc: "Tailored roadmaps for your specific academic stage." },
-            { title: "Private WhatsApp Groups", desc: "Unlock access to exclusive study circles managed by toppers." },
-            { title: "Scholarship Coupons", desc: "Merit-based discounts and codes for deserving candidates." },
-            { title: "Printable Performance Cards", desc: "Download a verified 'Report Card' PDF for parents/teachers." },
-            { title: "Teacher Verified Content", desc: "Every single MCQ is vetted by subject specialist professors." },
-            { title: "24/7 Availability", desc: "No academy timings—your personal testing center is open 24/7." },
+            { title: "Dark Mode", desc: "Study comfortably at night with a fully integrated dark theme." },
+            { title: "Mobile Friendly", desc: "Practice on the go with a seamless mobile experience." },
+            { title: "Distraction Free", desc: "Clean interface designed purely for focused learning." },
+            { title: "Bookmarks", desc: "Save important questions to revise before the exam." },
         ]
     }
 ];
@@ -128,9 +116,9 @@ const StatsBar = () => (
     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 w-full max-w-5xl mx-auto mb-16">
         {[
             { label: "Question Bank", value: "20,000+", icon: <BookOpen className="text-blue-500" /> },
-            { label: "Past Papers", value: "10 Years", icon: <Clock className="text-violet-500" /> },
-            { label: "Active Students", value: "5,000+", icon: <Users className="text-teal-500" /> },
-            { label: "Uptime", value: "24/7", icon: <Zap className="text-orange-500" /> },
+            { label: "Past Papers", value: "Available", icon: <Clock className="text-violet-500" /> },
+            { label: "Community", value: "Active", icon: <Users className="text-teal-500" /> },
+            { label: "Access", value: "24/7", icon: <Zap className="text-orange-500" /> },
         ].map((stat, idx) => (
             <div key={idx} className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 flex flex-col items-center justify-center text-center transform transition-transform hover:-translate-y-1">
                 <div className="mb-3 p-3 bg-slate-50 dark:bg-slate-700 rounded-full">
@@ -367,7 +355,7 @@ const FeaturesBento = () => {
                             </div>
                             <GamificationHUD />
                         </div>
-                    ) : activeTab === 'ux' || activeTab === 'core' ? (
+                    ) : activeTab === 'ux' || activeTab === 'core' || activeTab === 'doubt' ? (
                         <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
                             <div className="text-center mb-4">
                                 <span className="text-xs font-bold text-slate-400 uppercase">Custom Test Interface</span>
