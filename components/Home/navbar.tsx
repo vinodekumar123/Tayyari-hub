@@ -7,8 +7,6 @@ import { getAuth } from "firebase/auth";
 import { getFirestore, doc, getDoc } from "firebase/firestore";
 import { Menu, X } from "lucide-react";
 import { app } from "../../app/firebase";
-import logo from "../../app/assets/logo.png";
-import Image from "next/image";
 import { ModeToggle } from "@/components/mode-toggle";
 
 const Navbar = () => {
@@ -99,6 +97,12 @@ const Navbar = () => {
           <a href="#pricing" className="hover:text-blue-500 dark:hover:text-blue-400 transition">
             Pricing
           </a>
+          <Link href="/about" className="hover:text-blue-500 dark:hover:text-blue-400 transition">
+            About Us
+          </Link>
+          <Link href="/contact" className="hover:text-blue-500 dark:hover:text-blue-400 transition">
+            Contact Us
+          </Link>
 
           <div className="flex items-center gap-4 ml-2">
             <ModeToggle />
@@ -143,6 +147,12 @@ const Navbar = () => {
           <a href="#pricing" onClick={toggleMenu} className="block hover:text-blue-600 dark:hover:text-blue-400 text-lg">
             Pricing
           </a>
+          <Link href="/about" onClick={toggleMenu} className="block hover:text-blue-600 dark:hover:text-blue-400 text-lg">
+            About Us
+          </Link>
+          <Link href="/contact" onClick={toggleMenu} className="block hover:text-blue-600 dark:hover:text-blue-400 text-lg">
+            Contact Us
+          </Link>
           <button
             onClick={() => {
               toggleMenu();

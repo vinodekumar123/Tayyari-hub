@@ -2,7 +2,7 @@
 
 import React from "react";
 import { motion } from "framer-motion";
-import { Facebook, Twitter, Instagram, Youtube, Mail, Phone, MapPin, ArrowRight, Heart } from "lucide-react";
+import { Facebook, Twitter, Instagram, Youtube, Mail, Phone, Heart } from "lucide-react";
 import Link from "next/link";
 
 const Footer = () => {
@@ -16,10 +16,10 @@ const Footer = () => {
       { name: "Mock Exams", href: "#" },
     ],
     company: [
-      { name: "About Us", href: "#" },
+      { name: "About Us", href: "/about" },
       { name: "Success Stories", href: "#reviews" },
       { name: "Careers", href: "#" },
-      { name: "Contact", href: "#" },
+      { name: "Contact", href: "/contact" },
     ],
     support: [
       { name: "Help Center", href: "#" },
