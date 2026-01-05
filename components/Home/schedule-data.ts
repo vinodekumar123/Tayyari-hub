@@ -40,7 +40,7 @@ export const freshersCards = [
 
 export const freshersClassXII = [
     { date: "01 Feb", code: "CW-XII-01", subject: "Biology", topic: "Homeostasis" },
-    { date: "03 Feb", code: "CW-XII-02", subject: "Physics", topic: "Molecular Theory of Gas" },
+    { date: "03 Feb", code: "CW-XII-02", subject: "Physics", topic: "First Law of Thermodynamics" },
     { date: "06 Feb", code: "CW-XII-03", subject: "Chemistry", topic: "Representative Elements" },
     { date: "08 Feb", code: "CW-XII-04", subject: "Biology", topic: "Support & Movement" },
     { isCombined: true, date: "10 Feb", code: "GT-XII-01", topic: "Coverage: CW-XII-01 → CW-XII-04 (first 4 chapters)" },
@@ -117,9 +117,9 @@ export const improversS1 = [
     { test: 5, date: "29 Jan", day: "Wed", topics: "Biology XI: Gaseous Exchange<br>Chemistry XI: State of Matter (Liquids & Solids)<br>Physics XI: Fluid Dynamics<br>English: Prepositions, Gerunds & Infinitives<br>Logical Reasoning: Complete Topics" },
     { test: 6, date: "1 Feb", day: "Sat", topics: "Biology XII: Homeostasis<br>Chemistry XI: Chemical Equilibrium<br>Physics XI: Electric Fields, Capacitors<br>English: Voice, Narration<br>Logical Reasoning: Complete Topics" },
     { test: 7, date: "5 Feb", day: "Wed", topics: "Biology XII: Support & Movement<br>Chemistry XI: Chemical Kinetics, Thermochemistry<br>Physics XI: DC Circuits<br>English: Sentence Correction, Punctuation<br>Logical Reasoning: Complete Topics" },
-    { test: 8, date: "8 Feb", day: "Sat", topics: "Biology XII: Nervous Coordination<br>Chemistry XI: Electrochemistry<br>Physics XI: Oscillations, Acoustics<br>English: Tenses, Gerunds & Infinitives<br>Logical Reasoning: Complete Topics" },
+    { test: 8, date: "8 Feb", day: "Sat", topics: "Biology XII: Nervous Coordination<br>Chemistry XI: Electrochemistry<br>Physics XI: Oscillations<br>English: Tenses, Gerunds & Infinitives<br>Logical Reasoning: Complete Topics" },
     { test: 9, date: "12 Feb", day: "Wed", topics: "FULL XI SYLLABUS - Biology, Chemistry, Physics<br>English: Complete Topics<br>Logical Reasoning: Complete Topics" },
-    { test: 10, date: "15 Feb", day: "Sat", topics: "Biology XII: Reproduction<br>Chemistry XII: Representative Elements<br>Physics XII: Molecular Theory of Gas<br>English: Tenses, Prepositions<br>Logical Reasoning: Complete Topics" },
+    { test: 10, date: "15 Feb", day: "Sat", topics: "Biology XII: Reproduction<br>Chemistry XII: Representative Elements<br>Physics XII: Acoustics<br>English: Tenses, Prepositions<br>Logical Reasoning: Complete Topics" },
     { test: 11, date: "19 Feb", day: "Wed", topics: "Biology XII: Inheritance<br>Chemistry XII: D-Block Elements<br>Physics XII: First Law of Thermodynamics<br>English: Gerunds & Infinitives, Voice<br>Logical Reasoning: Complete Topics" },
     { test: 12, date: "22 Feb", day: "Sat", topics: "Biology XII: Evolution<br>Chemistry XII: Organic Compounds, Nomenclature<br>Physics XII: Magnetic Field, Electromagnetic Induction<br>English: Sentence Correction, Punctuation<br>Logical Reasoning: Complete Topics" },
     { test: 13, date: "26 Feb", day: "Wed", topics: "Biology XII: Biotechnology<br>Chemistry XII: Hydrocarbons<br>Physics XII: Alternating Current, Solid State Electronics<br>English: Tenses, Prepositions<br>Logical Reasoning: Complete Topics" },
@@ -136,13 +136,86 @@ export const improversS2 = [
     { test: 5, date: "15 Apr", day: "Wed", topics: "Biology XI: Gaseous Exchange<br>Chemistry XI: State of Matter (Liquids & Solids)<br>Physics XI: Fluid Dynamics<br>English: Prepositions, Gerunds & Infinitives<br>Logical Reasoning: Complete Topics" },
     { test: 6, date: "18 Apr", day: "Sat", topics: "Biology XII: Homeostasis<br>Chemistry XI: Chemical Equilibrium<br>Physics XI: Electric Fields, Capacitors<br>English: Voice, Narration<br>Logical Reasoning: Complete Topics" },
     { test: 7, date: "22 Apr", day: "Wed", topics: "Biology XII: Support & Movement<br>Chemistry XI: Chemical Kinetics, Thermochemistry<br>Physics XI: DC Circuits<br>English: Sentence Correction, Punctuation<br>Logical Reasoning: Complete Topics" },
-    { test: 8, date: "25 Apr", day: "Sat", topics: "Biology XII: Nervous Coordination<br>Chemistry XI: Electrochemistry<br>Physics XI: Oscillations, Acoustics<br>English: Tenses, Gerunds & Infinitives<br>Logical Reasoning: Complete Topics" },
+    { test: 8, date: "25 Apr", day: "Sat", topics: "Biology XII: Nervous Coordination<br>Chemistry XI: Electrochemistry<br>Physics XI: Oscillations<br>English: Tenses, Gerunds & Infinitives<br>Logical Reasoning: Complete Topics" },
     { test: 9, date: "29 Apr", day: "Wed", topics: "FULL XI SYLLABUS - Biology, Chemistry, Physics<br>English: Complete Topics<br>Logical Reasoning: Complete Topics" },
-    { test: 10, date: "2 May", day: "Sat", topics: "Biology XII: Reproduction<br>Chemistry XII: Representative Elements<br>Physics XII: Molecular Theory of Gas<br>English: Tenses, Prepositions<br>Logical Reasoning: Complete Topics" },
+    { test: 10, date: "2 May", day: "Sat", topics: "Biology XII: Reproduction<br>Chemistry XII: Representative Elements<br>Physics XII: Acoustics<br>English: Tenses, Prepositions<br>Logical Reasoning: Complete Topics" },
     { test: 11, date: "6 May", day: "Wed", topics: "Biology XII: Inheritance<br>Chemistry XII: D-Block Elements<br>Physics XII: First Law of Thermodynamics<br>English: Gerunds & Infinitives, Voice<br>Logical Reasoning: Complete Topics" },
     { test: 12, date: "9 May", day: "Sat", topics: "Biology XII: Evolution<br>Chemistry XII: Organic Compounds, Nomenclature<br>Physics XII: Magnetic Field, Electromagnetic Induction<br>English: Sentence Correction, Punctuation<br>Logical Reasoning: Complete Topics" },
     { test: 13, date: "13 May", day: "Wed", topics: "Biology XII: Biotechnology<br>Chemistry XII: Hydrocarbons<br>Physics XII: Alternating Current, Solid State Electronics<br>English: Tenses, Prepositions<br>Logical Reasoning: Complete Topics" },
     { test: 14, date: "16 May", day: "Sat", topics: "Biology (Mixed XI + XII): High-Yield Physiology<br>Chemistry XII: Alkyl Halides, Amines, Alcohols, Phenols, Ethers<br>Physics XII: Quantum Physics<br>English: Gerunds & Infinitives, Voice, Narration<br>Logical Reasoning: Complete Topics" },
     { test: 15, date: "20 May", day: "Wed", topics: "Biology (Mixed): Genetics + Nervous Coordination<br>Chemistry XII: Aldehydes, Ketones, Carboxylic Acids & Derivatives<br>Physics XII: Nuclear Physics, Atomic Physics<br>English: Sentence Correction, Punctuation<br>Logical Reasoning: Complete Topics" },
     { test: 16, date: "15 Jun", day: "Mon", topics: "FINAL GRAND TEST - FULL XI + XII (All Biology, Chemistry, Physics)<br>English: Complete all topics<br>Logical Reasoning: Complete Topics" },
+];
+
+export const flpPhases = [
+    {
+        title: "PHASE–1: SUBJECT-WISE FOUNDATION TESTS (100 MCQs)",
+        tests: [
+            { test: 1, date: "01 Jul", type: "Subject Test", syllabus: "<b>Full XI Biology</b> (All XI chapters)" },
+            { test: 2, date: "03 Jul", type: "Subject Test", syllabus: "<b>Full XII Biology</b> (All XII chapters)" },
+            { test: 3, date: "05 Jul", type: "Subject Test", syllabus: "<b>Full XI Chemistry</b> (All XI chapters)" },
+            { test: 4, date: "07 Jul", type: "Subject Test", syllabus: "<b>Full XII Chemistry</b> (All XII chapters)" },
+            { test: 5, date: "09 Jul", type: "Subject Test", syllabus: "<b>Full XI Physics</b> (All XI chapters)" },
+            { test: 6, date: "11 Jul", type: "Subject Test", syllabus: "<b>Full XII Physics</b> (All XII chapters)" },
+            { test: 7, date: "13 Jul", type: "Subject Test", syllabus: "<b>Full English</b> (All topics)" },
+            { test: 8, date: "15 Jul", type: "Subject Test", syllabus: "<b>Full Logical Reasoning</b> (All topics)" },
+        ]
+    },
+    {
+        title: "PHASE–2: XI MOCK TESTS (180 MCQs)",
+        tests: [
+            {
+                test: 9, date: "17 Jul", type: "XI MOCK – 1st HALF",
+                syllabus: `<b>Biology XI (1st Half):</b> Biological Molecules, Enzymes, Cell Structure & Function, Bioenergetics, Acellular Life<br/>
+                <b>Chemistry XI (1st Half):</b> Stoichiometry, Atomic Structure, Chemical Bonding, State of Matter (Gases)<br/>
+                <b>Physics XI (1st Half):</b> Kinematics, Dynamics, Rotational & Circular Motion, Work, Power & Energy<br/>
+                <b>English:</b> Complete<br/><b>Logical Reasoning:</b> Complete`
+            },
+            {
+                test: 10, date: "19 Jul", type: "XI MOCK – 2nd HALF",
+                syllabus: `<b>Biology XI (2nd Half):</b> Holozoic Nutrition, Circulation, Immunity, Gaseous Exchange<br/>
+                <b>Chemistry XI (2nd Half):</b> Solids & Liquids, Equilibrium, Kinetics, Thermochemistry, Electrochemistry<br/>
+                <b>Physics XI (2nd Half):</b> Fluid Dynamics, Electric Fields, Capacitors, DC Circuits, Oscillations, Acoustics<br/>
+                <b>English:</b> Complete<br/><b>Logical Reasoning:</b> Complete`
+            },
+            { test: 11, date: "21 Jul", type: "FULL XI MOCK", syllabus: "Full XI + English + Logical" },
+            { test: 12, date: "23 Jul", type: "FULL XI MOCK", syllabus: "Full XI + English + Logical" },
+            { test: 13, date: "25 Jul", type: "FULL XI MOCK", syllabus: "Full XI + English + Logical" },
+        ]
+    },
+    {
+        title: "PHASE–3: XII MOCK TESTS (180 MCQs)",
+        tests: [
+            {
+                test: 14, date: "27 Jul", type: "XII MOCK – 1st HALF",
+                syllabus: `<b>Biology XII (1st Half):</b> Homeostasis, Support & Movement, Nervous Coordination, Reproduction<br/>
+                <b>Chemistry XII (1st Half):</b> Representative Elements, D-Block, Organic Compounds, Nomenclature, Hydrocarbons<br/>
+                <b>Physics XII (1st Half):</b> Gas Theory, Thermodynamics, Magnetic Field, Induction<br/>
+                <b>English:</b> Complete<br/><b>Logical Reasoning:</b> Complete`
+            },
+            {
+                test: 15, date: "29 Jul", type: "XII MOCK – 2nd HALF",
+                syllabus: `<b>Biology XII (2nd Half):</b> Inheritance, Evolution, Biotechnology<br/>
+                <b>Chemistry XII (2nd Half):</b> Alkyl Halides, Alcohols, Aldehydes, Carboxylic Acids, Biochemistry, Industrial<br/>
+                <b>Physics XII (2nd Half):</b> AC, Electronics, Quantum, Atomic & Nuclear Physics<br/>
+                <b>English:</b> Complete<br/><b>Logical Reasoning:</b> Complete`
+            },
+            { test: 16, date: "31 Jul", type: "FULL XII MOCK", syllabus: "Full XII + English + Logical" },
+            { test: 17, date: "03 Aug", type: "FULL XII MOCK", syllabus: "Full XII + English + Logical" },
+            { test: 18, date: "06 Aug", type: "FULL XII MOCK", syllabus: "Full XII + English + Logical" },
+        ]
+    },
+    {
+        title: "PHASE–4: FLPs (FULL LENGTH PAPERS – 180 MCQs)",
+        tests: [
+            { test: 19, date: "09 Aug", type: "FLP-1", syllabus: "Full XI + XII (All Subjects)" },
+            { test: 20, date: "12 Aug", type: "FLP-2", syllabus: "Full XI + XII (All Subjects)" },
+            { test: 21, date: "15 Aug", type: "FLP-3", syllabus: "Full XI + XII (All Subjects)" },
+            { test: 22, date: "18 Aug", type: "FLP-4", syllabus: "Full XI + XII (All Subjects)" },
+            { test: 23, date: "21 Aug", type: "FLP-5", syllabus: "Full XI + XII (All Subjects)" },
+            { test: 24, date: "24 Aug", type: "FLP-6", syllabus: "Full XI + XII (All Subjects)" },
+            { test: 25, date: "27 Aug", type: "FLP-7", syllabus: "Full XI + XII (All Subjects)" },
+            { test: 26, date: "30 Aug", type: "FLP-8", syllabus: "Full XI + XII (All Subjects)" },
+        ]
+    }
 ];

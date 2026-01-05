@@ -1,0 +1,31 @@
+
+> nextjs@0.1.0 build
+> next build
+
+   ▲ Next.js 15.5.9
+   - Environments: .env.local
+
+   Creating an optimized production build ...
+
+[1m[33mwarn[39m[22m - The class `duration-[20s]` is ambiguous and matches multiple utilities.
+[1m[33mwarn[39m[22m - If this is content and not a class, replace it with `duration-&lsqb;20s&rsqb;` to silence this warning.
+ ✓ Compiled successfully in 19.9s
+   Linting and checking validity of types ...
+
+./app/admin/quizzes/quizebank/page.tsx
+196:6  Warning: React Hook useEffect has a missing dependency: 'cache'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+
+info  - Need to disable some ESLint rules? Learn more here: https://nextjs.org/docs/app/api-reference/config/eslint#disabling-rules
+Failed to compile.
+
+./utils/generate-schedule-pdf.ts:39:23
+Type error: This comparison appears to be unintentional because the types '"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAABGAAAADRCAYAAACD18RqAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAJglSURBVHhe7N13eFRl9gfw7zl3ZtJJIHSkFxVQxIKiqAiKIDas2LsiYltd3XVdy67uWn72gliw17U3FGyoqIiIINJ7xwAhpGfmnvP7Y2bC5IpKSTJ3wvk8zzxJ3nNnMoTJm7nnnve8gDHGGGOMMcYY4zMrV67M/PHHH10A4rpuhaqS9xhjUg...' and '"LOGO_PLACEHOLDER"' have no overlap.
+
+[0m [90m 37 |[39m
+ [90m 38 |[39m     [90m// --- Header ---[39m
+[31m[1m>[22m[39m[90m 39 |[39m     [36mif[39m (logoBase64 [33m&&[39m logoBase64 [33m!==[39m [32m"LOGO_PLACEHOLDER"[39m) {
+ [90m    |[39m                       [31m[1m^[22m[39m
+ [90m 40 |[39m         [36mconst[39m logoWidth [33m=[39m [35m40[39m[33m;[39m
+ [90m 41 |[39m         [36mconst[39m logoHeight [33m=[39m [35m10[39m[33m;[39m [90m// Aspect ratio approx 4:1[39m
+ [90m 42 |[39m         doc[33m.[39maddImage(logoBase64[33m,[39m [32m'PNG'[39m[33m,[39m margin[33m,[39m finalY[33m,[39m logoWidth[33m,[39m logoHeight)[33m;[39m[0m
+Next.js build worker exited with code: 1 and signal: null

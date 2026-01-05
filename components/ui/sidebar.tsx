@@ -117,6 +117,7 @@ export function Sidebar() {
       items: [
         // Courses: Admin/SuperAdmin only
         ...(!userRole.includes('teacher') ? [{ icon: BookOpen, label: 'Courses', href: '/admin/courses' }] : []),
+        ...(!userRole.includes('teacher') ? [{ icon: BookOpen, label: 'Bundle Management', href: '/admin/bundles' }] : []),
         ...(userRole.includes('teacher') ? [{ icon: Users, label: 'Community', href: '/dashboard/teacher/community' }] : []),
 
         { icon: BookOpen, label: 'Content Hub', href: '/admin/content' },

@@ -24,11 +24,11 @@ export default function Home() {
       </ScrollReveal>
 
       <ScrollReveal>
-        <FeaturesBento />
+        <SeriesSchedule />
       </ScrollReveal>
 
       <ScrollReveal>
-        <SeriesSchedule />
+        <FeaturesBento />
       </ScrollReveal>
 
       <ScrollReveal>

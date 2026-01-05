@@ -18,7 +18,7 @@ import {
     ChevronRight,
     Download
 } from 'lucide-react';
-import { freshersClassXII, freshersClassXI, improversS1, improversS2, freshersCards } from './schedule-data';
+import { freshersClassXII, freshersClassXI, improversS1, improversS2, freshersCards, flpPhases } from './schedule-data';
 import { generateSchedulePDF } from '../../utils/generate-schedule-pdf';
 
 const SeriesSchedule = () => {
@@ -27,78 +27,7 @@ const SeriesSchedule = () => {
 
 
     // --- Data: FLP Series ---
-    const flpPhases = [
-        {
-            title: "PHASE–1: SUBJECT-WISE FOUNDATION TESTS (100 MCQs)",
-            tests: [
-                { test: 1, date: "01 Jul", type: "Subject Test", syllabus: "<b>Full XI Biology</b> (All XI chapters)" },
-                { test: 2, date: "03 Jul", type: "Subject Test", syllabus: "<b>Full XII Biology</b> (All XII chapters)" },
-                { test: 3, date: "05 Jul", type: "Subject Test", syllabus: "<b>Full XI Chemistry</b> (All XI chapters)" },
-                { test: 4, date: "07 Jul", type: "Subject Test", syllabus: "<b>Full XII Chemistry</b> (All XII chapters)" },
-                { test: 5, date: "09 Jul", type: "Subject Test", syllabus: "<b>Full XI Physics</b> (All XI chapters)" },
-                { test: 6, date: "11 Jul", type: "Subject Test", syllabus: "<b>Full XII Physics</b> (All XII chapters)" },
-                { test: 7, date: "13 Jul", type: "Subject Test", syllabus: "<b>Full English</b> (All topics)" },
-                { test: 8, date: "15 Jul", type: "Subject Test", syllabus: "<b>Full Logical Reasoning</b> (All topics)" },
-            ]
-        },
-        {
-            title: "PHASE–2: XI MOCK TESTS (180 MCQs)",
-            tests: [
-                {
-                    test: 9, date: "17 Jul", type: "XI MOCK – 1st HALF",
-                    syllabus: `<b>Biology XI (1st Half):</b> Biological Molecules, Enzymes, Cell Structure & Function, Bioenergetics, Acellular Life<br/>
-                    <b>Chemistry XI (1st Half):</b> Stoichiometry, Atomic Structure, Chemical Bonding, State of Matter (Gases)<br/>
-                    <b>Physics XI (1st Half):</b> Kinematics, Dynamics, Rotational & Circular Motion, Work, Power & Energy<br/>
-                    <b>English:</b> Complete<br/><b>Logical Reasoning:</b> Complete`
-                },
-                {
-                    test: 10, date: "19 Jul", type: "XI MOCK – 2nd HALF",
-                    syllabus: `<b>Biology XI (2nd Half):</b> Holozoic Nutrition, Circulation, Immunity, Gaseous Exchange<br/>
-                    <b>Chemistry XI (2nd Half):</b> Solids & Liquids, Equilibrium, Kinetics, Thermochemistry, Electrochemistry<br/>
-                    <b>Physics XI (2nd Half):</b> Fluid Dynamics, Electric Fields, Capacitors, DC Circuits, Oscillations, Acoustics<br/>
-                    <b>English:</b> Complete<br/><b>Logical Reasoning:</b> Complete`
-                },
-                { test: 11, date: "21 Jul", type: "FULL XI MOCK", syllabus: "Full XI + English + Logical" },
-                { test: 12, date: "23 Jul", type: "FULL XI MOCK", syllabus: "Full XI + English + Logical" },
-                { test: 13, date: "25 Jul", type: "FULL XI MOCK", syllabus: "Full XI + English + Logical" },
-            ]
-        },
-        {
-            title: "PHASE–3: XII MOCK TESTS (180 MCQs)",
-            tests: [
-                {
-                    test: 14, date: "27 Jul", type: "XII MOCK – 1st HALF",
-                    syllabus: `<b>Biology XII (1st Half):</b> Homeostasis, Support & Movement, Nervous Coordination, Reproduction<br/>
-                    <b>Chemistry XII (1st Half):</b> Representative Elements, D-Block, Organic Compounds, Nomenclature, Hydrocarbons<br/>
-                    <b>Physics XII (1st Half):</b> Gas Theory, Thermodynamics, Magnetic Field, Induction<br/>
-                    <b>English:</b> Complete<br/><b>Logical Reasoning:</b> Complete`
-                },
-                {
-                    test: 15, date: "29 Jul", type: "XII MOCK – 2nd HALF",
-                    syllabus: `<b>Biology XII (2nd Half):</b> Inheritance, Evolution, Biotechnology<br/>
-                    <b>Chemistry XII (2nd Half):</b> Alkyl Halides, Alcohols, Aldehydes, Carboxylic Acids, Biochemistry, Industrial<br/>
-                    <b>Physics XII (2nd Half):</b> AC, Electronics, Quantum, Atomic & Nuclear Physics<br/>
-                    <b>English:</b> Complete<br/><b>Logical Reasoning:</b> Complete`
-                },
-                { test: 16, date: "31 Jul", type: "FULL XII MOCK", syllabus: "Full XII + English + Logical" },
-                { test: 17, date: "03 Aug", type: "FULL XII MOCK", syllabus: "Full XII + English + Logical" },
-                { test: 18, date: "06 Aug", type: "FULL XII MOCK", syllabus: "Full XII + English + Logical" },
-            ]
-        },
-        {
-            title: "PHASE–4: FLPs (FULL LENGTH PAPERS – 180 MCQs)",
-            tests: [
-                { test: 19, date: "09 Aug", type: "FLP-1", syllabus: "Full XI + XII (All Subjects)" },
-                { test: 20, date: "12 Aug", type: "FLP-2", syllabus: "Full XI + XII (All Subjects)" },
-                { test: 21, date: "15 Aug", type: "FLP-3", syllabus: "Full XI + XII (All Subjects)" },
-                { test: 22, date: "18 Aug", type: "FLP-4", syllabus: "Full XI + XII (All Subjects)" },
-                { test: 23, date: "21 Aug", type: "FLP-5", syllabus: "Full XI + XII (All Subjects)" },
-                { test: 24, date: "24 Aug", type: "FLP-6", syllabus: "Full XI + XII (All Subjects)" },
-                { test: 25, date: "27 Aug", type: "FLP-7", syllabus: "Full XI + XII (All Subjects)" },
-                { test: 26, date: "30 Aug", type: "FLP-8", syllabus: "Full XI + XII (All Subjects)" },
-            ]
-        }
-    ];
+    // Imported from schedule-data.ts
 
 
     // Helper to render icons for freshers (since extracted data has string names)
@@ -151,7 +80,7 @@ const SeriesSchedule = () => {
                         transition={{ delay: 0.2 }}
                         className="text-lg text-slate-600 dark:text-slate-400 max-w-2xl mx-auto"
                     >
-                        Systematic test series designed to cover every topic, rigorously test your concepts, and ensure you're exam-ready.
+                        Systematic test series designed to cover every topic, rigorously test your concepts, and ensure you&apos;re exam-ready.
                     </motion.p>
                 </div>
 
@@ -286,28 +215,7 @@ const SeriesSchedule = () => {
                                 animate={{ opacity: 1, y: 0 }}
                                 exit={{ opacity: 0, y: -20 }}
                             >
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
-                                    {freshersCards.map((item, i) => (
-                                        <div key={i} className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-xl shadow-slate-200/50 dark:shadow-none">
-                                            <div className={`w-14 h-14 rounded-2xl bg-${item.color}-50 dark:bg-${item.color}-900/20 flex items-center justify-center text-${item.color}-600 dark:text-${item.color}-400 mb-6`}>
-                                                {getIcon(item.icon)}
-                                            </div>
-                                            <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-1">{item.title}</h3>
-                                            <p className="text-slate-500 dark:text-slate-400 text-sm mb-4">{item.subtitle}</p>
-                                            <div className="space-y-3 mb-6">
-                                                {item.features.map((feat, j) => (
-                                                    <div key={j} className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
-                                                        <CheckCircle2 className={`w-4 h-4 text-${item.color}-500`} />
-                                                        {feat}
-                                                    </div>
-                                                ))}
-                                            </div>
-                                            <div className="pt-4 border-t border-slate-100 dark:border-slate-800">
-                                                <span className="font-bold text-slate-900 dark:text-white">{item.stats}</span>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
+
 
                                 {/* Class XII Schedule */}
                                 <div className="space-y-8 mb-12">

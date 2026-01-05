@@ -1,50 +1,50 @@
 export interface Question {
-  id: string;
-  subject?: string;
-  chapter?: string;
-  questionText?: string;
-  options?: any[];
-  correctAnswer?: string;
-  explanation?: string;
-  createdAt?: any;
+    id: string;
+    subject?: string;
+    chapter?: string;
+    questionText?: string;
+    options?: any[];
+    correctAnswer?: string;
+    explanation?: string;
+    createdAt?: any;
 }
 
 export interface QuizConfig {
-  title: string;
-  course: string;
-  subject: string;
-  chapter: string;
-  totalQuestions: number;
-  duration: number;
-  maxPerSubject: number;
+    title: string;
+    course: string;
+    subject: string;
+    chapter: string;
+    totalQuestions: number;
+    duration: number;
+    maxPerSubject: number;
 }
 
 export interface Metadata {
-  course?: string;
-  courseId?: string;
-  subject?: string;
-  subjectId?: string;
-  chapter?: string;
-  chapterId?: string;
-  topic?: string;
-  difficulty?: string;
-  year?: string;
-  book?: string;
-  teacher?: string;
+    course?: string;
+    courseId?: string;
+    subject?: string;
+    subjectId?: string;
+    chapter?: string;
+    chapterId?: string;
+    topic?: string;
+    difficulty?: string;
+    year?: string;
+    book?: string;
+    teacher?: string;
 }
 
 export interface FormState {
-  fullName: string;
-  email: string;
-  phone: string;
-  metadata: Metadata;
-  subjects?: string[];
+    fullName: string;
+    email: string;
+    phone: string;
+    metadata: Metadata;
+    subjects?: string[];
 }
 
 export interface SubjectItem {
-  id: string;
-  name: string;
-  chapters?: Record<string, any>;
+    id: string;
+    name: string;
+    chapters?: Record<string, any>;
 }
 export interface Course {
     id: string;
@@ -127,6 +127,17 @@ export interface Subject {
     [key: string]: any;
 }
 
+export interface Bundle {
+    id: string;
+    name: string;
+    description?: string;
+    price: number;
+    seriesIds: string[]; // IDs of Series included in this bundle
+    active: boolean;
+    createdAt?: any;
+    [key: string]: any;
+}
+
 export interface EnrollmentRecord {
     id: string;
     // Student Info (Snapshot)
@@ -136,6 +147,7 @@ export interface EnrollmentRecord {
     // Series Info (Snapshot)
     seriesId: string;
     seriesName: string;
+    bundleId?: string; // Optional: Track if this enrollment came from a bundle
     // Payment Info
     price: number;
     transactionId: string;

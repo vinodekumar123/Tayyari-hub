@@ -35,7 +35,7 @@ import {
 } from 'lucide-react';
 import { onAuthStateChanged, sendPasswordResetEmail } from 'firebase/auth';
 import { useRouter } from 'next/navigation';
-import { Student, Course, Series, EnrollmentRecord, BulkDeleteResponse } from '@/types';
+import { Student, Course, Series, EnrollmentRecord, BulkDeleteResponse, Bundle } from '@/types';
 import { TableSkeleton } from '@/components/ui/skeleton-cards';
 import { brandColors, glassmorphism } from '@/lib/design-tokens';
 import { toast } from 'react-hot-toast';
@@ -192,29 +192,40 @@ export default function StudentsPage() {
     getCount();
   }, []);
 
-  // Fetch Series when Enroll Modal opens
+  // Fetch Series and Bundles when Enroll Modal opens
+  const [bundlesList, setBundlesList] = useState<Bundle[]>([]);
+  const [enrollType, setEnrollType] = useState<'series' | 'bundle'>('series');
+
   useEffect(() => {
     if (enrollModal) {
-      const fetchSeries = async () => {
-        const q = query(collection(db, 'series'), orderBy('createdAt', 'desc'));
-        const snap = await getDocs(q);
-        setSeriesList(snap.docs.map(d => ({ id: d.id, ...d.data() } as Series)));
+      const fetchData = async () => {
+        const qSeries = query(collection(db, 'series'), orderBy('createdAt', 'desc'));
+        const snapSeries = await getDocs(qSeries);
+        setSeriesList(snapSeries.docs.map(d => ({ id: d.id, ...d.data() } as Series)));
+
+        const qBundles = query(collection(db, 'bundles'), where('active', '==', true));
+        const snapBundles = await getDocs(qBundles);
+        setBundlesList(snapBundles.docs.map(d => ({ id: d.id, ...d.data() } as Bundle)));
       };
-      fetchSeries();
+      fetchData();
     }
   }, [enrollModal]);
 
-  // Fetch History when History Modal opens
+  // Fetch Enrollment History
   useEffect(() => {
     if (historyModal && currentStudent) {
       const fetchHistory = async () => {
-        // Removed orderBy to avoid needing a composite index. Sorting client-side instead.
-        const q = query(collection(db, 'enrollments'), where('studentId', '==', currentStudent.id));
-        const snap = await getDocs(q);
-        const records = snap.docs.map(d => ({ id: d.id, ...d.data() } as EnrollmentRecord));
-        // Sort descending by enrolledAt (ISO string)
-        records.sort((a, b) => (b.enrolledAt || '').localeCompare(a.enrolledAt || ''));
-        setEnrollmentHistory(records);
+        try {
+          const q = query(collection(db, 'enrollments'), where('studentId', '==', currentStudent.id));
+          const snapshot = await getDocs(q);
+          const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as EnrollmentRecord));
+          // Client-side sort to match 'paymentDate' desc
+          data.sort((a, b) => new Date(b.paymentDate || b.enrolledAt).getTime() - new Date(a.paymentDate || a.enrolledAt).getTime());
+          setEnrollmentHistory(data);
+        } catch (err) {
+          console.error('Failed to fetch history', err);
+          toast.error('Failed to load history');
+        }
       };
       fetchHistory();
     }
@@ -232,10 +243,6 @@ export default function StudentsPage() {
       // --- ROBUST SEARCH LOGIC ---
       if (term) {
         // Run Parallel Queries for: FullName, Email, Phone, FatherName
-        // Note: Firestore Range queries only work for prefix matches (e.g., 'Ami' matches 'Amit').
-        // They are case-sensitive by default, but we assume data is standard or the user types matching case.
-        // For truly case-insensitive, we'd need a lowercase field in DB. For now, we rely on standard input.
-
         const searchFields = ['fullName', 'email', 'phone', 'fatherName'];
 
         const createSearchQuery = (field: string) => {
@@ -243,7 +250,7 @@ export default function StudentsPage() {
             usersRef,
             where(field, '>=', term),
             where(field, '<=', term + '\uf8ff'),
-            limit(itemsPerPage) // Limit each parallel query to avoid massive reads
+            limit(itemsPerPage)
           );
         };
 
@@ -256,11 +263,10 @@ export default function StudentsPage() {
           snap.docs.forEach(doc => {
             const data = doc.data() as Student;
 
-            // Client-side Filtering for consistency with dropdowns
+            // Client-side Filtering
             let matchesFilter = true;
             if (filterType === 'premium' && data.plan !== 'premium') matchesFilter = false;
             if (filterType === 'free' && data.plan === 'premium') matchesFilter = false;
-            // if (filterType === 'admin' && !data.admin) matchesFilter = false; 
 
             if (courseFilter !== 'all' && data.course !== courseFilter) matchesFilter = false;
 
@@ -275,15 +281,14 @@ export default function StudentsPage() {
         });
 
         const sortedData = Array.from(mergedStudentsMap.values()).sort((a, b) => {
-          // Sort by name by default
           return (a.fullName || '').localeCompare(b.fullName || '');
         });
 
         setStudents(sortedData);
-        setHasMore(false); // Disable infinite scroll during search to avoid complexity with parallel cursors
+        setHasMore(false);
 
       } else {
-        // --- STANDARD FILTERING (No Search Term) ---
+        // --- STANDARD FILTERING ---
         if (filterType !== 'all') {
           if (filterType === 'premium') constraints.push(where('plan', '==', 'premium'));
           if (filterType === 'free') constraints.push(where('plan', '==', 'free'));
@@ -355,11 +360,9 @@ export default function StudentsPage() {
   }, [lastVisible, hasMore, loading, fetchStudents]);
 
   useEffect(() => {
-    // Reset pagination on filter change
     setLastVisible(null);
     setStudents([]);
     fetchStudents(true);
-    // Scroll to top when searching/filtering
     window.scrollTo({ top: 0, behavior: 'smooth' });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debouncedSearchTerm, itemsPerPage, filterType, courseFilter, sortField, sortDirection]);
@@ -548,7 +551,6 @@ export default function StudentsPage() {
     }
   };
 
-
   const handleEditSave = async () => {
     if (!currentStudent?.id) return;
     try {
@@ -562,31 +564,69 @@ export default function StudentsPage() {
     }
   };
 
+  // Handle Enrollment Submit
   const handleEnrollSubmit = async () => {
     if (!currentStudent || !enrollmentData.seriesId || !enrollmentData.transactionId) { toast.error('Fill required fields'); return; }
     setEnrollLoading(true);
     try {
-      const selectedSeries = seriesList.find(s => s.id === enrollmentData.seriesId);
-      if (!selectedSeries) throw new Error('Series not found');
-      await addDoc(collection(db, 'enrollments'), {
-        studentId: currentStudent.id,
-        studentName: currentStudent.fullName,
-        studentEmail: currentStudent.email,
-        seriesId: selectedSeries.id,
-        seriesName: selectedSeries.name,
-        price: Number(enrollmentData.price),
-        transactionId: enrollmentData.transactionId,
-        senderName: enrollmentData.senderName,
-        paymentDate: new Date().toISOString(),
-        enrolledByAdminId: auth.currentUser?.uid || 'system',
-        enrolledByAdminName: auth.currentUser?.displayName || 'Admin',
-        enrolledAt: new Date().toISOString(),
-        status: 'active'
-      });
-      toast.success(`Enrolled in ${selectedSeries.name}`);
+      const enrollmentsToAdd: any[] = [];
+      const batch = [];
+
+      // If engaging in a Bundle
+      if (enrollType === 'bundle') {
+        const selectedBundle = bundlesList.find(b => b.id === enrollmentData.seriesId);
+        if (!selectedBundle) throw new Error('Bundle not found');
+
+        // Iterate through all series in the bundle
+        for (const sId of selectedBundle.seriesIds) {
+          const seriesObj = seriesList.find(s => s.id === sId)
+            || (await getDocs(query(collection(db, 'series'), where('__name__', '==', sId)))).docs[0]?.data() as Series; // Fallback fetch if not in list
+
+          if (seriesObj) {
+            enrollmentsToAdd.push({
+              seriesId: sId,
+              seriesName: seriesObj.name || 'Unknown Series',
+              bundleId: selectedBundle.id,
+              price: Number(enrollmentData.price) / selectedBundle.seriesIds.length, // Split price for record keeping or just store 0/full on one? Storing split for now.
+            });
+          }
+        }
+      } else {
+        // Single Series
+        const selectedSeries = seriesList.find(s => s.id === enrollmentData.seriesId);
+        if (!selectedSeries) throw new Error('Series not found');
+        enrollmentsToAdd.push({
+          seriesId: selectedSeries.id,
+          seriesName: selectedSeries.name,
+          price: Number(enrollmentData.price),
+        });
+      }
+
+      // Create Records
+      for (const item of enrollmentsToAdd) {
+        await addDoc(collection(db, 'enrollments'), {
+          studentId: currentStudent.id,
+          studentName: currentStudent.fullName,
+          studentEmail: currentStudent.email,
+          seriesId: item.seriesId,
+          seriesName: item.seriesName,
+          bundleId: item.bundleId || null,
+          price: item.price,
+          transactionId: enrollmentData.transactionId,
+          senderName: enrollmentData.senderName,
+          paymentDate: new Date().toISOString(),
+          enrolledByAdminId: auth.currentUser?.uid || 'system',
+          enrolledByAdminName: auth.currentUser?.displayName || 'Admin',
+          enrolledAt: new Date().toISOString(),
+          status: 'active'
+        });
+      }
+
+      toast.success(`Enrolled successfully`);
       setEnrollModal(false);
-    } catch (error) {
-      toast.error('Enrollment failed');
+    } catch (error: any) {
+      console.error(error);
+      toast.error('Enrollment failed: ' + error.message);
     } finally {
       setEnrollLoading(false);
     }
@@ -631,6 +671,29 @@ export default function StudentsPage() {
     } catch (err) {
       console.error("Receipt gen error", err);
       toast.error("Failed to generate receipt.");
+    }
+  };
+
+  const handleRevokeEnrollment = async (enrollmentId: string) => {
+    if (!confirm('Are you sure you want to revoke this enrollment? The student will lose access immediately.')) return;
+
+    try {
+      const enrollmentRef = doc(db, 'enrollments', enrollmentId);
+      await updateDoc(enrollmentRef, {
+        status: 'cancelled',
+        revokedAt: new Date().toISOString(),
+        revokedBy: auth.currentUser?.uid || 'admin'
+      });
+
+      // Update local state
+      setEnrollmentHistory(prev => prev.map(rec =>
+        rec.id === enrollmentId ? { ...rec, status: 'cancelled' } : rec
+      ));
+
+      toast.success('Enrollment revoked successfully');
+    } catch (error: any) {
+      console.error('Error revoking enrollment:', error);
+      toast.error('Failed to revoke enrollment');
     }
   };
 
@@ -947,14 +1010,40 @@ export default function StudentsPage() {
         <DialogContent>
           <DialogHeader><DialogTitle>Enroll in Series</DialogTitle></DialogHeader>
           <div className="space-y-4">
+            {/* Toggle Type */}
+            <div className="flex rounded-md bg-slate-100 p-1">
+              <button
+                onClick={() => setEnrollType('series')}
+                className={`flex-1 py-1 text-sm font-medium rounded-sm transition-all ${enrollType === 'series' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500 hover:text-slate-900'}`}
+              >
+                Single Series
+              </button>
+              <button
+                onClick={() => setEnrollType('bundle')}
+                className={`flex-1 py-1 text-sm font-medium rounded-sm transition-all ${enrollType === 'bundle' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500 hover:text-slate-900'}`}
+              >
+                Bundle
+              </button>
+            </div>
+
             <div className="space-y-2">
-              <Label>Select Series</Label>
+              <Label>{enrollType === 'series' ? 'Select Series' : 'Select Bundle'}</Label>
               <Select value={enrollmentData.seriesId} onValueChange={(val) => {
-                const s = seriesList.find(x => x.id === val);
-                setEnrollmentData({ ...enrollmentData, seriesId: val, price: s?.price || 0 });
+                if (enrollType === 'series') {
+                  const s = seriesList.find(x => x.id === val);
+                  setEnrollmentData({ ...enrollmentData, seriesId: val, price: s?.price || 0 });
+                } else {
+                  const b = bundlesList.find(x => x.id === val);
+                  setEnrollmentData({ ...enrollmentData, seriesId: val, price: b?.price || 0 });
+                }
               }}>
-                <SelectTrigger><SelectValue placeholder="Choose a series" /></SelectTrigger>
-                <SelectContent>{seriesList.map(s => <SelectItem key={s.id} value={s.id}>{s.name} (₹{s.price})</SelectItem>)}</SelectContent>
+                <SelectTrigger><SelectValue placeholder={enrollType === 'series' ? "Choose a series" : "Choose a bundle"} /></SelectTrigger>
+                <SelectContent>
+                  {enrollType === 'series'
+                    ? seriesList.map(s => <SelectItem key={s.id} value={s.id}>{s.name} (₹{s.price})</SelectItem>)
+                    : bundlesList.map(b => <SelectItem key={b.id} value={b.id}>{b.name} (₹{b.price}) - {b.seriesIds.length} Series</SelectItem>)
+                  }
+                </SelectContent>
               </Select>
             </div>
             <Input placeholder='Transaction ID' value={enrollmentData.transactionId} onChange={e => setEnrollmentData({ ...enrollmentData, transactionId: e.target.value })} />
@@ -1003,14 +1092,27 @@ export default function StudentsPage() {
                     <Badge variant={rec.status === 'active' ? 'default' : 'destructive'} className="mr-2">{rec.status}</Badge>
                     <span className='text-sm font-bold'>₹{rec.price}</span>
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    title="Download Receipt"
-                    onClick={() => handleDownloadReceipt([rec])}
-                  >
-                    <Download className="w-4 h-4 text-blue-600" />
-                  </Button>
+                  <div className="flex items-center">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      title="Download Receipt"
+                      onClick={() => handleDownloadReceipt([rec])}
+                    >
+                      <Download className="w-4 h-4 text-blue-600" />
+                    </Button>
+                    {rec.status === 'active' && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-red-600 hover:text-red-700 hover:bg-red-50 ml-1 h-8 px-2"
+                        title="Revoke Enrollment"
+                        onClick={() => handleRevokeEnrollment(rec.id)}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    )}
+                  </div>
                 </div>
               </div>
             ))}
