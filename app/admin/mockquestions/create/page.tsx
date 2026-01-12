@@ -225,7 +225,7 @@ const INITIAL_QUESTION: Question = {
   isGrace: false,
 };
 
-export default function CreateQuestionPage() {
+function CreateQuestionPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const id = searchParams.get("id");
@@ -1126,6 +1126,14 @@ export default function CreateQuestionPage() {
         }}
       />
     </div>
+  );
+}
+
+export default function CreateQuestionPage() {
+  return (
+    <React.Suspense fallback={<div className="flex justify-center items-center h-screen"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div></div>}>
+      <CreateQuestionPageContent />
+    </React.Suspense>
   );
 }
 

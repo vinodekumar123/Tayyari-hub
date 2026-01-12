@@ -66,7 +66,7 @@ export function UnifiedHeader({
     }, [greeting]);
 
     return (
-        <header className={`sticky top-0 z-30 w-full mb-8 rounded-2xl border border-slate-200/50 dark:border-slate-800/50 ${glassmorphism.light} shadow-sm backdrop-blur-xl animate-in fade-in slide-in-from-top-2 duration-500 ${className}`}>
+        <header className={`sticky top-0 z-30 w-full mb-8 rounded-2xl border border-slate-200/50 dark:border-slate-800/50 ${glassmorphism.light} shadow-sm backdrop-blur-xl ${className}`}>
             <div className="container mx-auto px-4 h-16 flex items-center justify-between">
 
                 {/* Left Section: Greeting or Title */}

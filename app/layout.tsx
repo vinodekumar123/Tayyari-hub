@@ -1,19 +1,18 @@
 // app/layout.tsx
 import './globals.css'
+import React from 'react';
 import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
 import { SpeedInsights } from '@vercel/speed-insights/next'
 
-import { ThemeProvider } from '@/components/theme-provider'
-import { Toaster } from '@/components/ui/sonner'
+import { NavigationLoader } from '@/components/ui/navigation-loader'
 
-const inter = Inter({ subsets: ['latin'] })
+import { Toaster } from "@/components/ui/toaster";
+import { ThemeProvider } from "@/components/theme-provider";
 
-export const metadata: Metadata = {
-  title: 'Tayyari Hub',
-  description: 'Best Platform for MDCAT, LAT and ECAT Entry Test Preparation',
-}
+const inter = Inter({ subsets: ['latin'] });
+
 
 export default function RootLayout({
   children,
@@ -29,6 +28,9 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
+          <React.Suspense fallback={null}>
+            <NavigationLoader />
+          </React.Suspense>
           {children}
           <Toaster />
           {process.env.NODE_ENV === 'production' && (

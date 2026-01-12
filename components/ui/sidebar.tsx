@@ -19,6 +19,7 @@ import { Badge } from '@/components/ui/badge';
 import { ModeToggle } from '@/components/mode-toggle';
 import { NotificationBell } from '@/components/notifications/NotificationBell';
 import { useFcmToken } from '@/hooks/useFcmToken';
+import { useUIStore } from '@/stores/useUIStore'; // Added import
 import {
   Dialog,
   DialogContent,
@@ -54,6 +55,7 @@ export function Sidebar() {
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
   const [isSuperAdmin, setIsSuperAdmin] = useState<boolean>(false);
   const [sessionExpiredOpen, setSessionExpiredOpen] = useState(false);
+  const { setLoading } = useUIStore(); // Added hook usage
 
   useEffect(() => {
     if (mobileOpen) {
@@ -311,7 +313,18 @@ export function Sidebar() {
     );
   };
 
-  const isActive = (href?: string) => href && pathname.includes(href);
+  const isActive = (href?: string) => {
+    if (!href) return false;
+    if (pathname === href) return true;
+
+    // Dashboard roots should only be active on exact match
+    const isDashboardRoot = href === '/dashboard/student' || href === '/dashboard/admin' || href === '/dashboard/teacher';
+    if (isDashboardRoot) return false;
+
+    // Sub-path matching (e.g. /quiz-bank active on /quiz-bank/detail)
+    // Ensures we don't match /dashboard/stud for /dashboard/student
+    return pathname.startsWith(href) && (pathname[href.length] === '/' || pathname.length === href.length);
+  };
 
   const handleSignOut = async () => {
     const auth = getAuth(app);
@@ -338,7 +351,7 @@ export function Sidebar() {
       <div className="md:hidden fixed top-4 left-4 z-50">
         {!mobileOpen && (
           <Button variant="ghost" size="icon" onClick={() => setMobileOpen(true)}>
-            <Menu className="h-6 w-6 text-gray-800" />
+            <Menu className="h-6 w-6 text-foreground" />
           </Button>
         )}
       </div>
@@ -386,7 +399,16 @@ export function Sidebar() {
               {expandedSections.includes(section.section) && (
                 <div className="space-y-1">
                   {section.items.map((item) => (
-                    <Link key={item.href} href={item.href!}>
+                    <Link
+                      key={item.href}
+                      href={item.href!}
+                      onClick={() => {
+                        if (!isActive(item.href)) {
+                          setLoading('navigation', true);
+                        }
+                        if (mobileOpen) setMobileOpen(false);
+                      }}
+                    >
                       <div
                         className={`flex items-center justify-between px-3 py-2 rounded-sm text-sm transition-all duration-200 group ${isActive(item.href)
                           ? 'bg-gradient-to-r from-purple-100 to-blue-100 text-purple-700 shadow-sm dark:from-purple-900/50 dark:to-blue-900/50 dark:text-purple-300'
