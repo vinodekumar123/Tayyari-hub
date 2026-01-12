@@ -67,7 +67,7 @@ export interface Quiz {
     selectedQuestions?: any[];
     published: boolean;
     course: string | { name: string;[key: string]: any }; // Handle both string and object legacy data
-    accessType: 'public' | 'series';
+    accessType: 'public' | 'series' | 'paid';
     maxAttempts?: number;
     series?: string[];
     [key: string]: any;

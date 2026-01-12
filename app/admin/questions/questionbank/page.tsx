@@ -140,7 +140,7 @@ function stripHtml(html: string) {
 
 // Increased batch size for infinite scroll
 const ITEMS_PER_PAGE = 100;
-import { useInView } from 'react-intersection-observer'; // Can't assume this pkg exists, safer to use raw observer
+// import { useInView } from 'react-intersection-observer'; // Removed to avoid dependency error
 
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from '../../../firebase';
@@ -216,6 +216,21 @@ export default function QuestionBankPage() {
   const [availableSubjects, setAvailableSubjects] = useState<string[]>([]);
   const [availableCourses, setAvailableCourses] = useState<string[]>([]);
   const [availableYears, setAvailableYears] = useState<string[]>([]);
+
+  // Scroll To Top Logic
+  const [showScrollTop, setShowScrollTop] = useState(false);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      setShowScrollTop(window.scrollY > 400);
+    };
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  const scrollToTop = () => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
 
 

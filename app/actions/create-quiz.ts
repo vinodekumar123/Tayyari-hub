@@ -1,7 +1,7 @@
 'use server';
 
 import { adminDb } from '@/lib/firebase-admin';
-import { Timestamp } from 'firebase-admin/firestore';
+import { Timestamp, FieldValue } from 'firebase-admin/firestore';
 
 interface CreateQuizConfig {
     userId: string;
@@ -175,7 +175,7 @@ export async function createMockQuiz(config: CreateQuizConfig) {
             allSelectedQuestions.forEach(q => {
                 const qRef = adminDb.collection('mock-questions').doc(q.id);
                 t.update(qRef, {
-                    usedInQuizzes: adminDb!.FieldValue.increment(1) // Assuming explicit update, fallback if doc missing? No, query found it.
+                    usedInQuizzes: FieldValue.increment(1)
                 });
                 // Note: If doc doesn't exist (rare race), transaction fails. 
                 // We'll assume consistency from query phase.

@@ -15,7 +15,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
-import { collection, getDocs, addDoc, Timestamp, query, updateDoc, getDoc, doc, orderBy, where, limit, startAfter } from "firebase/firestore";
+import { collection, getDocs, addDoc, Timestamp, query, updateDoc, getDoc, doc, orderBy, where, limit, startAfter, writeBatch } from "firebase/firestore";
 import { db } from "../../../firebase";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useSearchParams, useRouter } from 'next/navigation';
@@ -158,11 +158,14 @@ function CreateQuizContent() {
       }
 
       const snapshot = await getDocs(q);
-      const newQuestions = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...(doc.data()),
-        usedInQuizzes: doc.data().usedInQuizzes || 0,
-      }));
+      const newQuestions = snapshot.docs.map((doc) => {
+        const data = doc.data() as any;
+        return {
+          id: doc.id,
+          ...data,
+          usedInQuizzes: data.usedInQuizzes || 0,
+        };
+      });
 
       setAvailableQuestions(prev => [...prev, ...newQuestions]);
       setLastQuestionDoc(snapshot.docs[snapshot.docs.length - 1]);
