@@ -173,7 +173,9 @@ export default function StudentQuizBankPage() {
                         orderBy('startDate', 'desc'),
                         limit(20)
                     );
-                    return getDocs(qPublic);
+                    const snap = await getDocs(qPublic);
+                    console.log(`Fetched ${snap.docs.length} public quizzes`);
+                    return snap;
                 };
 
                 const fetchEnrolledQuizzes = async () => {
@@ -215,7 +217,8 @@ export default function StudentQuizBankPage() {
                 // 4. Client-Side Filter
                 // Allow if: Access is Public OR Series Match
                 const finalQuizzes = data.filter(quiz => {
-                    if (quiz.accessType === 'public') return true;
+                    const isPublic = quiz.accessType === 'public' || quiz.accessType === 'Public';
+                    if (isPublic) return true;
 
                     // For non-public, must match enrollment
                     if (!quiz.series || quiz.series.length === 0) return false;
@@ -311,17 +314,13 @@ export default function StudentQuizBankPage() {
             return;
         }
 
-        // Check enrollment access
-        if (quiz.series && quiz.series.length > 0) {
+        // Check enrollment access (Skip for Public quizzes)
+        const isPublic = quiz.accessType === 'public' || quiz.accessType === 'Public';
+
+        if (!isPublic && quiz.series && quiz.series.length > 0) {
             const hasAccess = userEnrolledSeries.length > 0 && quiz.series.some(s => userEnrolledSeries.includes(s));
             if (!hasAccess) {
                 addToast({ type: 'error', message: 'You are not enrolled in the series for this quiz.' });
-                return;
-            }
-        } else {
-            // If quiz has series but user has none (should be filtered out by UI but extra safety)
-            if (quiz.series && quiz.series.length > 0 && userEnrolledSeries.length === 0) {
-                addToast({ type: 'error', message: 'You must be enrolled in a series to access this quiz.' });
                 return;
             }
         }
@@ -362,6 +361,9 @@ export default function StudentQuizBankPage() {
 
             // Client Filter on Load More
             const finalData = newData.filter(quiz => {
+                const isPublic = quiz.accessType === 'public' || quiz.accessType === 'Public';
+                if (isPublic) return true;
+
                 if (!quiz.series || quiz.series.length === 0) return false;
                 if (userEnrolledSeries.length === 0) return false;
                 return quiz.series.some((s: string) => userEnrolledSeries.includes(s));
