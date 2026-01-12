@@ -10,11 +10,13 @@ import {
     Clock,
     Database,
     BrainCircuit,
-    AlertCircle
+    AlertCircle,
+    BookOpenCheck
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
 import { Progress } from '@/components/ui/progress';
 import { toast } from 'sonner';
 import {
@@ -62,6 +64,9 @@ export default function AutoTaggerPage() {
     const [allSubjects, setAllSubjects] = useState<Subject[]>([]);
     const [selectedCourse, setSelectedCourse] = useState('');
     const [selectedSubject, setSelectedSubject] = useState('');
+    const [selectedModel, setSelectedModel] = useState('gemini-2.0-flash-exp');
+    const [processingMode, setProcessingMode] = useState<'pending' | 'all'>('pending');
+    const [syllabusContext, setSyllabusContext] = useState('FSC Sindh Board New Syllabus');
     const [validChapters, setValidChapters] = useState<string[]>([]);
     const [isStarting, setIsStarting] = useState(false);
     const [debugLogs, setDebugLogs] = useState<string[]>([]);
@@ -70,12 +75,14 @@ export default function AutoTaggerPage() {
     const [status, setStatus] = useState<'idle' | 'running' | 'paused' | 'completed'>('idle');
     const [totalQuestions, setTotalQuestions] = useState(0);
     const [processedCount, setProcessedCount] = useState(0);
+    const [failedCount, setFailedCount] = useState(0);
     const [logs, setLogs] = useState<ProcessLog[]>([]);
     const [startTime, setStartTime] = useState<number | null>(null);
 
     // Refs for loop control
     const isRunningRef = useRef(false);
     const processedCountRef = useRef(0);
+    const failedCountRef = useRef(0);
 
     // Constants
     const BATCH_SIZE = 5; // Reduced from 10 to prevent timeouts
@@ -132,8 +139,11 @@ export default function AutoTaggerPage() {
     const resetStats = () => {
         setStatus('idle');
         setTotalQuestions(0);
+        setTotalQuestions(0);
         setProcessedCount(0);
+        setFailedCount(0);
         processedCountRef.current = 0;
+        failedCountRef.current = 0;
         setLogs([]);
         setStartTime(null);
         setDebugLogs([]);
@@ -143,41 +153,42 @@ export default function AutoTaggerPage() {
 
     const fetchQuestionCount = async () => {
         if (!selectedCourse || !selectedSubject) return;
-        addDebugLog(`Fetching questions: Course=${selectedCourse}, Subject=${selectedSubject}`);
+        addDebugLog(`Fetching ALL questions for Subject=${selectedSubject} (ignoring current Course ID)...`);
         try {
-            let q = query(
+            // Broad Query: Fetch ALL questions for this subject
+            // This allows us to catch "Orphan" questions (missing courseId) AND valid ones.
+            const q = query(
                 collection(db, 'questions'),
-                where('courseId', '==', selectedCourse),
                 where('subject', '==', selectedSubject)
             );
-            let snap = await getDocs(q);
 
-            // ORPHAN RECOVERY LOGIC - START
+            const snap = await getDocs(q);
+
             if (snap.empty) {
-                addDebugLog("Strict match failed (0 docs). Attempting Orphan Recovery...");
-                // Query by Subject Only
-                const looseQ = query(
-                    collection(db, 'questions'),
-                    where('subject', '==', selectedSubject)
-                );
-                const looseSnap = await getDocs(looseQ);
+                addDebugLog("No questions found for this Subject.");
+                toast.warning("No questions found for this Subject.");
+                setTotalQuestions(0);
+                return [];
+            }
 
-                if (!looseSnap.empty) {
-                    addDebugLog(`RECOVERY: Found ${looseSnap.size} orphan questions with matching Subject.`);
-                    addDebugLog(`IMPORTANT: These will be adopted into Course ${selectedCourse} upon processing.`);
-                    toast.warning(`Found ${looseSnap.size} orphan questions. They will be fixed & tagged.`);
-                    setTotalQuestions(looseSnap.size);
-                    return looseSnap.docs;
-                } else {
-                    addDebugLog("Recovery failed: No questions found for this Subject at all (orphan or valid).");
+            addDebugLog(`Fetch success: ${snap.size} total questions found for subject '${selectedSubject}'.`);
+
+            let finalDocs = snap.docs;
+
+            // CLIENT-SIDE FILTERING based on Processing Mode
+            if (processingMode === 'pending') {
+                finalDocs = snap.docs.filter(doc => !doc.data().aiTagged);
+                addDebugLog(`Filtering: ${snap.size} Total -> ${finalDocs.length} Pending (Skipped ${snap.size - finalDocs.length} already tagged)`);
+
+                if (finalDocs.length === 0 && snap.size > 0) {
+                    toast.success("All questions for this subject are already tagged! ✅");
                 }
             } else {
-                addDebugLog(`Fetch success: ${snap.size} docs found.`);
+                addDebugLog(`Mode 'All': Queuing all ${snap.size} questions (Force Re-tag).`);
             }
-            // ORPHAN RECOVERY LOGIC - END
 
-            setTotalQuestions(snap.size);
-            return snap.docs;
+            setTotalQuestions(finalDocs.length);
+            return finalDocs;
         } catch (e: any) {
             addDebugLog(`Fetch Error: ${e.message}`);
             console.error(e);
@@ -255,79 +266,120 @@ export default function AutoTaggerPage() {
                     };
                 });
 
-                // Call API
-                addDebugLog(`Sending Batch ${String(Math.floor(processedCountRef.current / BATCH_SIZE) + 1)} to AI (Size: ${questionsPayload.length})...`);
+                let retries = 0;
+                let success = false;
+                const MAX_RETRIES = 3;
 
-                const response = await fetch('/api/ai/auto-tag', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        questions: questionsPayload,
-                        validChapters,
-                        subject: selectedSubject
-                    })
-                });
+                while (retries <= MAX_RETRIES && !success) {
+                    try {
+                        addDebugLog(`Sending Batch ${String(Math.floor(processedCountRef.current / BATCH_SIZE) + 1)} to AI (Size: ${questionsPayload.length})... (Attempt ${retries + 1})`);
 
-                if (!response.ok) {
-                    const errText = await response.text();
-                    addDebugLog(`API Error ${response.status}: ${errText.substring(0, 50)}`);
-                    throw new Error(`API ${response.status}`);
-                }
-
-                const result = await response.json();
-                addDebugLog(`AI Response received. Results: ${result?.results?.length || 0}`);
-
-                if (result.results) {
-                    // Batch Update Firestore
-                    const batch = writeBatch(db);
-                    const newLogs: ProcessLog[] = [];
-                    addDebugLog("Writing updates to Firestore...");
-
-                    result.results.forEach((item: any) => {
-                        const docRef = doc(db, 'questions', item.id);
-                        batch.update(docRef, {
-                            chapter: item.chapter,
-                            difficulty: item.difficulty,
-                            courseId: selectedCourse, // AUTO-FIX: Ensure courseId is set correctly
-                            aiTagged: true,
-                            updatedAt: new Date() // Use serverTimestamp in real app if possible
+                        const response = await fetch('/api/ai/auto-tag', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                questions: questionsPayload,
+                                validChapters,
+                                subject: selectedSubject,
+                                model: selectedModel,
+                                syllabusContext
+                            })
                         });
 
-                        // Log
-                        const originalDoc = batchDocs.find(d => d.id === item.id);
-                        const qText = originalDoc?.data().questionText || "";
+                        if (!response.ok) {
+                            if (response.status === 429 || response.status === 503 || response.status === 500) {
+                                // Rate limited or service temporarily unavailable
+                                const errText = await response.text();
+                                addDebugLog(`API ${response.status}: Rate limit/Capacity hit. Retrying in ${Math.pow(2, retries + 1)}s...`);
+                                console.warn(`API Error ${response.status}: ${errText.substring(0, 200)}`);
 
-                        newLogs.push({
-                            id: item.id,
-                            questionPreview: qText.substring(0, 50) + "...",
-                            oldChapter: originalDoc?.data().chapter || "N/A",
-                            newChapter: item.chapter,
-                            difficulty: item.difficulty,
-                            status: 'success',
-                            timestamp: new Date().toLocaleTimeString()
-                        });
-                    });
+                                if (retries === MAX_RETRIES) {
+                                    throw new Error(`API ${response.status} Failed after ${MAX_RETRIES} retries: ${errText.substring(0, 100)}`);
+                                }
 
-                    await batch.commit();
-                    addDebugLog("Firestore batch committed.");
+                                // Exponential Backoff: 2s, 4s, 8s
+                                await new Promise(r => setTimeout(r, 2000 * Math.pow(2, retries)));
+                                retries++;
+                                continue;
+                            } else {
+                                // Other hard errors
+                                const errText = await response.text();
+                                throw new Error(`API ${response.status}: ${errText.substring(0, 500)}`);
+                            }
+                        }
 
-                    // Update State
-                    processedCountRef.current += batchDocs.length;
-                    setProcessedCount(processedCountRef.current);
-                    setLogs(prev => [...newLogs, ...prev].slice(0, 100)); // Keep last 100
-                    addDebugLog(`Batch success! Moving to next...`);
-                } else {
-                    addDebugLog("Warning: No results array in AI response.");
+                        const result = await response.json();
+                        addDebugLog(`AI Response received. Results: ${result?.results?.length || 0}`);
+
+                        if (result.results) {
+                            // Batch Update Firestore
+                            const batch = writeBatch(db);
+                            const newLogs: ProcessLog[] = [];
+                            addDebugLog("Writing updates to Firestore...");
+
+                            result.results.forEach((item: any) => {
+                                const docRef = doc(db, 'questions', item.question_id || item.id);
+                                batch.update(docRef, {
+                                    chapter: item.assigned_chapter || item.chapter,
+                                    difficulty: item.difficulty,
+                                    courseId: selectedCourse, // AUTO-FIX: Ensure courseId is set correctly
+                                    aiTagged: true,
+                                    updatedAt: new Date() // Use serverTimestamp in real app if possible
+                                });
+
+                                // Log
+                                const originalDoc = batchDocs.find(d => d.id === (item.question_id || item.id));
+                                const qText = originalDoc?.data().questionText || "";
+
+                                newLogs.push({
+                                    id: item.question_id || item.id,
+                                    questionPreview: qText.substring(0, 50) + "...",
+                                    oldChapter: originalDoc?.data().chapter || "N/A",
+                                    newChapter: item.assigned_chapter || item.chapter,
+                                    difficulty: item.difficulty,
+                                    status: 'success',
+                                    timestamp: new Date().toLocaleTimeString()
+                                });
+                            });
+
+                            await batch.commit();
+                            addDebugLog("Firestore batch committed.");
+
+                            // Update State
+                            processedCountRef.current += batchDocs.length;
+                            setProcessedCount(processedCountRef.current);
+                            setLogs(prev => [...newLogs, ...prev].slice(0, 100)); // Keep last 100
+                            addDebugLog(`Batch success! Moving to next...`);
+                        } else {
+                            addDebugLog("Warning: No results array in AI response.");
+                        }
+
+                        success = true; // Break retry loop
+
+                    } catch (attemptError: any) {
+                        if (retries < MAX_RETRIES && (attemptError.message?.includes('429') || attemptError.message?.includes('503'))) {
+                            // Already handled above normally, but unexpected throw
+                            console.warn("Retrying after unexpected block error:", attemptError);
+                            await new Promise(r => setTimeout(r, 2000));
+                            retries++;
+                        } else if (retries === MAX_RETRIES) {
+                            throw attemptError; // Final fail
+                        } else {
+                            // Non-retriable error
+                            throw attemptError;
+                        }
+                    }
                 }
-
             } catch (err: any) {
                 console.error("Batch failed", err);
                 addDebugLog(`Batch failed: ${err.message}`);
                 toast.error("Batch failed, skipping...");
+                failedCountRef.current += batchDocs.length;
+                setFailedCount(failedCountRef.current);
             }
 
-            // Delay to respect rate limits if needed
-            await new Promise(r => setTimeout(r, 1000));
+            // Delay to respect rate limits - Increased to 2000ms base
+            await new Promise(r => setTimeout(r, 2000));
 
             currentIndex += BATCH_SIZE;
 
@@ -378,7 +430,7 @@ export default function AutoTaggerPage() {
                     <div className="flex gap-4">
                         <div className="bg-white/50 p-4 rounded-xl border border-gray-200 backdrop-blur-sm">
                             <div className="text-xs text-muted-foreground uppercase tracking-wider font-bold">Model</div>
-                            <div className="font-mono text-sm font-semibold text-green-600">Gemini 1.5 Flash</div>
+                            <div className="font-mono text-sm font-semibold text-green-600">{selectedModel}</div>
                         </div>
                     </div>
                 </div>
@@ -389,7 +441,7 @@ export default function AutoTaggerPage() {
                 <div className="lg:col-span-1 space-y-6">
                     <Card className="border-t-4 border-t-blue-500 shadow-lg">
                         <CardHeader>
-                            <CardTitle>Configuration</CardTitle>
+                            <CardTitle>Configuration (Select Model)</CardTitle>
                             <CardDescription>Select target scope</CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-4">
@@ -416,6 +468,56 @@ export default function AutoTaggerPage() {
                                         }
                                     </SelectContent>
                                 </Select>
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-sm font-medium">AI Model</label>
+                                <Select value={selectedModel} onValueChange={setSelectedModel} disabled={status === 'running'}>
+                                    <SelectTrigger><SelectValue placeholder="Select Model" /></SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="gemini-1.5-flash">Gemini 1.5 Flash (Fast)</SelectItem>
+                                        <SelectItem value="gemini-1.5-pro">Gemini 1.5 Pro (Smart)</SelectItem>
+                                        <SelectItem value="gemini-2.0-flash-exp">Gemini 2.0 Flash (Preview)</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+
+                            <div className="space-y-2">
+                                <label className="text-sm font-medium">Processing Scope</label>
+                                <div className="flex gap-2">
+                                    <Button
+                                        variant={processingMode === 'pending' ? 'default' : 'outline'}
+                                        className={`flex-1 ${processingMode === 'pending' ? 'bg-green-600 hover:bg-green-700' : ''}`}
+                                        onClick={() => setProcessingMode('pending')}
+                                        disabled={status === 'running'}
+                                    >
+                                        Pending Only
+                                    </Button>
+                                    <Button
+                                        variant={processingMode === 'all' ? 'default' : 'outline'}
+                                        className="flex-1"
+                                        onClick={() => setProcessingMode('all')}
+                                        disabled={status === 'running'}
+                                    >
+                                        Process All
+                                    </Button>
+                                </div>
+                                <p className="text-xs text-muted-foreground">
+                                    {processingMode === 'pending'
+                                        ? "Skip questions that are already AI Tagged."
+                                        : "Re-process and overwrite all questions."}
+                                </p>
+                            </div>
+
+                            <div className="space-y-2">
+                                <label className="text-sm font-medium">Syllabus Context</label>
+                                <Textarea
+                                    placeholder="e.g. Sindh Board, Federal Board, PMC Syllabus..."
+                                    value={syllabusContext}
+                                    onChange={(e) => setSyllabusContext(e.target.value)}
+                                    disabled={status === 'running'}
+                                    className="h-20 resize-none text-xs"
+                                />
+                                <p className="text-xs text-muted-foreground">Specify Board/Syllabus for better accuracy.</p>
                             </div>
 
                             {selectedSubject && (
@@ -484,7 +586,14 @@ export default function AutoTaggerPage() {
                             <CardContent className="p-4 flex flex-col items-center justify-center text-center">
                                 <CheckCircle2 className="w-6 h-6 text-green-500 mb-2" />
                                 <div className="text-2xl font-bold">{processedCount}</div>
-                                <div className="text-xs text-muted-foreground">Processed</div>
+                                <div className="text-xs text-muted-foreground">Success</div>
+                            </CardContent>
+                        </Card>
+                        <Card className="bg-white/50 backdrop-blur">
+                            <CardContent className="p-4 flex flex-col items-center justify-center text-center">
+                                <AlertCircle className="w-6 h-6 text-red-500 mb-2" />
+                                <div className="text-2xl font-bold">{failedCount}</div>
+                                <div className="text-xs text-muted-foreground">Failed</div>
                             </CardContent>
                         </Card>
                         <Card className="bg-white/50 backdrop-blur">

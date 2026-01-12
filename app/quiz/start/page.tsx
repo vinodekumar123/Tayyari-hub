@@ -58,6 +58,8 @@ interface QuizData {
   selectedQuestions: Question[];
   questionsPerPage?: number;
   maxAttempts: number;
+  accessType?: 'public' | 'series' | 'free' | 'paid';
+  series?: string[];
 }
 
 const stripHtml = (html: string): string => {
@@ -230,12 +232,15 @@ const StartQuizPageContent: React.FC = () => {
         })),
         questionsPerPage: data.questionsPerPage || 1,
         maxAttempts: data.maxAttempts || 1,
+        accessType: data.accessType,
+        series: data.series || [],
       };
 
       setQuiz(quizData);
 
       // Series Enrollment Check
-      if (!isAdmin && data.series && Array.isArray(data.series) && data.series.length > 0) {
+      const isSeriesRestricted = data.accessType === 'series' || data.accessType === 'paid';
+      if (!isAdmin && isSeriesRestricted && data.series && Array.isArray(data.series) && data.series.length > 0) {
         try {
           const enrollmentsRef = collection(db, 'enrollments');
           const qEnrol = query(enrollmentsRef, where('studentId', '==', user.uid), where('status', '==', 'active'));

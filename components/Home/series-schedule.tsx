@@ -124,11 +124,11 @@ const SeriesSchedule = () => {
                                 className="w-full"
                             >
                                 {/* Series Switcher */}
-                                <div className="flex justify-center mb-8">
-                                    <div className="bg-slate-100 dark:bg-slate-800 p-1 rounded-xl inline-flex">
+                                <div className="flex flex-col md:flex-row items-center gap-4 mb-8">
+                                    <div className="bg-slate-100 dark:bg-slate-800 p-1 rounded-xl inline-flex w-full md:w-auto">
                                         <button
                                             onClick={() => setImproverSeries(1)}
-                                            className={`px-6 py-2 rounded-lg text-sm font-semibold transition-all ${improverSeries === 1
+                                            className={`flex-1 md:flex-none px-6 py-2 rounded-lg text-sm font-semibold transition-all ${improverSeries === 1
                                                 ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm'
                                                 : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
                                                 }`}
@@ -137,7 +137,7 @@ const SeriesSchedule = () => {
                                         </button>
                                         <button
                                             onClick={() => setImproverSeries(2)}
-                                            className={`px-6 py-2 rounded-lg text-sm font-semibold transition-all ${improverSeries === 2
+                                            className={`flex-1 md:flex-none px-6 py-2 rounded-lg text-sm font-semibold transition-all ${improverSeries === 2
                                                 ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm'
                                                 : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
                                                 }`}
@@ -148,7 +148,7 @@ const SeriesSchedule = () => {
                                     {/* PDF Download Button */}
                                     <button
                                         onClick={() => generateSchedulePDF('improver')}
-                                        className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold transition-all shadow-lg shadow-blue-600/20 active:scale-95"
+                                        className="w-full md:w-auto inline-flex justify-center items-center gap-2 px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold transition-all shadow-lg shadow-blue-600/20 active:scale-95"
                                     >
                                         <Download className="w-4 h-4" />
                                         Download Schedule PDF

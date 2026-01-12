@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useMemo } from 'react';
 import { db, auth } from '@/app/firebase';
-import { collection, query, where, getDocs, doc, updateDoc, deleteDoc, serverTimestamp, orderBy } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, updateDoc, deleteDoc, serverTimestamp, orderBy, limit, startAfter, Timestamp, QueryDocumentSnapshot, DocumentData } from 'firebase/firestore';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Bookmark, Trash2, RotateCcw, X, Eye, EyeOff, Search, Clock, BookOpen, BarChart3, Grid, CheckCircle } from 'lucide-react';
+import { Bookmark, Trash2, RotateCcw, X, Eye, EyeOff, Search, Clock, BookOpen, BarChart3, Grid, CheckCircle, Play, ArrowRight, ArrowLeft, Repeat } from 'lucide-react';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend } from 'recharts';
@@ -25,7 +25,7 @@ interface Flashcard {
     explanation?: string;
     subject?: string;
     topic?: string;
-    savedAt?: any;
+    savedAt?: Timestamp;
     isDeleted?: boolean;
     [key: string]: any;
 }
@@ -43,27 +43,92 @@ export default function FlashcardsPage() {
     const [cardToDelete, setCardToDelete] = useState<Flashcard | null>(null);
     const [activeTab, setActiveTab] = useState('active');
 
-    useEffect(() => {
-        onAuthStateChanged(auth, u => setUser(u));
-    }, []);
+    const [lastDoc, setLastDoc] = useState<QueryDocumentSnapshot<DocumentData> | null>(null);
+    const [hasMore, setHasMore] = useState(false);
+    const [loadingMore, setLoadingMore] = useState(false);
+
+    // Study Mode State
+    const [isStudyOpen, setIsStudyOpen] = useState(false);
+    const [studyIndex, setStudyIndex] = useState(0);
+    const [isFlipped, setIsFlipped] = useState(false);
 
     useEffect(() => {
+        const unsubscribe = onAuthStateChanged(auth, u => {
+            setUser(u);
+            if (!u) setLoading(false);
+        });
+        return () => unsubscribe();
+    }, []);
+
+    const fetchCards = async (isInitial = true) => {
         if (!user) return;
-        const fetchCards = async () => {
+
+        if (isInitial) {
             setLoading(true);
-            try {
-                const q = query(collection(db, 'users', user.uid, 'flashcards'), orderBy('savedAt', 'desc'));
-                const snap = await getDocs(q);
-                const cards = snap.docs.map(d => ({ id: d.id, ...d.data() })) as Flashcard[];
-                setFlashcards(cards);
-            } catch (e) {
-                console.error("Error fetching flashcards", e);
-            } finally {
-                setLoading(false);
+        } else {
+            setLoadingMore(true);
+        }
+
+        try {
+            let q = query(
+                collection(db, 'users', user.uid, 'flashcards'),
+                orderBy('savedAt', 'desc'),
+                limit(12)
+            );
+
+            if (!isInitial && lastDoc) {
+                q = query(q, startAfter(lastDoc));
             }
-        };
-        fetchCards();
+
+            const snap = await getDocs(q);
+            const newCards = snap.docs.map(d => ({ id: d.id, ...d.data() })) as Flashcard[];
+
+            if (isInitial) {
+                setFlashcards(newCards);
+            } else {
+                setFlashcards(prev => [...prev, ...newCards]);
+            }
+
+            setLastDoc(snap.docs[snap.docs.length - 1] || null);
+            setHasMore(snap.docs.length === 12);
+        } catch (e) {
+            console.error("Error fetching flashcards", e);
+            toast.error("Failed to load cards");
+        } finally {
+            setLoading(false);
+            setLoadingMore(false);
+        }
+    };
+
+    useEffect(() => {
+        if (user) {
+            fetchCards(true);
+        }
     }, [user]);
+
+    const startStudySession = () => {
+        if (flashcards.length === 0) {
+            toast.error("No cards to study!");
+            return;
+        }
+        setStudyIndex(0);
+        setIsFlipped(false);
+        setIsStudyOpen(true);
+    };
+
+    const nextCard = () => {
+        if (studyIndex < filteredCards.length - 1) {
+            setStudyIndex(prev => prev + 1);
+            setIsFlipped(false);
+        }
+    };
+
+    const prevCard = () => {
+        if (studyIndex > 0) {
+            setStudyIndex(prev => prev - 1);
+            setIsFlipped(false);
+        }
+    };
 
     // Handle soft delete
     const handleDelete = async (card: Flashcard) => {
@@ -170,6 +235,9 @@ export default function FlashcardsPage() {
                 icon={<BookOpen className="w-6 h-6" />}
             >
                 <div className="flex items-center gap-4">
+                    <Button onClick={startStudySession} className="hidden md:flex bg-indigo-600 hover:bg-indigo-700 text-white gap-2 shadow-lg shadow-indigo-200 dark:shadow-indigo-900/20">
+                        <Play className="w-4 h-4 fill-current" /> Study Mode
+                    </Button>
                     <Card className="bg-indigo-50 border-indigo-100 dark:bg-indigo-900/20 dark:border-indigo-900/50 px-4 py-2 h-10 flex items-center justify-center min-w-[120px]">
                         <div className="flex items-center gap-2">
                             <div className="text-indigo-600 dark:text-indigo-400 font-bold text-lg">{analytics.total}</div>
@@ -343,6 +411,20 @@ export default function FlashcardsPage() {
                     )}
                 </TabsContent>
 
+                {/* Load More Button */}
+                {hasMore && activeTab === 'active' && !subjectFilter && !searchTerm && (
+                    <div className="mt-8 flex justify-center">
+                        <Button
+                            variant="outline"
+                            onClick={() => fetchCards(false)}
+                            disabled={loadingMore}
+                            className="w-full md:w-auto min-w-[200px]"
+                        >
+                            {loadingMore ? 'Loading...' : 'Load More Cards'}
+                        </Button>
+                    </div>
+                )}
+
                 <TabsContent value="recycle" className="space-y-6">
                     {filteredCards.length > 0 ? (
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -390,6 +472,92 @@ export default function FlashcardsPage() {
                         <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>Cancel</Button>
                         <Button variant="destructive" onClick={handlePermanentDelete}>Delete Forever</Button>
                     </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Study Mode Dialog */}
+            <Dialog open={isStudyOpen} onOpenChange={setIsStudyOpen}>
+                <DialogContent className="max-w-4xl h-[80vh] flex flex-col p-0 gap-0 bg-gray-50 dark:bg-slate-950 border-none overflow-hidden">
+                    <div className="p-4 border-b border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex justify-between items-center">
+                        <div className="flex items-center gap-2">
+                            <Badge variant="outline" className="bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400">
+                                Card {studyIndex + 1} of {filteredCards.length}
+                            </Badge>
+                            {filteredCards[studyIndex]?.subject && (
+                                <Badge variant="secondary" className="hidden sm:inline-flex">
+                                    {filteredCards[studyIndex].subject}
+                                </Badge>
+                            )}
+                        </div>
+                        <Button variant="ghost" size="icon" onClick={() => setIsStudyOpen(false)}>
+                            <X className="w-5 h-5" />
+                        </Button>
+                    </div>
+
+                    <div className="flex-1 overflow-y-auto p-4 md:p-8 flex items-center justify-center relative">
+                        {filteredCards.length > 0 && filteredCards[studyIndex] ? (
+                            <div
+                                className="w-full max-w-2xl aspect-video md:aspect-[4/3] perspective-1000 cursor-pointer group"
+                                onClick={() => setIsFlipped(!isFlipped)}
+                            >
+                                <div className={`relative w-full h-full transition-all duration-500 transform-style-3d ${isFlipped ? 'rotate-y-180' : ''}`}>
+                                    {/* Front */}
+                                    <div className="absolute w-full h-full backface-hidden bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-gray-200 dark:border-slate-800 p-8 flex flex-col items-center justify-center text-center">
+                                        <h3 className="text-xl md:text-2xl font-medium text-gray-800 dark:text-gray-100 mb-6 font-serif">
+                                            Question
+                                        </h3>
+                                        <div
+                                            className="prose dark:prose-invert max-w-none text-lg md:text-xl"
+                                            dangerouslySetInnerHTML={{ __html: filteredCards[studyIndex].questionText }}
+                                        />
+                                        <div className="mt-8 text-sm text-gray-400 dark:text-gray-500 flex items-center gap-2 animate-pulse">
+                                            <Repeat className="w-4 h-4" /> Click to flip
+                                        </div>
+                                    </div>
+
+                                    {/* Back */}
+                                    <div className="absolute w-full h-full backface-hidden rotate-y-180 bg-indigo-50 dark:bg-slate-900 rounded-2xl shadow-xl border-2 border-indigo-100 dark:border-indigo-900/30 p-8 flex flex-col items-center justify-center text-center overflow-y-auto">
+                                        <h3 className="text-xl md:text-2xl font-medium text-indigo-600 dark:text-indigo-400 mb-6 font-serif">
+                                            Answer
+                                        </h3>
+                                        <div className="text-xl md:text-2xl font-bold text-gray-900 dark:text-gray-100 mb-4">
+                                            {filteredCards[studyIndex].correctAnswer}
+                                        </div>
+                                        {filteredCards[studyIndex].explanation && (
+                                            <div className="mt-4 p-4 bg-white/50 dark:bg-slate-800/50 rounded-lg text-sm md:text-base text-gray-600 dark:text-gray-300 max-h-[200px] overflow-y-auto">
+                                                <div dangerouslySetInnerHTML={{ __html: filteredCards[studyIndex].explanation }} />
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="text-center">
+                                <p className="text-gray-500">No cards accessible to study.</p>
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="p-4 border-t border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex justify-between items-center gap-4">
+                        <Button
+                            variant="outline"
+                            onClick={prevCard}
+                            disabled={studyIndex === 0}
+                            className="w-32"
+                        >
+                            <ArrowLeft className="w-4 h-4 mr-2" /> Previous
+                        </Button>
+                        <div className="text-sm text-gray-400 hidden sm:block">
+                            Use arrow keys to navigate
+                        </div>
+                        <Button
+                            onClick={nextCard}
+                            disabled={studyIndex === filteredCards.length - 1}
+                            className="w-32 bg-indigo-600 text-white hover:bg-indigo-700"
+                        >
+                            Next <ArrowRight className="w-4 h-4 ml-2" />
+                        </Button>
+                    </div>
                 </DialogContent>
             </Dialog>
         </div>

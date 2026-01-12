@@ -1,7 +1,9 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, Suspense } from 'react';
 import { CsvImporter } from '@/components/admin/CsvImporter';
+import { AiBulkGenerateDialog } from '@/components/admin/AiBulkGenerateDialog';
+import { useSearchParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import 'react-quill-new/dist/quill.snow.css';
 import { Button } from '@/components/ui/button';
@@ -12,11 +14,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Loader2, Plus, Trash2, Wand2, Calculator, Download, Upload, CheckCircle2, RotateCcw, AlertCircle } from 'lucide-react';
+import { Loader2, Plus, Trash2, Wand2, Calculator, Download, Upload, CheckCircle2, RotateCcw, AlertCircle, Sparkles } from 'lucide-react';
 import Papa from 'papaparse';
 import { glassmorphism } from '@/lib/design-tokens';
 import { app, auth } from '../../../firebase';
-import { collection, addDoc, serverTimestamp, getDocs, writeBatch, doc, getDoc, getFirestore } from 'firebase/firestore';
+
+import { collection, addDoc, serverTimestamp, getDocs, writeBatch, doc, getDoc, updateDoc, getFirestore } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
 
 const db = getFirestore(app);
@@ -146,7 +149,11 @@ interface Question {
   allOptionsCorrect: boolean; // If true, any answer (or no answer?) is valid - logic depends on consumption
 }
 
-const CreateQuestionPage = () => {
+const CreateQuestionPageContent = () => {
+  const searchParams = useSearchParams();
+  const questionId = searchParams.get('id');
+  const isEditMode = !!questionId;
+
   const [loading, setLoading] = useState(false);
   const [courses, setCourses] = useState<Course[]>([]);
   const [allSubjects, setAllSubjects] = useState<Subject[]>([]);
@@ -159,6 +166,10 @@ const CreateQuestionPage = () => {
 
   // CSV State
   const [isCsvDialogOpen, setIsCsvDialogOpen] = useState(false);
+  const [importInitialData, setImportInitialData] = useState<any[] | undefined>(undefined);
+
+  // AI Bulk State
+  const [isAiBulkOpen, setIsAiBulkOpen] = useState(false);
 
   const [isSaving, setIsSaving] = useState(false);
 
@@ -254,6 +265,44 @@ const CreateQuestionPage = () => {
     fetchData();
   }, []);
 
+  // Fetch Question if Edit Mode
+  useEffect(() => {
+    if (!questionId) return;
+    const fetchQuestion = async () => {
+      try {
+        setLoading(true);
+        const docRef = doc(db, 'questions', questionId);
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          const q = docSnap.data() as Question; // Cast simpler
+          // Populate Form
+          setQuestionText(q.questionText || '');
+          setOptions(q.options || ['', '', '', '']);
+          setCorrectAnswer(q.correctAnswer || '');
+          setExplanation(q.explanation || '');
+          setSubject(q.subject || '');
+          setDifficulty(q.difficulty || 'Medium');
+          setTopic(q.topic || '');
+          setSubtopic(q.subtopic || '');
+          setIsPublic(q.isPublic ?? true);
+          if (q.courseId) setSelectedCourse(q.courseId);
+          setAllOptionsCorrect(q.allOptionsCorrect || false);
+          setChapter((q as any).chapter || '');
+          setYear((q as any).year || '');
+          setBook((q as any).book || '');
+        } else {
+          toast.error("Question not found");
+        }
+      } catch (error) {
+        console.error(error);
+        toast.error("Failed to load question");
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchQuestion();
+  }, [questionId]);
+
   const handleOptionChange = (index: number, value: string) => {
     const newOptions = [...options];
     newOptions[index] = value;
@@ -315,7 +364,7 @@ const CreateQuestionPage = () => {
 
     setLoading(true);
     try {
-      await addDoc(collection(db, 'questions'), {
+      const payload = {
         questionText,
         options,
         correctAnswer, // Saving the text value
@@ -326,30 +375,47 @@ const CreateQuestionPage = () => {
         subtopic,
         isPublic,
         courseId: selectedCourse,
-        // positiveMarks: Number(positiveMarks), // Removed
-        // isGrace, // Removed
         allOptionsCorrect,
         chapter,
         year,
         book,
         teacher: userName || 'Admin', // Save current user NAME
-        createdAt: serverTimestamp(),
-        type: 'multiple-choice' // Default type
-      });
-      toast.success("Question created successfully!");
-      // Reset form
-      setQuestionText('');
-      setOptions(['', '', '', '']);
-      setCorrectAnswer('');
-      setExplanation('');
+        type: 'multiple-choice', // Default type
+        updatedAt: serverTimestamp()
+      };
+
+      if (isEditMode && questionId) {
+        // Update
+        await updateDoc(doc(db, 'questions', questionId), payload);
+        toast.success("Question updated successfully!");
+        // Don't clear form on edit, maybe redirect or stay
+      } else {
+        // Create
+        await addDoc(collection(db, 'questions'), {
+          ...payload,
+          createdAt: serverTimestamp(),
+        });
+        toast.success("Question created successfully!");
+        // Reset form
+        setQuestionText('');
+        setOptions(['', '', '', '']);
+        setCorrectAnswer('');
+        setExplanation('');
+      }
+
     } catch (error) {
-      console.error("Error adding question: ", error);
-      toast.error("Failed to create question");
+      console.error("Error saving question: ", error);
+      toast.error("Failed to save question");
     } finally {
       setLoading(false);
     }
   };
 
+
+  const handleAiBulkSuccess = (data: any[]) => {
+    setImportInitialData(data);
+    setIsCsvDialogOpen(true); // Open CSV/Preview Dialog directly
+  };
 
   const handleSmartImport = async (importedData: any[]) => {
     setIsSaving(true);
@@ -366,6 +432,11 @@ const CreateQuestionPage = () => {
           questionText += `<br/><img src="${row.imageUrl || row.image}" alt="Imported Image" />`;
         }
 
+        console.log("Saving Question Row:", {
+          row,
+          globalState: { selectedCourse, subject, chapter, difficulty }
+        });
+
         // Use Global Metadata + Row Data
         const data = {
           questionText,
@@ -380,6 +451,8 @@ const CreateQuestionPage = () => {
           subtopic,
           isPublic,
           courseId: selectedCourse,
+          course: courses.find(c => c.id === selectedCourse)?.name || 'Unknown',
+          isDeleted: false,
           // positiveMarks: Number(positiveMarks), // Removed
 
           // isGrace, // Removed
@@ -388,6 +461,7 @@ const CreateQuestionPage = () => {
           year,
           book,
           teacher: userName || 'Admin', // Save current user NAME
+          teacherId: auth.currentUser?.uid, // Save current user ID for filtering
 
           status: 'published',
           type: 'multiple-choice',
@@ -421,11 +495,11 @@ const CreateQuestionPage = () => {
           <div className="flex flex-col md:flex-row items-center justify-between gap-6">
             <div>
               <h1 className="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-[#004AAD] via-[#0066FF] to-[#00B4D8] dark:from-[#0066FF] dark:via-[#00B4D8] dark:to-[#66D9EF] mb-2">
-                Create Question
+                {isEditMode ? 'Edit Question' : 'Create Question'}
               </h1>
               <p className="text-muted-foreground font-semibold flex items-center gap-2">
                 <Wand2 className="w-5 h-5 text-[#00B4D8] dark:text-[#66D9EF]" />
-                Add new questions to the question bank
+                {isEditMode ? 'Modify existing question details' : 'Add new questions to the question bank'}
               </p>
             </div>
 
@@ -433,7 +507,21 @@ const CreateQuestionPage = () => {
               <Button
                 variant="outline"
                 onClick={() => {
-                  console.log("Import CSV Clicked. Course:", selectedCourse, "Subject:", subject);
+                  if (!selectedCourse || !subject) {
+                    toast.error("Please configure Course and Subject first.");
+                    return;
+                  }
+                  setIsAiBulkOpen(true);
+                }}
+                className="bg-white dark:bg-gray-800 dark:border-gray-700 dark:hover:bg-gray-700 mr-2"
+              >
+                <Sparkles className="mr-2 h-4 w-4 text-purple-500" /> AI Bulk Import
+              </Button>
+
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setImportInitialData(undefined); // Reset for file upload
                   if (!selectedCourse || !subject) {
                     toast.error("Please select a Course and Subject from the settings panel first.");
                     return;
@@ -696,15 +784,19 @@ const CreateQuestionPage = () => {
 
           <Button size="lg" className="w-full" onClick={handleSubmit} disabled={loading}>
             {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-            Create Question
+            {isEditMode ? 'Update Question' : 'Create Question'}
           </Button>
         </div>
       </div>
 
       <CsvImporter
         isOpen={isCsvDialogOpen}
-        onClose={() => setIsCsvDialogOpen(false)}
+        onClose={() => {
+          setIsCsvDialogOpen(false);
+          setImportInitialData(undefined);
+        }}
         onImport={handleSmartImport}
+        initialData={importInitialData}
         defaultMetadata={{
           Course: courses.find(c => c.id === selectedCourse)?.name || 'Unknown',
           Subject: subject,
@@ -714,7 +806,27 @@ const CreateQuestionPage = () => {
           Status: allOptionsCorrect ? 'All Correct' : 'Normal'
         }}
       />
+
+      <AiBulkGenerateDialog
+        isOpen={isAiBulkOpen}
+        onClose={() => setIsAiBulkOpen(false)}
+        onGenerate={handleAiBulkSuccess}
+        defaultMetadata={{
+          courseId: selectedCourse,
+          subject,
+          chapter,
+          difficulty
+        }}
+      />
     </div>
+  );
+};
+
+const CreateQuestionPage = () => {
+  return (
+    <Suspense fallback={<div className="p-8 text-center">Loading editor...</div>}>
+      <CreateQuestionPageContent />
+    </Suspense>
   );
 };
 

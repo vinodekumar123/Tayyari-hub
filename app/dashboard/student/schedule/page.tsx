@@ -13,6 +13,7 @@ import { glassmorphism } from '@/lib/design-tokens';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { UnifiedHeader } from '@/components/unified-header';
+import { safeDate } from '@/lib/date-utils';
 
 interface ScheduleGroup {
     dateLabel: string;
@@ -23,7 +24,6 @@ export default function SchedulePage() {
     const { user } = useUserStore();
     const [scheduleGroups, setScheduleGroups] = useState<ScheduleGroup[]>([]);
     const [loading, setLoading] = useState(true);
-    const [enrolledSeriesIds, setEnrolledSeriesIds] = useState<string[]>([]);
 
     useEffect(() => {
         const fetchSchedule = async () => {
@@ -37,21 +37,29 @@ export default function SchedulePage() {
                 const userSnap = await getDoc(userRef);
                 const userData = userSnap.data();
 
-                // Allow admin/teacher to see all or mock specific logic? 
-                // For now stick to student logic: Filter by enrolled series.
                 const seriesIds: string[] = userData?.enrolledSeries || [];
-                setEnrolledSeriesIds(seriesIds);
+
+                // OPTIMIZATION: If no series, no need to fetch quizzes
+                if (seriesIds.length === 0) {
+                    setScheduleGroups([]);
+                    setLoading(false);
+                    return;
+                }
 
                 // 2. Fetch Quizzes
-                // Note: Firestore 'in' or 'array-contains-any' is limited to 10. 
-                // If a user has > 10 series, we might need multiple queries or client-side filtering.
-                // For this implementation, we'll fetch all published quizzes and filter client-side 
-                // to be robust against series count limits, though less efficient for massive datasets.
-                // Ideally, we'd query by date range (e.g., upcoming month) + series filter.
+                // Optimization: Fetch ONLY quizzes for enrolled series
+                // Note: Firestore 'in' limit is 10. If > 10, needed to chunk or fall back. 
+                // We slice to 10 for safety in this query, or strict filter client side if needed 
+                // but usually users aren't in >10 active series.
+                const safeSeriesIds = seriesIds.slice(0, 10);
 
                 const quizzesRef = collection(db, 'quizzes');
-                // Basic Filter: Published only
-                const q = query(quizzesRef, where('published', '==', true));
+                const q = query(
+                    quizzesRef,
+                    where('published', '==', true),
+                    where('series', 'array-contains-any', safeSeriesIds)
+                );
+
                 const querySnapshot = await getDocs(q);
 
                 const allQuizzes: Quiz[] = querySnapshot.docs.map(doc => ({
@@ -60,22 +68,16 @@ export default function SchedulePage() {
                 } as Quiz));
 
                 // 3. Filter and Sort
-                const now = new Date();
-
+                // Double check series enrollment (redundant if using filtered query, but safe)
                 const relevantQuizzes = allQuizzes.filter(quiz => {
-                    // Check Series Enrollment
-                    // If quiz has no series tag, is it free for all? detailed logic can be added. 
-                    // Assuming quizzes MUST belong to a series to appear in "Personalized Schedule".
-                    if (!quiz.series || quiz.series.length === 0) return false;
-
-                    const hasAccess = quiz.series.some(sId => seriesIds.includes(sId));
-                    return hasAccess;
+                    if (!quiz.series) return false;
+                    return quiz.series.some(sId => seriesIds.includes(sId));
                 });
 
                 // Sort by Start Date
                 relevantQuizzes.sort((a, b) => {
-                    const dateA = new Date(a.startDate).getTime();
-                    const dateB = new Date(b.startDate).getTime();
+                    const dateA = safeDate(a.startDate).getTime();
+                    const dateB = safeDate(b.startDate).getTime();
                     return dateA - dateB;
                 });
 
@@ -83,10 +85,7 @@ export default function SchedulePage() {
                 const groups: Record<string, Quiz[]> = {};
 
                 relevantQuizzes.forEach(quiz => {
-                    const date = new Date(quiz.startDate);
-                    // Keep only future or recent past (e.g. last 24h) quizzes? 
-                    // Let's show all for now, or maybe filter out way past ones.
-                    // The prompt implies "Upcoming" focus.
+                    const date = safeDate(quiz.startDate);
 
                     let label = format(date, 'yyyy-MM-dd');
                     if (isToday(date)) label = 'Today';
@@ -116,7 +115,24 @@ export default function SchedulePage() {
     }, [user]);
 
     if (loading) {
-        return <div className="p-8 text-center">Loading Schedule...</div>;
+        return (
+            <div className="max-w-5xl mx-auto p-4 md:p-8 space-y-8">
+                <div className="flex items-center gap-4 mb-8">
+                    <div className="h-8 w-8 rounded-full bg-slate-200 animate-pulse" />
+                    <div className="h-8 w-48 bg-slate-200 rounded animate-pulse" />
+                </div>
+
+                {[1, 2].map((i) => (
+                    <div key={i} className="pl-8 border-l-2 border-slate-200 pb-8">
+                        <div className="h-6 w-32 bg-slate-200 rounded mb-4 animate-pulse" />
+                        <div className="grid gap-4">
+                            <div className="h-32 bg-slate-100 rounded-lg animate-pulse" />
+                            <div className="h-32 bg-slate-100 rounded-lg animate-pulse" />
+                        </div>
+                    </div>
+                ))}
+            </div>
+        );
     }
 
     if (scheduleGroups.length === 0) {
@@ -125,13 +141,12 @@ export default function SchedulePage() {
                 <div className="bg-purple-100 p-4 rounded-full">
                     <Calendar className="w-12 h-12 text-purple-600" />
                 </div>
-                <h2 className="text-2xl font-bold">No Scheduled Quizzes</h2>
+                <h2 className="text-2xl font-bold">No Schedule Found</h2>
                 <p className="text-muted-foreground max-w-md">
-                    It looks like you don&apos;t have any upcoming quizzes for your enrolled series.
-                    Enroll in a series to see your exam schedule!
+                    You are enrolled in series, but there are no upcoming quizzes scheduled at the moment.
                 </p>
-                <Link href="/pricing">
-                    <Button>Browse Series</Button>
+                <Link href="/dashboard/student/library">
+                    <Button variant="outline">Browse Library</Button>
                 </Link>
             </div>
         );
@@ -157,8 +172,8 @@ export default function SchedulePage() {
 
                         <div className="grid gap-4">
                             {group.quizzes.map(quiz => {
-                                const startDate = new Date(quiz.startDate);
-                                const isLive = isToday(startDate) && new Date() >= startDate && new Date() <= addHours(startDate, quiz.duration / 60); // Approx check
+                                const startDate = safeDate(quiz.startDate);
+                                const isLive = isToday(startDate) && new Date() >= startDate && new Date() <= addHours(startDate, quiz.duration / 60);
 
                                 return (
                                     <Card key={quiz.id} className={`${glassmorphism.light} border-l-4 ${isLive ? 'border-l-red-500' : 'border-l-blue-500'} hover:shadow-lg transition-all group`}>

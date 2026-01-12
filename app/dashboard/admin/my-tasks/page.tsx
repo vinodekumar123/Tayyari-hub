@@ -12,7 +12,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import {
-    CheckCircle, MessageSquare, Clock, ArrowRight, DollarSign
+    CheckCircle, MessageSquare, Clock, ArrowRight, DollarSign, X
 } from 'lucide-react';
 import { Task, TaskComment } from '@/types';
 import { toast } from 'sonner';
@@ -78,7 +78,7 @@ export default function AdminPersonalTasksPage() {
     };
 
     return (
-        <div className="p-8 flex gap-6 h-full">
+        <div className="p-4 md:p-8 flex flex-col md:flex-row gap-6 h-full relative">
 
             {/* Task List */}
             <div className="flex-1 space-y-6">
@@ -121,9 +121,14 @@ export default function AdminPersonalTasksPage() {
 
             {/* Task Details Sidebar */}
             {selectedTask && (
-                <div className="w-[400px] border-l bg-white dark:bg-slate-900 h-full overflow-y-auto p-6 shadow-xl relative animate-in slide-in-from-right-10">
+                <div className="fixed inset-0 z-50 md:static md:z-auto w-full md:w-[400px] border-l-0 md:border-l bg-white dark:bg-slate-900 h-full overflow-y-auto p-6 shadow-xl animate-in slide-in-from-right-10 md:slide-in-from-right-0">
                     <div className="mb-6 pb-6 border-b">
-                        <h2 className="text-2xl font-bold mb-2">{selectedTask.title}</h2>
+                        <div className="flex justify-between items-start mb-2">
+                            <h2 className="text-2xl font-bold">{selectedTask.title}</h2>
+                            <Button variant="ghost" size="icon" className="md:hidden" onClick={() => setSelectedTask(null)}>
+                                <X className="w-5 h-5" />
+                            </Button>
+                        </div>
                         <div className="flex items-center gap-2 mb-4">
                             <Badge>{selectedTask.status.replace('_', ' ')}</Badge>
                             <Badge variant="outline" className="text-emerald-600 border-emerald-600">${selectedTask.paymentAmount}</Badge>

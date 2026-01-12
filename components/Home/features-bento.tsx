@@ -133,7 +133,7 @@ const StatsBar = () => (
 
 /* --- COMPONENT 2: GAMIFICATION WIDGET (HUD) --- */
 const GamificationHUD = () => (
-    <div className="bg-gradient-to-br from-slate-900 to-slate-800 text-white rounded-3xl p-6 shadow-xl relative overflow-hidden border border-slate-700 w-full max-sm mx-auto">
+    <div className="bg-gradient-to-br from-slate-900 to-slate-800 text-white rounded-3xl p-6 shadow-xl relative overflow-hidden border border-slate-700 w-full max-w-sm mx-auto">
         {/* Background Glow */}
         <div className="absolute top-0 right-0 w-32 h-32 bg-orange-500 blur-[80px] opacity-20"></div>
 

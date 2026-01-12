@@ -45,7 +45,7 @@ import {
 } from '@/components/ui/dialog';
 import {
     ArrowRight, BookOpen, Calendar, Clock, Play,
-    Search, Award, Zap, Database, TrendingUp, Filter
+    Search, Files
 } from 'lucide-react';
 import { UnifiedHeader } from '@/components/unified-header';
 
@@ -123,8 +123,6 @@ export default function StudentQuizBankPage() {
             try {
                 // 1. Fetch User's Enrolled Series
                 let enrolledSeries: string[] = [];
-                // Check if user object already has them (if updated logic elsewhere puts it there)
-                // Otherwise fetch fresh
                 try {
                     const userDoc = await getDoc(doc(db, 'users', user.uid));
                     if (userDoc.exists()) {
@@ -136,43 +134,8 @@ export default function StudentQuizBankPage() {
                     console.error("Failed to fetch user enrolled series", e);
                 }
 
-                // 2. Fetch Series Metadata (for names)
-                console.log("DEBUG: Fetched Enrolled Series:", enrolledSeries);
-                const seriesSnap = await getDocs(collection(db, 'series'));
-                // Map all series first
-                const allSeries = seriesSnap.docs.map(d => ({ id: d.id, name: d.data().name }));
-
-                // For dropdown, show enrolled series if user has any.
-                // If user has none, maybe show all (legacy behavior) or none? 
-                // Requirement: "students page it will only load quizzes of that enrolled series"
-                // Strict: If enrolledSeries is empty, show NO series in dropdown.
-                const visibleSeriesList = enrolledSeries.length > 0
-                    ? allSeries.filter(s => enrolledSeries.includes(s.id))
-                    : []; // Strict empty if none enrolled
-
-                setSeriesList(visibleSeriesList);
-
-                // 3. Fetch Quizzes
-                const cacheKey = `student-quizzes-${user.uid}`;
-                /* 
-                   Checking cache is tricky now because enrollment might change. 
-                   We'll skip cache check for series logic critical path for now to ensure correctness.
-                */
-                // const cached = cache.get<Quiz[]>(cacheKey); 
-                // Removed cache check for now.
-
-                const constraints: any[] = [orderBy('startDate', 'desc'), limit(50)];
-
-                // Student Filters
-                constraints.push(where('published', '==', true));
-                const userCourse = (user as any).course;
-                if (userCourse) {
-                    constraints.push(where('course.name', '==', userCourse));
-                }
-
-                // --- SERIES RESTRICTION ---
+                // If not enrolled in any series, stop early
                 if (enrolledSeries.length === 0) {
-                    // If user is not enrolled in any series, show NOTHING (per user request: "only... enrolled in").
                     setQuizzes([]);
                     setLastVisible(null);
                     setHasMore(false);
@@ -181,43 +144,22 @@ export default function StudentQuizBankPage() {
                     return;
                 }
 
-                // Firestore limits 'array-contains-any' to 10 values.
-                const chunks = enrolledSeries.slice(0, 10);
-                constraints.push(where('series', 'array-contains-any', chunks));
+                // 2. Parallel Fetch: Series Names, Attempts, Quizzes
+                const promises = [
+                    getDocs(collection(db, 'series')), // Fetch All Series Metadata (optimization: could be filtered but series collection is usually small)
+                    getDocs(collection(db, 'users', user.uid, 'quizAttempts')), // Fetch Attempts
+                ];
 
-                const q = query(collection(db, 'quizzes'), ...constraints);
-                const snapshot = await getDocs(q);
+                const [seriesSnap, attemptsSnap] = await Promise.all(promises);
 
-                const data = snapshot.docs.map((d) => ({
-                    id: d.id,
-                    ...d.data(),
-                })) as Quiz[];
+                // Process Series List
+                const allSeries = seriesSnap.docs.map(d => ({ id: d.id, name: d.data().name }));
+                const visibleSeriesList = allSeries.filter(s => enrolledSeries.includes(s.id));
+                setSeriesList(visibleSeriesList);
 
-                // Client-side filtering for strict enrollment check
-                // Requirement: "only load show quizzes of student enrolled in series"
-                console.log("DEBUG: Raw Fetched Quizzes Length:", data.length);
-                const finalQuizzes = data.filter(quiz => {
-                    // Strict: Must have a series tag AND that tag must be in enrolledSeries.
-                    // This creates a "My Quizzes" view. Public quizzes (no series) are hidden.
-                    if (!quiz.series || quiz.series.length === 0) return false;
-                    const match = quiz.series.some((s: string) => enrolledSeries.includes(s));
-                    if (!match) console.log("DEBUG: Filtered out quiz (Client-Side):", quiz.id, quiz.series);
-                    return match;
-                });
-                // console.log("DEBUG: Final Quizzes Length:", finalQuizzes.length);
-
-                setQuizzes(finalQuizzes);
-                setLastVisible(snapshot.docs[snapshot.docs.length - 1]);
-                setHasMore(snapshot.docs.length >= 50);
-
-                // cache.set(cacheKey, finalQuizzes, 5 * 60 * 1000); // Cache disabled for now to prevent loops/stale data
-
-                // 4. Fetch Attempts & Calculate Stats
-                const attemptsRef = collection(db, 'users', user.uid, 'quizAttempts');
-                const attemptsSnap = await getDocs(attemptsRef);
+                // Process Attempts
                 const counts: { [key: string]: number } = {};
                 const attemptDocs: any[] = [];
-
                 attemptsSnap.docs.forEach(doc => {
                     const d = doc.data();
                     if (d.completed) {
@@ -227,33 +169,57 @@ export default function StudentQuizBankPage() {
                 });
                 setAttemptedQuizzes(counts);
 
-                // Calculate Series Analytics
-                // Only calculate for series user is enrolled in
-                const statsSeriesSource = enrolledSeries.length > 0
-                    ? allSeries.filter(s => enrolledSeries.includes(s.id))
-                    : []; // If no enrolled series, no series stats to show really.
+                // 3. Fetch Quizzes with Optimized Logic
+                const constraints: any[] = [orderBy('startDate', 'desc'), limit(50)];
 
-                const stats = statsSeriesSource.map(series => {
-                    // Find quizzes in this series (from the fetch result, or ALL matching series?)
-                    // The fetch result `finalQuizzes` only has 50 items. This might be inaccurate for "Total Quizzes".
-                    // But doing a full count query for every series is expensive. 
-                    // I'll calculate based on Loaded Quizzes for now, or accept the limitation.
-                    // NOTE: The prompt asked for "series analytics", implying full view. 
-                    // Ideally we'd fetch aggregate stats. But for now, let's use the local data + matching attempts.
-                    // Actually, `finalQuizzes` is partial. 
-                    // BETTER APPROACH: Match attempts to series by finding quizzes that belong to series?
-                    // But we don't know All Quizzes IDs in a series without querying.
-                    // I will calculate stats based on *fetched* quizzes for "Progress in Loaded Quizzes" 
-                    // OR just matching attempts if we can link attempt -> series (we can't easily without quiz doc).
-                    // Given the constraints, I will calculate based on `finalQuizzes` (the active list).
-                    // This serves as "Recent/Active Series Progress".
+                constraints.push(where('published', '==', true));
+                const userCourse = (user as any).course;
+                if (userCourse) {
+                    constraints.push(where('course.name', '==', userCourse));
+                }
 
+                // --- KEY FIX: HANDLING >10 SERIES ---
+                // Firestore 'array-contains-any' is limited to 10 items.
+                // Strategy: 
+                // IF enrolled <= 10: Use 'array-contains-any' (Efficient)
+                // IF enrolled > 10: DO NOT filter by series in Cloud. Fetch purely by Course + Sort, then filter in Client.
+                // This might fetch extraneous quizzes from other series in same course, but ensures we don't miss any.
+
+                if (enrolledSeries.length <= 10) {
+                    constraints.push(where('series', 'array-contains-any', enrolledSeries));
+                }
+                // Else: Just fetch by Course (already added above)
+
+                const q = query(collection(db, 'quizzes'), ...constraints);
+                const snapshot = await getDocs(q);
+
+                const data = snapshot.docs.map((d) => ({
+                    id: d.id,
+                    ...d.data(),
+                })) as Quiz[];
+
+                // 4. Strict Client-Side Filter
+                // Ideally we only want quizzes that belong to *one* of the user's enrolled series.
+                const finalQuizzes = data.filter(quiz => {
+                    // Must have series
+                    if (!quiz.series || quiz.series.length === 0) return false;
+
+                    // Must match at least one enrolled series
+                    const match = quiz.series.some((s: string) => enrolledSeries.includes(s));
+                    return match;
+                });
+
+                setQuizzes(finalQuizzes);
+                setLastVisible(snapshot.docs[snapshot.docs.length - 1]);
+                setHasMore(snapshot.docs.length >= 50);
+
+                // 5. Calculate Series Analytics (Client Side - Approximation based on fetched data)
+                const stats = visibleSeriesList.map(series => {
                     const seriesQuizzes = finalQuizzes.filter(q => q.series?.includes(series.id));
                     const totalQuizzes = seriesQuizzes.length;
 
                     if (totalQuizzes === 0) return null;
 
-                    // Attempts in this series (from loaded quizzes)
                     let attemptedCount = 0;
                     let totalAccuracy = 0;
 
@@ -318,20 +284,28 @@ export default function StudentQuizBankPage() {
     // Handle quiz click
     const handleQuizClick = (quiz: Quiz) => {
         const userPlan = (user as any)?.plan;
-        // Double check strict access just in case locally
-        if (quiz.series && quiz.series.length > 0 && userEnrolledSeries.length > 0) {
-            const hasAccess = quiz.series.some(s => userEnrolledSeries.includes(s));
-            if (!hasAccess && !user?.admin) {
-                addToast({ type: 'error', message: 'You are not enrolled in the series for this quiz.' });
-                return;
-            }
-        } else if (quiz.series && quiz.series.length > 0 && userEnrolledSeries.length === 0 && !user?.admin) {
-            // If user has NO enrolled series but quiz is in a series
-            addToast({ type: 'error', message: 'You must be enrolled in a series to access this quiz.' });
+
+        if (user?.admin) {
+            router.push(`/quiz/start?id=${quiz.id}`);
             return;
         }
 
-        if (!user?.admin && userPlan === 'free' && quiz.accessType === 'paid') {
+        // Check enrollment access
+        if (quiz.series && quiz.series.length > 0) {
+            const hasAccess = userEnrolledSeries.length > 0 && quiz.series.some(s => userEnrolledSeries.includes(s));
+            if (!hasAccess) {
+                addToast({ type: 'error', message: 'You are not enrolled in the series for this quiz.' });
+                return;
+            }
+        } else {
+            // If quiz has series but user has none (should be filtered out by UI but extra safety)
+            if (quiz.series && quiz.series.length > 0 && userEnrolledSeries.length === 0) {
+                addToast({ type: 'error', message: 'You must be enrolled in a series to access this quiz.' });
+                return;
+            }
+        }
+
+        if (userPlan === 'free' && quiz.accessType === 'paid') {
             setShowPremiumDialog(true);
             return;
         }
@@ -353,10 +327,10 @@ export default function StudentQuizBankPage() {
             if (userCourse) constraints.push(where('course.name', '==', userCourse));
 
             // Series Restriction
-            if (userEnrolledSeries.length > 0) {
-                const chunks = userEnrolledSeries.slice(0, 10);
-                constraints.push(where('series', 'array-contains-any', chunks));
+            if (userEnrolledSeries.length <= 10 && userEnrolledSeries.length > 0) {
+                constraints.push(where('series', 'array-contains-any', userEnrolledSeries));
             }
+            // If > 10, no server-side series filter, rely on client side
 
             constraints.push(startAfter(lastVisible));
 
@@ -367,7 +341,7 @@ export default function StudentQuizBankPage() {
 
             // Client Filter on Load More
             const finalData = newData.filter(quiz => {
-                if (!quiz.series || quiz.series.length === 0) return true;
+                if (!quiz.series || quiz.series.length === 0) return false;
                 if (userEnrolledSeries.length === 0) return false;
                 return quiz.series.some((s: string) => userEnrolledSeries.includes(s));
             });
@@ -394,6 +368,8 @@ export default function StudentQuizBankPage() {
     if (loading || !user) {
         return (
             <div className="w-full max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                {/* Header Skeleton */}
+                <div className="h-48 rounded-3xl bg-muted animate-pulse mb-8" />
                 <TableSkeleton rows={8} columns={4} />
             </div>
         );
@@ -401,43 +377,11 @@ export default function StudentQuizBankPage() {
 
     return (
         <div className="w-full max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
-
-
-            {/* Modern Header with Brand Colors */}
-            <div className="relative group">
-                <div className="absolute inset-0 bg-gradient-to-r from-[#004AAD] via-[#0066FF] to-[#00B4D8] rounded-3xl blur-xl opacity-20 dark:opacity-30 group-hover:opacity-30 dark:group-hover:opacity-40 transition-opacity duration-500" />
-                <div className={`relative ${glassmorphism.light} p-8 rounded-3xl border border-[#004AAD]/20 dark:border-[#0066FF]/30`}>
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <h1 className="text-4xl font-black mb-2 flex items-center gap-2">
-                                <span>📝</span>
-                                <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#004AAD] via-[#0066FF] to-[#00B4D8] dark:from-[#0066FF] dark:via-[#00B4D8] dark:to-[#66D9EF]">
-                                    My Quiz Bank
-                                </span>
-                            </h1>
-                            <p className="text-muted-foreground font-semibold flex items-center gap-2">
-                                <Zap className="w-5 h-5 text-[#00B4D8] dark:text-[#66D9EF]" />
-                                {filteredQuizzes.length} quizzes available
-                            </p>
-                        </div>
-                        <div className="hidden md:flex gap-4">
-                            <div className={`${glassmorphism.medium} p-4 rounded-2xl border border-[#004AAD]/10`}>
-                                <div className="flex items-center gap-3">
-                                    <div className="p-3 bg-gradient-to-br from-[#004AAD]/20 to-[#0066FF]/20 rounded-xl">
-                                        <Award className="w-6 h-6 text-[#004AAD] dark:text-[#0066FF]" />
-                                    </div>
-                                    <div>
-                                        <p className="text-xs text-muted-foreground">Enrolled Series</p>
-                                        <p className="text-2xl font-black text-foreground">
-                                            {userEnrolledSeries.length}
-                                        </p>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
+            <UnifiedHeader
+                title="My Quiz Bank"
+                subtitle={`${filteredQuizzes.length} quizzes available from your enrolled series`}
+                icon={<Files className="w-6 h-6" />}
+            />
 
             {/* Series Analytics Section */}
             {seriesStats.length > 0 && (
@@ -451,7 +395,7 @@ export default function StudentQuizBankPage() {
                                 <div className="space-y-4">
                                     <div className="flex justify-between items-end">
                                         <div>
-                                            <p className="text-sm text-muted-foreground">Progress (in recent)</p>
+                                            <p className="text-sm text-muted-foreground">Recent Progress</p>
                                             <p className="text-2xl font-bold text-[#004AAD] dark:text-[#00B4D8]">{stat.attemptedCount}/{stat.totalQuizzes}</p>
                                         </div>
                                         <div className="text-right">
@@ -495,8 +439,6 @@ export default function StudentQuizBankPage() {
                                 className="pl-10 bg-background/50 border-[#004AAD]/20 focus:border-[#0066FF]"
                             />
                         </div>
-
-
 
                         <Select
                             value={filters.status}

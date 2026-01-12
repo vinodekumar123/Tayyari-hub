@@ -117,9 +117,9 @@ export default function LoginPage() {
     <div className="min-h-screen relative flex items-center justify-center bg-slate-950 overflow-hidden text-slate-200">
 
       {/* Cinematic Background */}
-      <div className="absolute inset-0">
-        <div className="absolute top-[-20%] left-[-10%] w-[800px] h-[800px] bg-blue-600/10 rounded-full blur-[120px] animate-pulse-slow"></div>
-        <div className="absolute bottom-[-20%] right-[-10%] w-[800px] h-[800px] bg-indigo-600/10 rounded-full blur-[120px] animate-pulse-slow delay-1000"></div>
+      <div className="absolute inset-0 overflow-hidden">
+        <div className="absolute top-[-20%] left-[-10%] w-[800px] h-[800px] bg-blue-600/10 rounded-full blur-[120px] animate-pulse-slow hidden sm:block"></div>
+        <div className="absolute bottom-[-20%] right-[-10%] w-[800px] h-[800px] bg-indigo-600/10 rounded-full blur-[120px] animate-pulse-slow delay-1000 hidden sm:block"></div>
         <div className="absolute inset-0 bg-[url('/grid.svg')] opacity-[0.05]"></div>
       </div>
 
@@ -162,7 +162,7 @@ export default function LoginPage() {
           transition={{ duration: 0.6, delay: 0.2 }}
           className="w-full max-w-md mx-auto"
         >
-          <div className="bg-slate-900/40 backdrop-blur-2xl border border-white/5 rounded-[2rem] p-8 md:p-10 shadow-2xl relative overflow-hidden group">
+          <div className="bg-slate-900/40 backdrop-blur-2xl border border-white/5 rounded-[2rem] p-6 md:p-10 shadow-2xl relative overflow-hidden group">
             {/* Subtle gradient border sweep */}
             <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent -translate-x-full group-hover:animate-shimmer pointer-events-none"></div>
 

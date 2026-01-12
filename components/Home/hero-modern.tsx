@@ -19,7 +19,7 @@ const HeroModern = () => {
                 style={{ '--token-color': '#1E67C6' } as React.CSSProperties}
             />
             {/* Spotlight Effect */}
-            <Spotlight className="-top-40 -left-10 md:-left-32 md:-top-20 h-screen" fill="white" />
+            <Spotlight className="hidden md:block -top-40 -left-10 md:-left-32 md:-top-20 h-screen" fill="white" />
 
             {/* Background Layers */}
             <div className="absolute inset-0 z-0">
@@ -44,7 +44,7 @@ const HeroModern = () => {
                 </motion.div>
 
                 {/* Headline */}
-                <div className="text-center text-5xl font-black leading-tight sm:text-7xl md:text-8xl text-gray-900 dark:text-gray-100 mb-6">
+                <div className="text-center text-3xl sm:text-5xl font-black leading-tight md:text-8xl text-gray-900 dark:text-gray-100 mb-6">
                     <TextGenerateEffect words="Master Your MDCAT Journey" />
                 </div>
 

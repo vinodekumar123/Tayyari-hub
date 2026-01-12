@@ -63,7 +63,7 @@ const PricingBundles = () => {
                         <button
                             onClick={() => setActiveTab('freshers')}
                             suppressHydrationWarning
-                            className={`relative z-10 px-8 py-3 rounded-full text-sm font-bold transition-colors duration-300 flex items-center justify-center gap-2 w-48 ${activeTab === 'freshers' ? 'text-white' : 'text-slate-500 hover:text-slate-900 dark:text-slate-400'}`}
+                            className={`relative z-10 px-4 md:px-8 py-3 rounded-full text-xs md:text-sm font-bold transition-colors duration-300 flex items-center justify-center gap-2 w-36 md:w-48 ${activeTab === 'freshers' ? 'text-white' : 'text-slate-500 hover:text-slate-900 dark:text-slate-400'}`}
                         >
                             <GraduationCap className="w-4 h-4" />
                             FRESHERS
@@ -71,7 +71,7 @@ const PricingBundles = () => {
                         <button
                             onClick={() => setActiveTab('improvers')}
                             suppressHydrationWarning
-                            className={`relative z-10 px-8 py-3 rounded-full text-sm font-bold transition-colors duration-300 flex items-center justify-center gap-2 w-48 ${activeTab === 'improvers' ? 'text-white' : 'text-slate-500 hover:text-slate-900 dark:text-slate-400'}`}
+                            className={`relative z-10 px-4 md:px-8 py-3 rounded-full text-xs md:text-sm font-bold transition-colors duration-300 flex items-center justify-center gap-2 w-36 md:w-48 ${activeTab === 'improvers' ? 'text-white' : 'text-slate-500 hover:text-slate-900 dark:text-slate-400'}`}
                         >
                             <Zap className="w-4 h-4" />
                             IMPROVERS
@@ -209,7 +209,7 @@ const PricingBundles = () => {
                                             <div className="hidden md:flex flex-shrink-0 w-12 h-12 rounded-full bg-white dark:bg-slate-900 border-4 border-blue-100 dark:border-blue-900 items-center justify-center relative z-10 shadow-sm mt-1">
                                                 <div className="w-3 h-3 bg-blue-500 rounded-full animate-pulse"></div>
                                             </div>
-                                            <div className="flex-1 bg-white dark:bg-slate-900 p-8 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm hover:shadow-lg transition-all relative overflow-hidden group-hover:border-blue-200">
+                                            <div className="flex-1 bg-white dark:bg-slate-900 p-6 md:p-8 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm hover:shadow-lg transition-all relative overflow-hidden group-hover:border-blue-200">
                                                 <div className="flex justify-between items-start mb-2">
                                                     <div className="inline-block px-3 py-1 rounded-full text-xs font-bold text-white bg-blue-500 mb-2">Starts 15 Jan</div>
                                                     <div className="text-right">
@@ -235,7 +235,7 @@ const PricingBundles = () => {
                                             <div className="hidden md:flex flex-shrink-0 w-12 h-12 rounded-full bg-white dark:bg-slate-900 border-4 border-indigo-100 dark:border-indigo-900 items-center justify-center relative z-10 shadow-sm mt-1">
                                                 <div className="w-3 h-3 bg-indigo-500 rounded-full"></div>
                                             </div>
-                                            <div className="flex-1 bg-white dark:bg-slate-900 p-8 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm hover:shadow-lg transition-all relative overflow-hidden group-hover:border-indigo-200">
+                                            <div className="flex-1 bg-white dark:bg-slate-900 p-6 md:p-8 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm hover:shadow-lg transition-all relative overflow-hidden group-hover:border-indigo-200">
                                                 <div className="flex justify-between items-start mb-2">
                                                     <div className="inline-block px-3 py-1 rounded-full text-xs font-bold text-white bg-indigo-500 mb-2">Starts 01 April</div>
                                                     <div className="text-right">
@@ -261,7 +261,7 @@ const PricingBundles = () => {
                                             <div className="hidden md:flex flex-shrink-0 w-12 h-12 rounded-full bg-white dark:bg-slate-900 border-4 border-purple-100 dark:border-purple-900 items-center justify-center relative z-10 shadow-sm mt-1">
                                                 <div className="w-3 h-3 bg-purple-500 rounded-full"></div>
                                             </div>
-                                            <div className="flex-1 bg-white dark:bg-slate-900 p-8 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm hover:shadow-lg transition-all relative overflow-hidden group-hover:border-purple-200">
+                                            <div className="flex-1 bg-white dark:bg-slate-900 p-6 md:p-8 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm hover:shadow-lg transition-all relative overflow-hidden group-hover:border-purple-200">
                                                 <div className="flex justify-between items-start mb-2">
                                                     <div className="inline-block px-3 py-1 rounded-full text-xs font-bold text-white bg-purple-500 mb-2">Starts 01 July</div>
                                                     <div className="text-right">
@@ -287,7 +287,7 @@ const PricingBundles = () => {
                                             <div className="hidden md:flex flex-shrink-0 w-12 h-12 rounded-full bg-white dark:bg-slate-900 border-4 border-fuchsia-100 dark:border-fuchsia-900 items-center justify-center relative z-10 shadow-sm mt-1">
                                                 <Database className="w-5 h-5 text-fuchsia-500" />
                                             </div>
-                                            <div className="flex-1 bg-white dark:bg-slate-900 p-8 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm hover:shadow-lg transition-all relative overflow-hidden group-hover:border-fuchsia-200">
+                                            <div className="flex-1 bg-white dark:bg-slate-900 p-6 md:p-8 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm hover:shadow-lg transition-all relative overflow-hidden group-hover:border-fuchsia-200">
                                                 <div className="flex justify-between items-start mb-2">
                                                     <div className="inline-block px-3 py-1 rounded-full text-xs font-bold text-white bg-fuchsia-500 mb-2">will be live from 01 Feb</div>
                                                     <div className="text-right">
@@ -320,7 +320,7 @@ const PricingBundles = () => {
                             <Crown className="w-6 h-6 text-orange-500" />
                             {activeTab === 'freshers' ? 'Complete Bundle' : 'Mega Bundle'}
                         </h3>
-                        <div className="group bg-white dark:bg-slate-900 rounded-3xl p-8 shadow-2xl border-2 border-orange-400 relative overflow-hidden transform hover:-translate-y-2 transition-transform duration-300 flex-1 flex flex-col">
+                        <div className="group bg-white dark:bg-slate-900 rounded-3xl p-6 md:p-8 shadow-2xl border-2 border-orange-400 relative overflow-hidden transform hover:-translate-y-2 transition-transform duration-300 flex-1 flex flex-col">
 
                             {/* Shimmer Effect */}
                             <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden">
@@ -344,7 +344,7 @@ const PricingBundles = () => {
 
                             <div className="mb-6 relative z-10">
                                 <div className="flex items-baseline gap-2">
-                                    <span className="text-5xl font-black text-slate-900 dark:text-white">
+                                    <span className="text-4xl md:text-5xl font-black text-slate-900 dark:text-white">
                                         Rs. {activeTab === 'freshers' ? '3500' : '2800'}
                                     </span>
                                     <span className="text-lg text-slate-400 line-through decoration-red-400">

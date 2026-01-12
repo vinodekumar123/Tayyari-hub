@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import {
     Upload,
     Download,
@@ -41,6 +41,7 @@ interface CsvImporterProps {
     onImport: (data: any[]) => Promise<void>;
     defaultMetadata: Record<string, any>;
     metadataLabels?: Record<string, string>; // Friendly labels for metadata keys
+    initialData?: any[]; // Data injected directly (e.g. from AI), bypassing upload
 }
 
 export function CsvImporter({
@@ -48,44 +49,20 @@ export function CsvImporter({
     onClose,
     onImport,
     defaultMetadata,
-    metadataLabels = {}
+    metadataLabels = {},
+    initialData
 }: CsvImporterProps) {
 
     const [step, setStep] = useState<'upload' | 'preview'>('upload');
     const [csvData, setCsvData] = useState<any[]>([]);
     const [validationErrors, setValidationErrors] = useState<{ row: number, error: string }[]>([]);
     const [isImporting, setIsImporting] = useState(false);
-    const fileInputRef = useRef<HTMLInputElement>(null);
-
     const [editingRow, setEditingRow] = useState<{ index: number, data: any } | null>(null);
 
-    const reset = () => {
-        setStep('upload');
-        setCsvData([]);
-        setValidationErrors([]);
-        setIsImporting(false);
-        setEditingRow(null);
-    };
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    const loadedRef = useRef(false);
 
-    const handleClose = () => {
-        reset();
-        onClose();
-    };
-
-    const downloadTemplate = () => {
-        // Only include question-specific fields, not the global metadata
-        const headers = ['questionText', 'option1', 'option2', 'option3', 'option4', 'correctAnswer', 'explanation', 'topic', 'difficulty', 'imageUrl'];
-        const dummy = ['What is the speed of light?', '3x10^8 m/s', '3x10^6 m/s', 'Zero', 'Infinite', '3x10^8 m/s', 'It is constant in vacuum', 'Light', 'Medium', ''];
-        const csvContent = "data:text/csv;charset=utf-8," + [headers.join(','), dummy.join(',')].join('\n');
-        const encodedUri = encodeURI(csvContent);
-        const link = document.createElement("a");
-        link.setAttribute("href", encodedUri);
-        link.setAttribute("download", "question_import_template.csv");
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-    };
-
+    // Validate Function
     const validateRow = (row: any, index: number) => {
         const errors: string[] = [];
         const rowNum = index + 1;
@@ -106,6 +83,53 @@ export function CsvImporter({
 
         return errors;
     };
+
+    // Effect: Handle Initial Data Injection
+    // We use a useEffect to ensure state updates happen after mount/update, not during render.
+    useEffect(() => {
+        if (initialData && initialData.length > 0 && !loadedRef.current && isOpen) {
+            const errors: { row: number, error: string }[] = [];
+            initialData.forEach((row, i) => {
+                const rowErrors = validateRow(row, i);
+                rowErrors.forEach(err => errors.push({ row: i + 1, error: err }));
+            });
+
+            setCsvData(initialData);
+            setValidationErrors(errors);
+            setStep('preview');
+            loadedRef.current = true;
+        }
+    }, [initialData, isOpen]);
+
+    const reset = () => {
+        setStep('upload');
+        setCsvData([]);
+        setValidationErrors([]);
+        setIsImporting(false);
+        setEditingRow(null);
+    };
+
+    const handleClose = () => {
+        reset();
+        loadedRef.current = false;
+        onClose();
+    };
+
+    const downloadTemplate = () => {
+        // Only include question-specific fields, not the global metadata
+        const headers = ['questionText', 'option1', 'option2', 'option3', 'option4', 'correctAnswer', 'explanation', 'topic', 'difficulty', 'imageUrl'];
+        const dummy = ['What is the speed of light?', '3x10^8 m/s', '3x10^6 m/s', 'Zero', 'Infinite', '3x10^8 m/s', 'It is constant in vacuum', 'Light', 'Medium', ''];
+        const csvContent = "data:text/csv;charset=utf-8," + [headers.join(','), dummy.join(',')].join('\n');
+        const encodedUri = encodeURI(csvContent);
+        const link = document.createElement("a");
+        link.setAttribute("href", encodedUri);
+        link.setAttribute("download", "question_import_template.csv");
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+
+
 
     const revalidateAll = (data: any[]) => {
         const errors: { row: number, error: string }[] = [];

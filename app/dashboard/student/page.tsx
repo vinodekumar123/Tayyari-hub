@@ -29,9 +29,9 @@ export default function StudentDashboard() {
   const [recentQuizzes, setRecentQuizzes] = useState<any[]>([]);
   const [unfinishedQuizzes, setUnfinishedQuizzes] = useState<any[]>([]);
 
-  // Split Analytics State
-  const [adminStats, setAdminStats] = useState({ total: 0, attempted: 0, accuracy: 0, correct: 0, wrong: 0 });
-  const [userStats, setUserStats] = useState({ total: 0, attempted: 0, accuracy: 0, correct: 0, wrong: 0 });
+  // Split Analytics State - REMOVED client-side calcs
+  // const [adminStats, setAdminStats] = useState({ total: 0, attempted: 0, accuracy: 0, correct: 0, wrong: 0 });
+  // const [userStats, setUserStats] = useState({ total: 0, attempted: 0, accuracy: 0, correct: 0, wrong: 0 });
 
   useEffect(() => {
     // Greeting logic moved to UnifiedHeader
@@ -58,10 +58,10 @@ export default function StudentDashboard() {
         const recentSnap = await getDocs(query(
           collection(db, 'users', uid, 'quizAttempts'),
           orderBy('submittedAt', 'desc'),
-          limit(500)
+          limit(10) // OPTIMIZED: Reduced from 500 to 10
         ));
         const allAttempts = recentSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-        setRecentQuizzes(allAttempts.slice(0, 10));
+        setRecentQuizzes(allAttempts);
 
         // Fetch Unfinished
         const unfinishedSnap = await getDocs(query(
@@ -83,29 +83,8 @@ export default function StudentDashboard() {
         }));
         setUnfinishedQuizzes(unfinished);
 
-        // --- Calculate Split Analytics ---
-        const calcStats = (attempts: any[]) => {
-          const totalAttempts = attempts.length;
-          const totalScore = attempts.reduce((acc, curr) => acc + (curr.score || 0), 0);
-          const totalMax = attempts.reduce((acc, curr) => acc + (curr.total || 0), 0);
-          const totalQuestions = attempts.reduce((acc, curr) => acc + (curr.totalQuestions || 0), 0);
-          const totalCorrect = attempts.reduce((acc, curr) => acc + (curr.correctAnswers || curr.correct || 0), 0);
-
-          const accuracy = totalMax > 0 ? Math.round((totalScore / totalMax) * 100) : 0;
-          return {
-            total: totalAttempts,
-            attempted: totalQuestions,
-            correct: totalCorrect,
-            wrong: totalQuestions - totalCorrect,
-            accuracy: accuracy
-          };
-        };
-
-        const adminAttempts = allAttempts.filter((a: any) => a.quizType !== 'user');
-        const userAttempts = allAttempts.filter((a: any) => a.quizType === 'user');
-
-        setAdminStats(calcStats(adminAttempts));
-        setUserStats(calcStats(userAttempts));
+        // --- Client-side Calc Removed for Performance ---
+        // Relying on server-aggregated stats in studentData.stats
 
       } catch (err) {
         console.error(err);
@@ -121,8 +100,8 @@ export default function StudentDashboard() {
 
   const stats = {
     ...studentData?.stats,
-    totalQuizzes: (adminStats.total + userStats.total) || studentData?.stats?.totalQuizzes || 0,
-    totalQuestions: (adminStats.attempted + userStats.attempted) || studentData?.stats?.totalQuestions || 0,
+    totalQuizzes: studentData?.stats?.totalQuizzes || 0,
+    totalQuestions: studentData?.stats?.totalQuestions || 0,
     overallAccuracy: studentData?.stats?.overallAccuracy || 0
   };
 
@@ -180,7 +159,7 @@ export default function StudentDashboard() {
             Leaderboard
           </Button>
         </Link>
-        <Link href="/admin/quizzes/quizebank">
+        <Link href="/quiz/create-mock">
           <Button size="sm" className="gap-2 rounded-full bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-600/20 transition-all hover:-translate-y-0.5 hover:shadow-xl hover:shadow-blue-600/30 text-xs px-4">
             <Zap className="w-3 h-3" />
             New Quiz
@@ -224,7 +203,7 @@ export default function StudentDashboard() {
           <CardContent>
             <div className="text-3xl font-bold text-slate-900 dark:text-white">{stats.totalQuizzes}</div>
             <p className="text-xs text-slate-500 mt-1 font-medium">
-              <span className="text-blue-600 dark:text-blue-400">{userStats.total} Custom</span> • <span className="text-indigo-600 dark:text-indigo-400">{adminStats.total} Official</span>
+              Tests Taken
             </p>
           </CardContent>
         </Card>
@@ -276,27 +255,27 @@ export default function StudentDashboard() {
             <div className="grid grid-cols-2 gap-4">
               <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800">
                 <p className="text-slate-500 text-xs font-semibold uppercase tracking-wider mb-1">Attempts</p>
-                <p className="text-2xl font-bold text-slate-900 dark:text-white">{adminStats.total}</p>
+                <p className="text-2xl font-bold text-slate-900 dark:text-white">{stats.adminAttempts || 0}</p>
               </div>
               <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800">
                 <p className="text-slate-500 text-xs font-semibold uppercase tracking-wider mb-1">Accuracy</p>
-                <p className={`text-2xl font-bold ${adminStats.accuracy >= 70 ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'}`}>
-                  {adminStats.accuracy}%
+                <p className={`text-2xl font-bold ${(stats.adminAccuracy || 0) >= 70 ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'}`}>
+                  {stats.adminAccuracy || 0}%
                 </p>
               </div>
             </div>
             <div className="space-y-3 pt-2">
               <div className="flex justify-between text-sm">
                 <span className="text-slate-600 dark:text-slate-400 font-medium">Correct</span>
-                <span className="font-bold text-emerald-600 dark:text-emerald-500">{adminStats.correct}</span>
+                <span className="font-bold text-emerald-600 dark:text-emerald-500">{stats.adminCorrect || 0}</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-slate-600 dark:text-slate-400 font-medium">Wrong</span>
-                <span className="font-bold text-red-500 dark:text-red-400">{adminStats.wrong}</span>
+                <span className="font-bold text-red-500 dark:text-red-400">{stats.adminWrong || 0}</span>
               </div>
               <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-2 overflow-hidden flex">
-                <div className="bg-emerald-500 h-full transition-all duration-700" style={{ width: `${(adminStats.correct / (adminStats.attempted || 1)) * 100}%` }}></div>
-                <div className="bg-red-500 h-full transition-all duration-700" style={{ width: `${(adminStats.wrong / (adminStats.attempted || 1)) * 100}%` }}></div>
+                <div className="bg-emerald-500 h-full transition-all duration-700" style={{ width: `${stats.adminAccuracy || 0}%` }}></div>
+                <div className="bg-red-500 h-full transition-all duration-700" style={{ width: `${100 - (stats.adminAccuracy || 0)}%` }}></div>
               </div>
             </div>
           </CardContent>
@@ -318,27 +297,27 @@ export default function StudentDashboard() {
             <div className="grid grid-cols-2 gap-4">
               <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800">
                 <p className="text-slate-500 text-xs font-semibold uppercase tracking-wider mb-1">Attempts</p>
-                <p className="text-2xl font-bold text-slate-900 dark:text-white">{userStats.total}</p>
+                <p className="text-2xl font-bold text-slate-900 dark:text-white">{stats.userAttempts || 0}</p>
               </div>
               <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800">
                 <p className="text-slate-500 text-xs font-semibold uppercase tracking-wider mb-1">Accuracy</p>
-                <p className={`text-2xl font-bold ${userStats.accuracy >= 70 ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'}`}>
-                  {userStats.accuracy}%
+                <p className={`text-2xl font-bold ${(stats.userAccuracy || 0) >= 70 ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'}`}>
+                  {stats.userAccuracy || 0}%
                 </p>
               </div>
             </div>
             <div className="space-y-3 pt-2">
               <div className="flex justify-between text-sm">
                 <span className="text-slate-600 dark:text-slate-400 font-medium">Correct</span>
-                <span className="font-bold text-emerald-600 dark:text-emerald-500">{userStats.correct}</span>
+                <span className="font-bold text-emerald-600 dark:text-emerald-500">{stats.userCorrect || 0}</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-slate-600 dark:text-slate-400 font-medium">Wrong</span>
-                <span className="font-bold text-red-500 dark:text-red-400">{userStats.wrong}</span>
+                <span className="font-bold text-red-500 dark:text-red-400">{stats.userWrong || 0}</span>
               </div>
               <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-2 overflow-hidden flex">
-                <div className="bg-emerald-500 h-full transition-all duration-700" style={{ width: `${(userStats.correct / (userStats.attempted || 1)) * 100}%` }}></div>
-                <div className="bg-red-500 h-full transition-all duration-700" style={{ width: `${(userStats.wrong / (userStats.attempted || 1)) * 100}%` }}></div>
+                <div className="bg-emerald-500 h-full transition-all duration-700" style={{ width: `${stats.userAccuracy || 0}%` }}></div>
+                <div className="bg-red-500 h-full transition-all duration-700" style={{ width: `${100 - (stats.userAccuracy || 0)}%` }}></div>
               </div>
             </div>
           </CardContent>

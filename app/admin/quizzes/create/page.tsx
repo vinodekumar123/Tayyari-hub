@@ -71,7 +71,7 @@ function CreateQuizContent() {
     endDate: '',
     startTime: '',
     endTime: '',
-    accessType: 'free',
+    accessType: 'public',
     resultVisibility: 'immediate',
     selectedQuestions: [],
     questionFilters: {
@@ -137,6 +137,47 @@ function CreateQuizContent() {
 
   // Available question state
   const [availableQuestions, setAvailableQuestions] = useState<any[]>([]);
+
+  const fetchMoreQuestions = async () => {
+    setLoadingQuestions(true);
+    try {
+      let q;
+      if (lastQuestionDoc) {
+        q = query(
+          collection(db, "questions"),
+          orderBy("createdAt", "desc"),
+          startAfter(lastQuestionDoc),
+          limit(20)
+        );
+      } else {
+        q = query(
+          collection(db, "questions"),
+          orderBy("createdAt", "desc"),
+          limit(20)
+        );
+      }
+
+      const snapshot = await getDocs(q);
+      const newQuestions = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...(doc.data()),
+        usedInQuizzes: doc.data().usedInQuizzes || 0,
+      }));
+
+      setAvailableQuestions(prev => [...prev, ...newQuestions]);
+      setLastQuestionDoc(snapshot.docs[snapshot.docs.length - 1]);
+    } catch (error) {
+      console.error("Error fetching questions:", error);
+    } finally {
+      setLoadingQuestions(false);
+    }
+  };
+
+  // Initial Question Fetch
+  useEffect(() => {
+    fetchMoreQuestions();
+    // eslint-disable-next-line
+  }, []); // Run once on mount
 
   // Subjects by course
   useEffect(() => {
@@ -278,9 +319,10 @@ function CreateQuizContent() {
       !quizConfig.title ||
       !quizConfig.course ||
       (quizConfig.subjects.length === 0 && !quizConfig.subjects.includes('all-subjects')) ||
+      (quizConfig.accessType === 'series' && (!quizConfig.series || quizConfig.series.length === 0)) ||
       quizConfig.selectedQuestions.length === 0
     ) {
-      alert("Please fill in all required fields, select at least one subject, and select questions");
+      alert("Please fill in all required fields. If 'Series Exclusive', you must select at least one series.");
       return;
     }
 
@@ -341,22 +383,63 @@ function CreateQuizContent() {
 
   const handleSaveToMockQuestions = async () => {
     try {
-      const selectedQuestionIds = quizConfig.selectedQuestions.map(q => q.id);
-      const existingQuestions = await getDocs(collection(db, "mock-questions"));
-      const existingIds = new Set(existingQuestions.docs.map(doc => doc.id));
+      if (quizConfig.selectedQuestions.length === 0) {
+        alert("No questions selected.");
+        return;
+      }
 
-      for (const question of quizConfig.selectedQuestions) {
-        if (!existingIds.has(question.id)) {
-          await addDoc(collection(db, "mock-questions"), {
-            ...question,
-            createdAt: Timestamp.now(),
-          });
+      setLoadingQuestions(true); // Re-use loading state or add a new one? Re-using is fine or we can just block interaction.
+
+      const selectedQuestions = quizConfig.selectedQuestions;
+      const batchSize = 10; // Check/Save in small chunks to avoid limits
+      let addedCount = 0;
+
+      for (let i = 0; i < selectedQuestions.length; i += batchSize) {
+        const chunk = selectedQuestions.slice(i, i + batchSize);
+        const chunkIds = chunk.map(q => q.id);
+
+        // Check which ones already exist in mock-questions
+        // Note: We are assuming ID parity. If mock-questions generates NEW IDs, this check is invalid. 
+        // But usually we preserve ID or check by some other key. The original code checked by `doc.id`.
+        // Let's assume we want to preserve IDs or check if a doc with this ID exists.
+
+        // Actually, the original code looked at `existingQuestions` and checked `existingIds.has(question.id)`.
+        // This implies we expect `mock-questions` docs to have the SAME ID as `questions` docs?
+        // If so, we should check `doc(db, 'mock-questions', id)`.
+
+        // Let's optimize: Check specific Docs presence.
+        const chunkChecks = await Promise.all(
+          chunk.map(q => getDoc(doc(db, 'mock-questions', q.id)))
+        );
+
+        const newBatch = writeBatch(db);
+        let hasUpdates = false;
+
+        chunk.forEach((q, idx) => {
+          const exists = chunkChecks[idx].exists();
+          if (!exists) {
+            // Use setDoc to preserve the ID, ensuring future checks work
+            newBatch.set(doc(db, "mock-questions", q.id), {
+              ...q,
+              createdAt: Timestamp.now(),
+              usedInQuizzes: 0 // Reset usage for the mock bank context
+            });
+            hasUpdates = true;
+            addedCount++;
+          }
+        });
+
+        if (hasUpdates) {
+          await newBatch.commit();
         }
       }
-      alert("Selected questions saved to Mock Questions successfully!");
+
+      alert(`Process Complete. ${addedCount} new questions saved to Mock Bank.`);
     } catch (error) {
       console.error("Error saving to mock-questions:", error);
       alert("Failed to save questions to Mock Questions.");
+    } finally {
+      setLoadingQuestions(false);
     }
   };
 
@@ -624,17 +707,7 @@ function CreateQuizContent() {
                     />
                   </div>
 
-                  <div className="space-y-3">
-                    <Label htmlFor="series" className="text-base font-semibold">Series</Label>
-                    <MultiSelect
-                      value={quizConfig.series || []}
-                      onChange={(value) => handleMultiSelectChange('series', value)}
-                      options={seriesList.map(s => ({ value: s.id, label: s.name }))}
-                      placeholder="Assign to Series"
-                      disabled={false}
-                      type=""
-                    />
-                  </div>
+                  {/* Series moved to Settings based on Access Type */}
                 </div>
               </CardContent>
             </Card>
@@ -732,7 +805,7 @@ function CreateQuizContent() {
                   <div className="space-y-3">
                     <Label htmlFor="accessType" className="text-base font-semibold">Access Type</Label>
                     <div className="grid grid-cols-2 gap-3">
-                      {['free', 'paid'].map(type => (
+                      {['public', 'series'].map(type => (
                         <div
                           key={type}
                           onClick={() => handleInputChange('accessType', type)}
@@ -741,11 +814,25 @@ function CreateQuizContent() {
                             : 'bg-white/50 dark:bg-black/20 border-white/20 dark:border-white/10 hover:bg-white/70'
                             }`}
                         >
-                          {type.charAt(0).toUpperCase() + type.slice(1)}
+                          {type === 'public' ? 'Public' : 'Series Exclusive'}
                         </div>
                       ))}
                     </div>
                   </div>
+
+                  {quizConfig.accessType === 'series' && (
+                    <div className="space-y-3 md:col-span-2">
+                      <Label htmlFor="series" className="text-base font-semibold">Select Series <span className="text-red-500">*</span></Label>
+                      <MultiSelect
+                        value={quizConfig.series || []}
+                        onChange={(value) => handleMultiSelectChange('series', value)}
+                        options={seriesList.map(s => ({ value: s.id, label: s.name }))}
+                        placeholder="Select Series (Required)"
+                        disabled={false}
+                        type=""
+                      />
+                    </div>
+                  )}
                   <div className="space-y-3">
                     <Label htmlFor="resultVisibility" className="text-base font-semibold">Result Visibility</Label>
                     <Select value={quizConfig.resultVisibility} onValueChange={(v) => handleInputChange('resultVisibility', v)}>
@@ -991,25 +1078,7 @@ function CreateQuizContent() {
                   <div className="flex justify-center pt-8">
                     <Button
                       variant="outline"
-                      onClick={async () => {
-                        if (!lastQuestionDoc) return;
-                        setLoadingQuestions(true);
-                        const q = query(
-                          collection(db, "questions"),
-                          orderBy("createdAt", "desc"),
-                          startAfter(lastQuestionDoc),
-                          limit(20)
-                        );
-                        const snapshot = await getDocs(q);
-                        const newQuestions = snapshot.docs.map((doc) => ({
-                          id: doc.id,
-                          ...(doc.data()),
-                          usedInQuizzes: doc.data().usedInQuizzes || 0,
-                        }));
-                        setAvailableQuestions(prev => [...prev, ...newQuestions]);
-                        setLastQuestionDoc(snapshot.docs[snapshot.docs.length - 1]);
-                        setLoadingQuestions(false);
-                      }}
+                      onClick={fetchMoreQuestions}
                       className="w-full md:w-auto min-w-[200px] h-12 bg-white/10 dark:bg-white/5 hover:bg-white/20 border-white/10 backdrop-blur-md"
                       disabled={loadingQuestions}
                     >

@@ -58,7 +58,7 @@ const ReviewCard = ({ review }: { review: typeof testimonials[0] }) => {
     <div className="w-[350px] md:w-[450px] h-full flex-shrink-0 px-4">
       <div className="relative group h-full">
         {/* Glassmorphic Background */}
-        <div className="absolute inset-0 bg-white/60 dark:bg-slate-900/60 backdrop-blur-xl rounded-[2rem] border border-white/40 dark:border-slate-700/50 shadow-xl transition-all duration-500 group-hover:shadow-2xl group-hover:shadow-blue-500/10 group-hover:bg-white/80 dark:group-hover:bg-slate-800/80"></div>
+        <div className="absolute inset-0 bg-white dark:bg-slate-900 md:bg-white/60 md:dark:bg-slate-900/60 md:backdrop-blur-xl rounded-[2rem] border border-slate-100 dark:border-slate-800 md:border-white/40 md:dark:border-slate-700/50 shadow-sm md:shadow-xl transition-all duration-500 group-hover:shadow-2xl group-hover:shadow-blue-500/10 group-hover:bg-white/80 dark:group-hover:bg-slate-800/80"></div>
 
         {/* Gradient Glow Effect */}
         <div className={`absolute -inset-0.5 bg-gradient-to-r ${review.gradient} opacity-0 group-hover:opacity-20 blur-xl transition-opacity duration-500 rounded-[2rem] -z-10`}></div>

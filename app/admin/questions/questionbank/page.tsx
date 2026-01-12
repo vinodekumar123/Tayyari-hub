@@ -92,6 +92,8 @@ import {
   BarChart2,
   Info,
   CheckCircle,
+  ArrowRight,
+  ArrowUp,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import Papa from 'papaparse';
@@ -136,7 +138,9 @@ function stripHtml(html: string) {
   return tmp.textContent || tmp.innerText || "";
 }
 
-const ITEMS_PER_PAGE = 20;
+// Increased batch size for infinite scroll
+const ITEMS_PER_PAGE = 100;
+import { useInView } from 'react-intersection-observer'; // Can't assume this pkg exists, safer to use raw observer
 
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from '../../../firebase';
@@ -213,6 +217,23 @@ export default function QuestionBankPage() {
   const [availableCourses, setAvailableCourses] = useState<string[]>([]);
   const [availableYears, setAvailableYears] = useState<string[]>([]);
 
+
+
+  // Infinite Scroll Observer
+  const observer = React.useRef<IntersectionObserver>();
+  const lastQuestionElementRef = useCallback((node: HTMLTableRowElement) => {
+    if (loading) return;
+    if (observer.current) observer.current.disconnect();
+
+    observer.current = new IntersectionObserver(entries => {
+      if (entries[0].isIntersecting && hasMore) {
+        fetchQuestions(true);
+      }
+    });
+
+    if (node) observer.current.observe(node);
+  }, [loading, hasMore]); // eslint-disable-line
+
   // Initial Fetch & Filter Sync
   const fetchQuestions = useCallback(async (isLoadMore = false) => {
     setLoading(true);
@@ -225,15 +246,21 @@ export default function QuestionBankPage() {
       if (filterYear !== 'All') constraints.push(where('year', '==', filterYear));
       if (filterStatus !== 'All') constraints.push(where('status', '==', filterStatus));
 
+      if (filterStatus !== 'All') constraints.push(where('status', '==', filterStatus));
+
+      // Server-Side Filtering for Deleted Items Only
+      // We ONLY apply this constraint if we are looking for the Delete Bin.
+      // For "Active" items, we cannot simply say `where('isDeleted', '==', false)` because
+      // legacy documents missing the 'isDeleted' field would be EXCLUDED by Firestore.
       if (showDeleted) {
         constraints.push(where('isDeleted', '==', true));
       }
 
       if (constraints.length > 0) {
-        q = query(collection(db, 'questions'), ...constraints, limit(ITEMS_PER_PAGE));
+        q = query(collection(db, 'questions'), ...constraints, orderBy('createdAt', 'desc'), limit(ITEMS_PER_PAGE));
       } else {
-        // Fallback to simple query to avoid excluding docs missing createdAt field
-        q = query(collection(db, 'questions'), limit(ITEMS_PER_PAGE));
+        // Fallback to simple query
+        q = query(collection(db, 'questions'), orderBy('createdAt', 'desc'), limit(ITEMS_PER_PAGE));
       }
 
       if (isLoadMore && lastDoc) {
@@ -251,17 +278,26 @@ export default function QuestionBankPage() {
 
       // Client-side filtering:
       // 1. Search Query
-      // 2. isDeleted (if not viewing delete bin)
+      // 2. isDeleted (Only for Active view, to filter out deleted ones that slipped in if any, 
+      //    but mainly to handle the legacy 'undefined' case correctly).
       const filtered = fetched.filter(q => {
         const matchesSearch = searchQuery ? q.questionText.toLowerCase().includes(searchQuery.toLowerCase()) : true;
-        const matchesDeleted = showDeleted ? true : q.isDeleted !== true;
-        return matchesSearch && matchesDeleted;
+
+        // If we are in "Active Mode" (showDeleted=false), we must HIDE items that are isDeleted=true
+        // We include items where isDeleted is false OR undefined.
+        const matchesStatus = showDeleted ? true : (q.isDeleted !== true);
+
+        return matchesSearch && matchesStatus;
       });
 
       console.log("Total fetched:", fetched.length, "After filtering:", filtered.length);
 
       if (isLoadMore) {
-        setQuestions(prev => [...prev, ...filtered]);
+        setQuestions(prev => {
+          const existingIds = new Set(prev.map(p => p.id));
+          const newUnique = filtered.filter(f => !existingIds.has(f.id));
+          return [...prev, ...newUnique];
+        });
       } else {
         setQuestions(filtered);
       }
@@ -279,7 +315,7 @@ export default function QuestionBankPage() {
       const years = new Set([...availableYears, ...fetched.map(q => q.year || '')].filter(Boolean));
       setAvailableYears(Array.from(years));
 
-      fetchStats(fetched.map(q => q.id));
+      // Previously: fetchStats(fetched.map(q => q.id)); -> REMOVED for performance
 
     } catch (error) {
       console.error("Error fetching questions:", error);
@@ -289,37 +325,21 @@ export default function QuestionBankPage() {
     }
   }, [filterCourse, filterSubject, filterDifficulty, filterYear, filterStatus, searchQuery, showDeleted, lastDoc]); // eslint-disable-line
 
-  // Debounced Search or Enter Key
+  // Filters Change Effect (Reset & Fetch)
+  // Removed searchQuery from dependency to prevent auto-reload on type
   useEffect(() => {
-    const timer = setTimeout(() => {
-      // Reset and fetch
-      setLastDoc(null);
-      fetchQuestions(false);
-    }, 500);
-    return () => clearTimeout(timer);
-  }, [searchQuery, filterCourse, filterSubject, filterDifficulty, filterYear, filterStatus, showDeleted, fetchQuestions]);
+    setLastDoc(null);
+    fetchQuestions(false);
+  }, [filterCourse, filterSubject, filterDifficulty, filterYear, filterStatus, showDeleted]); // eslint-disable-line
 
-  const fetchStats = async (ids: string[]) => {
-    if (ids.length === 0) return;
-    try {
-      // In a real app, you'd want a summary collection or a cloud function to aggregate this.
-      // For now, we'll fetch quizzes and count occurrences of these IDs in 'selectedQuestions'.
-      const qSnap = await getDocs(collection(db, 'quizzes'));
-      const quizData = qSnap.docs.map(d => d.data());
-
-      setQuestions(prev => prev.map(q => {
-        if (ids.includes(q.id)) {
-          const count = quizData.filter(qz =>
-            qz.selectedQuestions?.some((sq: any) => sq.id === q.id)
-          ).length;
-          return { ...q, usageCount: count };
-        }
-        return q;
-      }));
-    } catch (e) {
-      console.error("Error fetching stats:", e);
-    }
+  // Handle Search Explicitly
+  const handleSearch = () => {
+    setLastDoc(null);
+    fetchQuestions(false);
   };
+
+  // REMOVED fetchStats: It was causing O(N) reads on the 'quizzes' collection
+  // which is not scalable. Usage counts should be pre-calculated on the question document.
 
 
   // Actions
@@ -343,16 +363,22 @@ export default function QuestionBankPage() {
 
     setLoading(true);
     try {
-      const batch = writeBatch(db);
-      selectedQuestions.forEach(id => {
-        batch.update(doc(db, 'questions', id), { isDeleted: true, updatedAt: new Date() });
-      });
-      await batch.commit();
+      // Helper for chunking
+      const chunkSize = 450;
+      for (let i = 0; i < selectedQuestions.length; i += chunkSize) {
+        const batch = writeBatch(db);
+        const chunk = selectedQuestions.slice(i, i + chunkSize);
+        chunk.forEach(id => {
+          batch.update(doc(db, 'questions', id), { isDeleted: true, updatedAt: new Date() });
+        });
+        await batch.commit();
+      }
 
       setQuestions(prev => prev.filter(q => !selectedQuestions.includes(q.id)));
       setSelectedQuestions([]);
       toast.success("Questions moved to Delete Bin");
     } catch (err) {
+      console.error(err);
       toast.error("Failed to delete questions");
     } finally {
       setLoading(false);
@@ -363,16 +389,21 @@ export default function QuestionBankPage() {
     if (selectedQuestions.length === 0) return;
     setLoading(true);
     try {
-      const batch = writeBatch(db);
-      selectedQuestions.forEach(id => {
-        batch.update(doc(db, 'questions', id), { isDeleted: false, updatedAt: new Date() });
-      });
-      await batch.commit();
+      const chunkSize = 450;
+      for (let i = 0; i < selectedQuestions.length; i += chunkSize) {
+        const batch = writeBatch(db);
+        const chunk = selectedQuestions.slice(i, i + chunkSize);
+        chunk.forEach(id => {
+          batch.update(doc(db, 'questions', id), { isDeleted: false, updatedAt: new Date() });
+        });
+        await batch.commit();
+      }
 
       setQuestions(prev => prev.filter(q => !selectedQuestions.includes(q.id)));
       setSelectedQuestions([]);
       toast.success("Questions restored successfully");
     } catch (err) {
+      console.error(err);
       toast.error("Failed to restore questions");
     } finally {
       setLoading(false);
@@ -385,16 +416,21 @@ export default function QuestionBankPage() {
 
     setLoading(true);
     try {
-      const batch = writeBatch(db);
-      selectedQuestions.forEach(id => {
-        batch.delete(doc(db, 'questions', id));
-      });
-      await batch.commit();
+      const chunkSize = 450;
+      for (let i = 0; i < selectedQuestions.length; i += chunkSize) {
+        const batch = writeBatch(db);
+        const chunk = selectedQuestions.slice(i, i + chunkSize);
+        chunk.forEach(id => {
+          batch.delete(doc(db, 'questions', id));
+        });
+        await batch.commit();
+      }
 
       setQuestions(prev => prev.filter(q => !selectedQuestions.includes(q.id)));
       setSelectedQuestions([]);
       toast.success("Questions permanently deleted");
     } catch (err) {
+      console.error(err);
       toast.error("Failed to delete questions");
     } finally {
       setLoading(false);
@@ -510,16 +546,24 @@ export default function QuestionBankPage() {
 
         {/* Search & Filter */}
         <div className="flex items-center gap-2 w-full md:w-auto flex-1 max-w-2xl">
-          <div className="relative flex-1">
-            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-500 dark:text-gray-400" />
+          <div className="relative flex-1 md:min-w-[300px]">
+            <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Search questions..."
-              className="pl-9 bg-white dark:bg-gray-900 shadow-sm border-gray-200 dark:border-gray-800 focus:ring-blue-500"
+              placeholder="Search questions (Press Enter)..."
               value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+              className="pl-9 bg-white dark:bg-gray-800"
             />
+            <Button
+              size="sm"
+              variant="ghost"
+              className="absolute right-1 top-1 h-8 w-8 p-0"
+              onClick={handleSearch}
+            >
+              <ArrowRight className="h-4 w-4" />
+            </Button>
           </div>
-
           <Sheet>
             <SheetTrigger asChild>
               <Button variant="outline" className="bg-white dark:bg-gray-900 shadow-sm dark:border-gray-800">
@@ -814,12 +858,22 @@ export default function QuestionBankPage() {
           </TableBody>
         </Table>
 
-        {/* Load More Footer */}
-        {hasMore && !loading && questions.length > 0 && (
-          <div className="p-4 border-t border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-900 flex justify-center">
-            <Button variant="outline" onClick={() => fetchQuestions(true)} className="w-full sm:w-auto bg-white dark:bg-gray-800 dark:border-gray-700">
-              Load More Questions <ChevronDown className="ml-2 h-4 w-4" />
-            </Button>
+        {/* Sentinel for Infinite Scroll */}
+        {hasMore && (
+          <div
+            className="p-8 flex justify-center items-center"
+            ref={(node) => {
+              if (loading) return;
+              const obs = new IntersectionObserver(entries => {
+                if (entries[0].isIntersecting && hasMore) {
+                  fetchQuestions(true);
+                }
+              }, { threshold: 1.0 });
+              if (node) obs.observe(node);
+            }}
+          >
+            {loading && <div className="text-gray-400 text-sm animate-pulse">Loading more questions...</div>}
+            {!loading && <div ref={lastQuestionElementRef as any} className="h-10 w-full" />}
           </div>
         )}
       </div>
@@ -880,10 +934,10 @@ export default function QuestionBankPage() {
             </div>
           )}
         </DialogContent>
-      </Dialog>
+      </Dialog >
 
       {/* Batch Edit Modal */}
-      <Dialog open={isBatchEditing} onOpenChange={setIsBatchEditing}>
+      < Dialog open={isBatchEditing} onOpenChange={setIsBatchEditing} >
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Batch Update Metadata</DialogTitle>
@@ -949,13 +1003,25 @@ export default function QuestionBankPage() {
             </Button>
           </DialogFooter>
         </DialogContent>
-      </Dialog>
+      </Dialog >
       {/* Question Analytics Sheet */}
-      <QuestionAnalyticsSheet
+      < QuestionAnalyticsSheet
         question={analyticsQuestion}
         onClose={() => setAnalyticsQuestion(null)}
       />
-    </div>
+
+
+      {/* Scroll To Top Button */}
+      {showScrollTop && (
+        <Button
+          className="fixed bottom-8 right-8 rounded-full shadow-lg z-50 p-3 h-12 w-12 bg-blue-600 hover:bg-blue-700 text-white animate-in fade-in slide-in-from-bottom-4"
+          onClick={scrollToTop}
+        >
+          <ArrowUp className="h-6 w-6" />
+        </Button>
+      )}
+
+    </div >
   );
 }
 

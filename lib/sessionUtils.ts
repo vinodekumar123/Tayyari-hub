@@ -46,6 +46,11 @@ const getBrowserFingerprint = () => {
 // Helper to get IP and Geo Info
 const getGeoInfo = async () => {
     try {
+        // Skip GeoIP on localhost to prevent CORS errors
+        if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
+            return { ip: '127.0.0.1', city: 'Localhost', country: 'Localhost', region: 'Localhost' };
+        }
+
         // Using ipapi.co for location data (Free tier: 1000 requests/day, suitable for dev/demo)
         // Production recommendation: Use a paid service or server-side IP lookup to avoid client-side rate limits/cors issues if scaling
         const res = await fetch('https://ipapi.co/json/');

@@ -6,7 +6,7 @@ import Link from 'next/link';
 import {
   BookOpen, Users, Trophy, BarChart3, Settings, Plus,
   Database, Home, ChevronDown, ChevronRight, LogOut,
-  ClipboardList, UserCircle, Menu, X, FileBarChart, Flag, Calendar
+  ClipboardList, UserCircle, Menu, X, FileBarChart, Flag, Calendar, BrainCircuit
 } from 'lucide-react';
 import logo from "../../app/assets/logo.png";
 import Image from "next/image";
@@ -129,6 +129,7 @@ export function Sidebar() {
         { icon: Plus, label: 'Add Mock Question', href: '/admin/mockquestions/create' },
         { icon: Trophy, label: 'Quizzes', href: '/admin/quizzes/quizebank' },
         { icon: Plus, label: 'Create Quiz', href: '/admin/quizzes/create' },
+        { icon: BrainCircuit, label: 'AI Auto-Tagger', href: '/admin/questions/auto-tagger' },
         { icon: Flag, label: 'Reported Questions', href: '/admin/reports' },
       ],
     },

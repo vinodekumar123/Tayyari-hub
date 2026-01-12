@@ -8,7 +8,9 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Trophy, Medal, Crown } from 'lucide-react';
+import { Trophy, Medal, Crown, AlertCircle } from 'lucide-react';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { glassmorphism } from '@/lib/design-tokens';
 import { useUserStore } from '@/stores/useUserStore';
 import { UnifiedHeader } from '@/components/unified-header';
@@ -25,34 +27,24 @@ export default function LeaderboardPage() {
     const [leaders, setLeaders] = useState<LeaderboardEntry[]>([]);
     const [loading, setLoading] = useState(true);
     const [userRank, setUserRank] = useState<number | null>(null);
+    const [error, setError] = useState<string | null>(null);
 
     const fetchLeaderboard = useCallback(async () => {
         try {
             setLoading(true);
-            // OPTIMIZATION: In a real large-scale app, we would have a scheduled function
-            // that aggregates scores into a dedicated 'leaderboard' collection.
-            // For ~2000 students, querying 'users' by stat is okay IF indexed.
-            // If index missing, we might need client-side sort of a subset or just fetching all students (heavy).
-
-            // Attempting to fetch top 50 students sorted by totalScore
-            // Note: This requires a composite index on [role, stats.totalScore]. 
-            // If it fails, I'll fallback to client-side sorting of latest users (or just all users if possible).
-
+            // OPTIMIZATION: Server-side sorting and limiting
+            // This requires a composite index on [role, stats.totalScore].
             const usersRef = collection(db, 'users');
-            // We assume 'stats.totalScore' exists. If not, this query yields nothing.
-            // Since we upgraded student dashboard, we know stats are important.
-
             const q = query(
                 usersRef,
                 where('role', '==', 'student'),
-                // orderBy('stats.totalScore', 'desc'), // Risk of index error. 
-                // limit(50)
+                orderBy('stats.totalScore', 'desc'),
+                limit(50)
             );
 
             const snap = await getDocs(q);
 
-            // Client-side processing (Safe fallback for <5k users)
-            const allStudents = snap.docs.map(d => {
+            const fetchedLeaders = snap.docs.map((d, idx) => {
                 const data = d.data();
                 return {
                     id: d.id,
@@ -60,23 +52,25 @@ export default function LeaderboardPage() {
                     totalScore: data.stats?.totalScore || 0,
                     accuracy: data.stats?.overallAccuracy || 0,
                     quizzesTaken: data.stats?.totalQuizzes || 0,
+                    rank: idx + 1
                 } as LeaderboardEntry;
             });
 
-            // Sort DESC by score
-            allStudents.sort((a, b) => b.totalScore - a.totalScore);
-
-            // Assign Ranks
-            const ranked = allStudents.slice(0, 50).map((s, idx) => ({ ...s, rank: idx + 1 }));
-            setLeaders(ranked);
+            setLeaders(fetchedLeaders);
 
             if (user) {
-                const myIndex = allStudents.findIndex(s => s.uid === user.uid);
-                if (myIndex !== -1) setUserRank(myIndex + 1);
+                // Check if user is in the fetched top 50
+                const myEntry = fetchedLeaders.find(s => s.uid === user.uid);
+                if (myEntry) {
+                    setUserRank(myEntry.rank);
+                } else {
+                    setUserRank(null);
+                }
             }
 
         } catch (error) {
             console.error('Leaderboard fetch error', error);
+            setError('Failed to load leaderboard. Please check your connection or try again later.');
         } finally {
             setLoading(false);
         }
@@ -100,6 +94,14 @@ export default function LeaderboardPage() {
                 subtitle="Top performers across all series. Keep learning, keep climbing!"
                 icon={<Trophy className="w-6 h-6" />}
             />
+
+            {error && (
+                <Alert variant="destructive">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertTitle>Error</AlertTitle>
+                    <AlertDescription>{error}</AlertDescription>
+                </Alert>
+            )}
 
             {/* User Rank Card */}
             {user && userRank && (
@@ -142,46 +144,78 @@ export default function LeaderboardPage() {
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            {leaders.map((student) => (
-                                <TableRow key={student.id} className={`group hover:bg-muted/50 transition-colors ${student.uid === user?.uid ? 'bg-indigo-50 dark:bg-indigo-900/20' : ''}`}>
-                                    <TableCell className="font-bold text-center text-lg">
-                                        <div className="flex justify-center">{getRankIcon(student.rank)}</div>
-                                    </TableCell>
-                                    <TableCell>
-                                        <div className="flex items-center gap-3">
-                                            <Avatar className="h-10 w-10 border-2 border-background group-hover:border-indigo-200 transition-colors">
-                                                <AvatarImage src={student.profileImage} />
-                                                <AvatarFallback className="font-bold bg-indigo-100 text-indigo-700">
-                                                    {student.fullName?.[0]}
-                                                </AvatarFallback>
-                                            </Avatar>
-                                            <div className="flex flex-col">
-                                                <span className={`font-bold ${student.uid === user?.uid ? 'text-indigo-600 dark:text-indigo-400' : ''}`}>
-                                                    {student.fullName}
-                                                </span>
-                                                {student.uid === user?.uid && <span className="text-[10px] text-muted-foreground">You</span>}
+                            {loading ? (
+                                Array.from({ length: 5 }).map((_, i) => (
+                                    <TableRow key={`skeleton-${i}`}>
+                                        <TableCell className="text-center">
+                                            <Skeleton className="h-8 w-8 rounded-full mx-auto" />
+                                        </TableCell>
+                                        <TableCell>
+                                            <div className="flex items-center gap-3">
+                                                <Skeleton className="h-10 w-10 rounded-full" />
+                                                <div className="flex flex-col gap-2">
+                                                    <Skeleton className="h-4 w-32" />
+                                                    <Skeleton className="h-3 w-16" />
+                                                </div>
                                             </div>
+                                        </TableCell>
+                                        <TableCell>
+                                            <Skeleton className="h-4 w-12 ml-auto" />
+                                        </TableCell>
+                                        <TableCell>
+                                            <Skeleton className="h-7 w-16 ml-auto rounded-md" />
+                                        </TableCell>
+                                        <TableCell>
+                                            <Skeleton className="h-6 w-12 ml-auto" />
+                                        </TableCell>
+                                    </TableRow>
+                                ))
+                            ) : leaders.length === 0 && !loading && !error ? (
+                                <TableRow>
+                                    <TableCell colSpan={5} className="text-center py-12 text-muted-foreground">
+                                        <div className="flex flex-col items-center gap-2">
+                                            <Trophy className="h-12 w-12 text-muted-foreground/30" />
+                                            <p className="text-lg font-medium">No champions yet!</p>
+                                            <p className="text-sm">Be the first to take a quiz and climb the ranks.</p>
                                         </div>
                                     </TableCell>
-                                    <TableCell className="text-right font-medium text-muted-foreground">{student.quizzesTaken}</TableCell>
-                                    <TableCell className="text-right font-medium">
-                                        <span className={`px-2 py-1 rounded-md ${student.accuracy >= 80 ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'}`}>
-                                            {student.accuracy}%
-                                        </span>
-                                    </TableCell>
-                                    <TableCell className="text-right pr-6 font-black text-lg text-foreground">
-                                        {student.totalScore}
-                                    </TableCell>
                                 </TableRow>
-                            ))}
-
-                            {leaders.length === 0 && !loading && (
-                                <TableRow>
-                                    <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
-                                        No analytics available yet to generate rankings.
-                                    </TableCell>
-                                </TableRow>
+                            ) : (
+                                leaders.map((student) => (
+                                    <TableRow key={student.id} className={`group hover:bg-muted/50 transition-colors ${student.uid === user?.uid ? 'bg-indigo-50 dark:bg-indigo-900/20' : ''}`}>
+                                        <TableCell className="font-bold text-center text-lg">
+                                            <div className="flex justify-center">{getRankIcon(student.rank)}</div>
+                                        </TableCell>
+                                        <TableCell>
+                                            <div className="flex items-center gap-3">
+                                                <Avatar className="h-10 w-10 border-2 border-background group-hover:border-indigo-200 transition-colors">
+                                                    <AvatarImage src={student.profileImage} />
+                                                    <AvatarFallback className="font-bold bg-indigo-100 text-indigo-700">
+                                                        {student.fullName?.[0]}
+                                                    </AvatarFallback>
+                                                </Avatar>
+                                                <div className="flex flex-col">
+                                                    <span className={`font-bold ${student.uid === user?.uid ? 'text-indigo-600 dark:text-indigo-400' : ''}`}>
+                                                        {student.fullName}
+                                                    </span>
+                                                    {student.uid === user?.uid && <span className="text-[10px] text-muted-foreground">You</span>}
+                                                </div>
+                                            </div>
+                                        </TableCell>
+                                        <TableCell className="text-right font-medium text-muted-foreground">{student.quizzesTaken}</TableCell>
+                                        <TableCell className="text-right font-medium">
+                                            <span className={`px-2 py-1 rounded-md ${student.accuracy >= 80 ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'}`}>
+                                                {student.accuracy}%
+                                            </span>
+                                        </TableCell>
+                                        <TableCell className="text-right pr-6 font-black text-lg text-foreground">
+                                            {student.totalScore}
+                                        </TableCell>
+                                    </TableRow>
+                                ))
                             )}
+
+
                         </TableBody>
                     </Table>
                 </CardContent>
