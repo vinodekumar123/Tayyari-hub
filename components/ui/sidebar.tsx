@@ -48,14 +48,22 @@ export function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
 
+  // Global UI Store
+  const { sidebarOpen, setSidebarOpen, sidebarCollapsed, setSidebarCollapsed, sidebarTriggerHidden } = useUIStore();
+
+  // Map global state to local variable names for compatibility
+  const mobileOpen = sidebarOpen;
+  const setMobileOpen = setSidebarOpen;
+  const collapsed = sidebarCollapsed;
+  const setCollapsed = setSidebarCollapsed;
+
   const [expandedSections, setExpandedSections] = useState<string[]>(['main', 'content', 'users', 'settings', 'student', 'main_nav', 'learning', 'practice', 'community', 'performance', 'account']);
-  const [collapsed, setCollapsed] = useState(false);
-  const [mobileOpen, setMobileOpen] = useState(false);
+  // removed local state for collapsed and mobileOpen
   const [showSignOutDialog, setShowSignOutDialog] = useState(false);
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
   const [isSuperAdmin, setIsSuperAdmin] = useState<boolean>(false);
   const [sessionExpiredOpen, setSessionExpiredOpen] = useState(false);
-  const { setLoading } = useUIStore(); // Added hook usage
+  const { setLoading } = useUIStore();
 
   useEffect(() => {
     if (mobileOpen) {
@@ -191,7 +199,7 @@ export function Sidebar() {
       section: 'performance',
       title: 'Performance / Reports',
       items: [
-        { icon: ClipboardList, label: 'Results', href: '/admin/students/results' },
+        { icon: ClipboardList, label: 'Results', href: '/dashboard/student/results' },
         { icon: Flag, label: 'My Reports', href: '/dashboard/student/reports' },
       ],
     },
@@ -349,7 +357,7 @@ export function Sidebar() {
     <>
       {/* Mobile Menu Button */}
       <div className="md:hidden fixed top-4 left-4 z-50">
-        {!mobileOpen && (
+        {!mobileOpen && !sidebarTriggerHidden && (
           <Button variant="ghost" size="icon" onClick={() => setMobileOpen(true)}>
             <Menu className="h-6 w-6 text-foreground" />
           </Button>

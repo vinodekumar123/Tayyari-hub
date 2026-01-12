@@ -8,6 +8,9 @@ import { Sun, Moon, Coffee, Sparkles, CloudSun, Sunset, Menu } from 'lucide-reac
 import { glassmorphism } from '@/lib/design-tokens';
 
 
+import { Button } from '@/components/ui/button';
+import { useUIStore } from '@/stores/useUIStore';
+
 interface UnifiedHeaderProps {
     title?: string;
     subtitle?: string;
@@ -28,12 +31,20 @@ export function UnifiedHeader({
     className = ""
 }: UnifiedHeaderProps) {
     const { user } = useUserStore();
+    const { toggleSidebar } = useUIStore();
     const [greetingText, setGreetingText] = useState('');
     const [GreetingIcon, setGreetingIcon] = useState<any>(Sun);
     const [iconColor, setIconColor] = useState('text-amber-500');
 
     // Use prop name if available, otherwise fall back to store/auth data
     const displayName = studentName || user?.fullName?.split(' ')[0] || user?.email?.split('@')[0] || 'Student';
+
+    // Hide sidebar trigger when UnifiedHeader is present
+    useEffect(() => {
+        const { setSidebarTriggerHidden } = useUIStore.getState();
+        setSidebarTriggerHidden(true);
+        return () => setSidebarTriggerHidden(false);
+    }, []);
 
     useEffect(() => {
         if (!greeting) return;
@@ -72,6 +83,16 @@ export function UnifiedHeader({
                 {/* Left Section: Greeting or Title */}
                 <div className="flex items-center gap-3">
                     {/* Mobile Menu Trigger */}
+                    <div className="md:hidden">
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={toggleSidebar}
+                            className="mr-2"
+                        >
+                            <Menu className="w-6 h-6 text-foreground" />
+                        </Button>
+                    </div>
 
                     {greeting ? (
                         <>

@@ -140,7 +140,11 @@ export default function StudentDashboard() {
     <div className="min-h-screen bg-slate-50/[0.6] dark:bg-slate-950 p-4 md:p-8 font-sans text-slate-900 dark:text-slate-100">
 
       {/* 1. New Top Header */}
-      <UnifiedHeader greeting studentName={studentData?.fullName} />
+      <UnifiedHeader
+        greeting
+        studentName={studentData?.fullName}
+        subtitle="Manage your progress and quizzes here."
+      />
 
       {/* Modern Header Section (Actions Only now, logic moved) */}
       <div className="flex justify-end items-center gap-3 mb-8 -mt-2"> {/* Moved up slightly to tuck under sticky header nicely or keep distinct */}

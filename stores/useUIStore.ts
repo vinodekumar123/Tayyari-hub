@@ -40,11 +40,15 @@ interface UIStore {
 
     setSearchQuery: (query: string) => void;
     setSearchOpen: (open: boolean) => void;
+
+    // UI Configuration
+    sidebarTriggerHidden: boolean;
+    setSidebarTriggerHidden: (hidden: boolean) => void;
 }
 
 export const useUIStore = create<UIStore>((set, get) => ({
     // Initial state
-    sidebarOpen: true,
+    sidebarOpen: false, // Default closed (mobile)
     sidebarCollapsed: false,
     activeModal: null,
     modalData: null,
@@ -89,4 +93,8 @@ export const useUIStore = create<UIStore>((set, get) => ({
     // Search actions
     setSearchQuery: (query) => set({ searchQuery: query }),
     setSearchOpen: (open) => set({ searchOpen: open }),
+
+    // UI Configuration
+    sidebarTriggerHidden: false,
+    setSidebarTriggerHidden: (hidden) => set({ sidebarTriggerHidden: hidden }),
 }));

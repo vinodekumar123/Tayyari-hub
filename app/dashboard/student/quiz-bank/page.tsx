@@ -217,7 +217,8 @@ export default function StudentQuizBankPage() {
                 // 4. Client-Side Filter
                 // Allow if: Access is Public OR Series Match
                 const finalQuizzes = data.filter(quiz => {
-                    const isPublic = quiz.accessType === 'public' || quiz.accessType === 'Public';
+                    const accessType = (quiz.accessType as string || '').toLowerCase();
+                    const isPublic = accessType === 'public';
                     if (isPublic) return true;
 
                     // For non-public, must match enrollment
@@ -315,7 +316,8 @@ export default function StudentQuizBankPage() {
         }
 
         // Check enrollment access (Skip for Public quizzes)
-        const isPublic = quiz.accessType === 'public' || quiz.accessType === 'Public';
+        const accessType = (quiz.accessType as string || '').toLowerCase();
+        const isPublic = accessType === 'public';
 
         if (!isPublic && quiz.series && quiz.series.length > 0) {
             const hasAccess = userEnrolledSeries.length > 0 && quiz.series.some(s => userEnrolledSeries.includes(s));
@@ -361,7 +363,8 @@ export default function StudentQuizBankPage() {
 
             // Client Filter on Load More
             const finalData = newData.filter(quiz => {
-                const isPublic = quiz.accessType === 'public' || quiz.accessType === 'Public';
+                const accessType = (quiz.accessType as string || '').toLowerCase();
+                const isPublic = accessType === 'public';
                 if (isPublic) return true;
 
                 if (!quiz.series || quiz.series.length === 0) return false;
