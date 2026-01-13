@@ -3,14 +3,12 @@ export const metadata = {
   description: 'Entry Test Companion',
 }
 
-export default function RootLayout({
+export default function QuizLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
-  return (
-    <html lang="en">
-      <body>{children}</body>
-    </html>
-  )
+  // Nested layouts should NOT re-declare <html> and <body> tags
+  // Those belong only in the root app/layout.tsx
+  return <>{children}</>;
 }
