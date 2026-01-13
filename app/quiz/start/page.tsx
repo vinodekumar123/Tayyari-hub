@@ -147,6 +147,17 @@ const StartQuizPageContent: React.FC = () => {
     }
   }, 3000); // Save every 3 seconds max
 
+  // FIX: Debounced localStorage writes to avoid blocking main thread
+  const debouncedLocalSave = useDebounce((data: { answers: Record<string, string>; flags: Record<string, boolean> }) => {
+    if (!quizId || !user) return;
+    const backupKey = `quiz_backup_${user.uid}_${quizId}`;
+    try {
+      localStorage.setItem(backupKey, JSON.stringify(data));
+    } catch (e) {
+      console.error('LocalStorage save failed:', e);
+    }
+  }, 2000); // Save to localStorage every 2 seconds
+
   // Anti-Cheating & Robustness Hooks
   useEffect(() => {
     if (isAdmin) return; // Admins are exempt
@@ -166,15 +177,28 @@ const StartQuizPageContent: React.FC = () => {
     document.addEventListener('cut', preventEvents);
     document.addEventListener('selectstart', preventEvents);
 
-    // 3. Tab Visibility (Tab Switch Detection)
+    // 3. Tab Visibility (Tab Switch Detection with ENFORCEMENT)
     const handleVisibilityChange = () => {
       if (document.hidden) {
         setViolationCount(prev => {
           const newCount = prev + 1;
-          toast.warning(`Warning: Please stay on this tab! (${newCount}/3 violations)`, {
-            icon: <AlertTriangle className="text-yellow-500" />,
-            duration: 4000,
-          });
+
+          // FIX: Enforce auto-submit after 3 violations
+          if (newCount >= 3) {
+            toast.error('Maximum violations reached. Auto-submitting quiz.', {
+              icon: <AlertTriangle className="text-red-500" />,
+              duration: 3000
+            });
+            // Auto-submit via ref to avoid deps issue
+            setTimeout(() => {
+              handleSubmitRef.current?.(true);
+            }, 1000);
+          } else {
+            toast.warning(`Warning: Please stay on this tab! (${newCount}/3 violations)`, {
+              icon: <AlertTriangle className="text-yellow-500" />,
+              duration: 4000
+            });
+          }
           return newCount;
         });
       }
@@ -229,12 +253,11 @@ const StartQuizPageContent: React.FC = () => {
     restoredRef.current = true;
   }, [quizId, user]);
 
-  // Save to backup on change
+  // FIX: Use debounced localStorage save instead of blocking main thread
   useEffect(() => {
     if (!quizId || !user) return;
-    const backupKey = `quiz_backup_${user.uid}_${quizId}`;
-    localStorage.setItem(backupKey, JSON.stringify({ answers, flags }));
-  }, [answers, flags, quizId, user]);
+    debouncedLocalSave({ answers, flags });
+  }, [answers, flags, quizId, user, debouncedLocalSave]);
 
 
   useEffect(() => {
@@ -776,24 +799,35 @@ const StartQuizPageContent: React.FC = () => {
 
   if (loading || !quiz) return <p className="text-center py-10">Loading...</p>;
 
-  // (Group questions logic same)
+  // FIX: Memoize expensive computations (prevents recalculation on every render)
   const questionsPerPage = quiz.questionsPerPage || 1;
-  const groupedQuestions = quiz.selectedQuestions.reduce((acc, question) => {
-    const subjectName = typeof question.subject === 'object' ? question.subject?.name : question.subject || 'Uncategorized';
-    if (!acc[subjectName]) acc[subjectName] = [];
-    acc[subjectName].push(question);
-    return acc;
-  }, {} as Record<string, Question[]>);
-  const flattenedQuestions = Object.entries(groupedQuestions).sort(([a], [b]) => a.localeCompare(b)).flatMap(([_, questions]) => questions);
+
+  const flattenedQuestions = useMemo(() => {
+    const groupedQuestions = quiz.selectedQuestions.reduce((acc, question) => {
+      const subjectName = typeof question.subject === 'object' ? question.subject?.name : question.subject || 'Uncategorized';
+      if (!acc[subjectName]) acc[subjectName] = [];
+      acc[subjectName].push(question);
+      return acc;
+    }, {} as Record<string, Question[]>);
+
+    return Object.entries(groupedQuestions)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .flatMap(([_, questions]) => questions);
+  }, [quiz.selectedQuestions]);
+
   const startIdx = currentPage * questionsPerPage;
   const endIdx = startIdx + questionsPerPage;
   const qSlice = flattenedQuestions.slice(startIdx, endIdx);
-  const pageGroupedQuestions = qSlice.reduce((acc, question) => {
-    const subjectName = typeof question.subject === 'object' ? question.subject?.name : question.subject || 'Uncategorized';
-    if (!acc[subjectName]) acc[subjectName] = [];
-    acc[subjectName].push(question);
-    return acc;
-  }, {} as Record<string, Question[]>);
+
+  const pageGroupedQuestions = useMemo(() => {
+    return qSlice.reduce((acc, question) => {
+      const subjectName = typeof question.subject === 'object' ? question.subject?.name : question.subject || 'Uncategorized';
+      if (!acc[subjectName]) acc[subjectName] = [];
+      acc[subjectName].push(question);
+      return acc;
+    }, {} as Record<string, Question[]>);
+  }, [qSlice]);
+
   const totalPages = Math.ceil(flattenedQuestions.length / questionsPerPage);
   const isLastPage = currentPage >= totalPages - 1;
   const attemptedCount = Object.keys(answers).filter((k) => answers[k] !== undefined && answers[k] !== '').length;
