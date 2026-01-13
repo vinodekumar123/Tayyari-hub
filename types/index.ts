@@ -8,7 +8,8 @@ export interface Question {
     explanation?: string;
     createdAt?: any;
     teacherId?: string;
-    createdBy?: string;
+    teacher?: string; // Teacher display name
+    createdBy?: string; // UID for ownership tracking
     difficulty?: string;
     topic?: string;
     subtopic?: string;
