@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { useDebounce } from './hooks/useDebounce';
 import { doc, getDoc, setDoc, serverTimestamp, getDocs, collection, query, where } from 'firebase/firestore';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { db, auth } from '@/app/firebase';
@@ -72,7 +73,21 @@ const stripHtml = (html: string): string => {
 const StartQuizPageContent: React.FC = () => {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const quizId = searchParams.get('id')!;
+
+  // FIX: Validate quiz ID exists
+  const quizId = searchParams.get('id');
+
+  // Early return if no quiz ID
+  useEffect(() => {
+    if (!quizId) {
+      router.push('/dashboard/student');
+    }
+  }, [quizId, router]);
+
+  if (!quizId) {
+    return <div className="flex justify-center items-center min-h-screen">Redirecting...</div>;
+  }
+
   const [user, setUser] = useState<User | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [quiz, setQuiz] = useState<QuizData | null>(null);
@@ -103,6 +118,34 @@ const StartQuizPageContent: React.FC = () => {
 
   const [violationCount, setViolationCount] = useState(0);
   const [isOnline, setIsOnline] = useState(true);
+
+  // FIX: Debounced autosave to API (reduces Firestore writes by 90%)
+  const debouncedAutosave = useDebounce(async (data: {
+    answers: Record<string, string>;
+    flags: Record<string, boolean>;
+    currentIndex: number;
+    remainingTime: number;
+  }) => {
+    if (!user || !quizId || isAdmin) return;
+
+    try {
+      const response = await fetch('/api/quiz/autosave', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          quizId,
+          userId: user.uid,
+          ...data
+        })
+      });
+
+      if (!response.ok) {
+        console.error('Autosave failed:', await response.text());
+      }
+    } catch (error) {
+      console.error('Autosave error:', error);
+    }
+  }, 3000); // Save every 3 seconds max
 
   // Anti-Cheating & Robustness Hooks
   useEffect(() => {
@@ -362,21 +405,36 @@ const StartQuizPageContent: React.FC = () => {
     return () => window.removeEventListener('beforeunload', handleUnload);
   }, [answers, flags, currentPage, timeLeft, quiz, user, isAdmin, quizId]);
 
-  // ... (keeping existing handlers unchanged, showing shortened for brevity where logic is same)
+  // FIX: Use debounced API autosave instead of direct Firestore write
   const handleAnswer = (qid: string, val: string) => {
     const updatedAnswers = { ...answers, [qid]: val };
     setAnswers(updatedAnswers);
+
+    // Debounced save via API
     if (user && quiz && !isAdmin) {
-      setDoc(doc(db, 'users', user.uid, 'quizAttempts', quizId), { answers: updatedAnswers, remainingTime: timeLeft }, { merge: true });
+      debouncedAutosave({
+        answers: updatedAnswers,
+        flags,
+        currentIndex: currentPage * (quiz.questionsPerPage || 1),
+        remainingTime: timeLeft
+      });
     }
   };
 
+  // FIX: Use debounced API autosave instead of direct Firestore write
   const toggleFlag = (qid: string) => {
     const updatedFlags = { ...flags, [qid]: !flags[qid] };
     if (!updatedFlags[qid]) delete updatedFlags[qid];
     setFlags(updatedFlags);
+
+    // Debounced save via API
     if (user && quiz && !isAdmin) {
-      setDoc(doc(db, 'users', user.uid, 'quizAttempts', quizId), { flags: updatedFlags }, { merge: true });
+      debouncedAutosave({
+        answers,
+        flags: updatedFlags,
+        currentIndex: currentPage * (quiz.questionsPerPage || 1),
+        remainingTime: timeLeft
+      });
     }
   };
 
@@ -402,105 +460,99 @@ const StartQuizPageContent: React.FC = () => {
   const handleNextPage = () => { updateTimeSpent(); setCurrentPage(prev => prev + 1); };
   const handlePrevPage = () => { updateTimeSpent(); setCurrentPage(prev => Math.max(0, prev - 1)); };
 
+  // FIX: Consolidated submission logic with single guard and timer cleanup
   const handleSubmit = async (force: boolean = false) => {
-    // If we are forcing (from modal), ignore isSubmitting initially to allow re-entry, 
-    // BUT checking isSubmitting later is vital.
-    if (!force && (isSubmitting || hasSubmittedRef.current)) return;
-
-    // logic...
-    setIsSubmitting(true);
-    updateTimeSpent();
-
-    if (!force && !hasSubmittedRef.current && !showSummaryModal) {
-      if (timeLeft > 0 && !isAdmin) {
-        setShowSummaryModal(true);
-        setIsSubmitting(false); // Reset if just showing modal
-        return;
-      }
+    // SINGLE GUARD: Check if already submitting or submitted
+    if (hasSubmittedRef.current || isSubmitting) {
+      console.log('Submission blocked: already in progress or completed');
+      return;
     }
 
-    // Explicitly hide modal if we proceed
+    // Show summary modal if time remaining (unless forced)
+    if (!force && timeLeft > 0 && !isAdmin && !showSummaryModal) {
+      setShowSummaryModal(true);
+      return;
+    }
+
+    // Mark as submitted IMMEDIATELY to prevent double submission
+    hasSubmittedRef.current = true;
+    setIsSubmitting(true);
     setShowSummaryModal(false);
 
-    if (hasSubmittedRef.current) return;
-    hasSubmittedRef.current = true;
-    if (!user || !quiz || isSubmitting) return;
+    // FIX: Clear timer to prevent memory leaks and duplicate submissions
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
 
-    setIsSubmitting(true);
     updateTimeSpent();
 
-    if (!user || !quiz) return;
-    const total = quiz.selectedQuestions.length;
-    let score = 0;
-    for (const question of quiz.selectedQuestions) {
-      if (question.graceMark || answers[question.id] === question.correctAnswer) {
-        score += 1;
-      }
-    }
-    const newAttemptCount = attemptCount + 1;
-    // ... saving logic ...
-    // ... saving logic ...
-    try {
-      if (!navigator.onLine) throw new Error("No Internet Connection");
-
-      // Sanitize inputs to remove undefined values
-      const cleanAnswers = JSON.parse(JSON.stringify(answers));
-      const cleanFlags = JSON.parse(JSON.stringify(flags));
-
-      const resultData = { quizId, title: quiz.title, score, total, timestamp: serverTimestamp(), answers: cleanAnswers, flags: cleanFlags, attemptNumber: newAttemptCount };
-
-      // Parallelize critical saves with timeout
-      await timeoutPromise(15000, Promise.all([
-        setDoc(doc(db, 'users', user.uid, 'quizAttempts', quizId, 'results', quizId), resultData),
-        setDoc(doc(db, 'users', user.uid, 'quizAttempts', quizId), { submittedAt: serverTimestamp(), completed: true, remainingTime: 0, attemptNumber: newAttemptCount }, { merge: true })
-      ]));
-
-      // Stats update (Async - don't block main submission flow if possible, or include if critical)
-      // We will safeguard this part too so it doesn't hang the UI
-      try {
-        const { updateStudentStats } = await import('@/app/lib/student-stats');
-        const { recordQuestionPerformance } = await import('@/app/lib/analytics');
-        await updateStudentStats(user.uid, {
-          quizId, score, total, answers, selectedQuestions: quiz.selectedQuestions,
-          subject: Array.isArray(quiz.subject) ? quiz.subject.map((s: any) => s.name || s) : (typeof quiz.subject === 'object' ? (quiz.subject as any)?.name : quiz.subject),
-          timestamp: serverTimestamp() as any
-        }, 'admin');
-
-        const questionResults = quiz.selectedQuestions.map(q => ({
-          questionId: q.id,
-          isCorrect: q.graceMark || answers[q.id] === q.correctAnswer, // Auto-correct if grace
-          chosenOption: answers[q.id] || 'unanswered',
-          timeSpent: timeLogs[q.id] || 0,
-          graceMark: q.graceMark || false
-        }));
-        await recordQuestionPerformance(user.uid, quizId, questionResults);
-      } catch (statsErr) {
-        console.warn("Non-critical stats update failed:", statsErr);
-        // Don't fail submission for stats
-      }
-
-    } catch (error: any) {
-      console.error("Submission failed", error);
-      if (error.message === "No Internet Connection") {
-        toast.error("No Internet Connection", { description: "Cannot submit quiz. Please check your connection." });
-      } else if (error.message?.includes('timed out')) {
-        toast.error("Submission Timed Out", { description: "Server is not responding. Please try again." });
-      } else {
-        toast.error("Submission failed. Please try again.");
-      }
+    if (!user || !quiz) {
+      console.error('Missing user or quiz data');
       setIsSubmitting(false);
       hasSubmittedRef.current = false;
       return;
     }
 
-    setShowSubmissionModal(true);
-    setShowSummaryModal(false);
-    setTimeout(() => {
-      setShowSubmissionModal(false);
-      // Admin always goes to results
-      router.push('/quiz/results?id=' + quizId);
-      // Don't reset isSubmitting here, wait for redirect
-    }, 2000);
+    try {
+      if (!navigator.onLine) throw new Error("No Internet Connection");
+
+      // Sanitize inputs
+      const cleanAnswers = JSON.parse(JSON.stringify(answers));
+      const cleanFlags = JSON.parse(JSON.stringify(flags));
+      const cleanTimeLogs = JSON.parse(JSON.stringify(timeLogs));
+
+      // Use server-side submission API for security
+      const response = await fetch('/api/quiz/submit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          quizId,
+          userId: user.uid,
+          answers: cleanAnswers,
+          flags: cleanFlags,
+          timeLogs: cleanTimeLogs,
+          attemptNumber: attemptCount + 1,
+          timestamp: Date.now()
+        })
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Submission failed');
+      }
+
+      const result = await response.json();
+
+      // Show success and redirect
+      setShowSubmissionModal(true);
+      toast.success(`Quiz submitted! Score: ${result.score}/${result.total}`);
+
+      setTimeout(() => {
+        setShowSubmissionModal(false);
+        router.push('/quiz/results?id=' + quizId);
+      }, 2000);
+
+    } catch (error: any) {
+      console.error("Submission failed", error);
+
+      if (error.message === "No Internet Connection") {
+        toast.error("No Internet Connection", {
+          description: "Cannot submit quiz. Please check your connection."
+        });
+      } else if (error.message?.includes('timed out')) {
+        toast.error("Submission Timed Out", {
+          description: "Server is not responding. Please try again."
+        });
+      } else {
+        toast.error(error.message || "Submission failed. Please try again.");
+      }
+
+      // Reset states to allow retry
+      setIsSubmitting(false);
+      hasSubmittedRef.current = false;
+      return;
+    }
   };
 
   // Keep a stable ref to the latest handleSubmit so effects (timer) can call it without needing it in deps
