@@ -124,6 +124,7 @@ type Question = {
   year?: string;
   book?: string;
   teacher?: string;
+  createdBy?: string; // UID for ownership tracking
   enableExplanation?: boolean;
   createdAt?: Date;
   status?: 'draft' | 'published' | 'review';
