@@ -489,8 +489,15 @@ const StartQuizPageContent: React.FC = () => {
     });
     setPageStartTime(now);
   };
-  const handleNextPage = () => { updateTimeSpent(); setCurrentPage(prev => prev + 1); };
-  const handlePrevPage = () => { updateTimeSpent(); setCurrentPage(prev => Math.max(0, prev - 1)); };
+  // FIX: Only update time on page change, not every navigation
+  const handleNextPage = () => {
+    if (quiz) updateTimeSpent();
+    setCurrentPage(prev => prev + 1);
+  };
+  const handlePrevPage = () => {
+    if (quiz) updateTimeSpent();
+    setCurrentPage(prev => Math.max(0, prev - 1));
+  };
 
   // FIX: Consolidated submission logic with single guard and timer cleanup
   const handleSubmit = async (force: boolean = false) => {
@@ -637,7 +644,14 @@ const StartQuizPageContent: React.FC = () => {
     }
   };
 
+  // FIX: Format time with hours support for long quizzes
   const formatTime = (sec: number) => {
+    if (sec >= 3600) {
+      const h = Math.floor(sec / 3600);
+      const m = Math.floor((sec % 3600) / 60).toString().padStart(2, '0');
+      const s = (sec % 60).toString().padStart(2, '0');
+      return `${h}:${m}:${s}`;
+    }
     const m = Math.floor(sec / 60).toString().padStart(2, '0');
     const s = (sec % 60).toString().padStart(2, '0');
     return `${m}:${s}`;
