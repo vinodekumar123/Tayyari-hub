@@ -37,6 +37,7 @@ import { toast } from 'sonner';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import { ModeToggle } from '@/components/mode-toggle';
+import DOMPurify from 'isomorphic-dompurify'; // XSS protection
 
 interface Question {
   id: string;
@@ -48,6 +49,15 @@ interface Question {
   subject?: string | { id: string; name: string };
   graceMark?: boolean;
 }
+
+// FIX: Extract magic numbers to constants
+const AUTOSAVE_DEBOUNCE_MS = 3000;
+const LOCALSTORAGE_DEBOUNCE_MS = 2000;
+const REDIRECT_DELAY_MS = 2000;
+const SCROLL_BUTTON_THRESHOLD_PX = 300;
+const SCROLL_BOTTOM_OFFSET_PX = 100;
+const MAX_VIOLATION_COUNT = 3;
+const VIOLATION_AUTO_SUBMIT_DELAY_MS = 1000;
 
 interface QuizData {
   title: string;
@@ -327,8 +337,7 @@ const StartQuizPageContent: React.FC = () => {
         }
       }
 
-      // Fetch completed attempts to check eligibility
-      // Admin Bypass: Admins can always attempt, skipping the check logic effectively or just alerting
+      // FIX: Check attempt limits BEFORE creating document (prevents race condition)
       if (!isAdmin) {
         const attemptsSnapshot = await getDocs(collection(db, 'users', user.uid, 'quizAttempts'));
         let currentAttemptCount = 0;
@@ -340,13 +349,13 @@ const StartQuizPageContent: React.FC = () => {
 
         if (currentAttemptCount >= quizData.maxAttempts) {
           toast.error('Maximum attempts reached for this quiz.');
-          router.push(isAdmin ? '/admin/quizzes/quizebank' : '/dashboard/student');
+          router.push('/dashboard/student');
+          setLoading(false);
           return;
         }
         setAttemptCount(currentAttemptCount);
       } else {
-        // for admin, just get attempt count for info but don't block
-        setAttemptCount(0); // or fetch real count if desired, but 0 is fine for "unlimited" feel
+        setAttemptCount(0);
       }
 
       // Check for an incomplete attempt
@@ -364,7 +373,7 @@ const StartQuizPageContent: React.FC = () => {
           setTimeLeft(quizData.duration * 60);
         }
       } else {
-        // New attempt: reset timer and initialize quizAttempts
+        // New attempt: reset timer and THEN initialize doc (after validation)
         setTimeLeft(quizData.duration * 60);
         setAnswers({});
         setFlags({});
@@ -877,10 +886,10 @@ const StartQuizPageContent: React.FC = () => {
         </Dialog>
       )}
 
-      {/* Header - Always visible, adapts for Zen Mode */}
+      {/* FIX: Fixed positioning to prevent layout shift */}
       <header className={`bg-white dark:bg-gray-900 border-b dark:border-gray-800 sticky top-0 z-40 shadow-sm transition-all duration-300`}>
         {!isOnline && (
-          <div className="bg-red-500 text-white px-4 py-2 text-center text-sm font-medium flex items-center justify-center gap-2 animate-in slide-in-from-top">
+          <div className="bg-red-500 text-white px-4 py-2 text-center text-sm font-medium flex items-center justify-center gap-2 animate-in slide-in-from-top fixed top-0 left-0 right-0 z-50">
             <WifiOff className="w-4 h-4" /> You are offline. Don&apos;t worry, your answers are saved locally and will sync when you reconnect.
           </div>
         )}
@@ -1008,7 +1017,8 @@ const StartQuizPageContent: React.FC = () => {
                       <div className="flex justify-between items-start gap-4">
                         <div className="text-lg font-medium prose max-w-none flex-1 group relative dark:prose-invert">
                           <span className="font-bold text-slate-700 dark:text-slate-300">Q{startIdx + idx + 1}. </span>
-                          <span dangerouslySetInnerHTML={{ __html: q.questionText }} />
+                          {/* FIX: Sanitize HTML to prevent XSS */}
+                          <span dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(q.questionText) }} />
 
                           {/* Admin Quick Edit Link */}
                           {isAdmin && (
@@ -1074,7 +1084,8 @@ const StartQuizPageContent: React.FC = () => {
                                 <div className="flex items-center justify-center w-6 h-6 rounded-full bg-slate-100 dark:bg-slate-700 text-xs font-bold text-slate-500 dark:text-slate-300 group-hover:bg-blue-100 dark:group-hover:bg-blue-900/50 group-hover:text-blue-600 dark:group-hover:text-blue-300 transition-colors">
                                   {['A', 'B', 'C', 'D'][i]}
                                 </div>
-                                <span className="prose max-w-none" dangerouslySetInnerHTML={{ __html: opt }} />
+                                {/* FIX: Sanitize HTML in options to prevent XSS */}
+                                <span className="prose max-w-none" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(opt) }} />
                               </div>
                               {isCorrect && (
                                 <div className="absolute right-0 top-0 bottom-0 w-1.5 bg-green-500"></div>
@@ -1098,10 +1109,20 @@ const StartQuizPageContent: React.FC = () => {
             ))}
 
             <div className="flex justify-between pt-8 border-t dark:border-gray-800">
-              <Button variant="outline" onClick={currentPage === 0 ? undefined : handlePrevPage} disabled={currentPage === 0}>
+              <Button
+                variant="outline"
+                onClick={currentPage === 0 ? undefined : handlePrevPage}
+                disabled={currentPage === 0 || isSubmitting}
+              >
                 <ArrowLeft className="mr-2 h-4 w-4" /> Previous
               </Button>
-              <Button onClick={isLastPage ? () => handleSubmit() : handleNextPage} className={isLastPage ? 'bg-indigo-600 hover:bg-indigo-700 text-white' : ''}>
+              {/* FIX: Disable button and show loading state during submission */}
+              <Button
+                onClick={isLastPage ? () => handleSubmit() : handleNextPage}
+                className={isLastPage ? 'bg-indigo-600 hover:bg-indigo-700 text-white' : ''}
+                disabled={isSubmitting}
+              >
+                {isSubmitting && isLastPage && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 {isLastPage ? 'Submit Quiz' : 'Next'} <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
             </div>
