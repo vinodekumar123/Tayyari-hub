@@ -170,11 +170,8 @@ export default function AdminQuizBankPage() {
 
         const constraints: any[] = [orderBy('startDate', 'desc'), limit(20)];
 
-        // Teacher Constraint: Only show their own quizzes
-        if (isTeacher) {
-          // Prefer teacherId, fallback to createdBy
-          constraints.push(where('teacherId', '==', user.uid));
-        }
+        // Teachers can now view all quizzes (same as admin)
+        // Removed teacher ownership filter to allow full quiz bank access
 
         // Backend Series Filter
         if (filters.series !== 'all') {
@@ -267,10 +264,8 @@ export default function AdminQuizBankPage() {
     try {
       const constraints: any[] = [orderBy('startDate', 'desc'), limit(20)];
 
-      // Teacher Constraint
-      if (isTeacher) {
-        constraints.push(where('teacherId', '==', user.uid));
-      }
+      // Teachers can now view all quizzes (same as admin)
+      // Removed teacher ownership filter to allow full quiz bank access
 
       // Maintain filter on load more
       if (filters.series !== 'all') {
