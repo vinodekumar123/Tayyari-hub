@@ -57,6 +57,28 @@ export async function POST(request: NextRequest) {
         const quizData = quizSnap.data();
         const selectedQuestions = quizData?.selectedQuestions || [];
 
+        // FIX: Re-verify enrollment before accepting submission (Security #4)
+        const userDoc = await adminDb.collection('users').doc(userId).get();
+        const isAdmin = userDoc.exists && userDoc.data()?.admin === true;
+
+        if (!isAdmin && (quizData?.accessType === 'series' || quizData?.accessType === 'paid')) {
+            if (quizData.series && Array.isArray(quizData.series) && quizData.series.length > 0) {
+                const enrollmentsSnapshot = await adminDb.collection('enrollments')
+                    .where('studentId', '==', userId)
+                    .where('status', '==', 'active')
+                    .get();
+
+                const enrolledSeriesIds = new Set(enrollmentsSnapshot.docs.map(doc => doc.data().seriesId));
+                const hasAccess = quizData.series.some((sId: string) => enrolledSeriesIds.has(sId));
+
+                if (!hasAccess) {
+                    return NextResponse.json({
+                        error: 'Access denied: You are no longer enrolled in the required series'
+                    }, { status: 403 });
+                }
+            }
+        }
+
         // Calculate score server-side (secure)
         let score = 0;
         const total = selectedQuestions.length;
