@@ -7,6 +7,16 @@ export interface Question {
     correctAnswer?: string;
     explanation?: string;
     createdAt?: any;
+    teacherId?: string;
+    createdBy?: string;
+    difficulty?: string;
+    topic?: string;
+    subtopic?: string;
+    isPublic?: boolean;
+    courseId?: string;
+    allOptionsCorrect?: boolean;
+    year?: string;
+    book?: string;
 }
 
 export interface QuizConfig {

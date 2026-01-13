@@ -16,7 +16,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { collection, getDocs, addDoc, Timestamp, query, updateDoc, getDoc, doc, orderBy, where, limit, startAfter, writeBatch } from "firebase/firestore";
-import { db } from "../../../firebase";
+import { db, auth } from "../../../firebase";
+import { onAuthStateChanged } from "firebase/auth";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useSearchParams, useRouter } from 'next/navigation';
 import {
@@ -52,6 +53,31 @@ function CreateQuizContent() {
   const [questionsLimit, setQuestionsLimit] = useState(20); // Pagination limit
   const [lastQuestionDoc, setLastQuestionDoc] = useState<any>(null); // For cursor pagination
   const [loadingQuestions, setLoadingQuestions] = useState(false);
+
+  // RBAC State
+  const [userRole, setUserRole] = useState<'admin' | 'teacher' | 'student' | null>(null);
+  const [assignedSubjects, setAssignedSubjects] = useState<string[]>([]);
+  const [currentUserId, setCurrentUserId] = useState<string>('');
+
+  // Fetch User Role
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        setCurrentUserId(user.uid);
+        const userDoc = await getDoc(doc(db, 'users', user.uid));
+        if (userDoc.exists()) {
+          const userData = userDoc.data();
+          const role = userData.role || (userData.admin ? 'admin' : 'student');
+          setUserRole(role);
+          if (role === 'teacher') {
+            setAssignedSubjects(userData.subjects || []);
+            // Auto-filter subjects if standard subjects are loaded (though they might not be yet)
+          }
+        }
+      }
+    });
+    return () => unsub();
+  }, []);
 
   const [quizConfig, setQuizConfig] = useState<any>({
     title: '',
@@ -152,9 +178,16 @@ function CreateQuizContent() {
       // Apply Filters
       // Subject Filter (Array)
       if (subjects.length > 0 && !subjects.includes('all-subjects')) {
-        // Firestore 'in' limitation: max 10. If more, we might need to fetch all or client side.
-        // For now, assume < 10 or just take first 10.
+        // Explicit selection
         constraints.push(where('subject', 'in', subjects.slice(0, 10)));
+      } else if (userRole === 'teacher') {
+        // Teacher implied filter: If "All Subjects" (or empty) is selected, restrict to assignedSubjects
+        if (assignedSubjects.length > 0) {
+          constraints.push(where('subject', 'in', assignedSubjects.slice(0, 10)));
+        } else {
+          // Teacher with no subjects? Should find nothing.
+          constraints.push(where('subject', '==', '__NO_SUBJECTS__'));
+        }
       }
 
       // Chapter Filter (Array) 
@@ -431,6 +464,9 @@ function CreateQuizContent() {
 
     if (!isEditMode) {
       quizPayload.createdAt = Timestamp.now();
+      quizPayload.createdBy = currentUserId; // Track creator
+      quizPayload.teacherId = userRole === 'teacher' ? currentUserId : null; // Track teacher ownership specifically
+      quizPayload.creatorRole = userRole;
     }
 
     try {
@@ -768,7 +804,14 @@ function CreateQuizContent() {
                     <MultiSelect
                       value={quizConfig.subjects}
                       onChange={(value) => handleMultiSelectChange('subjects', value)}
-                      options={[{ value: 'all-subjects', label: 'All Subjects' }, ...subjects.filter(s => s && s.name && s.name.trim() !== '').map(s => ({ value: s.name, label: s.name }))]}
+                      options={[
+                        { value: 'all-subjects', label: 'All Subjects' },
+                        ...subjects
+                          .filter(s => s && s.name && s.name.trim() !== '')
+                          // TEACHER FILTER: Only show assigned subjects
+                          .filter(s => userRole !== 'teacher' || assignedSubjects.includes(s.name))
+                          .map(s => ({ value: s.name, label: s.name }))
+                      ]}
                       placeholder="Select subjects"
                       disabled={!quizConfig.course}
                       type="subject"

@@ -143,10 +143,12 @@ interface Question {
   tags: string[];
   topic: string;
   subtopic: string;
-  isPublic: boolean;
+  isPublic?: boolean;
+  courseId?: string;
+  teacherId?: string;
+  createdBy?: string;
+  allOptionsCorrect?: boolean;
   teacher?: string;
-  courseId: string; // Course ID for categorization
-  allOptionsCorrect: boolean; // If true, any answer (or no answer?) is valid - logic depends on consumption
 }
 
 const CreateQuestionPageContent = () => {
@@ -275,6 +277,20 @@ const CreateQuestionPageContent = () => {
         const docSnap = await getDoc(docRef);
         if (docSnap.exists()) {
           const q = docSnap.data() as Question; // Cast simpler
+
+          // SECURITY: Teacher Ownership Check
+          if (userRole === 'teacher') {
+            const currentUid = auth.currentUser?.uid;
+            // Check teacherId or createdBy. Legacy questions might not have teacherId.
+            // If neither matches, deny access.
+            if (q.teacherId !== currentUid && q.createdBy !== currentUid) {
+              toast.error("You do not have permission to edit this question.");
+              // Optional: Redirect or clear state
+              setLoading(false);
+              return;
+            }
+          }
+
           // Populate Form
           setQuestionText(q.questionText || '');
           setOptions(q.options || ['', '', '', '']);
@@ -300,8 +316,10 @@ const CreateQuestionPageContent = () => {
         setLoading(false);
       }
     };
-    fetchQuestion();
-  }, [questionId]);
+    if (userRole !== null) { // Only fetch when role is known to avoid premature security fail
+      fetchQuestion();
+    }
+  }, [questionId, userRole]);
 
   const handleOptionChange = (index: number, value: string) => {
     const newOptions = [...options];
