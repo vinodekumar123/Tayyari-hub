@@ -326,13 +326,18 @@ const StartQuizPageContent: React.FC = () => {
           const hasAccess = data.series.some((sId: string) => enrolledSeriesIds.has(sId));
 
           if (!hasAccess) {
-            toast.error('Access Denied: You are not enrolled in the required Series for this quiz.');
+            toast.error('Access Denied', {
+              description: 'You are not enrolled in the required Series for this quiz.',
+              duration: 5000
+            });
             router.push('/dashboard/student');
             return;
           }
         } catch (err) {
-          console.error("Error checking enrollment:", err);
-          toast.error("Failed to verify enrollment status.");
+          toast.error('Enrollment Verification Failed', {
+            description: 'Unable to verify your enrollment status. Please try again.',
+            duration: 5000
+          });
           return;
         }
       }
@@ -348,7 +353,10 @@ const StartQuizPageContent: React.FC = () => {
         });
 
         if (currentAttemptCount >= quizData.maxAttempts) {
-          toast.error('Maximum attempts reached for this quiz.');
+          toast.error('Maximum Attempts Reached', {
+            description: `You have used all ${quizData.maxAttempts} attempts for this quiz.`,
+            duration: 5000
+          });
           router.push('/dashboard/student');
           setLoading(false);
           return;
