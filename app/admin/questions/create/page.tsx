@@ -160,6 +160,10 @@ const CreateQuestionPageContent = () => {
   const [courses, setCourses] = useState<Course[]>([]);
   const [allSubjects, setAllSubjects] = useState<Subject[]>([]);
 
+  // Button Loading States
+  const [isAiBulkLoading, setIsAiBulkLoading] = useState(false);
+  const [isCsvLoading, setIsCsvLoading] = useState(false);
+
   // AI State
   const [isAiGenerating, setIsAiGenerating] = useState(false);
   const [aiPrompt, setAiPrompt] = useState('');
@@ -527,31 +531,45 @@ const CreateQuestionPageContent = () => {
             <div className="flex gap-2">
               <Button
                 variant="outline"
+                disabled={isAiBulkLoading || isCsvLoading}
                 onClick={() => {
                   if (!selectedCourse || !subject) {
                     toast.error("Please configure Course and Subject first.");
                     return;
                   }
-                  setIsAiBulkOpen(true);
+                  setIsAiBulkLoading(true);
+                  // Simulate loading delay for better UX
+                  setTimeout(() => {
+                    setIsAiBulkOpen(true);
+                    setIsAiBulkLoading(false);
+                  }, 800);
                 }}
                 className="bg-white dark:bg-gray-800 dark:border-gray-700 dark:hover:bg-gray-700 mr-2"
               >
-                <Sparkles className="mr-2 h-4 w-4 text-purple-500" /> AI Bulk Import
+                {isAiBulkLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4 text-purple-500" />}
+                AI Bulk Import
               </Button>
 
               <Button
                 variant="outline"
+                disabled={isAiBulkLoading || isCsvLoading}
                 onClick={() => {
                   setImportInitialData(undefined); // Reset for file upload
                   if (!selectedCourse || !subject) {
                     toast.error("Please select a Course and Subject from the settings panel first.");
                     return;
                   }
-                  setIsCsvDialogOpen(true);
+                  setIsCsvLoading(true);
+                  // Simulate loading delay for better UX
+                  setTimeout(() => {
+                    setIsCsvDialogOpen(true);
+                    setIsCsvLoading(false);
+                  }, 800);
                 }}
                 className="bg-white dark:bg-gray-800 dark:border-gray-700 dark:hover:bg-gray-700"
               >
-                <Upload className="mr-2 h-4 w-4" /> Import CSV
+                {isCsvLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
+                Import CSV
               </Button>
               <Sheet open={isAiSheetOpen} onOpenChange={setIsAiSheetOpen}>
                 <SheetTrigger asChild>

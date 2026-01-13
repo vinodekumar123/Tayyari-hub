@@ -89,7 +89,7 @@ export function AiBulkGenerateDialog({
 
     return (
         <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-            <DialogContent className="sm:max-w-[80vw] w-[80vw]">
+            <DialogContent className="sm:max-w-[80vw] w-[80vw] h-[80vh] flex flex-col">
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-2 text-xl">
                         <Sparkles className="w-5 h-5 text-purple-600" />
@@ -100,7 +100,7 @@ export function AiBulkGenerateDialog({
                     </DialogDescription>
                 </DialogHeader>
 
-                <div className="space-y-6 py-4">
+                <div className="flex-1 overflow-y-auto py-4 px-1 space-y-6">
                     <Tabs value={mode} onValueChange={(v: any) => setMode(v)} className="w-full">
                         <TabsList className="grid w-full grid-cols-2">
                             <TabsTrigger value="parse">
