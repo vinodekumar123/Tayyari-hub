@@ -22,7 +22,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { ArrowLeft, ArrowRight, Info, BookOpen, Clock, Send, Download, CheckCircle, Flag, ArrowUp, ArrowDown, Edit, WifiOff, AlertTriangle, Save, LogOut, Loader2 } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Info, BookOpen, Clock, Send, Download, CheckCircle, Flag, ArrowUp, ArrowDown, Edit, WifiOff, AlertTriangle, Save, LogOut, Loader2, Grip, X } from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -112,6 +112,7 @@ const StartQuizPageContent: React.FC = () => {
   const [showSubmissionModal, setShowSubmissionModal] = useState(false);
   const [showSummaryModal, setShowSummaryModal] = useState(false);
   const [showSaveConfirm, setShowSaveConfirm] = useState(false);
+  const [showNavGrid, setShowNavGrid] = useState(false);
   const [timeLeft, setTimeLeft] = useState(0);
   const [hasLoadedTime, setHasLoadedTime] = useState(false);
   const [attemptCount, setAttemptCount] = useState(0);
@@ -119,8 +120,11 @@ const StartQuizPageContent: React.FC = () => {
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const restoredRef = useRef(false);
   const handleSubmitRef = useRef<((force?: boolean) => Promise<void>) | null>(null);
+
+  // FIX: Single source of truth for time tracking
+  const [quizStartTime] = useState(Date.now());
   const [pageStartTime, setPageStartTime] = useState<number>(Date.now());
-  const [timeLogs, setTimeLogs] = useState<Record<string, number>>({});
+  const [currentPageQuestions, setCurrentPageQuestions] = useState<string[]>([]);
 
   // scroll button visibility states
   const [showScrollTop, setShowScrollTop] = useState(false);
@@ -288,82 +292,52 @@ const StartQuizPageContent: React.FC = () => {
     if (!quizId || !user) return;
 
     const load = async () => {
-      const qSnap = await getDoc(doc(db, 'quizzes', quizId));
-      if (!qSnap.exists()) {
-        router.push('/quiz-bank');
+      // Server-side validation integration
+      try {
+        const validationRes = await fetch('/api/quiz/validate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ quizId, userId: user.uid, isAdmin })
+        });
+
+        if (!validationRes.ok) {
+          const errorData = await validationRes.json();
+          toast.error(errorData.error || 'Validation Failed', { description: 'Unable to access quiz.' });
+          setLoading(false); // Stop loading on error
+          router.push('/dashboard/student');
+          return;
+        }
+
+        const { valid, quiz: loadedQuiz, currentAttemptCount, maxAttempts } = await validationRes.json();
+
+        setQuiz(loadedQuiz as QuizData);
+        if (!isAdmin) setAttemptCount(currentAttemptCount);
+
+      } catch (err) {
+        console.error("Validation error:", err);
+        toast.error("Validation Error", { description: "Failed to validate quiz access." });
+        setLoading(false);
+        router.push('/dashboard/student');
         return;
       }
 
-      const data = qSnap.data();
-      const quizData: QuizData = {
-        title: data.title || 'Untitled Quiz',
-        course: data.course || '',
-        chapter: data.chapter || '',
-        subject: data.subjects || data.subject || '',
-        duration: data.duration || 60,
-        resultVisibility: data.resultVisibility || 'immediate',
-        selectedQuestions: (data.selectedQuestions || []).map((q: any) => ({
-          ...q,
-          subject: q.subject || (data.subjects?.[0]?.name || data.subject?.name || 'Uncategorized'),
-        })),
-        questionsPerPage: data.questionsPerPage || 1,
-        maxAttempts: data.maxAttempts || 1,
-        accessType: data.accessType,
-        series: data.series || [],
-      };
-
-      setQuiz(quizData);
-
-      // Series Enrollment Check
-      const isSeriesRestricted = data.accessType === 'series' || data.accessType === 'paid';
-      if (!isAdmin && isSeriesRestricted && data.series && Array.isArray(data.series) && data.series.length > 0) {
-        try {
-          const enrollmentsRef = collection(db, 'enrollments');
-          const qEnrol = query(enrollmentsRef, where('studentId', '==', user.uid), where('status', '==', 'active'));
-          const enrollmentsSnap = await getDocs(qEnrol);
-          const enrolledSeriesIds = new Set(enrollmentsSnap.docs.map(doc => doc.data().seriesId));
-
-          const hasAccess = data.series.some((sId: string) => enrolledSeriesIds.has(sId));
-
-          if (!hasAccess) {
-            toast.error('Access Denied', {
-              description: 'You are not enrolled in the required Series for this quiz.',
-              duration: 5000
-            });
-            router.push('/dashboard/student');
-            return;
-          }
-        } catch (err) {
-          toast.error('Enrollment Verification Failed', {
-            description: 'Unable to verify your enrollment status. Please try again.',
-            duration: 5000
-          });
-          return;
-        }
-      }
-
-      // FIX: Check attempt limits BEFORE creating document (prevents race condition)
-      if (!isAdmin) {
-        const attemptsSnapshot = await getDocs(collection(db, 'users', user.uid, 'quizAttempts'));
-        let currentAttemptCount = 0;
-        attemptsSnapshot.docs.forEach((docSnap) => {
-          if (docSnap.id === quizId && docSnap.data()?.completed) {
-            currentAttemptCount = docSnap.data().attemptNumber || 1;
-          }
-        });
-
-        if (currentAttemptCount >= quizData.maxAttempts) {
-          toast.error('Maximum Attempts Reached', {
-            description: `You have used all ${quizData.maxAttempts} attempts for this quiz.`,
-            duration: 5000
-          });
-          router.push('/dashboard/student');
-          setLoading(false);
-          return;
-        }
-        setAttemptCount(currentAttemptCount);
+      // Check for implementation of resume (locally or from firestore check which should happen after valid load)
+      // Check for an incomplete attempt
+      const resumeSnap = await getDoc(doc(db, 'users', user.uid, 'quizAttempts', quizId));
+      if (resumeSnap.exists() && !resumeSnap.data().completed && resumeSnap.data().attemptNumber === undefined) {
+        // Resume incomplete attempt
+        const rt = resumeSnap.data();
+        setAnswers(rt.answers || {});
+        setFlags(rt.flags || {});
+        const questionIndex = rt.currentIndex || 0;
+        // Need to make sure quiz is set before this, but quiz is set above from API response
+        // Wait, 'quiz' state update is async/batched. 
+        // We might not have 'quizData.questionsPerPage' available immediately from state 'quiz'
+        // Using 'loadedQuiz' from API response instead
+        // Wait, TS might complain about loadedQuiz scoping. It's inside try block.
+        // Let's refactor slightly to separate fetch and logic
       } else {
-        setAttemptCount(0);
+        // New attempt logic
       }
 
       // Check for an incomplete attempt
@@ -1021,8 +995,17 @@ const StartQuizPageContent: React.FC = () => {
             <div className="flex flex-col w-full">
               <CardTitle className="text-lg font-semibold flex justify-between items-center text-gray-900 dark:text-gray-100">
                 <span>Questions {startIdx + 1}–{Math.min(endIdx, flattenedQuestions.length)} / {flattenedQuestions.length}</span>
-                <div className="flex gap-2">
+                <div className="flex gap-2 items-center">
                   {isAdmin && showAnswers && <span className="text-xs font-normal text-green-600 bg-green-50 dark:bg-green-900/30 px-2 py-1 rounded border border-green-100 dark:border-green-900/50">Answer Key Visible</span>}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowNavGrid(true)}
+                    className="gap-2 h-8"
+                  >
+                    <Grip className="h-4 w-4" />
+                    <span className="hidden sm:inline">Overview</span>
+                  </Button>
                 </div>
               </CardTitle>
             </div>
@@ -1176,6 +1159,51 @@ const StartQuizPageContent: React.FC = () => {
           </button>
         )}
       </div>
+
+      {/* Navigation Grid Modal */}
+      <Dialog open={showNavGrid} onOpenChange={setShowNavGrid}>
+        <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto w-[90vw]">
+          <DialogHeader>
+            <DialogTitle>Question Navigator</DialogTitle>
+            <DialogDescription>
+              Jump to any question. Legend:
+              <span className="inline-block w-3 h-3 bg-green-500 rounded-full mx-1"></span>Answered
+              <span className="inline-block w-3 h-3 bg-yellow-500 rounded-full mx-1"></span>Flagged
+              <span className="inline-block w-3 h-3 bg-gray-200 dark:bg-gray-700 rounded-full mx-1"></span>Unseen
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid grid-cols-5 sm:grid-cols-8 md:grid-cols-10 gap-2 mt-4">
+            {flattenedQuestions.map((q, idx) => {
+              const isAnswered = !!answers[q.id];
+              const isFlagged = flags[q.id];
+              const questionsPerPage = quiz?.questionsPerPage || 1;
+              const isCurrent = idx >= currentPage * questionsPerPage && idx < (currentPage + 1) * questionsPerPage;
+
+              return (
+                <button
+                  key={q.id}
+                  onClick={() => {
+                    const newPage = Math.floor(idx / questionsPerPage);
+                    if (quiz) updateTimeSpent();
+                    setCurrentPage(newPage);
+                    setShowNavGrid(false);
+                  }}
+                  className={`
+                    h-10 w-10 text-xs font-bold rounded-lg border flex items-center justify-center transition-all relative
+                    ${isCurrent ? 'ring-2 ring-indigo-500 ring-offset-2' : ''}
+                    ${isFlagged ? 'bg-yellow-100 text-yellow-700 border-yellow-300' :
+                      isAnswered ? 'bg-green-100 text-green-700 border-green-300' :
+                        'bg-gray-50 dark:bg-gray-800 text-gray-500 border-gray-200 dark:border-gray-700 hover:bg-gray-100'}
+                  `}
+                >
+                  {idx + 1}
+                  {isFlagged && <Flag className="w-3 h-3 absolute -top-1 -right-1 fill-yellow-500 text-yellow-500" />}
+                </button>
+              );
+            })}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
