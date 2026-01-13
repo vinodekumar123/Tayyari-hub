@@ -110,7 +110,7 @@ export function CsvImporter({
             setStep('preview');
             loadedRef.current = true;
         }
-    }, [initialData, isOpen]);
+    }, [initialData, isOpen, validateRow]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const reset = () => {
         setStep('upload');
