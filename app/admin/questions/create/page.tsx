@@ -380,6 +380,8 @@ const CreateQuestionPageContent = () => {
         year,
         book,
         teacher: userName || 'Admin', // Save current user NAME
+        teacherId: auth.currentUser?.uid, // Essential for RBAC
+        createdBy: auth.currentUser?.uid, // Standard Audit Field
         type: 'multiple-choice', // Default type
         updatedAt: serverTimestamp()
       };
@@ -462,6 +464,7 @@ const CreateQuestionPageContent = () => {
           book,
           teacher: userName || 'Admin', // Save current user NAME
           teacherId: auth.currentUser?.uid, // Save current user ID for filtering
+          createdBy: auth.currentUser?.uid, // Standard Audit Field
 
           status: 'published',
           type: 'multiple-choice',

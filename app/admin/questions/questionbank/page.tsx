@@ -39,6 +39,15 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuPortal,
 } from "@/components/ui/dropdown-menu";
+import { Calendar } from "@/components/ui/calendar";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { DateRange } from "react-day-picker";
+import { addDays, format } from "date-fns";
+import { Calendar as CalendarIcon } from "lucide-react";
 import {
   Sheet,
   SheetContent,
@@ -49,6 +58,7 @@ import {
   SheetFooter,
   SheetClose
 } from "@/components/ui/sheet";
+import { cn } from "@/lib/utils";
 import {
   Select,
   SelectContent,
@@ -205,6 +215,7 @@ export default function QuestionBankPage() {
   }>({});
 
   // Filters
+  // Filters
   const [searchQuery, setSearchQuery] = useState('');
   const [filterCourse, setFilterCourse] = useState('All');
   const [filterSubject, setFilterSubject] = useState('All');
@@ -212,10 +223,20 @@ export default function QuestionBankPage() {
   const [filterYear, setFilterYear] = useState('All');
   const [filterStatus, setFilterStatus] = useState('All');
 
-  // Metadata for filter options (mocked or fetched)
+  // New Filters
+  const [filterTeacher, setFilterTeacher] = useState('All');
+  const [filterChapter, setFilterChapter] = useState('All');
+  const [dateRange, setDateRange] = useState<DateRange | undefined>();
+
+  // Metadata
   const [availableSubjects, setAvailableSubjects] = useState<string[]>([]);
   const [availableCourses, setAvailableCourses] = useState<string[]>([]);
   const [availableYears, setAvailableYears] = useState<string[]>([]);
+
+  // Full Data for Dropdowns
+  const [allSubjectsData, setAllSubjectsData] = useState<any[]>([]);
+  const [teachersList, setTeachersList] = useState<{ uid: string, name: string }[]>([]);
+  const [availableChapters, setAvailableChapters] = useState<string[]>([]);
 
   // Scroll To Top Logic
   const [showScrollTop, setShowScrollTop] = useState(false);
@@ -231,6 +252,54 @@ export default function QuestionBankPage() {
   const scrollToTop = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
+
+  // Fetch Metadata (Subjects & Teachers) independently
+  useEffect(() => {
+    const fetchMetadata = async () => {
+      try {
+        // Fetch Subjects
+        const subSnap = await getDocs(collection(db, 'subjects'));
+        const subs = subSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+        setAllSubjectsData(subs);
+
+        // Fetch Teachers (Users with role 'teacher' or 'admin'?? Just teachers for now)
+        // Note: 'users' collection might be large, but filtering by role 'teacher' requires index.
+        // Fallback: Fetch all if small app, or try query.
+        try {
+          const teacherQuery = query(collection(db, 'users'), where('role', '==', 'teacher'));
+          const tSnap = await getDocs(teacherQuery);
+          const tech = tSnap.docs.map(d => ({
+            uid: d.id,
+            name: d.data().name || d.data().displayName || d.data().email || 'Unknown'
+          }));
+          // Also add Admins? Maybe separately.
+          setTeachersList(tech);
+        } catch (e) {
+          console.warn("Could not fetch teachers list (missing index?)", e);
+        }
+
+      } catch (e) {
+        console.error("Error fetching metadata", e);
+      }
+    };
+    fetchMetadata();
+  }, []);
+
+  // Update Available Chapters when Subject changes
+  useEffect(() => {
+    if (filterSubject !== 'All') {
+      const sub = allSubjectsData.find(s => s.name === filterSubject);
+      if (sub && sub.chapters) {
+        setAvailableChapters(Object.keys(sub.chapters));
+      } else {
+        setAvailableChapters([]);
+      }
+    } else {
+      setAvailableChapters([]);
+    }
+    // Reset chapter filter if subject changes
+    setFilterChapter('All');
+  }, [filterSubject, allSubjectsData]);
 
 
 
@@ -263,6 +332,10 @@ export default function QuestionBankPage() {
 
       if (filterStatus !== 'All') constraints.push(where('status', '==', filterStatus));
 
+      // New Server Side Filters
+      if (filterTeacher !== 'All') constraints.push(where('teacherId', '==', filterTeacher));
+      if (filterChapter !== 'All') constraints.push(where('chapter', '==', filterChapter));
+
       // Server-Side Filtering for Deleted Items Only
       // We ONLY apply this constraint if we are looking for the Delete Bin.
       // For "Active" items, we cannot simply say `where('isDeleted', '==', false)` because
@@ -293,8 +366,8 @@ export default function QuestionBankPage() {
 
       // Client-side filtering:
       // 1. Search Query
-      // 2. isDeleted (Only for Active view, to filter out deleted ones that slipped in if any, 
-      //    but mainly to handle the legacy 'undefined' case correctly).
+      // 2. isDeleted 
+      // 3. Date Range (To avoid composite index hell)
       const filtered = fetched.filter(q => {
         const matchesSearch = searchQuery ? q.questionText.toLowerCase().includes(searchQuery.toLowerCase()) : true;
 
@@ -302,7 +375,22 @@ export default function QuestionBankPage() {
         // We include items where isDeleted is false OR undefined.
         const matchesStatus = showDeleted ? true : (q.isDeleted !== true);
 
-        return matchesSearch && matchesStatus;
+        // Date Logic
+        let matchesDate = true;
+        if (dateRange && dateRange.from) {
+          const qDate = q.createdAt;
+          if (qDate) {
+            if (dateRange.from && qDate < dateRange.from) matchesDate = false;
+            if (dateRange.to) {
+              // End of day
+              const endOfDay = new Date(dateRange.to);
+              endOfDay.setHours(23, 59, 59, 999);
+              if (qDate > endOfDay) matchesDate = false;
+            }
+          }
+        }
+
+        return matchesSearch && matchesStatus && matchesDate;
       });
 
       console.log("Total fetched:", fetched.length, "After filtering:", filtered.length);
@@ -320,7 +408,8 @@ export default function QuestionBankPage() {
       setLastDoc(snapshot.docs[snapshot.docs.length - 1]);
       setHasMore(snapshot.docs.length === ITEMS_PER_PAGE);
 
-      // Extract unique values for filters
+      // Extract unique values for filters (from FETCHED data - adaptive)
+      // Note: For Chapter/Teacher, we rely on the full lists we fetched separately.
       const subjects = new Set([...availableSubjects, ...fetched.map(q => q.subject || '')].filter(Boolean));
       setAvailableSubjects(Array.from(subjects));
 
@@ -338,14 +427,14 @@ export default function QuestionBankPage() {
     } finally {
       setLoading(false);
     }
-  }, [filterCourse, filterSubject, filterDifficulty, filterYear, filterStatus, searchQuery, showDeleted, lastDoc]); // eslint-disable-line
+  }, [filterCourse, filterSubject, filterDifficulty, filterYear, filterStatus, filterTeacher, filterChapter, dateRange, searchQuery, showDeleted, lastDoc]); // eslint-disable-line
 
   // Filters Change Effect (Reset & Fetch)
   // Removed searchQuery from dependency to prevent auto-reload on type
   useEffect(() => {
     setLastDoc(null);
     fetchQuestions(false);
-  }, [filterCourse, filterSubject, filterDifficulty, filterYear, filterStatus, showDeleted]); // eslint-disable-line
+  }, [filterCourse, filterSubject, filterDifficulty, filterYear, filterStatus, filterTeacher, filterChapter, dateRange, showDeleted]); // eslint-disable-line
 
   // Handle Search Explicitly
   const handleSearch = () => {
@@ -591,6 +680,7 @@ export default function QuestionBankPage() {
                 <SheetDescription>Refine your view by specific attributes.</SheetDescription>
               </SheetHeader>
               <div className="py-6 space-y-4">
+                {/* Course Filter */}
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Course</label>
                   <Select value={filterCourse} onValueChange={setFilterCourse}>
@@ -601,32 +691,85 @@ export default function QuestionBankPage() {
                     </SelectContent>
                   </Select>
                 </div>
+
+                {/* Subject Filter */}
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Subject</label>
-                  <Select
-                    value={filterSubject}
-                    onValueChange={setFilterSubject}
-                    disabled={userRole === 'teacher' && teacherSubjects.length === 1} // Lock if only 1 subject
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="All Subjects" />
-                    </SelectTrigger>
+                  <Select value={filterSubject} onValueChange={setFilterSubject}>
+                    <SelectTrigger><SelectValue placeholder="All Subjects" /></SelectTrigger>
                     <SelectContent>
-                      {userRole !== 'teacher' && <SelectItem value="All">All Subjects</SelectItem>}
-
-                      {/* Show intersection of availableSubjects and teacherSubjects if teacher, else all avail */}
-                      {availableSubjects
-                        .filter(s => userRole !== 'teacher' || teacherSubjects.includes(s))
-                        .map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-
-                      {/* Also add teacher subjects that might not be in the questions list yet, to allow filtering for empty new subjects */}
-                      {userRole === 'teacher' && teacherSubjects
-                        .filter(s => !availableSubjects.includes(s))
-                        .map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-
+                      <SelectItem value="All">All Subjects</SelectItem>
+                      {availableSubjects.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
+
+                {/* Chapter Filter */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Chapter</label>
+                  <Select value={filterChapter} onValueChange={setFilterChapter} disabled={filterSubject === 'All'}>
+                    <SelectTrigger><SelectValue placeholder="All Chapters" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="All">All Chapters</SelectItem>
+                      {availableChapters.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Teacher Filter */}
+                {(userRole === 'admin' || isSuperAdmin) && (
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Teacher</label>
+                    <Select value={filterTeacher} onValueChange={setFilterTeacher}>
+                      <SelectTrigger><SelectValue placeholder="All Teachers" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="All">All Teachers</SelectItem>
+                        {teachersList.map(t => <SelectItem key={t.uid} value={t.uid}>{t.name}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+
+                {/* Date Filter */}
+                <div className="space-y-2 flex flex-col">
+                  <label className="text-sm font-medium">Date Range</label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant={"outline"}
+                        className={cn(
+                          "w-[240px] justify-start text-left font-normal",
+                          !dateRange && "text-muted-foreground"
+                        )}
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {dateRange?.from ? (
+                          dateRange.to ? (
+                            <>
+                              {format(dateRange.from, "LLL dd, y")} -{" "}
+                              {format(dateRange.to, "LLL dd, y")}
+                            </>
+                          ) : (
+                            format(dateRange.from, "LLL dd, y")
+                          )
+                        ) : (
+                          <span>Pick a date</span>
+                        )}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        initialFocus
+                        mode="range"
+                        defaultMonth={dateRange?.from}
+                        selected={dateRange}
+                        onSelect={setDateRange}
+                        numberOfMonths={2}
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Difficulty</label>
                   <Select value={filterDifficulty} onValueChange={setFilterDifficulty}>
@@ -668,49 +811,51 @@ export default function QuestionBankPage() {
                 </SheetClose>
               </SheetFooter>
             </SheetContent>
-          </Sheet>
-        </div>
+          </Sheet >
+        </div >
 
         {/* Bulk Actions */}
-        {selectedQuestions.length > 0 && (
-          <div className="flex items-center gap-2 bg-blue-50 dark:bg-blue-900/30 px-4 py-2 rounded-lg border border-blue-100 dark:border-blue-800 animate-in fade-in slide-in-from-top-2">
-            <span className="text-sm font-medium text-blue-700 dark:text-blue-300">{selectedQuestions.length} Selected</span>
-            <div className="h-4 w-px bg-blue-200 dark:bg-blue-700 mx-2" />
+        {
+          selectedQuestions.length > 0 && (
+            <div className="flex items-center gap-2 bg-blue-50 dark:bg-blue-900/30 px-4 py-2 rounded-lg border border-blue-100 dark:border-blue-800 animate-in fade-in slide-in-from-top-2">
+              <span className="text-sm font-medium text-blue-700 dark:text-blue-300">{selectedQuestions.length} Selected</span>
+              <div className="h-4 w-px bg-blue-200 dark:bg-blue-700 mx-2" />
 
-            {/* Only Admins/SuperAdmins can Delete/Restore generally. Teachers might delete their own, but let's restrict bulk delete for safety or allow if owner logic is complex. 
+              {/* Only Admins/SuperAdmins can Delete/Restore generally. Teachers might delete their own, but let's restrict bulk delete for safety or allow if owner logic is complex. 
                 For now, restrict Soft/Hard Delete to Admins. Teachers can only Update. 
              */}
-            {(isSuperAdmin || userRole === 'admin') && (
-              <>
-                {!showDeleted ? (
-                  <Button size="sm" variant="ghost" className="text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/30" onClick={handleSoftDelete}>
-                    <Trash2 className="h-4 w-4 mr-1" /> Delete
-                  </Button>
-                ) : (
-                  <>
-                    <Button size="sm" variant="ghost" className="text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 hover:bg-green-50 dark:hover:bg-green-900/30" onClick={handleRestore}>
-                      <RefreshCw className="h-4 w-4 mr-1" /> Restore
+              {(isSuperAdmin || userRole === 'admin') && (
+                <>
+                  {!showDeleted ? (
+                    <Button size="sm" variant="ghost" className="text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/30" onClick={handleSoftDelete}>
+                      <Trash2 className="h-4 w-4 mr-1" /> Delete
                     </Button>
-                    <Button size="sm" variant="ghost" className="text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/30" onClick={handlePermanentDelete}>
-                      <AlertTriangle className="h-4 w-4 mr-1" /> Permanent Delete
-                    </Button>
-                  </>
-                )}
-              </>
-            )}
+                  ) : (
+                    <>
+                      <Button size="sm" variant="ghost" className="text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 hover:bg-green-50 dark:hover:bg-green-900/30" onClick={handleRestore}>
+                        <RefreshCw className="h-4 w-4 mr-1" /> Restore
+                      </Button>
+                      <Button size="sm" variant="ghost" className="text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/30" onClick={handlePermanentDelete}>
+                        <AlertTriangle className="h-4 w-4 mr-1" /> Permanent Delete
+                      </Button>
+                    </>
+                  )}
+                </>
+              )}
 
-            <Button size="sm" variant="ghost" className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/30" onClick={() => setIsBatchEditing(true)}>
-              <Edit className="h-4 w-4 mr-1" /> Update
-            </Button>
-            <Button size="sm" variant="ghost" className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/30" onClick={handleExport}>
-              <Download className="h-4 w-4 mr-1" /> Export
-            </Button>
-          </div>
-        )}
-      </div>
+              <Button size="sm" variant="ghost" className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/30" onClick={() => setIsBatchEditing(true)}>
+                <Edit className="h-4 w-4 mr-1" /> Update
+              </Button>
+              <Button size="sm" variant="ghost" className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/30" onClick={handleExport}>
+                <Download className="h-4 w-4 mr-1" /> Export
+              </Button>
+            </div>
+          )
+        }
+      </div >
 
       {/* Main Table */}
-      <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden">
+      < div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden" >
         <Table>
           <TableHeader className="bg-gray-50/50 dark:bg-gray-800/50">
             <TableRow className="border-gray-200 dark:border-gray-800">
@@ -722,6 +867,7 @@ export default function QuestionBankPage() {
               </TableHead>
               <TableHead className="w-[40%] text-gray-700 dark:text-gray-300">Question</TableHead>
               <TableHead className="text-gray-700 dark:text-gray-300">Metadata</TableHead>
+              <TableHead className="text-gray-700 dark:text-gray-300">Added By</TableHead>
               <TableHead className="text-gray-700 dark:text-gray-300">Stats</TableHead>
               <TableHead className="text-gray-700 dark:text-gray-300">Details</TableHead>
               <TableHead className="text-right text-gray-700 dark:text-gray-300">Actions</TableHead>
@@ -789,6 +935,17 @@ export default function QuestionBankPage() {
                                 `}>
                         {question.status || 'draft'}
                       </Badge>
+                    </div>
+
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex flex-col gap-1 text-[10px]">
+                      <span className="font-medium text-gray-700 dark:text-gray-300">
+                        {question.teacher || 'System'}
+                      </span>
+                      <span className="text-muted-foreground text-[9px]">
+                        {question.isDeleted ? '(Deleted)' : ''}
+                      </span>
                     </div>
                   </TableCell>
                   <TableCell className="text-right">
@@ -874,27 +1031,30 @@ export default function QuestionBankPage() {
         </Table>
 
         {/* Sentinel for Infinite Scroll */}
-        {hasMore && (
-          <div
-            className="p-8 flex justify-center items-center"
-            ref={(node) => {
-              if (loading) return;
-              const obs = new IntersectionObserver(entries => {
-                if (entries[0].isIntersecting && hasMore) {
-                  fetchQuestions(true);
-                }
-              }, { threshold: 1.0 });
-              if (node) obs.observe(node);
-            }}
-          >
-            {loading && <div className="text-gray-400 text-sm animate-pulse">Loading more questions...</div>}
-            {!loading && <div ref={lastQuestionElementRef as any} className="h-10 w-full" />}
-          </div>
-        )}
-      </div>
+        {
+          hasMore && (
+            <div
+              className="p-8 flex justify-center items-center"
+              ref={(node) => {
+                if (loading) return;
+                const obs = new IntersectionObserver(entries => {
+                  if (entries[0].isIntersecting && hasMore) {
+                    fetchQuestions(true);
+                  }
+                }, { threshold: 1.0 });
+                if (node) obs.observe(node);
+              }}
+            >
+              {loading && <div className="text-gray-400 text-sm animate-pulse">Loading more questions...</div>}
+              {!loading && <div ref={lastQuestionElementRef as any} className="h-10 w-full" />}
+            </div>
+          )
+        }
+      </div >
 
       {/* Preview Modal */}
-      <Dialog open={!!previewQuestion} onOpenChange={(open) => !open && setPreviewQuestion(null)}>
+      < Dialog open={!!previewQuestion
+      } onOpenChange={(open) => !open && setPreviewQuestion(null)}>
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Question Preview</DialogTitle>
@@ -1027,14 +1187,16 @@ export default function QuestionBankPage() {
 
 
       {/* Scroll To Top Button */}
-      {showScrollTop && (
-        <Button
-          className="fixed bottom-8 right-8 rounded-full shadow-lg z-50 p-3 h-12 w-12 bg-blue-600 hover:bg-blue-700 text-white animate-in fade-in slide-in-from-bottom-4"
-          onClick={scrollToTop}
-        >
-          <ArrowUp className="h-6 w-6" />
-        </Button>
-      )}
+      {
+        showScrollTop && (
+          <Button
+            className="fixed bottom-8 right-8 rounded-full shadow-lg z-50 p-3 h-12 w-12 bg-blue-600 hover:bg-blue-700 text-white animate-in fade-in slide-in-from-bottom-4"
+            onClick={scrollToTop}
+          >
+            <ArrowUp className="h-6 w-6" />
+          </Button>
+        )
+      }
 
     </div >
   );

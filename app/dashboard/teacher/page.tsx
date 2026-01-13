@@ -11,6 +11,8 @@ import {
     getDocs,
     doc,
     getDoc,
+    orderBy,
+    limit,
     documentId
 } from 'firebase/firestore';
 import {
@@ -22,6 +24,16 @@ import { Skeleton } from '@/components/ui/skeleton';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import { cn, shadows, animations, glassmorphism } from '@/lib/design-tokens';
+import {
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
+} from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { formatDistanceToNow } from 'date-fns';
 
 // --- Types ---
 type TeacherStats = {
@@ -141,6 +153,7 @@ export default function TeacherDashboard() {
         assignedSubjectsCount: 0,
         subjects: []
     });
+    const [recentQuestions, setRecentQuestions] = useState<any[]>([]);
 
     // Auth Protection & Data Fetching
     useEffect(() => {
@@ -172,18 +185,50 @@ export default function TeacherDashboard() {
                     // Fetch Stats
                     const subjects = userData.subjects || [];
 
-                    // Count Questions created by this user (Assuming createdBy field exists or we loosely count)
-                    // Actually question creation usually tracks 'createdBy'
-                    // If 'createdBy' isn't indexed, this might fail. For now, let's try.
-                    // If not indexed, we might skip or handle error. Safest is to just count subjects for now 
-                    // or use the 'questions' collection if indexed.
-
                     let myQuestionsCount = 0;
                     try {
-                        const qSnap = await getCountFromServer(query(collection(db, 'questions'), where('createdBy', '==', user.uid)));
+                        // Check for modern 'teacherId' first
+                        const qQuery = query(collection(db, 'questions'), where('teacherId', '==', user.uid));
+                        const qSnap = await getCountFromServer(qQuery);
                         myQuestionsCount = qSnap.data().count;
+
+                        // Fallback or Merge logic? 
+                        // Actually, if we are transitioning, we might want to check BOTH 'teacherId' OR 'createdBy'
+                        // But Firestore doesn't support logical OR in queries easily without multiple requests.
+                        // Assuming 'teacherId' is populated for all new ones.
+                        // For legacy: check 'createdBy' if count is 0?
+                        if (myQuestionsCount === 0) {
+                            const legacyQuery = query(collection(db, 'questions'), where('createdBy', '==', user.uid));
+                            const legacySnap = await getCountFromServer(legacyQuery);
+                            myQuestionsCount = legacySnap.data().count;
+                        }
+
+                        // Fetch Recent Questions
+                        const recentQuery = query(
+                            collection(db, 'questions'),
+                            where('teacherId', '==', user.uid),
+                            orderBy('createdAt', 'desc'),
+                            limit(5)
+                        );
+                        // Warning: orderBy needs index with where.
+                        // If index missing, it might fail. We wrap in try specific for this.
+                        const recentSnap = await getDocs(recentQuery);
+                        if (!recentSnap.empty) {
+                            setRecentQuestions(recentSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+                        } else {
+                            // Try fallback createdBy
+                            const recentLegacy = query(
+                                collection(db, 'questions'),
+                                where('createdBy', '==', user.uid),
+                                orderBy('createdAt', 'desc'),
+                                limit(5)
+                            );
+                            const recentLegacySnap = await getDocs(recentLegacy);
+                            setRecentQuestions(recentLegacySnap.docs.map(d => ({ id: d.id, ...d.data() })));
+                        }
+
                     } catch (e) {
-                        console.warn("Could not fetch my questions count (index might be missing)", e);
+                        console.warn("Could not fetch my questions count/list (index might be missing)", e);
                     }
 
                     // Reports (Involving assigned subjects)
@@ -381,6 +426,63 @@ export default function TeacherDashboard() {
                         href="/dashboard/teacher/reports"
                         colorClass="bg-amber-500"
                     />
+                </div>
+
+                {/* Recent Questions */}
+                <div className="mt-8 animate-in fade-in slide-in-from-bottom-12 duration-700 delay-200">
+                    <h2 className="text-xl font-bold text-foreground mb-4 flex items-center gap-2">
+                        <Activity className="w-5 h-5 text-blue-500" />
+                        Recently Added Questions
+                    </h2>
+
+                    <div className="bg-white/40 dark:bg-slate-900/40 backdrop-blur-xl border border-white/20 dark:border-slate-800 rounded-2xl overflow-hidden shadow-sm">
+                        <Table>
+                            <TableHeader>
+                                <TableRow className="hover:bg-transparent border-white/10 dark:border-slate-800">
+                                    <TableHead>Question</TableHead>
+                                    <TableHead>Subject</TableHead>
+                                    <TableHead>Difficulty</TableHead>
+                                    <TableHead>Added</TableHead>
+                                    <TableHead className="text-right">Action</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {recentQuestions.length === 0 ? (
+                                    <TableRow>
+                                        <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
+                                            No questions added yet.
+                                        </TableCell>
+                                    </TableRow>
+                                ) : (
+                                    recentQuestions.map((q) => (
+                                        <TableRow key={q.id} className="hover:bg-white/50 dark:hover:bg-slate-800/50 border-white/10 dark:border-slate-800 transition-colors">
+                                            <TableCell className="font-medium max-w-[300px] truncate">
+                                                <div dangerouslySetInnerHTML={{ __html: q.questionText?.substring(0, 60) + (q.questionText?.length > 60 ? '...' : '') }} />
+                                            </TableCell>
+                                            <TableCell>
+                                                <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-800">
+                                                    {q.subject}
+                                                </Badge>
+                                            </TableCell>
+                                            <TableCell>
+                                                <Badge variant={q.difficulty === 'Hard' ? 'destructive' : q.difficulty === 'Easy' ? 'secondary' : 'default'} className="text-[10px]">
+                                                    {q.difficulty}
+                                                </Badge>
+                                            </TableCell>
+                                            <TableCell className="text-muted-foreground text-xs">
+                                                {q.createdAt ? formatDistanceToNow(q.createdAt.toDate(), { addSuffix: true }) : 'Just now'}
+                                            </TableCell>
+                                            <TableCell className="text-right">
+                                                <Link href={`/admin/questions/create?id=${q.id}`} className="text-blue-600 hover:text-blue-500 text-sm font-medium">
+                                                    Edit
+                                                </Link>
+                                            </TableCell>
+                                        </TableRow>
+                                    ))
+                                )}
+                            </TableBody>
+                        </Table>
+                    </div>
                 </div>
 
             </main>

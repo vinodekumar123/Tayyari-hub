@@ -60,34 +60,22 @@ export default function FlashcardsPage() {
         return () => unsubscribe();
     }, []);
 
-    const fetchCards = async (isInitial = true) => {
-        if (!user) return;
-
-        if (isInitial) {
-            setLoading(true);
-        } else {
-            setLoadingMore(true);
-        }
+    const loadMoreCards = async () => {
+        if (!user || !lastDoc) return;
+        setLoadingMore(true);
 
         try {
-            let q = query(
+            const q = query(
                 collection(db, 'users', user.uid, 'flashcards'),
                 orderBy('savedAt', 'desc'),
-                limit(12)
+                limit(12),
+                startAfter(lastDoc)
             );
-
-            if (!isInitial && lastDoc) {
-                q = query(q, startAfter(lastDoc));
-            }
 
             const snap = await getDocs(q);
             const newCards = snap.docs.map(d => ({ id: d.id, ...d.data() })) as Flashcard[];
 
-            if (isInitial) {
-                setFlashcards(newCards);
-            } else {
-                setFlashcards(prev => [...prev, ...newCards]);
-            }
+            setFlashcards(prev => [...prev, ...newCards]);
 
             setLastDoc(snap.docs[snap.docs.length - 1] || null);
             setHasMore(snap.docs.length === 12);
@@ -95,15 +83,37 @@ export default function FlashcardsPage() {
             console.error("Error fetching flashcards", e);
             toast.error("Failed to load cards");
         } finally {
-            setLoading(false);
             setLoadingMore(false);
         }
     };
 
     useEffect(() => {
-        if (user) {
-            fetchCards(true);
-        }
+        if (!user) return;
+
+        const loadInitial = async () => {
+            setLoading(true);
+            try {
+                const q = query(
+                    collection(db, 'users', user.uid, 'flashcards'),
+                    orderBy('savedAt', 'desc'),
+                    limit(12)
+                );
+
+                const snap = await getDocs(q);
+                const newCards = snap.docs.map(d => ({ id: d.id, ...d.data() })) as Flashcard[];
+
+                setFlashcards(newCards);
+                setLastDoc(snap.docs[snap.docs.length - 1] || null);
+                setHasMore(snap.docs.length === 12);
+            } catch (e) {
+                console.error("Error fetching flashcards", e);
+                toast.error("Failed to load cards");
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        loadInitial();
     }, [user]);
 
     const startStudySession = () => {
@@ -416,7 +426,7 @@ export default function FlashcardsPage() {
                     <div className="mt-8 flex justify-center">
                         <Button
                             variant="outline"
-                            onClick={() => fetchCards(false)}
+                            onClick={loadMoreCards}
                             disabled={loadingMore}
                             className="w-full md:w-auto min-w-[200px]"
                         >

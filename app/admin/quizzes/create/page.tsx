@@ -138,23 +138,76 @@ function CreateQuizContent() {
   // Available question state
   const [availableQuestions, setAvailableQuestions] = useState<any[]>([]);
 
-  const fetchMoreQuestions = async () => {
+  // We need a ref to access current filters inside the async function without stale closures 
+  // if we were using useCallback, but here we can just read state if we include it in deps or call explicitly.
+
+  const fetchMoreQuestions = async (reset = false) => {
+    if (loadingQuestions) return;
     setLoadingQuestions(true);
     try {
       let q;
-      if (lastQuestionDoc) {
-        q = query(
-          collection(db, "questions"),
-          orderBy("createdAt", "desc"),
-          startAfter(lastQuestionDoc),
-          limit(20)
-        );
+      const constraints: any[] = [];
+      const { subjects, chapters, difficulty, topic } = quizConfig.questionFilters;
+
+      // Apply Filters
+      // Subject Filter (Array)
+      if (subjects.length > 0 && !subjects.includes('all-subjects')) {
+        // Firestore 'in' limitation: max 10. If more, we might need to fetch all or client side.
+        // For now, assume < 10 or just take first 10.
+        constraints.push(where('subject', 'in', subjects.slice(0, 10)));
+      }
+
+      // Chapter Filter (Array) 
+      // Note: Can't have multiple 'in' queries or 'array-contains-any' usually. 
+      // If Subject is filtered, usually we filter by that. Chapter is secondary.
+      // If we used 'in' for subject, we can't use 'in' for chapter.
+      // Strategy: Client-filter chapters if Subject 'in' is used, OR if only 1 subject, use '=='.
+      if (chapters.length > 0 && !chapters.includes('all-chapters')) {
+        if (subjects.length === 1 && !subjects.includes('all-subjects')) {
+          // If single subject, we can use 'in' for chapters
+          constraints.push(where('chapter', 'in', chapters.slice(0, 10)));
+        } else {
+          // If multiple subjects or all-subjects, we might hit limits. 
+          // Let's rely on client-side filtering for chapters after fetching by subject?
+          // Or better: Don't filter by chapter in query if multiple subjects.
+          // Wait, previous logic was pure client side.
+          // Let's try to add if no other 'in' clause conflicts.
+        }
+      }
+
+      if (difficulty && difficulty !== '__all-difficulties__') {
+        constraints.push(where('difficulty', '==', difficulty));
+      }
+      if (topic && topic !== '__all-topics__') {
+        constraints.push(where('topic', '==', topic));
+      }
+
+      // Ordering
+      // Ensure we have index for fields involved in equality + Sort.
+      // Default sort
+      const sortConstraint = orderBy("createdAt", "desc");
+
+      if (reset) {
+        if (constraints.length > 0) {
+          q = query(collection(db, "questions"), ...constraints, sortConstraint, limit(20));
+        } else {
+          q = query(collection(db, "questions"), sortConstraint, limit(20));
+        }
       } else {
-        q = query(
-          collection(db, "questions"),
-          orderBy("createdAt", "desc"),
-          limit(20)
-        );
+        if (lastQuestionDoc) {
+          if (constraints.length > 0) {
+            q = query(collection(db, "questions"), ...constraints, sortConstraint, startAfter(lastQuestionDoc), limit(20));
+          } else {
+            q = query(collection(db, "questions"), sortConstraint, startAfter(lastQuestionDoc), limit(20));
+          }
+        } else {
+          // Should not happen if not reset, but safe fallback
+          if (constraints.length > 0) {
+            q = query(collection(db, "questions"), ...constraints, sortConstraint, limit(20));
+          } else {
+            q = query(collection(db, "questions"), sortConstraint, limit(20));
+          }
+        }
       }
 
       const snapshot = await getDocs(q);
@@ -167,20 +220,33 @@ function CreateQuizContent() {
         };
       });
 
-      setAvailableQuestions(prev => [...prev, ...newQuestions]);
+      if (reset) {
+        setAvailableQuestions(newQuestions);
+      } else {
+        setAvailableQuestions(prev => [...prev, ...newQuestions]);
+      }
+
       setLastQuestionDoc(snapshot.docs[snapshot.docs.length - 1]);
     } catch (error) {
       console.error("Error fetching questions:", error);
+      // Fallback: If index error, maybe alert user or fallback to basic?
+      // For now log it.
     } finally {
       setLoadingQuestions(false);
     }
   };
 
-  // Initial Question Fetch
+  // Refetch questions when filters change (Server-Side Filtering Trigger)
   useEffect(() => {
-    fetchMoreQuestions();
+    setLastQuestionDoc(null);
+    fetchMoreQuestions(true);
     // eslint-disable-next-line
-  }, []); // Run once on mount
+  }, [
+    quizConfig.questionFilters.subjects,
+    quizConfig.questionFilters.chapters,
+    quizConfig.questionFilters.difficulty,
+    quizConfig.questionFilters.topic
+  ]);
 
   // Subjects by course
   useEffect(() => {
@@ -318,14 +384,25 @@ function CreateQuizContent() {
   };
 
   const handleCreateOrUpdateQuiz = async () => {
-    if (
-      !quizConfig.title ||
-      !quizConfig.course ||
-      (quizConfig.subjects.length === 0 && !quizConfig.subjects.includes('all-subjects')) ||
-      (quizConfig.accessType === 'series' && (!quizConfig.series || quizConfig.series.length === 0)) ||
-      quizConfig.selectedQuestions.length === 0
-    ) {
-      alert("Please fill in all required fields. If 'Series Exclusive', you must select at least one series.");
+    // Specific Validation Checks
+    if (!quizConfig.title) {
+      alert("Please enter a Quiz Title.");
+      return;
+    }
+    if (!quizConfig.course) {
+      alert("Please select a Course.");
+      return;
+    }
+    if (quizConfig.subjects.length === 0 && !quizConfig.subjects.includes('all-subjects')) {
+      alert("Please select at least one Subject.");
+      return;
+    }
+    if (quizConfig.accessType === 'series' && (!quizConfig.series || quizConfig.series.length === 0)) {
+      alert("For 'Series Exclusive' access, you must select at least one Series.");
+      return;
+    }
+    if (quizConfig.selectedQuestions.length === 0) {
+      alert("Please select at least one question for the quiz.");
       return;
     }
 
@@ -1081,7 +1158,7 @@ function CreateQuizContent() {
                   <div className="flex justify-center pt-8">
                     <Button
                       variant="outline"
-                      onClick={fetchMoreQuestions}
+                      onClick={() => fetchMoreQuestions()}
                       className="w-full md:w-auto min-w-[200px] h-12 bg-white/10 dark:bg-white/5 hover:bg-white/20 border-white/10 backdrop-blur-md"
                       disabled={loadingQuestions}
                     >

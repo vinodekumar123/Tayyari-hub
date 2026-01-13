@@ -193,7 +193,7 @@ export default function AdminQuizBankPage() {
     };
 
     fetchQuizzes();
-  }, [user, addToast, setUiLoading, filters.series]);
+  }, [user, addToast, setUiLoading, filters.series, cache]);
 
   // Client-side Filter for remaining fields
   const filteredQuizzes = useMemo(() => {
