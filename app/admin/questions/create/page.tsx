@@ -542,7 +542,7 @@ const CreateQuestionPageContent = () => {
                   </Button>
                 </SheetTrigger>
 
-                <SheetContent className="sm:max-w-xl overflow-y-auto">
+                <SheetContent className="sm:max-w-[80vw] w-[80vw] overflow-y-auto">
                   <SheetHeader>
                     <SheetTitle>Generate Questions with AI</SheetTitle>
                     <SheetDescription>

@@ -208,7 +208,7 @@ export function CsvImporter({
 
     return (
         <Dialog open={isOpen} onOpenChange={(open) => !open && handleClose()}>
-            <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden bg-background">
+            <DialogContent className="max-w-[80vw] w-[80vw] max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden bg-background">
 
                 {/* Header */}
                 <DialogHeader className="p-6 pb-4 border-b">
@@ -416,7 +416,7 @@ function EditRowDialog({ open, onOpenChange, rowData, onSave }: { open: boolean,
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col p-0 gap-0 overflow-hidden">
+            <DialogContent className="max-w-[80vw] w-[80vw] max-h-[85vh] flex flex-col p-0 gap-0 overflow-hidden">
                 <DialogHeader className="p-6 pb-2 border-b">
                     <DialogTitle>Edit Question Details</DialogTitle>
                     <DialogDescription>Modify the imported data for this row.</DialogDescription>

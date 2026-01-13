@@ -1055,7 +1055,7 @@ export default function QuestionBankPage() {
       {/* Preview Modal */}
       < Dialog open={!!previewQuestion
       } onOpenChange={(open) => !open && setPreviewQuestion(null)}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-[80vw] w-[80vw] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Question Preview</DialogTitle>
             <DialogDescription>
@@ -1239,7 +1239,7 @@ function QuestionAnalyticsSheet({ question, onClose }: { question: Question | nu
 
   return (
     <Sheet open={!!question} onOpenChange={(open) => !open && onClose()}>
-      <SheetContent className="sm:max-w-xl overflow-y-auto">
+      <SheetContent className="sm:max-w-[80vw] w-[80vw] overflow-y-auto">
         <SheetHeader>
           <SheetTitle className="flex items-center gap-2 text-2xl">
             <BarChart2 className="h-6 w-6 text-blue-600" />
