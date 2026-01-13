@@ -29,14 +29,16 @@ interface AiBulkGenerateDialogProps {
         subject: string;
         chapter: string;
         difficulty: string;
-    }
+    };
+    validChapters?: string[];
 }
 
 export function AiBulkGenerateDialog({
     isOpen,
     onClose,
     onGenerate,
-    defaultMetadata
+    defaultMetadata,
+    validChapters = []
 }: AiBulkGenerateDialogProps) {
     const [prompt, setPrompt] = useState('');
     const [count, setCount] = useState([10]);
@@ -62,7 +64,8 @@ export function AiBulkGenerateDialog({
                     count: count[0],
                     strictMode: strategy === 'strict',
                     correctGrammar,
-                    metadata: defaultMetadata
+                    metadata: defaultMetadata,
+                    validChapters
                 })
             });
 

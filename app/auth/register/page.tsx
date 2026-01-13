@@ -6,6 +6,7 @@ import { createUserWithEmailAndPassword, signInWithPopup } from "firebase/auth";
 import { auth, provider, db } from "../../firebase";
 import { doc, getDoc } from "firebase/firestore";
 import Link from "next/link";
+import { logUserSession } from "@/lib/sessionUtils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -30,7 +31,9 @@ export default function RegisterPage() {
     setIsLoading(true);
     document.body.style.cursor = "wait";
     try {
-      await createUserWithEmailAndPassword(auth, email, password);
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      // Log initial session for new user
+      await logUserSession(userCredential.user).catch(console.error);
       router.push("/auth/onboarding");
     } catch (err: any) {
       setError(
@@ -49,6 +52,9 @@ export default function RegisterPage() {
     try {
       const result = await signInWithPopup(auth, provider);
       const user = result.user;
+
+      // Log session for Google signup
+      await logUserSession(user).catch(console.error);
 
       // Check if user exists and is complete
       const userRef = doc(db, 'users', user.uid);

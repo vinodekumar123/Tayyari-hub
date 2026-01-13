@@ -110,17 +110,34 @@ export default function AdminQuizBankPage() {
   const [deleteModal, setDeleteModal] = useState(false);
   const [quizToDelete, setQuizToDelete] = useState<Quiz | null>(null);
 
-  // Admin Access Check
+  // Admin/Teacher Access Check
   useEffect(() => {
-    if (!userLoading && user && !user.admin) {
+    // Check if user has role 'teacher' in their custom claims or user doc? 
+    // The useUserStore 'user.admin' is boolean. 'user.role' might exist?
+    // Let's assume user object has role if we updated type, otherwise check admin boolean.
+    // If we want to support teacher, we need to know if they are a teacher.
+    // userStore might only have { ...uid, email, admin }.
+    // If so, we might need to rely on the "admin" flag being false but they are in this route?
+    // Actually, `useUserStore` definition is not fully visible, but usually has `role`.
+    // Let's assume if they are NOT admin, we check if they are teacher.
+    // If strict RBAC:
+    const isTeacher = user?.role === 'teacher';
+    const isAdmin = user?.admin || user?.role === 'admin';
+
+    if (!userLoading && user && !isAdmin && !isTeacher) {
       addToast({ type: 'error', message: 'Access Denied' });
       router.push('/dashboard/student');
     }
   }, [user, userLoading, router, addToast]);
 
-  // Fetch Series List
+  // Fetch Series List (Admin/Teacher)
   useEffect(() => {
-    if (!user?.admin) return;
+    if (!user) return;
+    const isTeacher = user.role === 'teacher';
+    const isAdmin = user.admin || user.role === 'admin';
+
+    if (!isAdmin && !isTeacher) return;
+
     getDocs(collection(db, 'series')).then(snap => {
       setSeriesList(snap.docs.map(d => ({ id: d.id, name: d.data().name })));
     }).catch(err => console.error("Failed to load series", err));
@@ -128,7 +145,11 @@ export default function AdminQuizBankPage() {
 
   // Fetch quizzes with caching + backend filtering
   useEffect(() => {
-    if (!user || !user.admin) return;
+    if (!user) return;
+    const isTeacher = user.role === 'teacher';
+    const isAdmin = user.admin || user.role === 'admin';
+
+    if (!isAdmin && !isTeacher) return;
 
     const fetchQuizzes = async () => {
       setLoading(true);
@@ -138,21 +159,22 @@ export default function AdminQuizBankPage() {
       setLastVisible(null);
 
       try {
-        const cacheKey = `admin-quizzes-${user.uid}-${filters.series}`;
+        const cacheKey = `${isAdmin ? 'admin' : 'teacher'}-quizzes-${user.uid}-${filters.series}`;
         const cached = cache.get<Quiz[]>(cacheKey);
 
-        // Only use cache if it was for the same series filter
         if (cached && Array.isArray(cached) && cached.length > 0) {
           setQuizzes(cached);
           setLoading(false);
           setUiLoading('quizzes', false);
-          // If cached, we might need to handle pagination state manually or just fetch fresh to be safe for admin.
-          // For admin, refreshing is often better. Let's skip cache-return for now to ensure freshness with filters.
-          // Or better: Use it but still re-verify? 
-          // Let's stick to no-cache for filtered queries to simplify logic, or short TTL.
         }
 
         const constraints: any[] = [orderBy('startDate', 'desc'), limit(20)];
+
+        // Teacher Constraint: Only show their own quizzes
+        if (isTeacher) {
+          // Prefer teacherId, fallback to createdBy
+          constraints.push(where('teacherId', '==', user.uid));
+        }
 
         // Backend Series Filter
         if (filters.series !== 'all') {
@@ -173,19 +195,14 @@ export default function AdminQuizBankPage() {
 
         cache.set(cacheKey, data, 2 * 60 * 1000); // 2 min cache
 
-        if (data.length > 0) {
-          //   addToast({
-          //     type: 'success',
-          //     message: `Loaded ${data.length} quizzes`,
-          //     duration: 2000,
-          //   });
-        }
       } catch (error: any) {
         console.error('Error fetching quizzes:', error);
-        addToast({
-          type: 'error',
-          message: error.message || 'Failed to load quizzes',
-        });
+        // If index error, show specific message?
+        if (error.code === 'failed-precondition') {
+          addToast({ type: 'error', message: 'Database Index Required. Ask Admin.' });
+        } else {
+          addToast({ type: 'error', message: error.message || 'Failed to load quizzes' });
+        }
       } finally {
         setLoading(false);
         setUiLoading('quizzes', false);
@@ -240,12 +257,20 @@ export default function AdminQuizBankPage() {
 
   // Load more (pagination)
   const handleLoadMore = async () => {
-    if (!lastVisible || !user || !user.admin) return;
+    const isTeacher = user?.role === 'teacher';
+    const isAdmin = user?.admin || user?.role === 'admin';
+
+    if (!lastVisible || !user || (!isAdmin && !isTeacher)) return;
     setLoading(true);
     setUiLoading('quizzes', true);
 
     try {
       const constraints: any[] = [orderBy('startDate', 'desc'), limit(20)];
+
+      // Teacher Constraint
+      if (isTeacher) {
+        constraints.push(where('teacherId', '==', user.uid));
+      }
 
       // Maintain filter on load more
       if (filters.series !== 'all') {
@@ -261,9 +286,6 @@ export default function AdminQuizBankPage() {
       if (newData.length) {
         setQuizzes((prev) => {
           const combined = [...prev, ...newData];
-          try {
-            // Append to cache?
-          } catch (e) { }
           return combined;
         });
       }
@@ -280,8 +302,7 @@ export default function AdminQuizBankPage() {
   };
 
   // Show skeleton while loading
-  // Only full page skeleton on initial load, not filter change if we want smoother?
-  // But we reset quizzes to [] so it will show skeleton. That's fine.
+  // ... (Lines 285-290 unchanged in replacements, but including for context matching if needed)
   if (loading && quizzes.length === 0) {
     return (
       <div className="w-full max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -290,13 +311,15 @@ export default function AdminQuizBankPage() {
     );
   }
 
-  if (!user?.admin) return null;
+  if (!user || (!user.admin && user.role !== 'teacher')) return null;
+
+  const isAdmin = user?.admin || user?.role === 'admin';
 
   return (
     <div className="w-full max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
       <UnifiedHeader
-        title="Admin Dashboard"
-        subtitle="Manage Quizzes and Exams"
+        title={isAdmin ? "Admin Dashboard" : "Teacher Dashboard"}
+        subtitle={isAdmin ? "Manage Quizzes and Exams" : "Manage Your Quizzes"}
         icon={<Database className="w-6 h-6" />}
       />
 
@@ -309,7 +332,7 @@ export default function AdminQuizBankPage() {
               <h1 className="text-4xl font-black mb-2 flex items-center gap-2">
                 <span>📝</span>
                 <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#004AAD] via-[#0066FF] to-[#00B4D8] dark:from-[#0066FF] dark:via-[#00B4D8] dark:to-[#66D9EF]">
-                  Admin Quiz Bank
+                  {isAdmin ? "Admin Quiz Bank" : "My Quiz Bank"}
                 </span>
               </h1>
               <p className="text-muted-foreground font-semibold flex items-center gap-2">

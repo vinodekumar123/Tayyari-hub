@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, Suspense } from 'react';
+import { useState, useEffect, useRef, Suspense, useMemo } from 'react';
 import { CsvImporter } from '@/components/admin/CsvImporter';
 import { AiBulkGenerateDialog } from '@/components/admin/AiBulkGenerateDialog';
 import { useSearchParams } from 'next/navigation';
@@ -48,6 +48,7 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 import { toast } from 'sonner';
+import { generateSearchTokens } from '@/lib/searchUtils';
 
 
 
@@ -211,7 +212,7 @@ const CreateQuestionPageContent = () => {
           const uData = d.data();
           const r = uData.role || (uData.admin ? 'admin' : 'student');
           setUserRole(r);
-          setUserName(uData.name || uData.displayName || 'Unknown'); // Capture Name
+          setUserName(uData.fullName || uData.name || uData.displayName || 'Unknown'); // Capture Name
           if (r === 'teacher') {
             setAssignedSubjects(uData.subjects || []);
             // Auto-select first subject
@@ -386,6 +387,9 @@ const CreateQuestionPageContent = () => {
 
     setLoading(true);
     try {
+      // Generate search tokens from question text
+      const searchTokens = generateSearchTokens(questionText);
+
       const payload = {
         questionText,
         options,
@@ -401,10 +405,11 @@ const CreateQuestionPageContent = () => {
         chapter,
         year,
         book,
-        teacher: userName || 'Admin', // Save current user NAME
-        teacherId: auth.currentUser?.uid, // Essential for RBAC
-        createdBy: auth.currentUser?.uid, // Standard Audit Field
+        // Removed: teacher field (now fetched dynamically from createdBy)
+        teacherId: auth.currentUser?.uid, // Essential for RBAC (legacy, consider removing)
+        createdBy: auth.currentUser?.uid, // Standard Audit Field - Used for ownership
         type: 'multiple-choice', // Default type
+        searchTokens, // Add search tokens for server-side search
         updatedAt: serverTimestamp()
       };
 
@@ -436,6 +441,64 @@ const CreateQuestionPageContent = () => {
   };
 
 
+
+  // Memoized Available Subjects based on Course & Role
+  const availableSubjects = useMemo(() => {
+    if (!selectedCourse) return [];
+
+    const course = courses.find(c => c.id === selectedCourse);
+    if (!course) return [];
+
+    console.log("Filtering Subjects for Course:", course.name, "ID:", course.id);
+    console.log("Course Subject IDs:", course.subjectIds);
+
+    // Filter by Course
+    let filtered = allSubjects.filter(s => {
+      // Relaxed Logic: Only filter if the course EXPLICITLY lists subjects
+      if (course.subjectIds && course.subjectIds.length > 0) {
+        // Check match by ID OR Name (Robustness for inconsistent data)
+        return course.subjectIds.includes(s.id) || course.subjectIds.includes(s.name);
+      }
+      return true; // Show all subjects if course has no restrictions (Legacy/Incomplete data)
+    });
+
+    console.log("Subjects after Course Filter:", filtered.length);
+
+    // Filter by Teacher Role
+    if (userRole === 'teacher') {
+      if (assignedSubjects.length === 0) {
+        console.warn("Teacher has NO assigned subjects.");
+        return [];
+      }
+      console.log("Filtering for Teacher:", assignedSubjects);
+
+      const assignedRaw = new Set(assignedSubjects.map(String));
+      const assignedNormalized = new Set(assignedSubjects.map(as => String(as).trim().toLowerCase()));
+
+      filtered = filtered.filter(s => {
+        // 1. Exact ID Match
+        if (assignedRaw.has(s.id)) return true;
+        // 2. Case-insensitive ID Match
+        if (assignedNormalized.has(s.id.toLowerCase())) return true;
+        // 3. Case-insensitive Name Match
+        if (assignedNormalized.has(s.name.trim().toLowerCase())) return true;
+
+        return false;
+      });
+    }
+
+    return filtered;
+  }, [allSubjects, selectedCourse, courses, userRole, assignedSubjects]);
+
+  // Memoized Valid Chapters to handle both Map and Array structures
+  const validChaptersList = useMemo(() => {
+    const subObj = allSubjects.find(s => s.name === subject);
+    if (!subObj?.chapters) return [];
+    return Array.isArray(subObj.chapters)
+      ? subObj.chapters
+      : Object.keys(subObj.chapters);
+  }, [allSubjects, subject]);
+
   const handleAiBulkSuccess = (data: any[]) => {
     setImportInitialData(data);
     setIsCsvDialogOpen(true); // Open CSV/Preview Dialog directly
@@ -462,6 +525,9 @@ const CreateQuestionPageContent = () => {
         });
 
         // Use Global Metadata + Row Data
+        // Generate search tokens from question text
+        const searchTokens = generateSearchTokens(questionText);
+
         const data = {
           questionText,
           options: [row.option1, row.option2, row.option3, row.option4].filter(Boolean),
@@ -477,16 +543,15 @@ const CreateQuestionPageContent = () => {
           courseId: selectedCourse,
           course: courses.find(c => c.id === selectedCourse)?.name || 'Unknown',
           isDeleted: false,
-          // positiveMarks: Number(positiveMarks), // Removed
 
-          // isGrace, // Removed
           allOptionsCorrect, // Default to global state for imported (unless we add col later)
-          chapter,
+          chapter: row.chapter || chapter,
           year,
           book,
-          teacher: userName || 'Admin', // Save current user NAME
-          teacherId: auth.currentUser?.uid, // Save current user ID for filtering
-          createdBy: auth.currentUser?.uid, // Standard Audit Field
+          // Removed: teacher field (now fetched dynamically from createdBy)
+          teacherId: auth.currentUser?.uid, // Save current user ID for filtering (legacy)
+          createdBy: auth.currentUser?.uid, // Standard Audit Field - Used for ownership
+          searchTokens, // Add search tokens for server-side search
 
           status: 'published',
           type: 'multiple-choice',
@@ -740,24 +805,17 @@ const CreateQuestionPageContent = () => {
                     <SelectValue placeholder={selectedCourse ? "Select Subject" : "Select Course First"} />
                   </SelectTrigger>
                   <SelectContent>
-                    {allSubjects
-                      .filter(s => {
-                        // Must be in the selected course
-                        const course = courses.find(c => c.id === selectedCourse);
-                        if (!course?.subjectIds?.includes(s.id)) return false;
-
-                        // If teacher, must be in assigned subjects
-                        // Note: assignedSubjects stores strings (Names), s.name checks that.
-                        if (userRole === 'teacher') {
-                          return assignedSubjects.includes(s.name);
-                        }
-
-                        return true;
-                      })
-                      .map(s => (
+                    {availableSubjects.length === 0 ? (
+                      <SelectItem value="none" disabled>
+                        {userRole === 'teacher'
+                          ? (assignedSubjects.length === 0 ? "No subjects assigned to your account" : "No assigned subjects in this course")
+                          : "No subjects found for this course"}
+                      </SelectItem>
+                    ) : (
+                      availableSubjects.map(s => (
                         <SelectItem key={s.id} value={s.name}>{s.name}</SelectItem>
                       ))
-                    }
+                    )}
                   </SelectContent>
                 </Select>
               </div>
@@ -769,14 +827,12 @@ const CreateQuestionPageContent = () => {
                     <SelectValue placeholder={subject ? "Select Chapter" : "Select Subject First"} />
                   </SelectTrigger>
                   <SelectContent>
-                    {(() => {
-                      const selectedSubjectObj = allSubjects.find(s => s.name === subject);
-                      const chapters = selectedSubjectObj?.chapters ? Object.keys(selectedSubjectObj.chapters) : [];
-                      if (chapters.length === 0) return <SelectItem value="none" disabled>No chapters found</SelectItem>;
-                      return chapters.map(ch => (
+                    {validChaptersList.length === 0
+                      ? <SelectItem value="none" disabled>No chapters found</SelectItem>
+                      : validChaptersList.map(ch => (
                         <SelectItem key={ch} value={ch}>{ch}</SelectItem>
-                      ));
-                    })()}
+                      ))
+                    }
                   </SelectContent>
                 </Select>
               </div>
@@ -836,6 +892,7 @@ const CreateQuestionPageContent = () => {
         }}
         onImport={handleSmartImport}
         initialData={importInitialData}
+        validChapters={validChaptersList}
         defaultMetadata={{
           Course: courses.find(c => c.id === selectedCourse)?.name || 'Unknown',
           Subject: subject,
@@ -850,6 +907,7 @@ const CreateQuestionPageContent = () => {
         isOpen={isAiBulkOpen}
         onClose={() => setIsAiBulkOpen(false)}
         onGenerate={handleAiBulkSuccess}
+        validChapters={validChaptersList}
         defaultMetadata={{
           courseId: selectedCourse,
           subject,

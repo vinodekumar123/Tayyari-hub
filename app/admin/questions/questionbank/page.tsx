@@ -107,6 +107,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import Papa from 'papaparse';
+import { generateSearchTokens } from '@/lib/searchUtils';
 
 // --- Types ---
 type Question = {
@@ -162,11 +163,19 @@ export default function QuestionBankPage() {
   const [userRole, setUserRole] = useState<'admin' | 'superadmin' | 'teacher' | 'student' | null>(null);
   const [teacherSubjects, setTeacherSubjects] = useState<string[]>([]);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+  const [isRoleLoaded, setIsRoleLoaded] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+
+  // Teacher Names Cache - Maps UID to name
+  const [teacherNamesCache, setTeacherNamesCache] = useState<Record<string, string>>({});
 
   // Checks user role on mount
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (user) => {
       if (user) {
+        // Store the current user's ID
+        setCurrentUserId(user.uid);
+
         // Fetch extended user details for role/subjects
         // We can't just rely on custom claims if they aren't set, so fetch from firestore 'users'
         // But since we are inside a component, let's just fetch the doc.
@@ -182,15 +191,20 @@ export default function QuestionBankPage() {
             if (role === 'teacher') {
               const subs = data.subjects || [];
               setTeacherSubjects(subs);
-              // Force filter to first subject if available
-              if (subs.length > 0) {
-                setFilterSubject(subs[0]);
-              }
+              // Pre-populate availableSubjects with teacher's assigned subjects
+              // This ensures the dropdown shows options immediately
+              setAvailableSubjects(subs);
+              // Keep filter as 'All' to show all assigned subjects' questions
             }
           }
+          setIsRoleLoaded(true);
         } catch (e) {
           console.error("Error fetching user role", e);
+          setIsRoleLoaded(true);
         }
+      } else {
+        setCurrentUserId(null);
+        setIsRoleLoaded(true);
       }
     });
     return () => unsub();
@@ -285,6 +299,49 @@ export default function QuestionBankPage() {
     fetchMetadata();
   }, []);
 
+  // Fetch Teacher Names Dynamically
+  const fetchTeacherName = async (uid: string): Promise<string> => {
+    // Check cache first
+    if (teacherNamesCache[uid]) {
+      return teacherNamesCache[uid];
+    }
+
+    // Fetch from Firestore
+    try {
+      const { getDoc, doc } = await import('firebase/firestore');
+      const userDoc = await getDoc(doc(db, 'users', uid));
+      if (userDoc.exists()) {
+        const userData = userDoc.data();
+        const name = userData.fullName || userData.name || userData.displayName || 'Unknown';
+
+        // Cache it
+        setTeacherNamesCache(prev => ({ ...prev, [uid]: name }));
+        return name;
+      }
+    } catch (error) {
+      console.error('Error fetching teacher name:', error);
+    }
+
+    return 'Unknown';
+  };
+
+  // Batch fetch teacher names for all questions
+  useEffect(() => {
+    const fetchAllTeacherNames = async () => {
+      const uniqueUids = new Set(questions.map(q => q.createdBy).filter(Boolean));
+
+      for (const uid of uniqueUids) {
+        if (!teacherNamesCache[uid]) {
+          await fetchTeacherName(uid as string);
+        }
+      }
+    };
+
+    if (questions.length > 0) {
+      fetchAllTeacherNames();
+    }
+  }, [questions]); // eslint-disable-line
+
   // Update Available Chapters when Subject changes
   useEffect(() => {
     if (filterSubject !== 'All') {
@@ -324,12 +381,35 @@ export default function QuestionBankPage() {
     try {
       let q;
       const constraints: any[] = [];
+
+      // STRICT TEACHER OWNERSHIP RULE: Teachers can ONLY see questions they created
+      if (userRole === 'teacher' && currentUserId) {
+        console.log('🔒 TEACHER FILTER APPLIED:', { userRole, currentUserId });
+        constraints.push(where('createdBy', '==', currentUserId));
+      } else {
+        console.log('ℹ️ NO TEACHER FILTER:', { userRole, currentUserId });
+      }
+
+      // SERVER-SIDE SEARCH using search tokens
+      if (searchQuery && searchQuery.trim()) {
+        const searchToken = searchQuery.toLowerCase().trim();
+        constraints.push(where('searchTokens', 'array-contains', searchToken));
+      }
+
       if (filterCourse !== 'All') constraints.push(where('course', '==', filterCourse));
-      if (filterSubject !== 'All') constraints.push(where('subject', '==', filterSubject));
+      if (filterSubject !== 'All') {
+        // Specific Subject Selected
+        if (userRole === 'teacher' && !teacherSubjects.includes(filterSubject)) {
+          constraints.push(where('subject', '==', '__INVALID_ACCESS__'));
+        } else {
+          constraints.push(where('subject', '==', filterSubject));
+        }
+      } else {
+        // 'All' Subjects Selected - No additional subject filtering needed now
+        // because teacher ownership is already enforced above
+      }
       if (filterDifficulty !== 'All') constraints.push(where('difficulty', '==', filterDifficulty));
       if (filterYear !== 'All') constraints.push(where('year', '==', filterYear));
-      if (filterStatus !== 'All') constraints.push(where('status', '==', filterStatus));
-
       if (filterStatus !== 'All') constraints.push(where('status', '==', filterStatus));
 
       // New Server Side Filters
@@ -365,12 +445,9 @@ export default function QuestionBankPage() {
       }));
 
       // Client-side filtering:
-      // 1. Search Query
-      // 2. isDeleted 
-      // 3. Date Range (To avoid composite index hell)
+      // 1. isDeleted status (to avoid querying legacy docs without the field)
+      // 2. Date Range (to avoid composite index complexity)
       const filtered = fetched.filter(q => {
-        const matchesSearch = searchQuery ? q.questionText.toLowerCase().includes(searchQuery.toLowerCase()) : true;
-
         // If we are in "Active Mode" (showDeleted=false), we must HIDE items that are isDeleted=true
         // We include items where isDeleted is false OR undefined.
         const matchesStatus = showDeleted ? true : (q.isDeleted !== true);
@@ -390,7 +467,7 @@ export default function QuestionBankPage() {
           }
         }
 
-        return matchesSearch && matchesStatus && matchesDate;
+        return matchesStatus && matchesDate;
       });
 
       console.log("Total fetched:", fetched.length, "After filtering:", filtered.length);
@@ -431,12 +508,14 @@ export default function QuestionBankPage() {
 
   // Filters Change Effect (Reset & Fetch)
   // Removed searchQuery from dependency to prevent auto-reload on type
+  // Wait for role to be loaded before fetching to prevent race condition
   useEffect(() => {
+    if (!isRoleLoaded) return; // Don't fetch until we know the user's role
     setLastDoc(null);
     fetchQuestions(false);
-  }, [filterCourse, filterSubject, filterDifficulty, filterYear, filterStatus, filterTeacher, filterChapter, dateRange, showDeleted]); // eslint-disable-line
+  }, [isRoleLoaded, filterCourse, filterSubject, filterDifficulty, filterYear, filterStatus, filterTeacher, filterChapter, dateRange, showDeleted, searchQuery, currentUserId, userRole, teacherSubjects]); // eslint-disable-line
 
-  // Handle Search Explicitly
+  // Handle Search Explicitly (Search is now server-side, so this just triggers re-fetch)
   const handleSearch = () => {
     setLastDoc(null);
     fetchQuestions(false);
@@ -699,7 +778,13 @@ export default function QuestionBankPage() {
                     <SelectTrigger><SelectValue placeholder="All Subjects" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="All">All Subjects</SelectItem>
-                      {availableSubjects.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                      {/* For teachers: show their assigned subjects (pre-populated in availableSubjects) */}
+                      {/* For admins: show all subjects from allSubjectsData */}
+                      {userRole === 'teacher' ? (
+                        teacherSubjects.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)
+                      ) : (
+                        allSubjectsData.map(s => <SelectItem key={s.name || s.id} value={s.name || s.id}>{s.name || s.id}</SelectItem>)
+                      )}
                     </SelectContent>
                   </Select>
                 </div>
@@ -941,7 +1026,7 @@ export default function QuestionBankPage() {
                   <TableCell>
                     <div className="flex flex-col gap-1 text-[10px]">
                       <span className="font-medium text-gray-700 dark:text-gray-300">
-                        {question.teacher || 'System'}
+                        {teacherNamesCache[question.createdBy as string] || question.teacher || 'System'}
                       </span>
                       <span className="text-muted-foreground text-[9px]">
                         {question.isDeleted ? '(Deleted)' : ''}
@@ -1065,20 +1150,29 @@ export default function QuestionBankPage() {
 
           {previewQuestion && (
             <div className="space-y-6 py-4">
+              {/* Metadata Badges */}
               <div className="flex flex-wrap gap-2">
                 <Badge variant="secondary">{previewQuestion.course}</Badge>
                 <Badge variant="secondary">{previewQuestion.subject}</Badge>
+                {previewQuestion.chapter && <Badge variant="outline">Chapter: {previewQuestion.chapter}</Badge>}
                 <Badge variant="secondary">{previewQuestion.difficulty}</Badge>
                 {previewQuestion.year && <Badge variant="outline">Year: {previewQuestion.year}</Badge>}
-                <Badge className={previewQuestion.status === 'published' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}>
+                <Badge className={previewQuestion.status === 'published' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300'}>
                   {previewQuestion.status || 'draft'}
                 </Badge>
+                {previewQuestion.teacher && (
+                  <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-800">
+                    👤 {teacherNamesCache[previewQuestion.createdBy as string] || previewQuestion.teacher || 'Unknown'}
+                  </Badge>
+                )}
               </div>
 
+              {/* Question Text */}
               <div className="prose prose-sm dark:prose-invert max-w-none">
                 <div dangerouslySetInnerHTML={{ __html: previewQuestion.questionText }} />
               </div>
 
+              {/* Options */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 {previewQuestion.options.map((option, idx) => (
                   <div
@@ -1096,7 +1190,8 @@ export default function QuestionBankPage() {
                 ))}
               </div>
 
-              {previewQuestion.enableExplanation && previewQuestion.explanation && (
+              {/* Explanation - Show if it exists */}
+              {previewQuestion.explanation && (
                 <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg border border-blue-100 dark:border-blue-800">
                   <h4 className="font-bold text-blue-800 dark:text-blue-300 text-sm mb-2 flex items-center gap-2">
                     <Eye className="h-4 w-4" /> Explanation

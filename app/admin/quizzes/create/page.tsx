@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Select,
@@ -35,8 +35,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { brandColors, animations, glassmorphism } from '@/lib/design-tokens';
-import { motion } from 'framer-motion';
+import { glassmorphism } from '@/lib/design-tokens';
 
 function CreateQuizContent() {
   const router = useRouter();
@@ -48,11 +47,17 @@ function CreateQuizContent() {
   const quizId = params.get('id');
   const isEditMode = Boolean(quizId);
 
-  const [questionDateFilter, setQuestionDateFilter] = useState('');
+  // removed unused `questionDateFilter`
   const [seriesList, setSeriesList] = useState<any[]>([]); // New Series State
   const [questionsLimit, setQuestionsLimit] = useState(20); // Pagination limit
   const [lastQuestionDoc, setLastQuestionDoc] = useState<any>(null); // For cursor pagination
   const [loadingQuestions, setLoadingQuestions] = useState(false);
+  const [hasMoreQuestions, setHasMoreQuestions] = useState(true);
+
+  // FIX #3: Rate limiting state
+  const fetchTimestampsRef = useRef<number[]>([]);
+  const RATE_LIMIT_MAX = 10; // Max 10 fetches
+  const RATE_LIMIT_WINDOW = 60000; // Per 60 seconds
 
   // RBAC State
   const [userRole, setUserRole] = useState<'admin' | 'teacher' | 'student' | null>(null);
@@ -70,8 +75,46 @@ function CreateQuizContent() {
           const role = userData.role || (userData.admin ? 'admin' : 'student');
           setUserRole(role);
           if (role === 'teacher') {
-            setAssignedSubjects(userData.subjects || []);
-            // Auto-filter subjects if standard subjects are loaded (though they might not be yet)
+            const subjectIds = userData.subjects || [];
+            console.log("Teacher Debug: Raw Subject IDs from User Data:", subjectIds);
+
+            if (subjectIds.length > 0) {
+              try {
+                // Fetch ALL subjects to build a reliable map
+                // This avoids potential issues with individual doc permissions or missing IDs if we can read the collection
+                const subjectsSnap = await getDocs(collection(db, 'subjects'));
+                const subjectMap = new Map();
+                subjectsSnap.forEach(doc => {
+                  const data = doc.data();
+                  if (data.name) {
+                    subjectMap.set(doc.id, data.name);
+                    // Also map name to name just in case ID was actually a name
+                    subjectMap.set(data.name, data.name);
+                  }
+                });
+
+                const resolvedSubjects = subjectIds.map((sid: string) => {
+                  const name = subjectMap.get(sid);
+                  if (name) {
+                    console.log(`Teacher Debug: Mapped ID ${sid} -> ${name}`);
+                    return name;
+                  } else {
+                    console.warn(`Teacher Debug: Could not map ID ${sid}. Available IDs:`, Array.from(subjectMap.keys()));
+                    return sid; // Fallback
+                  }
+                });
+
+                console.log("Teacher Debug: Final Assigned Subjects:", resolvedSubjects);
+                setAssignedSubjects(resolvedSubjects);
+              } catch (error) {
+                console.error("Teacher Debug: Error fetching subjects collection:", error);
+                // Fallback to IDs if collection read fails - store as strings
+                setAssignedSubjects(subjectIds.map((id: any) => String(id)));
+              }
+            } else {
+              console.log("Teacher Debug: No subjects found in user data.");
+              setAssignedSubjects([]);
+            }
           }
         }
       }
@@ -101,7 +144,7 @@ function CreateQuizContent() {
     resultVisibility: 'immediate',
     selectedQuestions: [],
     questionFilters: {
-      subjects: [],
+      subjects: ['all-subjects'], // Default to all subjects so questions load immediately
       chapters: [],
       difficulty: '',
       searchTerm: '',
@@ -168,46 +211,99 @@ function CreateQuizContent() {
   // if we were using useCallback, but here we can just read state if we include it in deps or call explicitly.
 
   const fetchMoreQuestions = async (reset = false) => {
-    if (loadingQuestions) return;
+    if (loadingQuestions && !reset) return;
+
+    // FIX #3: Rate limiting check
+    const now = Date.now();
+    fetchTimestampsRef.current = fetchTimestampsRef.current.filter(t => now - t < RATE_LIMIT_WINDOW);
+
+    if (fetchTimestampsRef.current.length >= RATE_LIMIT_MAX) {
+      alert('Too many requests. Please wait a moment before loading more questions.');
+      return;
+    }
+
+    fetchTimestampsRef.current.push(now);
     setLoadingQuestions(true);
     try {
       let q;
       const constraints: any[] = [];
-      const { subjects, chapters, difficulty, topic } = quizConfig.questionFilters;
+      const { subjects, chapters, difficulty, topic, createdAfter } = quizConfig.questionFilters;
 
-      // Apply Filters
-      // Subject Filter (Array)
-      if (subjects.length > 0 && !subjects.includes('all-subjects')) {
-        // Explicit selection
-        constraints.push(where('subject', 'in', subjects.slice(0, 10)));
-      } else if (userRole === 'teacher') {
-        // Teacher implied filter: If "All Subjects" (or empty) is selected, restrict to assignedSubjects
-        if (assignedSubjects.length > 0) {
-          constraints.push(where('subject', 'in', assignedSubjects.slice(0, 10)));
+      // --- 0. Teacher Restriction (Ownership) ---
+      if (userRole === 'teacher') {
+        // Teacher sees ONLY questions they created
+        if (currentUserId) {
+          console.log('🔒 QUIZ: TEACHER FILTER APPLIED:', { userRole, currentUserId });
+          constraints.push(where('createdBy', '==', currentUserId));
         } else {
-          // Teacher with no subjects? Should find nothing.
-          constraints.push(where('subject', '==', '__NO_SUBJECTS__'));
+          console.log('⚠️ QUIZ: TEACHER BUT NO USER ID');
+          // If for some reason ID is missing, show nothing
+          constraints.push(where('createdBy', '==', '__INVALID_USER__'));
         }
+      } else {
+        console.log('ℹ️ QUIZ: NO TEACHER FILTER:', { userRole, currentUserId });
       }
 
-      // Chapter Filter (Array) 
-      // Note: Can't have multiple 'in' queries or 'array-contains-any' usually. 
-      // If Subject is filtered, usually we filter by that. Chapter is secondary.
-      // If we used 'in' for subject, we can't use 'in' for chapter.
-      // Strategy: Client-filter chapters if Subject 'in' is used, OR if only 1 subject, use '=='.
+      // --- 1. Determine Effective Subjects ---
+      let effectiveSubjects: string[] = [];
+      let isSubjectRestricted = false;
+
+      console.log('📊 Subject Filter Debug:', {
+        selectedSubjects: subjects,
+        userRole,
+        assignedSubjects,
+        includesAllSubjects: subjects.includes('all-subjects')
+      });
+
+      if (subjects.length > 0 && !subjects.includes('all-subjects')) {
+        effectiveSubjects = subjects;
+        isSubjectRestricted = true;
+      } else if (userRole === 'teacher') {
+        effectiveSubjects = assignedSubjects;
+        isSubjectRestricted = true;
+      } else {
+        // Admin viewing "All Subjects"
+        effectiveSubjects = [];
+        isSubjectRestricted = false;
+      }
+
+      console.log('✅ Effective Subjects:', { effectiveSubjects, isSubjectRestricted });
+
+      // --- 2. Apply Subject Filter ---
+      let subjectUsesInQuery = false;
+
+      if (isSubjectRestricted) {
+        if (effectiveSubjects.length === 0) {
+          // Teacher with no subjects assigned
+          console.log('⚠️ No subjects - blocking query');
+          constraints.push(where('subject', '==', '__NO_SUBJECTS__'));
+        } else if (effectiveSubjects.length === 1) {
+          // Optimization: Use '==' instead of 'in' so we can use 'in' for chapters
+          console.log('✓ Single subject filter:', effectiveSubjects[0]);
+          constraints.push(where('subject', '==', effectiveSubjects[0]));
+        } else {
+          // Must use 'in'
+          console.log('✓ Multiple subjects filter:', effectiveSubjects.slice(0, 10));
+          constraints.push(where('subject', 'in', effectiveSubjects.slice(0, 10)));
+          subjectUsesInQuery = true;
+        }
+      } else {
+        console.log('✓ No subject restriction - loading all');
+      }
+
+      // --- 3. Apply Chapter Filter ---
+      // We can use 'in' for chapters ONLY if we haven't used 'in' for subjects.
       if (chapters.length > 0 && !chapters.includes('all-chapters')) {
-        if (subjects.length === 1 && !subjects.includes('all-subjects')) {
-          // If single subject, we can use 'in' for chapters
+        if (!subjectUsesInQuery) {
           constraints.push(where('chapter', 'in', chapters.slice(0, 10)));
         } else {
-          // If multiple subjects or all-subjects, we might hit limits. 
-          // Let's rely on client-side filtering for chapters after fetching by subject?
-          // Or better: Don't filter by chapter in query if multiple subjects.
-          // Wait, previous logic was pure client side.
-          // Let's try to add if no other 'in' clause conflicts.
+          // Fallback: We cannot filter by chapter on server because we used 'in' for subjects.
+          // This relies on client-side filtering (filteredQuestions) which handles the rest.
+          console.warn("Cannot server-filter chapters while filtering multiple subjects.");
         }
       }
 
+      // 4. Equality Filters
       if (difficulty && difficulty !== '__all-difficulties__') {
         constraints.push(where('difficulty', '==', difficulty));
       }
@@ -215,40 +311,41 @@ function CreateQuizContent() {
         constraints.push(where('topic', '==', topic));
       }
 
-      // Ordering
-      // Ensure we have index for fields involved in equality + Sort.
-      // Default sort
+      // 5. Date Filter (Inequality)
+      if (createdAfter) {
+        const date = new Date(createdAfter);
+        constraints.push(where('createdAt', '>=', Timestamp.fromDate(date)));
+      }
+
+      // 6. Ordering
       const sortConstraint = orderBy("createdAt", "desc");
 
+      // Construct Query
       if (reset) {
-        if (constraints.length > 0) {
-          q = query(collection(db, "questions"), ...constraints, sortConstraint, limit(20));
-        } else {
-          q = query(collection(db, "questions"), sortConstraint, limit(20));
-        }
+        q = query(collection(db, "questions"), ...constraints, sortConstraint, limit(questionsLimit));
       } else {
         if (lastQuestionDoc) {
-          if (constraints.length > 0) {
-            q = query(collection(db, "questions"), ...constraints, sortConstraint, startAfter(lastQuestionDoc), limit(20));
-          } else {
-            q = query(collection(db, "questions"), sortConstraint, startAfter(lastQuestionDoc), limit(20));
-          }
+          q = query(collection(db, "questions"), ...constraints, sortConstraint, startAfter(lastQuestionDoc), limit(questionsLimit));
         } else {
-          // Should not happen if not reset, but safe fallback
-          if (constraints.length > 0) {
-            q = query(collection(db, "questions"), ...constraints, sortConstraint, limit(20));
-          } else {
-            q = query(collection(db, "questions"), sortConstraint, limit(20));
-          }
+          q = query(collection(db, "questions"), ...constraints, sortConstraint, limit(questionsLimit));
         }
       }
 
       const snapshot = await getDocs(q);
       const newQuestions = snapshot.docs.map((doc) => {
         const data = doc.data() as any;
+        // Normalize common nested fields to simple string names for UI filtering/counting
+        const courseName = data.course?.name || data.course || data.courseName || data.courseId || '';
+        const subjectName = data.subject?.name || data.subject || data.subjectName || data.subjectId || '';
+        const chapterName = data.chapter?.name || data.chapter || data.chapterName || '';
+        const createdAtVal = data.createdAt;
         return {
           id: doc.id,
           ...data,
+          course: courseName,
+          subject: subjectName,
+          chapter: chapterName,
+          createdAt: createdAtVal,
           usedInQuizzes: data.usedInQuizzes || 0,
         };
       });
@@ -256,29 +353,51 @@ function CreateQuizContent() {
       if (reset) {
         setAvailableQuestions(newQuestions);
       } else {
-        setAvailableQuestions(prev => [...prev, ...newQuestions]);
+        setAvailableQuestions(prev => {
+          // Dedupe just in case
+          const existingIds = new Set(prev.map(p => p.id));
+          const filteredNew = newQuestions.filter(n => !existingIds.has(n.id));
+          return [...prev, ...filteredNew];
+        });
       }
 
       setLastQuestionDoc(snapshot.docs[snapshot.docs.length - 1]);
+      setHasMoreQuestions(snapshot.docs.length === questionsLimit);
     } catch (error) {
       console.error("Error fetching questions:", error);
-      // Fallback: If index error, maybe alert user or fallback to basic?
-      // For now log it.
     } finally {
       setLoadingQuestions(false);
     }
   };
 
   // Refetch questions when filters change (Server-Side Filtering Trigger)
+  // CRITICAL FIX: Include userRole and currentUserId to ensure teacher filter applies
   useEffect(() => {
+    // GUARD: Don't fetch until we know the user role (prevents loading all questions for teachers)
+    if (userRole === null) {
+      console.log('Waiting for user role before fetching questions...');
+      return;
+    }
+
+    // GUARD: For teachers, wait until assignedSubjects are loaded
+    if (userRole === 'teacher' && assignedSubjects.length === 0) {
+      console.log('⏳ Waiting for teacher subjects to load...');
+      return;
+    }
+
+    console.log('Fetching questions with role:', userRole, 'userId:', currentUserId);
     setLastQuestionDoc(null);
     fetchMoreQuestions(true);
     // eslint-disable-next-line
   }, [
+    userRole, // CRITICAL: Must refetch when role is known
+    currentUserId, // CRITICAL: Must refetch when user ID is available
+    assignedSubjects, // CRITICAL: Wait for teacher subjects to load
     quizConfig.questionFilters.subjects,
     quizConfig.questionFilters.chapters,
     quizConfig.questionFilters.difficulty,
-    quizConfig.questionFilters.topic
+    quizConfig.questionFilters.topic,
+    quizConfig.questionFilters.createdAfter // Added dependency
   ]);
 
   // Subjects by course
@@ -381,16 +500,16 @@ function CreateQuizContent() {
     });
   };
 
+  // FIX #11: Clear selection logic extracted for explicit "Clear All" button
+  const handleClearSelection = () => {
+    setQuizConfig((prev) => ({
+      ...prev,
+      selectedQuestions: [],
+    }));
+  };
+
   // Auto select logic: select the latest added questions (top N recent)
   const handleAutoSelectQuestions = () => {
-    if (quizConfig.selectedQuestions.length > 0) {
-      setQuizConfig((prev) => ({
-        ...prev,
-        selectedQuestions: [],
-      }));
-      return;
-    }
-
     // Filter by date if applied
     let filtered: any[] = availableQuestions;
     if (quizConfig.questionFilters.createdAfter) {
@@ -581,7 +700,9 @@ function CreateQuizContent() {
       filtered = filtered.filter(q => q.chapter === chapter);
     }
     if (quizConfig.questionFilters.createdAfter) {
-      const afterDate = new Date(quizConfig.questionFilters.createdAfter).getTime();
+      const afterDate = new Date(quizConfig.questionFilters.createdAfter);
+      afterDate.setHours(0, 0, 0, 0);
+      const afterMs = afterDate.getTime();
       filtered = filtered.filter(q => {
         if (!q.createdAt) return false;
         let questionDate;
@@ -590,7 +711,7 @@ function CreateQuizContent() {
         } else {
           questionDate = new Date(q.createdAt).getTime();
         }
-        return questionDate >= afterDate;
+        return questionDate >= afterMs;
       });
     }
     return filtered.length;
@@ -609,7 +730,11 @@ function CreateQuizContent() {
     // Date filter
     let matchesDate = true;
     if (createdAfter) {
-      const afterDate = new Date(createdAfter).getTime();
+      // Normalize createdAfter (YYYY-MM-DD) to local start-of-day milliseconds
+      const afterDate = new Date(createdAfter);
+      afterDate.setHours(0, 0, 0, 0);
+      const afterMs = afterDate.getTime();
+
       let questionDate;
       if (q.createdAt && q.createdAt.seconds !== undefined) {
         questionDate = q.createdAt.seconds * 1000;
@@ -618,20 +743,23 @@ function CreateQuizContent() {
       } else {
         matchesDate = false;
       }
-      matchesDate = questionDate >= afterDate;
+      matchesDate = questionDate >= afterMs;
     }
 
     return matchesSubject && matchesChapter && matchesDifficulty && matchesTopic && matchesSearch && matchesDate;
   });
 
-  const groupedQuestions = filteredQuestions.reduce((acc, question) => {
-    const subject = question.subject || 'Uncategorized';
-    if (!acc[subject]) {
-      acc[subject] = [];
-    }
-    acc[subject].push(question);
-    return acc;
-  }, {} as Record<string, any[]>);
+  // FIX #9: Memoize grouped questions to avoid re-computation on every render
+  const groupedQuestions = useMemo(() => {
+    return filteredQuestions.reduce((acc, question) => {
+      const subject = question.subject || 'Uncategorized';
+      if (!acc[subject]) {
+        acc[subject] = [];
+      }
+      acc[subject].push(question);
+      return acc;
+    }, {} as Record<string, any[]>);
+  }, [filteredQuestions]);
 
   const MultiSelect = ({ value, onChange, options, placeholder, disabled, type }) => {
     const displayValue = value.includes('all-subjects') || value.includes('all-chapters')
@@ -808,8 +936,8 @@ function CreateQuizContent() {
                         { value: 'all-subjects', label: 'All Subjects' },
                         ...subjects
                           .filter(s => s && s.name && s.name.trim() !== '')
-                          // TEACHER FILTER: Only show assigned subjects
-                          .filter(s => userRole !== 'teacher' || assignedSubjects.includes(s.name))
+                          // TEACHER FILTER: Only show assigned subjects. Accept either stored name or id.
+                          .filter(s => userRole !== 'teacher' || assignedSubjects.includes(s.name) || assignedSubjects.includes(s.id))
                           .map(s => ({ value: s.name, label: s.name }))
                       ]}
                       placeholder="Select subjects"
@@ -978,8 +1106,24 @@ function CreateQuizContent() {
             <Card className={`${glassmorphism.light} border-white/20 dark:border-white/10 shadow-xl`}>
               <CardHeader className="border-b border-gray-200">
                 <div className="flex justify-between items-center">
-                  <CardTitle className="text-2xl font-semibold text-gray-900">Question Selection</CardTitle>
+                  <div className="flex items-center gap-3">
+                    <CardTitle className="text-2xl font-semibold text-gray-900">Question Selection</CardTitle>
+                    {/* FIX #8: Selected count badge */}
+                    <Badge variant="outline" className="text-lg px-3 py-1 bg-blue-50 text-blue-700 border-blue-300">
+                      {quizConfig.selectedQuestions.length} / {quizConfig.totalQuestions} Selected
+                    </Badge>
+                  </div>
                   <div className="flex space-x-3">
+                    {/* FIX #11: Separate Clear All button */}
+                    {quizConfig.selectedQuestions.length > 0 && (
+                      <Button
+                        variant="outline"
+                        className="border-red-300 text-red-600 hover:bg-red-50 transition-all duration-200"
+                        onClick={handleClearSelection}
+                      >
+                        <X className="h-4 w-4 mr-2" /> Clear All ({quizConfig.selectedQuestions.length})
+                      </Button>
+                    )}
                     <Button
                       variant="outline"
                       className="border-gray-300 hover:bg-gray-100 transition-all duration-200"
@@ -987,13 +1131,6 @@ function CreateQuizContent() {
                     >
                       <Plus className="h-5 w-5 mr-2" /> Auto Select ({quizConfig.totalQuestions})
                     </Button>
-                    <Badge
-                      variant="secondary"
-                      className="bg-gray-200 hover:bg-gray-300 transition-all duration-200 cursor-pointer"
-                      onClick={handleAutoSelectQuestions}
-                    >
-                      {quizConfig.selectedQuestions.length > 0 ? 'Clear Selection' : `Auto (${quizConfig.totalQuestions})`}
-                    </Badge>
                     <Button
                       variant="secondary"
                       className="bg-green-600 hover:bg-green-700 text-white transition-all duration-200"
@@ -1026,6 +1163,9 @@ function CreateQuizContent() {
                           className="pl-12 pr-4 py-2 border-gray-300 focus:border-blue-500 focus:ring-blue-500 rounded-xl"
                         />
                       </div>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Search applies to loaded questions only. Load more to search deeper.
+                      </p>
                     </div>
                     <div className="space-y-2">
                       <Label className="text-lg font-medium text-gray-700">Subjects</Label>
@@ -1198,16 +1338,21 @@ function CreateQuizContent() {
                   })}
 
                   {/* Load More Button */}
+                  {/* FIX #6: Improved loading indicators and disable when no more */}
                   <div className="flex justify-center pt-8">
                     <Button
                       variant="outline"
                       onClick={() => fetchMoreQuestions()}
                       className="w-full md:w-auto min-w-[200px] h-12 bg-white/10 dark:bg-white/5 hover:bg-white/20 border-white/10 backdrop-blur-md"
-                      disabled={loadingQuestions}
+                      disabled={loadingQuestions || !hasMoreQuestions}
                     >
                       {loadingQuestions ? (
                         <span className="flex items-center"><span className="animate-spin mr-2">⏳</span> Loading...</span>
-                      ) : 'Load More Questions'}
+                      ) : hasMoreQuestions ? (
+                        'Load More Questions'
+                      ) : (
+                        'No More Questions'
+                      )}
                     </Button>
                   </div>
                 </div>

@@ -1124,6 +1124,7 @@ function CreateQuestionPageContent() {
           Chapter: questionData.chapter || 'General',
           Difficulty: questionData.difficulty
         }}
+        validChapters={chapters}
       />
     </div>
   );

@@ -29,12 +29,14 @@ interface Session {
     isRedFlagSession?: boolean;
     city?: string;
     country?: string;
+    isBlocked?: boolean;
+    blockReason?: string;
 }
 
 export default function SessionManagementPage() {
     const [sessions, setSessions] = useState<Session[]>([]);
     const [loading, setLoading] = useState(true);
-    const [filter, setFilter] = useState('all'); // all, active, redflags
+    const [filter, setFilter] = useState('all'); // all, active, redflags, blocked
     const [search, setSearch] = useState('');
 
     const fetchSessions = async () => {
@@ -105,13 +107,16 @@ export default function SessionManagementPage() {
         if (!matchesSearch) return false;
 
         if (filter === 'active') return session.isActive;
-        if (filter === 'redflags') return session.isRedFlagSession; // This relies on the flag set during login
+        if (filter === 'blocked') return session.isBlocked;
+        if (filter === 'redflags') return session.isRedFlagSession || session.isBlocked; // Include blocked in red flags
         return true;
     });
 
     // Calculate Stats
     const activeCount = sessions.filter(s => s.isActive).length;
-    const redFlagCount = sessions.filter(s => s.isRedFlagSession && s.isActive).length;
+    // Red flags now include sessions that were explicitly blocked due to limits
+    const redFlagCount = sessions.filter(s => (s.isRedFlagSession && s.isActive) || s.isBlocked).length;
+    const blockedCount = sessions.filter(s => s.isBlocked).length;
 
     return (
         <div className="p-6 space-y-8 bg-slate-50 dark:bg-slate-950 min-h-screen text-slate-900 dark:text-slate-100">
@@ -138,7 +143,7 @@ export default function SessionManagementPage() {
             </div>
 
             {/* Stats Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                 <Card className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800">
                     <CardHeader className="pb-2">
                         <CardTitle className="text-sm font-medium text-slate-500">Active Sessions</CardTitle>
@@ -155,7 +160,17 @@ export default function SessionManagementPage() {
                     </CardHeader>
                     <CardContent>
                         <div className="text-3xl font-bold text-red-600">{redFlagCount}</div>
-                        <p className="text-xs text-slate-400">Users on {'>'}3 devices</p>
+                        <p className="text-xs text-slate-400">Users on {'>'}3 devices or blocked</p>
+                    </CardContent>
+                </Card>
+
+                <Card className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800">
+                    <CardHeader className="pb-2">
+                        <CardTitle className="text-sm font-medium text-slate-500">Blocked Attempts</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="text-3xl font-bold text-orange-600">{blockedCount}</div>
+                        <p className="text-xs text-slate-400">Logins blocked by rules</p>
                     </CardContent>
                 </Card>
 
@@ -173,7 +188,7 @@ export default function SessionManagementPage() {
             {/* Filters & Table */}
             <div className="space-y-4">
                 <div className="flex flex-col sm:flex-row justify-between gap-4">
-                    <div className="flex gap-2 bg-slate-100 dark:bg-slate-900 p-1 rounded-lg w-fit">
+                    <div className="flex gap-2 bg-slate-100 dark:bg-slate-900 p-1 rounded-lg w-fit flex-wrap">
                         <button
                             onClick={() => setFilter('all')}
                             className={`px-4 py-2 text-sm font-semibold rounded-md transition-all ${filter === 'all' ? 'bg-white dark:bg-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
@@ -185,6 +200,12 @@ export default function SessionManagementPage() {
                             className={`px-4 py-2 text-sm font-semibold rounded-md transition-all ${filter === 'active' ? 'bg-white dark:bg-slate-800 shadow-sm text-green-600' : 'text-slate-500 hover:text-slate-700'}`}
                         >
                             Active Only
+                        </button>
+                        <button
+                            onClick={() => setFilter('blocked')}
+                            className={`px-4 py-2 text-sm font-semibold rounded-md transition-all ${filter === 'blocked' ? 'bg-white dark:bg-slate-800 shadow-sm text-orange-600' : 'text-slate-500 hover:text-slate-700'}`}
+                        >
+                            Blocked
                         </button>
                         <button
                             onClick={() => setFilter('redflags')}
@@ -224,14 +245,19 @@ export default function SessionManagementPage() {
                                 ) : filteredSessions.length === 0 ? (
                                     <tr><td colSpan={6} className="px-6 py-12 text-center text-slate-500">No sessions found matching filters.</td></tr>
                                 ) : filteredSessions.map((session) => (
-                                    <tr key={session.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors">
+                                    <tr key={session.id} className={`transition-colors ${session.isBlocked ? 'bg-red-50/50 dark:bg-red-900/10' : 'hover:bg-slate-50/50 dark:hover:bg-slate-800/50'}`}>
                                         <td className="px-6 py-4">
                                             <div className="flex flex-col">
                                                 <span className="font-bold text-slate-900 dark:text-white">{session.userName || 'User'}</span>
                                                 <span className="text-xs text-slate-500">{session.email}</span>
-                                                {session.isRedFlagSession && (
+                                                {session.isRedFlagSession && !session.isBlocked && (
                                                     <span className="mt-1 inline-flex items-center gap-1 text-[10px] font-bold text-red-600 bg-red-50 dark:bg-red-900/20 px-1.5 py-0.5 rounded w-fit">
                                                         <AlertTriangle className="w-3 h-3" /> Multi-Login Detected
+                                                    </span>
+                                                )}
+                                                {session.blockReason && (
+                                                    <span className="mt-1 inline-flex items-center gap-1 text-[10px] font-bold text-red-600 bg-red-50 dark:bg-red-900/20 px-1.5 py-0.5 rounded w-fit">
+                                                        <Ban className="w-3 h-3" /> {session.blockReason}
                                                     </span>
                                                 )}
                                             </div>
@@ -259,7 +285,9 @@ export default function SessionManagementPage() {
                                             </div>
                                         </td>
                                         <td className="px-6 py-4">
-                                            {session.isActive ? (
+                                            {session.isBlocked ? (
+                                                <Badge variant="destructive" className="bg-red-600/10 text-red-600 hover:bg-red-600/20 border-red-600/20 shadow-none">Blocked</Badge>
+                                            ) : session.isActive ? (
                                                 <Badge className="bg-green-100 text-green-700 hover:bg-green-100 dark:bg-green-900/30 dark:text-green-400 border-none shadow-none">Active</Badge>
                                             ) : (
                                                 <Badge variant="outline" className="text-slate-400 border-slate-200">Ended</Badge>

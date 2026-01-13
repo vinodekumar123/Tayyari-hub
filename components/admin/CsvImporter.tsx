@@ -42,6 +42,7 @@ interface CsvImporterProps {
     defaultMetadata: Record<string, any>;
     metadataLabels?: Record<string, string>; // Friendly labels for metadata keys
     initialData?: any[]; // Data injected directly (e.g. from AI), bypassing upload
+    validChapters?: string[];
 }
 
 export function CsvImporter({
@@ -50,7 +51,8 @@ export function CsvImporter({
     onImport,
     defaultMetadata,
     metadataLabels = {},
-    initialData
+    initialData,
+    validChapters = []
 }: CsvImporterProps) {
 
     const [step, setStep] = useState<'upload' | 'preview'>('upload');
@@ -79,6 +81,15 @@ export function CsvImporter({
             const normalizedCorrect = row.correctAnswer.trim();
             const match = options.find(o => o.toString().trim() === normalizedCorrect);
             if (!match) errors.push(`Correct answer '${row.correctAnswer}' not found in options`);
+        }
+
+        // Validate Chapter
+        if (validChapters.length > 0 && row.chapter) {
+            const chapterMatch = validChapters.includes(row.chapter);
+            if (!chapterMatch) {
+                // Try fuzzy match or warn
+                errors.push(`Invalid Chapter: '${row.chapter}'. Must match subject chapters.`);
+            }
         }
 
         return errors;
@@ -117,8 +128,8 @@ export function CsvImporter({
 
     const downloadTemplate = () => {
         // Only include question-specific fields, not the global metadata
-        const headers = ['questionText', 'option1', 'option2', 'option3', 'option4', 'correctAnswer', 'explanation', 'topic', 'difficulty', 'imageUrl'];
-        const dummy = ['What is the speed of light?', '3x10^8 m/s', '3x10^6 m/s', 'Zero', 'Infinite', '3x10^8 m/s', 'It is constant in vacuum', 'Light', 'Medium', ''];
+        const headers = ['questionText', 'option1', 'option2', 'option3', 'option4', 'correctAnswer', 'explanation', 'chapter', 'difficulty', 'imageUrl'];
+        const dummy = ['What is the speed of light?', '3x10^8 m/s', '3x10^6 m/s', 'Zero', 'Infinite', '3x10^8 m/s', 'It is constant in vacuum', validChapters[0] || 'Chapter 1', 'Medium', ''];
         const csvContent = "data:text/csv;charset=utf-8," + [headers.join(','), dummy.join(',')].join('\n');
         const encodedUri = encodeURI(csvContent);
         const link = document.createElement("a");
@@ -311,7 +322,7 @@ export function CsvImporter({
                                                         <TableCell className="text-xs text-muted-foreground">{i + 1}</TableCell>
                                                         <TableCell className="max-w-[400px]">
                                                             <div className="whitespace-pre-wrap font-medium pr-2">{row.questionText}</div>
-                                                            {row.topic && <Badge variant="outline" className="text-[10px] mt-1">{row.topic}</Badge>}
+                                                            {row.chapter && <Badge variant="outline" className="text-[10px] mt-1">{row.chapter}</Badge>}
                                                         </TableCell>
                                                         <TableCell className="text-xs text-muted-foreground max-w-[250px] whitespace-pre-wrap">
                                                             {[row.option1, row.option2, row.option3, row.option4].join(', ')}
@@ -395,12 +406,13 @@ export function CsvImporter({
                 onOpenChange={(open) => !open && setEditingRow(null)}
                 rowData={editingRow?.data}
                 onSave={(newData) => handleSaveEdit(editingRow!.index, newData)}
+                validChapters={validChapters}
             />
         </Dialog>
     );
 }
 
-function EditRowDialog({ open, onOpenChange, rowData, onSave }: { open: boolean, onOpenChange: (o: boolean) => void, rowData: any, onSave: (d: any) => void }) {
+function EditRowDialog({ open, onOpenChange, rowData, onSave, validChapters = [] }: { open: boolean, onOpenChange: (o: boolean) => void, rowData: any, onSave: (d: any) => void, validChapters?: string[] }) {
     const [localData, setLocalData] = useState<any>(rowData || {});
 
     // Sync state when rowData changes
@@ -464,12 +476,26 @@ function EditRowDialog({ open, onOpenChange, rowData, onSave }: { open: boolean,
                             />
                         </div>
                         <div className="grid gap-2">
-                            <label className="text-sm font-medium">Topic</label>
-                            <input
-                                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                                value={localData.topic || ''}
-                                onChange={(e) => handleChange('topic', e.target.value)}
-                            />
+                            <label className="text-sm font-medium">Chapter</label>
+                            {validChapters.length > 0 ? (
+                                <select
+                                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                                    value={localData.chapter || ''}
+                                    onChange={(e) => handleChange('chapter', e.target.value)}
+                                >
+                                    <option value="" disabled>Select Chapter</option>
+                                    {validChapters.map(ch => (
+                                        <option key={ch} value={ch}>{ch}</option>
+                                    ))}
+                                </select>
+                            ) : (
+                                <input
+                                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                                    value={localData.chapter || ''}
+                                    onChange={(e) => handleChange('chapter', e.target.value)}
+                                    placeholder="No chapters loaded, type manually"
+                                />
+                            )}
                         </div>
                         <div className="grid gap-2">
                             <label className="text-sm font-medium">Difficulty</label>

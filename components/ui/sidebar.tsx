@@ -79,6 +79,8 @@ export function Sidebar() {
   // Refs for cleanup
   const unsubscribeSessionRef = useRef<() => void | null>(null);
   const heartbeatIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  // FIX #4: Separate interval for faster revocation detection
+  const revocationCheckIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Initialize FCM Token
   useFcmToken();
@@ -250,6 +252,17 @@ export function Sidebar() {
           }, 5 * 60 * 1000);
           heartbeatIntervalRef.current = hbInterval;
 
+          // FIX #4: Faster revocation check every 30 seconds
+          // This ensures admin force-logout is detected quickly without overwhelming Firestore
+          const revocationInterval = setInterval(() => {
+            ensureSessionActive(user).catch((err) => {
+              if (err.message && (err.message.includes("revoked") || err.message.includes("blocked"))) {
+                setSessionExpiredOpen(true);
+              }
+            });
+          }, 30 * 1000); // 30 seconds
+          revocationCheckIntervalRef.current = revocationInterval;
+
           const data = snap.data();
           const role = data.role || (data.superadmin ? 'superadmin' : (data.admin ? 'admin' : 'student'));
           setUserRole(role);
@@ -286,6 +299,11 @@ export function Sidebar() {
           clearInterval(heartbeatIntervalRef.current);
           heartbeatIntervalRef.current = null;
         }
+        // FIX #4: Cleanup revocation check interval
+        if (revocationCheckIntervalRef.current) {
+          clearInterval(revocationCheckIntervalRef.current);
+          revocationCheckIntervalRef.current = null;
+        }
 
         setIsAdmin(false);
         setIsSuperAdmin(false);
@@ -301,6 +319,10 @@ export function Sidebar() {
       }
       if (heartbeatIntervalRef.current) {
         clearInterval(heartbeatIntervalRef.current);
+      }
+      // FIX #4: Cleanup revocation check interval
+      if (revocationCheckIntervalRef.current) {
+        clearInterval(revocationCheckIntervalRef.current);
       }
     };
   }, []); // Empty dependency array means runs once. But adminMenu accesses state. 

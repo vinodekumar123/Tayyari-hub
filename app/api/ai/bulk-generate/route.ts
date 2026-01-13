@@ -6,21 +6,25 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
 
 export async function POST(req: NextRequest) {
     try {
-        const { prompt, count, metadata, strictMode, correctGrammar, action = 'generate' } = await req.json();
+        const { prompt, count, metadata, strictMode, correctGrammar, validChapters, action = 'generate' } = await req.json();
 
         if (!process.env.GEMINI_API_KEY) {
             return NextResponse.json({ error: 'GEMINI_API_KEY not configured' }, { status: 500 });
         }
 
-        // Using 2.0 Flash for speed and improved logic
-        const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-exp' });
+        // Using 2.0 Flash with JSON constraints
+        const model = genAI.getGenerativeModel({
+            model: 'gemini-2.0-flash-exp',
+            generationConfig: { responseMimeType: 'application/json' }
+        });
 
         let finalPrompt = '';
 
         if (action === 'parse') {
             finalPrompt = `
            You are an expert data extraction AI.
-           Your task is to PARSE AND STRUCTURE the following raw text containing multiple-choice questions.
+           Your task is to PARSE, STRUCTURE, and CLASSIFY the following raw text containing multiple-choice questions.
+           CRITICAL: You must Analyze the content of each question and assign it to the most appropriate 'chapter' from the provided list below.
 
            RAW TEXT:
            """
@@ -47,32 +51,44 @@ export async function POST(req: NextRequest) {
       - option3 (string)
       - option4 (string)
       - correctAnswer (string) - MUST be exactly equal to one of the options.
-      - explanation (string) - Brief explanation (if found in text, otherwise infer it).
+      - explanation (string) - Brief explanation.
       - difficulty (string) - Detect from text or default to "Medium".
-      - topic (string) - Detect main topic.
+      - chapter (string) - MUST be selected from the valid chapters list below.
+      - subject (string) - The subject of the content.
 
       Constraints:
       1. Ensure options are distinct.
-      2. Ensure correctAnswer matches one option exactly (case-sensitive).
+      2. Ensure correctAnswer matches one option exactly.
       3. No Markdown formatting in the explanation.
     `;
 
+        if (validChapters && Array.isArray(validChapters) && validChapters.length > 0) {
+            finalPrompt += `
+      4. CHAPTER SELECTION (CRITICAL):
+         You MUST categorize each question into one of the following chapters.
+         Do NOT invent new chapters. Use the closest match from this list:
+         VALID CHAPTERS: ${JSON.stringify(validChapters)}
+      `;
+        }
+
         if (strictMode) {
             finalPrompt += `
-      4. STRICTLY RESPECT CONTEXT:
-         - Subject: ${metadata.subject}
-         - Chapter: ${metadata.chapter}
-         - Difficulty Level: ${metadata.difficulty} (Make ALL questions this difficulty).
+      5. STRICT CONTEXT:
+         - Subject: "${metadata.subject}" (Set 'subject' field to this value for ALL questions).
+         - Chapter: "${metadata.chapter}" (If this is not "All Chapters", force this chapter for ALL questions, ignoring auto-detection).
+         - Difficulty: "${metadata.difficulty}" (Force this difficulty).
       `;
         } else {
             finalPrompt += `
-      4. Auto-detect and assign appropriate 'difficulty' (Easy/Medium/Hard) and 'topic' for each question based on its content.
+      5. AUTO-DETECT:
+         - Subject: "${metadata.subject}" (Use this subject).
+         - Logic: Auto-detect the most appropriate 'difficulty' and 'chapter' (from the valid list) based on content.
       `;
         }
 
         if (correctGrammar) {
             finalPrompt += `
-      5. GRAMMAR & SPELLING: Ensure all questions and explanations follow strict academic English standards. Proofread carefully.
+      6. GRAMMAR: Ensure strict academic English.
       `;
         }
 
