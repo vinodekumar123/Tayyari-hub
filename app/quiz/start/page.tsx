@@ -23,6 +23,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { ArrowLeft, ArrowRight, Info, BookOpen, Clock, Send, Download, CheckCircle, Flag, ArrowUp, ArrowDown, Edit, WifiOff, AlertTriangle, Save, LogOut, Loader2, Grip, X } from 'lucide-react';
+import { QuestionCard } from './components/QuestionCard';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -1015,101 +1016,21 @@ const StartQuizPageContent: React.FC = () => {
             {Object.entries(pageGroupedQuestions).map(([subject, questions]) => (
               <div key={subject} className="space-y-6">
                 <h2 className="text-xl font-bold text-gray-800 dark:text-gray-200 border-b dark:border-gray-800 pb-2">{subject}</h2>
-                {questions.map((q, idx) => {
-                  const isCorrectAnswerVisible = isAdmin && showAnswers;
-                  return (
-                    <div key={q.id} className={`space-y-4 p-4 rounded-lg transition-colors ${isCorrectAnswerVisible ? 'bg-slate-50 border border-slate-100' : ''}`}>
-                      <div className="flex justify-between items-start gap-4">
-                        <div className="text-lg font-medium prose max-w-none flex-1 group relative dark:prose-invert">
-                          <span className="font-bold text-slate-700 dark:text-slate-300">Q{startIdx + idx + 1}. </span>
-                          {/* FIX: Sanitize HTML to prevent XSS */}
-                          <span dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(q.questionText) }} />
-
-                          {/* Admin Quick Edit Link */}
-                          {isAdmin && (
-                            <a
-                              href={`/admin/questions/create?edit=${q.id}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="absolute -right-6 top-0 opacity-0 group-hover:opacity-100 transition-opacity p-1 text-slate-400 hover:text-blue-600"
-                              title="Edit Question"
-                            >
-                              <Edit className="w-4 h-4" />
-                            </a>
-                          )}
-                        </div>
-                        <button onClick={() => toggleFlag(q.id)} className={`p-2 rounded-full hover:bg-slate-100 ${flags[q.id] ? 'text-yellow-500' : 'text-slate-300'}`}>
-                          <Flag className="w-5 h-5 fill-current" />
-                        </button>
-                      </div>
-
-                      <div className="grid gap-3">
-                        {q.options.map((opt, i) => {
-                          const isSelected = answers[q.id] === opt;
-                          const isCorrect = isCorrectAnswerVisible && opt === q.correctAnswer;
-
-                          let borderClass = 'border-gray-200 dark:border-gray-700';
-                          let bgClass = 'bg-white dark:bg-gray-800/50 hover:bg-gray-50 dark:hover:bg-gray-800';
-
-                          if (isSelected) {
-                            borderClass = 'border-blue-500 ring-1 ring-blue-500 dark:border-blue-400 dark:ring-blue-400';
-                            bgClass = 'bg-blue-50 dark:bg-blue-900/20';
-                          }
-                          if (isCorrect) {
-                            borderClass = 'border-green-500 ring-2 ring-green-500 dark:border-green-400 dark:ring-green-400';
-                            bgClass = 'bg-green-50 dark:bg-green-900/20';
-                          }
-
-                          return (
-                            <label key={i} className={`flex items-center p-4 border rounded-xl cursor-pointer transition-all ${borderClass} ${bgClass} relative overflow-hidden group`}>
-                              <div className="flex items-center h-5">
-                                <input
-                                  type="radio"
-                                  name={q.id}
-                                  value={opt}
-                                  checked={isSelected}
-                                  onChange={() => {
-                                    handleAnswer(q.id, opt);
-                                    if (!isSelected) {
-                                      // Motivational Toast every 5 answers
-                                      const count = Object.keys(answers).length + 1;
-                                      if (count > 0 && count % 5 === 0) {
-                                        toast.success(`Great momentum! ${count} questions answered!`, {
-                                          icon: '🔥',
-                                          duration: 2000,
-                                          position: 'bottom-center'
-                                        });
-                                      }
-                                    }
-                                  }}
-                                  className="h-4 w-4 text-blue-600 focus:ring-blue-500"
-                                />
-                              </div>
-                              <div className="ml-3 text-sm font-medium w-full flex items-center gap-3">
-                                <div className="flex items-center justify-center w-6 h-6 rounded-full bg-slate-100 dark:bg-slate-700 text-xs font-bold text-slate-500 dark:text-slate-300 group-hover:bg-blue-100 dark:group-hover:bg-blue-900/50 group-hover:text-blue-600 dark:group-hover:text-blue-300 transition-colors">
-                                  {['A', 'B', 'C', 'D'][i]}
-                                </div>
-                                {/* FIX: Sanitize HTML in options to prevent XSS */}
-                                <span className="prose max-w-none" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(opt) }} />
-                              </div>
-                              {isCorrect && (
-                                <div className="absolute right-0 top-0 bottom-0 w-1.5 bg-green-500"></div>
-                              )}
-                            </label>
-                          );
-                        })}
-                      </div>
-
-                      {/* Show explanation immediately for admin answering mode */}
-                      {isCorrectAnswerVisible && q.explanation && (
-                        <div className="mt-4 p-4 bg-green-50 border border-green-100 rounded-lg text-sm text-green-800 animate-in fade-in slide-in-from-top-2">
-                          <p className="font-bold flex items-center gap-2 mb-1"><Info className="w-4 h-4" /> Explanation:</p>
-                          <p>{q.explanation}</p>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
+                {questions.map((q, idx) => (
+                  <QuestionCard
+                    key={q.id}
+                    question={q}
+                    index={idx}
+                    totalIndex={startIdx + idx}
+                    answer={answers[q.id]}
+                    isFlagged={!!flags[q.id]}
+                    isAdmin={isAdmin}
+                    showAnswers={showAnswers}
+                    onAnswer={handleAnswer}
+                    onToggleFlag={toggleFlag}
+                    totalAnswered={Object.keys(answers).length}
+                  />
+                ))}
               </div>
             ))}
 
