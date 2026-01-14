@@ -38,18 +38,10 @@ import { toast } from 'sonner';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import { ModeToggle } from '@/components/mode-toggle';
-import DOMPurify from 'isomorphic-dompurify'; // XSS protection
+import DOMPurify from 'dompurify'; // XSS protection
+import { Question } from '@/types';
 
-interface Question {
-  id: string;
-  questionText: string;
-  options: string[];
-  correctAnswer?: string;
-  explanation?: string;
-  showExplanation?: boolean;
-  subject?: string | { id: string; name: string };
-  graceMark?: boolean;
-}
+
 
 // FIX: Extract magic numbers to constants
 const AUTOSAVE_DEBOUNCE_MS = 3000;
@@ -105,6 +97,7 @@ const StartQuizPageContent: React.FC = () => {
   const [showAnswers, setShowAnswers] = useState(false);
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [flags, setFlags] = useState<Record<string, boolean>>({});
+  const [timeLogs, setTimeLogs] = useState<Record<string, number>>({});
   const [currentPage, setCurrentPage] = useState(0);
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false); // Loader state
@@ -293,6 +286,7 @@ const StartQuizPageContent: React.FC = () => {
     if (!quizId || !user) return;
 
     const load = async () => {
+      let loadedQuiz: QuizData;
       // Server-side validation integration
       try {
         const validationRes = await fetch('/api/quiz/validate', {
@@ -309,7 +303,8 @@ const StartQuizPageContent: React.FC = () => {
           return;
         }
 
-        const { valid, quiz: loadedQuiz, currentAttemptCount, maxAttempts } = await validationRes.json();
+        const { valid, quiz: quizDataRes, currentAttemptCount, maxAttempts } = await validationRes.json();
+        loadedQuiz = quizDataRes;
 
         setQuiz(loadedQuiz as QuizData);
         if (!isAdmin) setAttemptCount(currentAttemptCount);
@@ -322,42 +317,24 @@ const StartQuizPageContent: React.FC = () => {
         return;
       }
 
-      // Check for implementation of resume (locally or from firestore check which should happen after valid load)
-      // Check for an incomplete attempt
-      const resumeSnap = await getDoc(doc(db, 'users', user.uid, 'quizAttempts', quizId));
-      if (resumeSnap.exists() && !resumeSnap.data().completed && resumeSnap.data().attemptNumber === undefined) {
-        // Resume incomplete attempt
-        const rt = resumeSnap.data();
-        setAnswers(rt.answers || {});
-        setFlags(rt.flags || {});
-        const questionIndex = rt.currentIndex || 0;
-        // Need to make sure quiz is set before this, but quiz is set above from API response
-        // Wait, 'quiz' state update is async/batched. 
-        // We might not have 'quizData.questionsPerPage' available immediately from state 'quiz'
-        // Using 'loadedQuiz' from API response instead
-        // Wait, TS might complain about loadedQuiz scoping. It's inside try block.
-        // Let's refactor slightly to separate fetch and logic
-      } else {
-        // New attempt logic
-      }
 
       // Check for an incomplete attempt
       const resumeSnap = await getDoc(doc(db, 'users', user.uid, 'quizAttempts', quizId));
       if (resumeSnap.exists() && !resumeSnap.data().completed && resumeSnap.data().attemptNumber === undefined) {
         // Resume incomplete attempt
-        const rt = resumeSnap.data();
+        const rt = resumeSnap.data() as any;
         setAnswers(rt.answers || {});
         setFlags(rt.flags || {});
         const questionIndex = rt.currentIndex || 0;
-        setCurrentPage(Math.floor(questionIndex / (quizData.questionsPerPage || 1)));
+        setCurrentPage(Math.floor(questionIndex / (loadedQuiz.questionsPerPage || 1)));
         if (!isAdmin && rt.remainingTime !== undefined) {
           setTimeLeft(rt.remainingTime);
         } else {
-          setTimeLeft(quizData.duration * 60);
+          setTimeLeft(loadedQuiz.duration * 60);
         }
       } else {
         // New attempt: reset timer and THEN initialize doc (after validation)
-        setTimeLeft(quizData.duration * 60);
+        setTimeLeft(loadedQuiz.duration * 60);
         setAnswers({});
         setFlags({});
         setCurrentPage(0);
@@ -367,7 +344,7 @@ const StartQuizPageContent: React.FC = () => {
           flags: {},
           currentIndex: 0,
           completed: false,
-          remainingTime: quizData.duration * 60,
+          remainingTime: loadedQuiz.duration * 60,
         }, { merge: true });
       }
 
@@ -672,7 +649,8 @@ const StartQuizPageContent: React.FC = () => {
     `;
 
     const groupedQuestions = quiz.selectedQuestions.reduce((acc, question) => {
-      const subjectName = typeof question.subject === 'object' ? question.subject?.name : question.subject || 'Uncategorized';
+      const subj = question.subject as any;
+      const subjectName = typeof subj === 'object' ? subj?.name : subj || 'Uncategorized';
       if (!acc[subjectName]) {
         acc[subjectName] = [];
       }
@@ -803,14 +781,14 @@ const StartQuizPageContent: React.FC = () => {
     };
   }, [loading, quiz]);
 
-  if (loading || !quiz) return <p className="text-center py-10">Loading...</p>;
-
   // FIX: Memoize expensive computations (prevents recalculation on every render)
-  const questionsPerPage = quiz.questionsPerPage || 1;
+  const questionsPerPage = quiz?.questionsPerPage || 1;
 
   const flattenedQuestions = useMemo(() => {
+    if (!quiz) return [];
     const groupedQuestions = quiz.selectedQuestions.reduce((acc, question) => {
-      const subjectName = typeof question.subject === 'object' ? question.subject?.name : question.subject || 'Uncategorized';
+      const subj = question.subject as any;
+      const subjectName = typeof subj === 'object' ? subj?.name : subj || 'Uncategorized';
       if (!acc[subjectName]) acc[subjectName] = [];
       acc[subjectName].push(question);
       return acc;
@@ -827,7 +805,8 @@ const StartQuizPageContent: React.FC = () => {
 
   const pageGroupedQuestions = useMemo(() => {
     return qSlice.reduce((acc, question) => {
-      const subjectName = typeof question.subject === 'object' ? question.subject?.name : question.subject || 'Uncategorized';
+      const subj = question.subject as any;
+      const subjectName = typeof subj === 'object' ? subj?.name : subj || 'Uncategorized';
       if (!acc[subjectName]) acc[subjectName] = [];
       acc[subjectName].push(question);
       return acc;
@@ -844,6 +823,8 @@ const StartQuizPageContent: React.FC = () => {
   const skippedQuestionIndexes = flattenedQuestions.map((q, idx) => ({ q, idx })).filter(({ q }) => !answers[q.id] || answers[q.id] === '').map(({ idx }) => idx + 1);
   const flaggedQuestionIndexes = flattenedQuestions.map((q, idx) => ({ q, idx })).filter(({ q }) => flags[q.id]).map(({ idx }) => idx + 1);
   const jumpToQuestion = (oneBasedIndex: number) => { setCurrentPage(Math.floor((oneBasedIndex - 1) / questionsPerPage)); setShowSummaryModal(false); window.scrollTo({ top: 0, behavior: 'smooth' }); };
+
+  if (loading || !quiz) return <p className="text-center py-10">Loading...</p>;
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950 px-4 transition-colors duration-300">

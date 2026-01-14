@@ -1,6 +1,6 @@
 import React from 'react';
 import { Flag, Edit, Info } from 'lucide-react';
-import DOMPurify from 'isomorphic-dompurify';
+import DOMPurify from 'dompurify';
 import { toast } from 'sonner';
 import { Question } from '@/types';
 
