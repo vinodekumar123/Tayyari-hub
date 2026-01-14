@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { FieldValue } from 'firebase-admin/firestore';
-import { adminDb } from '@/app/firebaseAdmin';
+import { adminDb } from '@/lib/firebase-admin';
 
 // Generate idempotency key from request
 function generateIdempotencyKey(userId: string, quizId: string, timestamp: number): string {

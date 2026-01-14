@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { doc, getDoc, getDocs, collection, query, where } from 'firebase/firestore';
-import { adminDb } from '@/app/firebaseAdmin';
+import { adminDb } from '@/lib/firebase-admin';
 
 export async function POST(request: NextRequest) {
     try {

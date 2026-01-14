@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { FieldValue } from 'firebase-admin/firestore';
-import { adminDb } from '@/app/firebaseAdmin';
+import { adminDb } from '@/lib/firebase-admin';
 
 // Rate limiting map (in-memory, simple implementation)
 const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
