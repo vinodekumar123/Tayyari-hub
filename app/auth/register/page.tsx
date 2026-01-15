@@ -33,7 +33,13 @@ export default function RegisterPage() {
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       // Log initial session for new user
-      await logUserSession(userCredential.user).catch(console.error);
+      // Log initial session for new user
+      try {
+        await logUserSession(userCredential.user);
+      } catch (sessionError) {
+        console.warn('Initial session logging failed, will retry on next page load:', sessionError);
+        // Don't block registration flow
+      }
       router.push("/auth/onboarding");
     } catch (err: any) {
       setError(

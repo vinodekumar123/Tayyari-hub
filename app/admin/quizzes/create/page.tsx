@@ -590,7 +590,7 @@ function CreateQuizContent() {
 
     try {
       const { updateQuestionUsage } = await import('../../../lib/analytics');
-      const currentIds = quizConfig.selectedQuestions.map(q => q.id);
+      const currentIds = (quizConfig.selectedQuestions || []).map(q => q.id);
       let previousIds = [];
 
       if (isEditMode) {
@@ -625,7 +625,7 @@ function CreateQuizContent() {
 
       setLoadingQuestions(true); // Re-use loading state or add a new one? Re-using is fine or we can just block interaction.
 
-      const selectedQuestions = quizConfig.selectedQuestions;
+      const selectedQuestions = quizConfig.selectedQuestions || [];
       const batchSize = 10; // Check/Save in small chunks to avoid limits
       let addedCount = 0;
 

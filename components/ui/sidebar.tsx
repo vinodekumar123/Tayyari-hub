@@ -81,6 +81,7 @@ export function Sidebar() {
   const heartbeatIntervalRef = useRef<NodeJS.Timeout | null>(null);
   // FIX #4: Separate interval for faster revocation detection
   const revocationCheckIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const loginTimeRef = useRef<number>(0);
 
   // Initialize FCM Token
   useFcmToken();
@@ -227,6 +228,7 @@ export function Sidebar() {
 
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
+        loginTimeRef.current = Date.now(); // Mark login time to allow grace period
         const userRef = doc(db, 'users', user.uid);
         const snap = await getDoc(userRef);
         if (snap.exists()) {
@@ -255,6 +257,11 @@ export function Sidebar() {
           // FIX #4: Faster revocation check every 30 seconds
           // This ensures admin force-logout is detected quickly without overwhelming Firestore
           const revocationInterval = setInterval(() => {
+            // Grace period: skip check within 10 seconds of login to prevent race conditions
+            if (Date.now() - loginTimeRef.current < 10000) {
+              return;
+            }
+
             ensureSessionActive(user).catch((err) => {
               if (err.message && (err.message.includes("revoked") || err.message.includes("blocked"))) {
                 setSessionExpiredOpen(true);

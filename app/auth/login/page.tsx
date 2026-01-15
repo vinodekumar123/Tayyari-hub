@@ -132,7 +132,7 @@ export default function LoginPage() {
         await logUserSession(userCredential.user);
         // Success - reset rate limit
         resetRateLimit();
-      } catch (sessionError) {
+      } catch (sessionError: any) {
         // Session logging failed - this is critical
         console.error("Session logging failed:", sessionError);
 
@@ -144,8 +144,23 @@ export default function LoginPage() {
           return;
         }
 
-        // For other session errors, show warning but allow login
-        setError('Warning: Session tracking unavailable. Some features may be limited.');
+        // For other errors, try to recover or show specific message
+        if (sessionError instanceof SessionRevokedError) {
+          // This should not happen during fresh login
+          console.warn('Unexpected SessionRevokedError during login');
+        }
+
+        // Check for network/connectivity issues
+        const isNetworkError = sessionError.code === 'unavailable' || sessionError.message?.includes('offline');
+
+        if (isNetworkError) {
+          console.warn('Session tracking deferred due to network issues');
+          // We allow login but warn
+          setError('Warning: Network issues detected. Session tracking may be limited.');
+        } else {
+          // For other session errors, show warning but allow login
+          setError('Warning: Session tracking unavailable. Some features may be limited.');
+        }
         // Don't return - proceed with login
       }
 

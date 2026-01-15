@@ -10,5 +10,28 @@ node_modules/
 out/
 .env
 .env.local
-.DS_Store
 serviceAccountKey.json
+temp-service-account.json
+*firebase-adminsdk*.json
+
+# Logs and Debugging
+debug_log.txt
+*.log
+*.txt
+auth_dry_run.txt
+dry_run_output.txt
+tsc_errors_new.txt
+tsc_output.txt
+lint_output.txt
+build-errors.txt
+
+# Scripts and Temp
+fix-encoding.ps1
+check-data.js
+debug-questions.js
+list-my-models.js
+runBatches.js
+
+# OS specific
+.DS_Store
+Thumbs.db

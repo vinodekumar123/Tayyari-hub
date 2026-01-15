@@ -80,20 +80,25 @@ const StartQuizPageContent: React.FC = () => {
   // FIX: Validate quiz ID exists
   const quizId = searchParams.get('id');
 
-  // Early return if no quiz ID
+  // Declare all state FIRST before any effects that use them
+  const [user, setUser] = useState<User | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [userRole, setUserRole] = useState<'admin' | 'teacher' | 'student'>('student');
+  const [quizMode, setQuizMode] = useState<'preview' | 'attempt' | null>(null);
+  const [authLoading, setAuthLoading] = useState(true); // Track auth loading state
+  const [quiz, setQuiz] = useState<QuizData | null>(null);
+
+  // Early return if no quiz ID - but wait for auth to load first
   useEffect(() => {
-    if (!quizId) {
-      router.push('/dashboard/student');
+    if (!quizId && user !== null) {
+      // Only redirect after we know the user's role
+      router.push(isAdmin ? '/dashboard/admin' : '/dashboard/student');
     }
-  }, [quizId, router]);
+  }, [quizId, router, isAdmin, user]);
 
   if (!quizId) {
     return <div className="flex justify-center items-center min-h-screen">Redirecting...</div>;
   }
-
-  const [user, setUser] = useState<User | null>(null);
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [quiz, setQuiz] = useState<QuizData | null>(null);
   const [showAnswers, setShowAnswers] = useState(false);
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [flags, setFlags] = useState<Record<string, boolean>>({});
@@ -107,6 +112,7 @@ const StartQuizPageContent: React.FC = () => {
   const [showSummaryModal, setShowSummaryModal] = useState(false);
   const [showSaveConfirm, setShowSaveConfirm] = useState(false);
   const [showNavGrid, setShowNavGrid] = useState(false);
+  const [validationError, setValidationError] = useState<{ title: string; message: string } | null>(null);
   const [timeLeft, setTimeLeft] = useState(0);
   const [hasLoadedTime, setHasLoadedTime] = useState(false);
   const [attemptCount, setAttemptCount] = useState(0);
@@ -134,6 +140,7 @@ const StartQuizPageContent: React.FC = () => {
     currentIndex: number;
     remainingTime: number;
   }) => {
+    // Skip autosave for admins to avoid cluttering DB
     if (!user || !quizId || isAdmin) return;
 
     try {
@@ -226,7 +233,7 @@ const StartQuizPageContent: React.FC = () => {
   }, [isAdmin]);
 
   // Helper: Timeout Promise
-  const timeoutPromise = (ms: number, promise: Promise<any>) => {
+  const timeoutPromise = <T,>(ms: number, promise: Promise<T>): Promise<T> => {
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => reject(new Error('Operation timed out (15s)')), ms);
       promise.then(
@@ -275,45 +282,69 @@ const StartQuizPageContent: React.FC = () => {
         const userSnap = await getDoc(doc(db, 'users', u.uid));
         if (userSnap.exists()) {
           const data = userSnap.data();
-          setIsAdmin(data.admin === true);
+          // Enhanced role detection - check multiple possible fields
+          let role: 'admin' | 'teacher' | 'student' = 'student';
+
+          if (data.admin === true) {
+            role = 'admin';
+          } else if (data.role === 'teacher' || data.role === 'Teacher' || data.isTeacher === true || data.teacher === true) {
+            role = 'teacher';
+          } else if (data.role === 'admin' || data.role === 'Admin') {
+            role = 'admin';
+          } else if (data.role) {
+            role = data.role.toLowerCase() as 'admin' | 'teacher' | 'student';
+          }
+
+          setUserRole(role);
+          setIsAdmin(role === 'admin' || role === 'teacher');
         }
       }
+      // Mark auth as loaded after determining admin status
+      setAuthLoading(false);
     });
     return () => unsub();
   }, []);
 
   useEffect(() => {
-    if (!quizId || !user) return;
+    // Wait for auth to complete before validating
+    if (!quizId || !user || authLoading) return;
 
     const load = async () => {
       let loadedQuiz: QuizData;
       // Server-side validation integration
       try {
-        const validationRes = await fetch('/api/quiz/validate', {
+        const validationRes = await timeoutPromise(15000, fetch('/api/quiz/validate', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ quizId, userId: user.uid, isAdmin })
-        });
+          body: JSON.stringify({ quizId, userId: user.uid, userRole })
+        }));
 
         if (!validationRes.ok) {
           const errorData = await validationRes.json();
-          toast.error(errorData.error || 'Validation Failed', { description: 'Unable to access quiz.' });
-          setLoading(false); // Stop loading on error
-          router.push('/dashboard/student');
-          return;
+          const errorMessage = errorData.primaryError || errorData.error || 'Access Denied';
+          const errorDescription = errorData.errors?.join(' ') || 'Unable to access this quiz.';
+
+          // Show clear error and set state
+          setValidationError({ title: errorMessage, message: errorDescription });
+          setLoading(false);
+          return; // Don't redirect - show error modal instead
         }
 
-        const { valid, quiz: quizDataRes, currentAttemptCount, maxAttempts } = await validationRes.json();
+        const { valid, quiz: quizDataRes, mode, currentAttemptCount, maxAttempts } = await validationRes.json();
         loadedQuiz = quizDataRes;
 
         setQuiz(loadedQuiz as QuizData);
-        if (!isAdmin) setAttemptCount(currentAttemptCount);
+        setQuizMode(mode || 'attempt');
+        if (mode === 'attempt') setAttemptCount(currentAttemptCount || 0);
 
-      } catch (err) {
+      } catch (err: any) {
         console.error("Validation error:", err);
-        toast.error("Validation Error", { description: "Failed to validate quiz access." });
+        // Show detailed error in modal instead of redirecting
+        setValidationError({
+          title: "Connection Error",
+          message: err.message || "Failed to validate quiz access. Please check your internet connection and try again."
+        });
         setLoading(false);
-        router.push('/dashboard/student');
         return;
       }
 
@@ -353,11 +384,11 @@ const StartQuizPageContent: React.FC = () => {
     };
 
     load();
-  }, [quizId, user, isAdmin, router]);
+  }, [quizId, user, userRole, authLoading, router]);
 
   useEffect(() => {
-    // Admin Bypass: Timer Logic Disabled
-    if (isAdmin) return;
+    // Preview Mode Bypass: Timer Logic Disabled for admin/teacher
+    if (quizMode === 'preview') return;
 
     if (loading || !quiz || showTimeoutModal || showSubmissionModal || !hasLoadedTime) return;
 
@@ -380,11 +411,11 @@ const StartQuizPageContent: React.FC = () => {
     }, 1000);
 
     return () => clearInterval(timerRef.current!);
-  }, [loading, quiz, showTimeoutModal, showSubmissionModal, hasLoadedTime, timeLeft, isAdmin]);
+  }, [loading, quiz, showTimeoutModal, showSubmissionModal, hasLoadedTime, timeLeft, quizMode]);
 
   useEffect(() => {
     const handleUnload = () => {
-      if (user && quiz && !isAdmin && !hasSubmittedRef.current) {
+      if (user && quiz && quizMode !== 'preview' && !hasSubmittedRef.current) {
         setDoc(doc(db, 'users', user.uid, 'quizAttempts', quizId), {
           answers,
           flags,
@@ -395,15 +426,15 @@ const StartQuizPageContent: React.FC = () => {
     };
     window.addEventListener('beforeunload', handleUnload);
     return () => window.removeEventListener('beforeunload', handleUnload);
-  }, [answers, flags, currentPage, timeLeft, quiz, user, isAdmin, quizId]);
+  }, [answers, flags, currentPage, timeLeft, quiz, user, quizMode, quizId]);
 
   // FIX: Use debounced API autosave instead of direct Firestore write
   const handleAnswer = (qid: string, val: string) => {
     const updatedAnswers = { ...answers, [qid]: val };
     setAnswers(updatedAnswers);
 
-    // Debounced save via API
-    if (user && quiz && !isAdmin) {
+    // Debounced save via API - skip in preview mode
+    if (user && quiz && quizMode !== 'preview') {
       debouncedAutosave({
         answers: updatedAnswers,
         flags,
@@ -419,8 +450,8 @@ const StartQuizPageContent: React.FC = () => {
     if (!updatedFlags[qid]) delete updatedFlags[qid];
     setFlags(updatedFlags);
 
-    // Debounced save via API
-    if (user && quiz && !isAdmin) {
+    // Debounced save via API - skip in preview mode
+    if (user && quiz && quizMode !== 'preview') {
       debouncedAutosave({
         answers,
         flags: updatedFlags,
@@ -461,6 +492,13 @@ const StartQuizPageContent: React.FC = () => {
 
   // FIX: Consolidated submission logic with single guard and timer cleanup
   const handleSubmit = async (force: boolean = false) => {
+    // Preview Mode: Just return to dashboard
+    if (quizMode === 'preview') {
+      toast.info('Preview mode - returning to dashboard');
+      const dashboardPath = userRole === 'admin' ? '/dashboard/admin' : userRole === 'teacher' ? '/dashboard/teacher' : '/dashboard/student';
+      router.push(dashboardPath);
+      return;
+    }
     // SINGLE GUARD: Check if already submitting or submitted
     if (hasSubmittedRef.current || isSubmitting) {
       console.log('Submission blocked: already in progress or completed');
@@ -523,13 +561,19 @@ const StartQuizPageContent: React.FC = () => {
 
       const result = await response.json();
 
-      // Show success and redirect
+      // Show success and conditional redirect
       setShowSubmissionModal(true);
       toast.success(`Quiz submitted! Score: ${result.score}/${result.total}`);
 
       setTimeout(() => {
         setShowSubmissionModal(false);
-        router.push('/quiz/results?id=' + quizId);
+        if (quiz.resultVisibility === 'immediate') {
+          router.push('/dashboard/student/responses?id=' + quizId);
+        } else {
+          // For non-immediate results, just show alert and return to dashboard
+          toast.success("Quiz submitted successfully!");
+          router.push('/dashboard/student');
+        }
       }, 2000);
 
     } catch (error: any) {
@@ -797,7 +841,7 @@ const StartQuizPageContent: React.FC = () => {
     return Object.entries(groupedQuestions)
       .sort(([a], [b]) => a.localeCompare(b))
       .flatMap(([_, questions]) => questions);
-  }, [quiz.selectedQuestions]);
+  }, [quiz]);
 
   const startIdx = currentPage * questionsPerPage;
   const endIdx = startIdx + questionsPerPage;
@@ -827,7 +871,7 @@ const StartQuizPageContent: React.FC = () => {
   if (loading || !quiz) return <p className="text-center py-10">Loading...</p>;
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 px-4 transition-colors duration-300">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 px-0 sm:px-4 transition-colors duration-300">
       {/* (Modals same) */}
       {showTimeoutModal && (<Dialog open={showTimeoutModal} onOpenChange={setShowTimeoutModal}> <DialogContent> <DialogHeader> <DialogTitle>Time is Out!</DialogTitle> </DialogHeader> </DialogContent> </Dialog>)}
 
@@ -864,6 +908,34 @@ const StartQuizPageContent: React.FC = () => {
         </Dialog>
       )}
 
+      {/* Validation Error Alert Dialog */}
+      <AlertDialog open={!!validationError} onOpenChange={() => { }}>
+        <AlertDialogContent className="max-w-md">
+          <AlertDialogHeader>
+            <div className="flex items-center gap-3 text-red-600">
+              <div className="p-2 bg-red-100 rounded-full">
+                <AlertTriangle className="w-6 h-6" />
+              </div>
+              <AlertDialogTitle className="text-xl">{validationError?.title || 'Access Denied'}</AlertDialogTitle>
+            </div>
+            <AlertDialogDescription className="text-base mt-4 text-gray-600 dark:text-gray-400">
+              {validationError?.message || 'You are not authorized to access this quiz.'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="mt-4">
+            <AlertDialogAction
+              onClick={() => {
+                const dashboardPath = userRole === 'admin' ? '/dashboard/admin' : userRole === 'teacher' ? '/dashboard/teacher' : '/dashboard/student';
+                router.push(dashboardPath);
+              }}
+              className="bg-blue-600 hover:bg-blue-700 w-full"
+            >
+              Return to Dashboard
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* FIX: Fixed positioning to prevent layout shift */}
       <header className={`bg-white dark:bg-gray-900 border-b dark:border-gray-800 sticky top-0 z-40 shadow-sm transition-all duration-300`}>
         {!isOnline && (
@@ -871,6 +943,68 @@ const StartQuizPageContent: React.FC = () => {
             <WifiOff className="w-4 h-4" /> You are offline. Don&apos;t worry, your answers are saved locally and will sync when you reconnect.
           </div>
         )}
+
+        {/* Mobile Navigation Modal */}
+        <Dialog open={showNavGrid} onOpenChange={setShowNavGrid}>
+          <DialogContent className="max-w-sm max-h-[80vh] overflow-hidden flex flex-col">
+            <DialogHeader>
+              <DialogTitle>Question Navigator</DialogTitle>
+              <DialogDescription>Jump to any question instantly</DialogDescription>
+            </DialogHeader>
+
+            <div className="flex items-center justify-between py-2 border-b">
+              <span className="text-sm font-medium">Progress: {Object.keys(answers).length}/{flattenedQuestions.length}</span>
+              <div className="flex gap-2 text-xs">
+                <span className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-green-500"></div> Done</span>
+                <span className="flex items-center gap-1"><div className="w-2 h-2 rounded-full ring-2 ring-yellow-400"></div> Flag</span>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-1 mt-2">
+              <div className="grid grid-cols-5 gap-2">
+                {flattenedQuestions.map((q, idx) => {
+                  const isAnswered = !!answers[q.id];
+                  const isFlagged = !!flags[q.id];
+                  const isCurrent = idx >= currentPage * (quiz?.questionsPerPage || 1) && idx < (currentPage + 1) * (quiz?.questionsPerPage || 1);
+
+                  return (
+                    <button
+                      key={q.id}
+                      onClick={() => {
+                        const targetPage = Math.floor(idx / (quiz?.questionsPerPage || 1));
+                        setCurrentPage(targetPage);
+                        setShowNavGrid(false);
+                        setTimeout(() => {
+                          const el = document.getElementById(`question-${q.id}`);
+                          el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        }, 100);
+                      }}
+                      className={`
+                      aspect-square rounded-lg flex items-center justify-center text-sm font-medium transition-all
+                      ${isCurrent ? 'ring-2 ring-offset-2 ring-blue-600 z-10' : ''}
+                      ${isAnswered
+                          ? 'bg-green-100 text-green-700 hover:bg-green-200 border border-green-200'
+                          : 'bg-gray-50 text-gray-700 hover:bg-gray-100 border border-gray-200'}
+                      ${isFlagged ? 'ring-2 ring-yellow-400 ring-offset-1' : ''}
+                    `}
+                    >
+                      {idx + 1}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Mobile Nav Trigger Button - Sticky on Right Side */}
+        <button
+          onClick={() => setShowNavGrid(true)}
+          className="fixed right-0 top-1/2 -translate-y-1/2 z-40 lg:hidden bg-blue-600 text-white p-3 rounded-l-xl shadow-lg border-y border-l border-blue-700 active:scale-95 transition-transform"
+          aria-label="Open Question Navigator"
+        >
+          <Grip className="w-5 h-5" />
+        </button>
 
         {/* Save & Leave Confirmation Dialog */}
         <AlertDialog open={showSaveConfirm} onOpenChange={setShowSaveConfirm}>
@@ -918,14 +1052,14 @@ const StartQuizPageContent: React.FC = () => {
 
             {/* Right Side Controls (Timer) */}
             <div className="flex items-center gap-4 ml-auto">
-              {!isAdmin && (
+              {quizMode !== 'preview' && (
                 <div className="flex items-center gap-2 font-mono text-red-600 dark:text-red-400 font-bold bg-red-50 dark:bg-red-900/20 px-3 py-1 rounded-full border border-red-100 dark:border-red-900/30">
                   <Clock className="w-4 h-4" /> {formatTime(timeLeft)}
                 </div>
               )}
               <ModeToggle />
-              {/* Save & Exit Button */}
-              {!isAdmin && (
+              {/* Save & Exit Button - Hide in preview mode */}
+              {quizMode !== 'preview' && (
                 <Button
                   variant="outline"
                   size="sm"
@@ -945,98 +1079,211 @@ const StartQuizPageContent: React.FC = () => {
         </div>
       </header>
 
-      <main className={`max-w-6xl w-full mx-auto p-4 transition-all duration-500`}>
-        {isAdmin && (
-          <div className="bg-yellow-50 border border-yellow-200 text-yellow-900 px-6 py-4 rounded-xl shadow-sm mb-6 flex flex-col md:flex-row items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-yellow-100 rounded-full"><Info className="w-5 h-5 text-yellow-700" /></div>
-              <div>
-                <p className="font-semibold text-lg">Admin Controls Enabled</p>
-                <p className="text-sm opacity-80">Timer disabled. Attempt limits ignored.</p>
+      {/* Main content with sidebar */}
+      <div className="flex max-w-7xl w-full mx-auto px-0 sm:px-4 gap-6">
+        {/* Sticky Question Navigator Sidebar - Hidden on mobile */}
+        <aside className="hidden lg:block w-64 flex-shrink-0">
+          <div className="sticky top-24 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 shadow-md overflow-hidden">
+            <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-4 py-3">
+              <h3 className="font-bold text-sm">Question Navigator</h3>
+              <p className="text-xs opacity-80 mt-0.5">
+                {Object.keys(answers).length}/{flattenedQuestions.length} answered
+              </p>
+            </div>
+            <div className="p-3 max-h-[60vh] overflow-y-auto">
+              <div className="grid grid-cols-5 gap-2">
+                {flattenedQuestions.map((q, idx) => {
+                  const isAnswered = !!answers[q.id];
+                  const isFlagged = !!flags[q.id];
+                  const isCurrent = idx >= startIdx && idx < endIdx;
+
+                  return (
+                    <button
+                      key={q.id}
+                      onClick={() => {
+                        const targetPage = Math.floor(idx / (quiz?.questionsPerPage || 1));
+                        setCurrentPage(targetPage);
+                        // Scroll to question after page change
+                        setTimeout(() => {
+                          const el = document.getElementById(`question-${q.id}`);
+                          el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        }, 100);
+                      }}
+                      className={`
+                        w-8 h-8 rounded-lg text-xs font-bold transition-all
+                        ${isCurrent ? 'ring-2 ring-blue-500 ring-offset-1' : ''}
+                        ${isAnswered
+                          ? 'bg-green-500 text-white hover:bg-green-600'
+                          : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'}
+                        ${isFlagged ? 'ring-2 ring-yellow-400' : ''}
+                      `}
+                      title={`Q${idx + 1}${isAnswered ? ' (Answered)' : ''}${isFlagged ? ' (Flagged)' : ''}`}
+                    >
+                      {idx + 1}
+                    </button>
+                  );
+                })}
               </div>
             </div>
-            <div className="flex items-center gap-3">
-              <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-lg border border-yellow-200">
-                <span className="text-sm font-medium">View Answers</span>
-                <div
-                  onClick={() => setShowAnswers(!showAnswers)}
-                  className={`w-10 h-5 rounded-full relative cursor-pointer transition-colors ${showAnswers ? 'bg-green-500' : 'bg-gray-300'}`}
-                >
-                  <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow-sm transition-transform ${showAnswers ? 'left-5' : 'left-0.5'}`}></div>
-                </div>
+            {/* Legend */}
+            <div className="px-3 py-2 border-t border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/50 text-xs space-y-1">
+              <div className="flex items-center gap-2">
+                <span className="w-4 h-4 bg-green-500 rounded"></span>
+                <span className="text-gray-600 dark:text-gray-400">Answered</span>
               </div>
-              <Button variant="outline" onClick={() => setShowDownloadModal(true)} className="bg-white hover:bg-yellow-50 border-yellow-300 text-yellow-800">
-                <Download className="h-4 w-4 mr-2" /> Export
-              </Button>
+              <div className="flex items-center gap-2">
+                <span className="w-4 h-4 bg-gray-100 dark:bg-gray-700 rounded ring-2 ring-yellow-400"></span>
+                <span className="text-gray-600 dark:text-gray-400">Flagged</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="w-4 h-4 bg-gray-100 dark:bg-gray-700 rounded ring-2 ring-blue-500"></span>
+                <span className="text-gray-600 dark:text-gray-400">Current</span>
+              </div>
             </div>
           </div>
-        )}
+        </aside>
 
-        <Card className="shadow-md w-full border-none transition-all duration-500 bg-white dark:bg-gray-900">
-          <CardHeader>
-            <div className="flex flex-col w-full">
-              <CardTitle className="text-lg font-semibold flex justify-between items-center text-gray-900 dark:text-gray-100">
-                <span>Questions {startIdx + 1}–{Math.min(endIdx, flattenedQuestions.length)} / {flattenedQuestions.length}</span>
-                <div className="flex gap-2 items-center">
-                  {isAdmin && showAnswers && <span className="text-xs font-normal text-green-600 bg-green-50 dark:bg-green-900/30 px-2 py-1 rounded border border-green-100 dark:border-green-900/50">Answer Key Visible</span>}
+        {/* Main Quiz Content */}
+        <main className="flex-1 min-w-0 transition-all duration-500">
+          {/* Preview Mode Banner */}
+          {quizMode === 'preview' && (
+            <div className="bg-gradient-to-r from-yellow-50 to-amber-50 border-l-4 border-yellow-400 px-6 py-4 rounded-xl shadow-md mb-6">
+              <div className="flex flex-col md:flex-row items-start md:items-center gap-4">
+                <div className="flex items-center gap-3 flex-1">
+                  <div className="p-2 bg-yellow-100 rounded-full">
+                    <Info className="w-5 h-5 text-yellow-700" />
+                  </div>
+                  <div>
+                    <p className="font-bold text-yellow-900 text-lg">Preview Mode Active</p>
+                    <p className="text-sm text-yellow-800 mt-1">
+                      You are viewing this quiz as {userRole === 'admin' ? 'an administrator' : 'a teacher'}.
+                      Your responses will not be recorded.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 flex-wrap">
+                  <Badge className="bg-yellow-500 text-white hover:bg-yellow-600 px-3 py-1">
+                    {userRole.toUpperCase()}
+                  </Badge>
+                  {/* Answer Toggle for Preview Mode */}
+                  <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-lg border border-yellow-200">
+                    <span className="text-sm font-medium text-gray-700">Show Answers</span>
+                    <div
+                      onClick={() => setShowAnswers(!showAnswers)}
+                      className={`w-10 h-5 rounded-full relative cursor-pointer transition-colors ${showAnswers ? 'bg-green-500' : 'bg-gray-300'
+                        }`}
+                    >
+                      <div
+                        className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow-sm transition-transform ${showAnswers ? 'left-5' : 'left-0.5'
+                          }`}
+                      ></div>
+                    </div>
+                  </div>
+                  {/* Export Button for Preview Mode */}
                   <Button
                     variant="outline"
-                    size="sm"
-                    onClick={() => setShowNavGrid(true)}
-                    className="gap-2 h-8"
+                    onClick={() => setShowDownloadModal(true)}
+                    className="bg-white hover:bg-yellow-50 border-yellow-300 text-yellow-800"
                   >
-                    <Grip className="h-4 w-4" />
-                    <span className="hidden sm:inline">Overview</span>
+                    <Download className="h-4 w-4 mr-2" /> Export PDF
                   </Button>
                 </div>
-              </CardTitle>
-            </div>
-          </CardHeader>
-
-          <CardContent className="space-y-10">
-            {Object.entries(pageGroupedQuestions).map(([subject, questions]) => (
-              <div key={subject} className="space-y-6">
-                <h2 className="text-xl font-bold text-gray-800 dark:text-gray-200 border-b dark:border-gray-800 pb-2">{subject}</h2>
-                {questions.map((q, idx) => (
-                  <QuestionCard
-                    key={q.id}
-                    question={q}
-                    index={idx}
-                    totalIndex={startIdx + idx}
-                    answer={answers[q.id]}
-                    isFlagged={!!flags[q.id]}
-                    isAdmin={isAdmin}
-                    showAnswers={showAnswers}
-                    onAnswer={handleAnswer}
-                    onToggleFlag={toggleFlag}
-                    totalAnswered={Object.keys(answers).length}
-                  />
-                ))}
               </div>
-            ))}
-
-            <div className="flex justify-between pt-8 border-t dark:border-gray-800">
-              <Button
-                variant="outline"
-                onClick={currentPage === 0 ? undefined : handlePrevPage}
-                disabled={currentPage === 0 || isSubmitting}
-              >
-                <ArrowLeft className="mr-2 h-4 w-4" /> Previous
-              </Button>
-              {/* FIX: Disable button and show loading state during submission */}
-              <Button
-                onClick={isLastPage ? () => handleSubmit() : handleNextPage}
-                className={isLastPage ? 'bg-indigo-600 hover:bg-indigo-700 text-white' : ''}
-                disabled={isSubmitting}
-              >
-                {isSubmitting && isLastPage && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                {isLastPage ? 'Submit Quiz' : 'Next'} <ArrowRight className="ml-2 h-4 w-4" />
-              </Button>
             </div>
-          </CardContent>
-        </Card>
-      </main>
+          )}
 
+          {/* Old Admin Controls - Only show if NOT in preview mode (legacy support) */}
+          {isAdmin && quizMode !== 'preview' && (
+            <div className="bg-yellow-50 border border-yellow-200 text-yellow-900 px-6 py-4 rounded-xl shadow-sm mb-6 flex flex-col md:flex-row items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-yellow-100 rounded-full"><Info className="w-5 h-5 text-yellow-700" /></div>
+                <div>
+                  <p className="font-semibold text-lg">Admin Controls Enabled</p>
+                  <p className="text-sm opacity-80">Timer disabled. Attempt limits ignored.</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-lg border border-yellow-200">
+                  <span className="text-sm font-medium">View Answers</span>
+                  <div
+                    onClick={() => setShowAnswers(!showAnswers)}
+                    className={`w-10 h-5 rounded-full relative cursor-pointer transition-colors ${showAnswers ? 'bg-green-500' : 'bg-gray-300'}`}
+                  >
+                    <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow-sm transition-transform ${showAnswers ? 'left-5' : 'left-0.5'}`}></div>
+                  </div>
+                </div>
+                <Button variant="outline" onClick={() => setShowDownloadModal(true)} className="bg-white hover:bg-yellow-50 border-yellow-300 text-yellow-800">
+                  <Download className="h-4 w-4 mr-2" /> Export
+                </Button>
+              </div>
+            </div>
+          )}
+
+          <Card className="shadow-none sm:shadow-md w-full border-none rounded-none sm:rounded-xl transition-all duration-500 bg-white dark:bg-gray-900">
+            <CardHeader>
+              <div className="flex flex-col w-full">
+                <CardTitle className="text-lg font-semibold flex justify-between items-center text-gray-900 dark:text-gray-100">
+                  <span>Questions {startIdx + 1}–{Math.min(endIdx, flattenedQuestions.length)} / {flattenedQuestions.length}</span>
+                  <div className="flex gap-2 items-center">
+                    {isAdmin && showAnswers && <span className="text-xs font-normal text-green-600 bg-green-50 dark:bg-green-900/30 px-2 py-1 rounded border border-green-100 dark:border-green-900/50">Answer Key Visible</span>}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowNavGrid(true)}
+                      className="gap-2 h-8"
+                    >
+                      <Grip className="h-4 w-4" />
+                      <span className="hidden sm:inline">Overview</span>
+                    </Button>
+                  </div>
+                </CardTitle>
+              </div>
+            </CardHeader>
+
+            <CardContent className="space-y-10 p-3 sm:p-6 pt-0 sm:pt-0">
+              {Object.entries(pageGroupedQuestions).map(([subject, questions]) => (
+                <div key={subject} className="space-y-6">
+                  <h2 className="text-xl font-bold text-gray-800 dark:text-gray-200 border-b dark:border-gray-800 pb-2">{subject}</h2>
+                  {questions.map((q, idx) => (
+                    <QuestionCard
+                      key={q.id}
+                      question={q}
+                      index={idx}
+                      totalIndex={startIdx + idx}
+                      answer={answers[q.id]}
+                      isFlagged={!!flags[q.id]}
+                      isAdmin={isAdmin}
+                      showAnswers={showAnswers}
+                      onAnswer={handleAnswer}
+                      onToggleFlag={toggleFlag}
+                      totalAnswered={Object.keys(answers).length}
+                    />
+                  ))}
+                </div>
+              ))}
+
+              <div className="flex justify-between pt-8 border-t dark:border-gray-800">
+                <Button
+                  variant="outline"
+                  onClick={currentPage === 0 ? undefined : handlePrevPage}
+                  disabled={currentPage === 0 || isSubmitting}
+                >
+                  <ArrowLeft className="mr-2 h-4 w-4" /> Previous
+                </Button>
+                {/* FIX: Disable button and show loading state during submission */}
+                <Button
+                  onClick={isLastPage ? () => handleSubmit() : handleNextPage}
+                  className={isLastPage ? 'bg-indigo-600 hover:bg-indigo-700 text-white' : ''}
+                  disabled={isSubmitting}
+                >
+                  {isSubmitting && isLastPage && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  {isLastPage ? 'Submit Quiz' : 'Next'} <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </main>
+      </div>
 
       {/* Floating scroll buttons */}
       <div className="fixed right-4 bottom-6 z-50 flex flex-col items-center gap-3">

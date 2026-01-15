@@ -17,7 +17,8 @@ import {
   addDoc,
   deleteDoc,
   getCountFromServer,
-  Timestamp
+  Timestamp,
+  documentId
 } from 'firebase/firestore';
 import {
   Dialog,
@@ -68,6 +69,7 @@ export default function StudentsPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<string>('all');
   const [courseFilter, setCourseFilter] = useState<string>('all');
+  const [seriesFilter, setSeriesFilter] = useState<string>('all');
   const [students, setStudents] = useState<Student[]>([]);
   const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
@@ -75,6 +77,9 @@ export default function StudentsPage() {
   const [hasMore, setHasMore] = useState(true);
   const [isSuperadmin, setIsSuperadmin] = useState(false);
   const [totalStudentsCount, setTotalStudentsCount] = useState(0);
+
+  // Series List (Global)
+  const [allSeries, setAllSeries] = useState<Series[]>([]);
 
   // Bulk selection state
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -192,17 +197,30 @@ export default function StudentsPage() {
     getCount();
   }, []);
 
-  // Fetch Series and Bundles when Enroll Modal opens
+  // Fetch Series Global
+  useEffect(() => {
+    const fetchSeries = async () => {
+      try {
+        const qSeries = query(collection(db, 'series'), orderBy('createdAt', 'desc'));
+        const snapSeries = await getDocs(qSeries);
+        const list = snapSeries.docs.map(d => ({ id: d.id, ...d.data() } as Series));
+        setAllSeries(list);
+        setSeriesList(list); // Also set for modal
+      } catch (error) {
+        console.error("Error fetching series", error);
+      }
+    };
+    fetchSeries();
+  }, []);
+
+  // Fetch Bundles when Enroll Modal opens
   const [bundlesList, setBundlesList] = useState<Bundle[]>([]);
   const [enrollType, setEnrollType] = useState<'series' | 'bundle'>('series');
 
   useEffect(() => {
     if (enrollModal) {
       const fetchData = async () => {
-        const qSeries = query(collection(db, 'series'), orderBy('createdAt', 'desc'));
-        const snapSeries = await getDocs(qSeries);
-        setSeriesList(snapSeries.docs.map(d => ({ id: d.id, ...d.data() } as Series)));
-
+        // Series already fetched globally
         const qBundles = query(collection(db, 'bundles'), where('active', '==', true));
         const snapBundles = await getDocs(qBundles);
         setBundlesList(snapBundles.docs.map(d => ({ id: d.id, ...d.data() } as Bundle)));
@@ -239,6 +257,64 @@ export default function StudentsPage() {
       const constraints: any[] = [];
       const term = debouncedSearchTerm.trim();
       const usersRef = collection(db, 'users');
+
+
+      // --- SERIES FILTER LOGIC (Two-Step Query) ---
+      if (seriesFilter !== 'all') {
+        // 1. Fetch Enrollments
+        const enrollQuery = query(collection(db, 'enrollments'), where('seriesId', '==', seriesFilter), where('status', '==', 'active'));
+        const enrollSnap = await getDocs(enrollQuery);
+        const studentIds = Array.from(new Set(enrollSnap.docs.map(d => d.data().studentId as string)));
+
+        if (studentIds.length === 0) {
+          setStudents([]);
+          setHasMore(false);
+          setLoading(false);
+          return;
+        }
+
+        // 2. Fetch Users by IDs (Batching handled if > 10 in logic, but simplistic here)
+        // Firestore 'in' limitation: max 10. For >10, we usually need multiple queries or client-side filter.
+        // For simplicity/robustness with potentially large lists, we might filter client-side if list is huge?
+        // Or chunk it.
+        // Let's implement chunking for correctness.
+        const chunks = [];
+        for (let i = 0; i < studentIds.length; i += 10) {
+          chunks.push(studentIds.slice(i, i + 10));
+        }
+
+        const userPromises = chunks.map(chunk => getDocs(query(usersRef, where(documentId(), 'in', chunk))));
+        const userSnaps = await Promise.all(userPromises);
+        let fetchedUsers: Student[] = [];
+        userSnaps.forEach(snap => {
+          fetchedUsers.push(...snap.docs.map(d => ({ id: d.id, ...d.data() } as Student)));
+        });
+
+        // Apply OTHER filters client-side on this specific set
+        fetchedUsers = fetchedUsers.filter(user => {
+          if (filterType === 'premium' && user.plan !== 'premium') return false;
+          if (filterType === 'free' && user.plan === 'premium') return false;
+          if (courseFilter !== 'all' && user.course !== courseFilter) return false;
+          // Search term check
+          if (term) {
+            const searchStr = (user.fullName + user.email + user.phone).toLowerCase();
+            return searchStr.includes(term.toLowerCase());
+          }
+          return true;
+        });
+
+        // Sort locally
+        fetchedUsers.sort((a, b) => {
+          const valA = (a[sortField] || '').toString().toLowerCase();
+          const valB = (b[sortField] || '').toString().toLowerCase();
+          return sortDirection === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
+        });
+
+        setStudents(fetchedUsers);
+        setHasMore(false); // Pagination disabled for filtered view
+        setLoading(false);
+        return; // EXIT EARLY
+      }
 
       // --- ROBUST SEARCH LOGIC ---
       if (term) {
@@ -328,11 +404,10 @@ export default function StudentsPage() {
 
     } catch (error) {
       console.error('Error fetching students:', error);
-      toast.error('Failed to load students.');
     } finally {
       setLoading(false);
     }
-  }, [debouncedSearchTerm, itemsPerPage, filterType, courseFilter, sortField, sortDirection, lastVisible]);
+  }, [debouncedSearchTerm, itemsPerPage, filterType, courseFilter, seriesFilter, sortField, sortDirection, lastVisible]);
 
   // Infinite Scroll Sentinel
   const observerTarget = useRef<HTMLDivElement>(null);
@@ -365,7 +440,7 @@ export default function StudentsPage() {
     fetchStudents(true);
     window.scrollTo({ top: 0, behavior: 'smooth' });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debouncedSearchTerm, itemsPerPage, filterType, courseFilter, sortField, sortDirection]);
+  }, [debouncedSearchTerm, itemsPerPage, filterType, courseFilter, seriesFilter, sortField, sortDirection]);
 
   // Selection handlers
   const handleSelectAll = () => {
@@ -865,10 +940,18 @@ export default function StudentsPage() {
         onFilterTypeChange={setFilterType}
         courseFilter={courseFilter}
         onCourseFilterChange={setCourseFilter}
+        seriesFilter={seriesFilter}
+        onSeriesFilterChange={setSeriesFilter}
         courses={courses}
+        series={allSeries}
         itemsPerPage={itemsPerPage}
         onItemsPerPageChange={setItemsPerPage}
-        onClearFilters={() => { setFilterType('all'); setCourseFilter('all'); setSearchTerm(''); }}
+        onClearFilters={() => {
+          setSearchTerm('');
+          setFilterType('all');
+          setCourseFilter('all');
+          setSeriesFilter('all');
+        }}
       />
 
       {/* Bulk Toolbar */}

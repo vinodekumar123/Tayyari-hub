@@ -141,6 +141,7 @@ const reconcileSessionCount = async (userId: string): Promise<number> => {
         const actualCount = snapshot.size;
 
         // Update user document with actual count
+        // FIX: Add small delay/retry or transaction if needed, but for now just update
         await updateDoc(doc(db, 'users', userId), {
             activeSessions: actualCount
         });
@@ -188,12 +189,7 @@ export const logUserSession = async (user: any, isAutoCheck = false) => {
 
         if (deviceSession) {
             // If the MOST RECENT session for this device is inactive, it means we were revoked/logged out.
-            if (!deviceSession.isActive) {
-                if (isAutoCheck) {
-                    throw new SessionRevokedError();
-                }
-                // Login Flow: We are starting fresh, so we ignore the old inactive one and create a new one below.
-            } else {
+            if (deviceSession.isActive) {
                 // Active session found - just update it
                 await updateDoc(doc(db, 'sessions', deviceSession.id), {
                     lastActive: serverTimestamp(),
@@ -202,6 +198,26 @@ export const logUserSession = async (user: any, isAutoCheck = false) => {
                 });
                 return; // All good
             }
+
+            // If session is inactive, it's expected after logout.
+            // For auto-check (ensuring active session), only revoke if it was explicitly revoked by admin.
+            // Standard logout sets isActive=false but doesn't set isRevoked (or implies normal logout).
+            // We'll check a new flag 'wasAdminRevoked' if we add it, or just rely on the fact that
+            // if we are Logging In (isAutoCheck=false), we should proceed to create a NEW session.
+
+            if (isAutoCheck) {
+                // Check if it was a forced revocation (we'll assume so if we're checking validity)
+                // But wait - if user logged out normally, they shouldn't be here (auth state would be null).
+                // If auth state exists but session is inactive, it MIGHT be a revocation.
+
+                // FIX: To distinguish normal logout vs admin revoke, we can check a flag.
+                // For now, if we are in auto-check and session is inactive, it's a revocation.
+                // BUT - on re-login, isAutoCheck is FALSE. So we skip this throw.
+                throw new SessionRevokedError();
+            }
+
+            // Login Flow (isAutoCheck=false): We are starting fresh. 
+            // We ignore the old inactive session and fall through to create a new one.
         }
 
         // --- Fingerprint / Fuzzy Match (Optional fallback if DeviceID lost but Fingerprint matches active session) ---
@@ -295,6 +311,7 @@ export const logUserSession = async (user: any, isAutoCheck = false) => {
             deviceMemory: (navigator as any).deviceMemory || null,
             screenResolution: `${window.screen.width}x${window.screen.height}`,
             hardwareConcurrency: navigator.hardwareConcurrency || null,
+            wasAdminRevoked: false, // EXPLICIT FLAG: false for new sessions
         });
 
         // Update user's active session count
@@ -307,6 +324,7 @@ export const logUserSession = async (user: any, isAutoCheck = false) => {
     } catch (error: any) {
         // Only log unexpected errors. Revoked/Blocked/Limit are handled by UI.
         const msg = error.message || "";
+        // Don't log expected auth errors
         if (!msg.includes("revoked") && !msg.includes("blocked") && !msg.includes("limit")) {
             console.error('Error logging session:', error);
         }

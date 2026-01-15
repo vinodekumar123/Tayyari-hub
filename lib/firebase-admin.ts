@@ -59,10 +59,21 @@ if (!admin.apps.length) {
         }
     } catch (error: any) {
         initializationError = error;
+        try {
+            const fs = require('fs');
+            const path = require('path');
+            const logPath = path.join(process.cwd(), 'debug_log.txt');
+            fs.appendFileSync(logPath, `[${new Date().toISOString()}] Firebase Admin Init Failed: ${error.message}\nStack: ${error.stack}\n`);
+        } catch (e) { /* ignore */ }
+
         console.error('❌ Firebase Admin SDK initialization failed:', error.message);
         console.error('Stack:', error.stack);
         // DON'T throw - let the app continue and handle errors in API routes
     }
+} else {
+    // Already initialized (HMR case)
+    isInitialized = true;
+    console.log('🔄 Firebase Admin SDK already initialized');
 }
 
 // Safe exports that won't crash if initialization failed

@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Search, Filter, X } from 'lucide-react';
 import { glassmorphism } from '@/lib/design-tokens';
-import { Course } from '@/types';
+import { Course, Series } from '@/types';
 import { Card, CardContent } from '@/components/ui/card';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetTrigger } from '@/components/ui/sheet';
 import { Label } from '@/components/ui/label';
@@ -16,7 +16,10 @@ interface StudentFiltersProps {
     onFilterTypeChange: (value: string) => void;
     courseFilter: string;
     onCourseFilterChange: (value: string) => void;
+    seriesFilter: string;
+    onSeriesFilterChange: (value: string) => void;
     courses: Course[];
+    series: Series[];
     itemsPerPage: number;
     onItemsPerPageChange: (value: number) => void;
     onClearFilters: () => void;
@@ -29,7 +32,10 @@ export function StudentFilters({
     onFilterTypeChange,
     courseFilter,
     onCourseFilterChange,
+    seriesFilter,
+    onSeriesFilterChange,
     courses,
+    series,
     itemsPerPage,
     onItemsPerPageChange,
     onClearFilters
@@ -93,6 +99,20 @@ export function StudentFilters({
                                     </Select>
                                 </div>
                                 <div className='space-y-2'>
+                                    <Label>Series Enrolled</Label>
+                                    <Select value={seriesFilter} onValueChange={onSeriesFilterChange}>
+                                        <SelectTrigger>
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value='all'>All Series</SelectItem>
+                                            {series.map(seriesItem => (
+                                                <SelectItem key={seriesItem.id} value={seriesItem.id}>{seriesItem.name}</SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div className='space-y-2'>
                                     <Label>Items Per Page</Label>
                                     <Select value={itemsPerPage.toString()} onValueChange={(v) => onItemsPerPageChange(Number(v))}>
                                         <SelectTrigger>
@@ -106,6 +126,7 @@ export function StudentFilters({
                                         </SelectContent>
                                     </Select>
                                 </div>
+
                                 <Button
                                     variant='outline'
                                     className='w-full'

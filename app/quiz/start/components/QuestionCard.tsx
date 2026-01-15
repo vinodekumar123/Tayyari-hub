@@ -32,9 +32,12 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({
     const isCorrectAnswerVisible = isAdmin && showAnswers;
 
     return (
-        <div className={`space-y-4 p-4 rounded-lg transition-colors ${isCorrectAnswerVisible ? 'bg-slate-50 border border-slate-100' : ''}`}>
-            <div className="flex justify-between items-start gap-4">
-                <div className="text-lg font-medium prose max-w-none flex-1 group relative dark:prose-invert">
+        <div id={`question-${q.id}`} className={`space-y-4 p-4 rounded-lg transition-colors ${isCorrectAnswerVisible ? 'bg-slate-50 border border-slate-100' : ''}`}>
+            <div className="flex justify-between items-start gap-4 overflow-hidden">
+                <div
+                    className="text-lg font-medium prose max-w-none flex-1 group relative dark:prose-invert"
+                    style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}
+                >
                     <span className="font-bold text-slate-700 dark:text-slate-300">Q{totalIndex + 1}. </span>
                     <span dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(q.questionText || '') }} />
 
@@ -74,7 +77,7 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({
 
                     return (
                         <label key={i} className={`flex items-center p-4 border rounded-xl cursor-pointer transition-all ${borderClass} ${bgClass} relative overflow-hidden group`}>
-                            <div className="flex items-center h-5">
+                            <div className="flex items-center h-5 flex-shrink-0">
                                 <input
                                     type="radio"
                                     name={q.id}
@@ -95,11 +98,15 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({
                                     className="h-4 w-4 text-blue-600 focus:ring-blue-500"
                                 />
                             </div>
-                            <div className="ml-3 text-sm font-medium w-full flex items-center gap-3">
-                                <div className="flex items-center justify-center w-6 h-6 rounded-full bg-slate-100 dark:bg-slate-700 text-xs font-bold text-slate-500 dark:text-slate-300 group-hover:bg-blue-100 dark:group-hover:bg-blue-900/50 group-hover:text-blue-300 transition-colors">
+                            <div className="ml-3 text-sm font-medium flex-1 min-w-0 flex items-center gap-3">
+                                <div className="flex items-center justify-center w-6 h-6 rounded-full bg-slate-100 dark:bg-slate-700 text-xs font-bold text-slate-500 dark:text-slate-300 group-hover:bg-blue-100 dark:group-hover:bg-blue-900/50 group-hover:text-blue-300 transition-colors flex-shrink-0">
                                     {['A', 'B', 'C', 'D'][i]}
                                 </div>
-                                <span className="prose max-w-none" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(opt) }} />
+                                <span
+                                    className="prose max-w-none"
+                                    style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}
+                                    dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(opt) }}
+                                />
                             </div>
                             {isCorrect && (
                                 <div className="absolute right-0 top-0 bottom-0 w-1.5 bg-green-500"></div>
