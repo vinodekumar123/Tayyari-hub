@@ -1,4 +1,5 @@
 'use client';
+import ComingSoon from '@/components/ui/coming-soon';
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -55,7 +56,7 @@ const getQuizAttemptStatus = (attempt?: { startedAt?: any, completed?: boolean }
   };
 };
 
-const UserCreatedQuizzesPage = () => {
+const UserCreatedQuizzesPageOriginal = () => {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [quizzes, setQuizzes] = useState<UserCreatedQuiz[]>([]);
@@ -326,4 +327,4 @@ const UserCreatedQuizzesPage = () => {
   );
 };
 
-export default UserCreatedQuizzesPage;
+export default function UserCreatedQuizzesPage() { return <ComingSoon />; }

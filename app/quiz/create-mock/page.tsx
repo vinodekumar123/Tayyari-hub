@@ -1,4 +1,5 @@
 'use client';
+import ComingSoon from '@/components/ui/coming-soon';
 
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -63,7 +64,7 @@ interface SubjectUsageDoc {
   updatedAt: any;
 }
 
-export default function CreateUserQuizPage() {
+function CreateUserQuizPageOriginal() {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
 
@@ -543,3 +544,5 @@ export default function CreateUserQuizPage() {
     </div>
   );
 }
+
+export default function CreateUserQuizPage() { return <ComingSoon />; }

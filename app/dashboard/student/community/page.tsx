@@ -25,7 +25,9 @@ const PROVINCES = [
     'Federal (Islamabad)', 'AJK', 'Gilgit Baltistan'
 ];
 
-export default function StudentCommunityPage() {
+import ComingSoon from '@/components/ui/coming-soon';
+
+function StudentCommunityPageOriginal() {
     const { user } = useUserStore();
     const [posts, setPosts] = useState<ForumPost[]>([]);
     const [subjects, setSubjects] = useState<Subject[]>([]);
@@ -299,3 +301,5 @@ export default function StudentCommunityPage() {
         </div >
     );
 }
+
+export default function StudentCommunityPage() { return <ComingSoon />; }
