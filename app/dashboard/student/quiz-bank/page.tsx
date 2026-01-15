@@ -121,33 +121,72 @@ export default function StudentQuizBankPage() {
             setUiLoading('quizzes', true);
 
             try {
-                // 1. Fetch User's Enrolled Series
-                let enrolledSeries: string[] = [];
-                try {
-                    const userDoc = await getDoc(doc(db, 'users', user.uid));
-                    if (userDoc.exists()) {
-                        const userData = userDoc.data();
-                        enrolledSeries = userData.enrolledSeries || [];
-                        setUserEnrolledSeries(enrolledSeries);
+                // 1. Resolve Enrolled Series (From Store or potentially specific fetch if needed)
+                // Use user data from store directly if available to save a round trip
+                let enrolledSeries: string[] = (user as any).enrolledSeries || [];
+
+                // 2. Start Parallel Fetches
+                // We fetch Series Names, Quiz Attempts, and Public Quizzes in parallel
+                // If we have enrolled series, we also fetch them in parallel effectively
+
+                const fetchSeriesNames = getDocs(collection(db, 'series')); // We need names for all potentially linked series
+                const fetchAttempts = getDocs(collection(db, 'users', user.uid, 'quizAttempts')); // Fetch all attempts for stats
+
+                const fetchPublicQuizzes = getDocs(query(
+                    collection(db, 'quizzes'),
+                    where('published', '==', true),
+                    where('accessType', '==', 'public'), // Explicit fetch for public
+                    orderBy('startDate', 'desc'),
+                    limit(20)
+                ));
+
+                // Conditional Fetch for Enrolled
+                const fetchEnrolledQuizzes = async () => {
+                    if (enrolledSeries.length === 0) return { docs: [] };
+
+                    // Optimization: If user object didn't have it, we might want to check DB, but assume Store is sync'd.
+                    // If we suspect Store is stale, we could add a quick check, but let's trust store for speed.
+
+                    const constraints: any[] = [
+                        where('published', '==', true),
+                        orderBy('startDate', 'desc'),
+                        limit(40)
+                    ];
+
+                    const userCourse = (user as any).course;
+                    if (userCourse) {
+                        constraints.push(where('course.name', '==', userCourse));
                     }
-                } catch (e) {
-                    console.error("Failed to fetch user enrolled series", e);
-                }
 
-                // REMOVED EARLY RETURN: We want to show Public quizzes even if no enrolled series.
+                    if (enrolledSeries.length <= 10) {
+                        constraints.push(where('series', 'array-contains-any', enrolledSeries));
+                    }
+                    return getDocs(query(collection(db, 'quizzes'), ...constraints));
+                };
 
-                // 2. Parallel Fetch: Series Names, Attempts, Quizzes
-                const promises = [
-                    getDocs(collection(db, 'series')), // Fetch All Series Metadata
-                    getDocs(collection(db, 'users', user.uid, 'quizAttempts')), // Fetch Attempts
-                ];
+                // EXECUTE ALL IN PARALLEL WITH TIMEOUT
+                // Create a timeout promise that rejects after 15 seconds
+                const timeoutPromise = new Promise((_, reject) => {
+                    setTimeout(() => reject(new Error('Request timed out. Please check your connection.')), 15000);
+                });
 
-                const [seriesSnap, attemptsSnap] = await Promise.all(promises);
+                const [seriesSnap, attemptsSnap, publicSnap, enrolledSnap] = await Promise.race([
+                    Promise.all([
+                        fetchSeriesNames,
+                        fetchAttempts,
+                        fetchPublicQuizzes,
+                        fetchEnrolledQuizzes()
+                    ]),
+                    timeoutPromise
+                ]) as [any, any, any, any];
+
+                // --- Processing Logic ---
 
                 // Process Series List
                 const allSeries = seriesSnap.docs.map(d => ({ id: d.id, name: d.data().name }));
                 const visibleSeriesList = allSeries.filter(s => enrolledSeries.includes(s.id));
                 setSeriesList(visibleSeriesList);
+                setUserEnrolledSeries(enrolledSeries); // Update state
 
                 // Process Attempts
                 const counts: { [key: string]: number } = {};
@@ -161,51 +200,7 @@ export default function StudentQuizBankPage() {
                 });
                 setAttemptedQuizzes(counts);
 
-                // 3. Fetch Quizzes (Composite Strategy: Public + Enrolled)
-                // We need to fetch quizzes that are either Public OR in Enrolled Series.
-                // Firestore doesn't accept logical OR across fields easily. We will split queries.
-
-                const fetchPublicQuizzes = async () => {
-                    const qPublic = query(
-                        collection(db, 'quizzes'),
-                        where('published', '==', true),
-                        where('accessType', '==', 'public'), // Explicit fetch for public
-                        orderBy('startDate', 'desc'),
-                        limit(20)
-                    );
-                    const snap = await getDocs(qPublic);
-                    console.log(`Fetched ${snap.docs.length} public quizzes`);
-                    return snap;
-                };
-
-                const fetchEnrolledQuizzes = async () => {
-                    if (enrolledSeries.length === 0) return { docs: [] };
-
-                    const constraints: any[] = [
-                        where('published', '==', true),
-                        orderBy('startDate', 'desc'),
-                        limit(40) // Give more weight to subscribed content
-                    ];
-
-                    const userCourse = (user as any).course;
-                    if (userCourse) {
-                        constraints.push(where('course.name', '==', userCourse));
-                    }
-
-                    if (enrolledSeries.length <= 10) {
-                        constraints.push(where('series', 'array-contains-any', enrolledSeries));
-                    }
-                    // If > 10, we rely on course filter + client side filter later
-
-                    return getDocs(query(collection(db, 'quizzes'), ...constraints));
-                };
-
-                const [publicSnap, enrolledSnap] = await Promise.all([
-                    fetchPublicQuizzes(),
-                    fetchEnrolledQuizzes()
-                ]);
-
-                // Merge and Deduplicate
+                // Merge Quizzes
                 const allDocs = [...publicSnap.docs, ...enrolledSnap.docs];
                 const uniqueDocsMap = new Map();
                 allDocs.forEach(d => {
@@ -214,31 +209,27 @@ export default function StudentQuizBankPage() {
 
                 const data = Array.from(uniqueDocsMap.values()) as Quiz[];
 
-                // 4. Client-Side Filter
-                // Allow if: Access is Public OR Series Match
+                // Client-Side Filter
                 const finalQuizzes = data.filter(quiz => {
                     const accessType = (quiz.accessType as string || '').toLowerCase();
                     const isPublic = accessType === 'public';
                     if (isPublic) return true;
-
-                    // For non-public, must match enrollment
                     if (!quiz.series || quiz.series.length === 0) return false;
                     return quiz.series.some((s: string) => enrolledSeries.includes(s));
                 });
 
-                // Sort merged results by date
+                // Sort
                 finalQuizzes.sort((a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime());
-
                 setQuizzes(finalQuizzes);
 
-                // Set last visible for pagination (using the last from the larger set, imperfect for merged pagination but acceptable for lazy load)
+                // Pagination cursor
                 if (enrolledSnap.docs.length > 0) setLastVisible(enrolledSnap.docs[enrolledSnap.docs.length - 1]);
                 else if (publicSnap.docs.length > 0) setLastVisible(publicSnap.docs[publicSnap.docs.length - 1]);
                 else setLastVisible(null);
 
                 setHasMore(finalQuizzes.length >= 20);
 
-                // 5. Calculate Series Analytics (Client Side - Approximation based on fetched data)
+                // Calculate Stats
                 const stats = visibleSeriesList.map(series => {
                     const seriesQuizzes = finalQuizzes.filter(q => q.series?.includes(series.id));
                     const totalQuizzes = seriesQuizzes.length;

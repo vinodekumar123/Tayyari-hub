@@ -48,22 +48,23 @@ const getBrowserFingerprint = () => {
  * Helper to get IP and Geo Info with timeout
  * @param timeoutMs Maximum time to wait for GeoIP lookup (default: 3000ms)
  */
-const getGeoInfo = async (timeoutMs: number = 3000) => {
+const getGeoInfo = async (timeoutMs: number = 2000) => {
     try {
-        // Skip GeoIP on localhost to prevent CORS errors
+        // Skip GeoIP on localhost
         if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
             return { ip: '127.0.0.1', city: 'Localhost', country: 'Localhost', region: 'Localhost' };
         }
 
-        // Race between fetch and timeout
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-
+        // Primary: ipapi.co (Rich data but strict CORS/Rate limits)
         try {
-            // Using ipapi.co for location data (Free tier: 1000 requests/day, suitable for dev/demo)
-            // Production recommendation: Use a paid service or server-side IP lookup to avoid client-side rate limits/cors issues if scaling
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
             const res = await fetch('https://ipapi.co/json/', { signal: controller.signal });
             clearTimeout(timeoutId);
+
+            if (!res.ok) throw new Error('ipapi.co failed');
+
             const data = await res.json();
             return {
                 ip: data.ip || 'unknown',
@@ -71,27 +72,37 @@ const getGeoInfo = async (timeoutMs: number = 3000) => {
                 country: data.country_name || 'Unknown Country',
                 region: data.region || ''
             };
-        } catch (fetchError: any) {
-            clearTimeout(timeoutId);
-            if (fetchError.name === 'AbortError') {
-                console.warn('GeoIP lookup timed out');
-                return { ip: 'unknown', city: 'Unknown', country: 'Unknown', region: '' };
-            }
-            throw fetchError;
+        } catch (e) {
+            // Fallback: ipify (Simple IP, very reliable CORS)
+            // console.warn('Primary GeoIP failed, trying fallback...');
         }
-    } catch (e) {
-        console.warn("Geo lookup failed, falling back to simple IP");
+
+        // Fallback: ipify
         try {
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 2000);
+            const timeoutId = setTimeout(() => controller.abort(), 1500); // Short timeout
+
             const res = await fetch('https://api.ipify.org?format=json', { signal: controller.signal });
             clearTimeout(timeoutId);
+
+            if (!res.ok) throw new Error('ipify failed');
+
             const data = await res.json();
-            return { ip: data.ip, city: 'Unknown', country: 'Unknown', region: '' };
-        } catch (err) {
-            console.warn('All GeoIP lookups failed, using fallback');
-            return { ip: 'unknown', city: 'Unknown', country: 'Unknown', region: '' };
+            return {
+                ip: data.ip,
+                city: 'Unknown (Fallback)',
+                country: 'Unknown (Fallback)',
+                region: ''
+            };
+        } catch (e) {
+            // console.warn('All GeoIP lookups failed');
         }
+
+        return { ip: 'unknown', city: 'Unknown', country: 'Unknown', region: '' };
+
+    } catch (e) {
+        // Absolute safety net
+        return { ip: 'unknown', city: 'Unknown', country: 'Unknown', region: '' };
     }
 };
 

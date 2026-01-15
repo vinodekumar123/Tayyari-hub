@@ -235,7 +235,7 @@ const StartQuizPageContent: React.FC = () => {
   // Helper: Timeout Promise
   const timeoutPromise = <T,>(ms: number, promise: Promise<T>): Promise<T> => {
     return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => reject(new Error('Operation timed out (15s)')), ms);
+      const timer = setTimeout(() => reject(new Error(`Operation timed out (${ms / 1000}s)`)), ms);
       promise.then(
         (res) => { clearTimeout(timer); resolve(res); },
         (err) => { clearTimeout(timer); reject(err); }
@@ -313,7 +313,7 @@ const StartQuizPageContent: React.FC = () => {
       let loadedQuiz: QuizData;
       // Server-side validation integration
       try {
-        const validationRes = await timeoutPromise(15000, fetch('/api/quiz/validate', {
+        const validationRes = await timeoutPromise(30000, fetch('/api/quiz/validate', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ quizId, userId: user.uid, userRole })

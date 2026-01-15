@@ -48,28 +48,31 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Fetch quiz data
-        let quizData;
-        try {
-            const quizRef = adminDb.collection('quizzes').doc(quizId);
-            const quizSnap = await quizRef.get();
+        // PARALLEL DATA FETCHING
+        // We fetch all necessary data in parallel to minimize latency
+        const quizPromise = adminDb.collection('quizzes').doc(quizId).get();
 
-            if (!quizSnap.exists) {
-                console.error('[Validation API] Quiz not found:', quizId);
-                return NextResponse.json(
-                    { error: 'Quiz not found' },
-                    { status: 404 }
-                );
-            }
+        // Fetch enrollments optimistically (we might not need them if public, but fetching is faster than waiting)
+        const enrollmentPromise = adminDb.collection('enrollments')
+            .where('studentId', '==', userId)
+            .where('status', '==', 'active')
+            .get();
 
-            quizData = quizSnap.data();
-        } catch (quizError: any) {
-            console.error('[Validation API] Error fetching quiz:', quizError.message);
-            return NextResponse.json(
-                { error: 'Failed to load quiz data: ' + quizError.message },
-                { status: 500 }
-            );
+        // Fetch attempt status
+        const attemptPromise = adminDb.collection('users').doc(userId).collection('quizAttempts').doc(quizId).get();
+
+        const [quizSnap, enrollmentsSnap, attemptSnap] = await Promise.all([
+            quizPromise,
+            enrollmentPromise,
+            attemptPromise
+        ]);
+
+        if (!quizSnap.exists) {
+            console.error('[Validation API] Quiz not found:', quizId);
+            return NextResponse.json({ error: 'Quiz not found' }, { status: 404 });
         }
+
+        const quizData = quizSnap.data();
 
         // Determine final user role (from request or default to student)
         const finalUserRole = userRole || 'student';
@@ -119,16 +122,11 @@ export async function POST(request: NextRequest) {
         }
 
         // 3. Enrollment/Access Check
+        // Use the pre-fetched enrollmentsSnap
         const isSeriesRestricted = quizData?.accessType === 'series' || quizData?.accessType === 'paid';
 
         if (isSeriesRestricted && quizData?.series && Array.isArray(quizData.series) && quizData.series.length > 0) {
             try {
-                const enrollmentsRef = adminDb.collection('enrollments');
-                const enrollmentsSnap = await enrollmentsRef
-                    .where('studentId', '==', userId)
-                    .where('status', '==', 'active')
-                    .get();
-
                 const enrolledSeriesIds = new Set(enrollmentsSnap.docs.map(doc => doc.data().seriesId));
                 const hasAccess = quizData.series.some((sId: string) => enrolledSeriesIds.has(sId));
 
@@ -154,13 +152,11 @@ export async function POST(request: NextRequest) {
         }
 
         // 4. Check attempt limits
+        // Use pre-fetched attemptSnap
         const maxAttempts = quizData?.maxAttempts || 1;
         let currentAttemptCount = 0;
 
         try {
-            const attemptRef = adminDb.collection('users').doc(userId).collection('quizAttempts').doc(quizId);
-            const attemptSnap = await attemptRef.get();
-
             if (attemptSnap.exists) {
                 const data = attemptSnap.data();
                 if (data?.completed) {
