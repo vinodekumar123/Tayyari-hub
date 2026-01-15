@@ -48,8 +48,54 @@ const PricingBundles = () => {
                     </h2>
 
                     <p className="text-slate-600 dark:text-slate-400 font-medium mb-8">
-                        Early Bird Discount (First 50 Students): <span className="text-green-600 font-bold">30% OFF</span> | Group (2 Students): <span className="text-green-600 font-bold">50% OFF</span> each
+                        Join with friends and save more on Complete Bundles!
                     </p>
+
+                    {/* Group Discount Banner */}
+                    <div className="bg-gradient-to-r from-green-500 to-emerald-600 rounded-3xl p-6 md:p-8 mb-10 shadow-2xl relative overflow-hidden">
+                        <div className="absolute top-0 right-0 w-40 h-40 bg-white/10 rounded-full blur-3xl translate-x-1/2 -translate-y-1/2"></div>
+                        <div className="absolute bottom-0 left-0 w-32 h-32 bg-white/10 rounded-full blur-2xl -translate-x-1/2 translate-y-1/2"></div>
+
+                        <div className="relative z-10">
+                            <div className="flex items-center justify-center gap-2 mb-4">
+                                <Sparkles className="w-6 h-6 text-yellow-300" />
+                                <h3 className="text-2xl md:text-3xl font-black text-white">GROUP DISCOUNT OFFER</h3>
+                                <Sparkles className="w-6 h-6 text-yellow-300" />
+                            </div>
+                            <p className="text-green-100 text-sm mb-6 max-w-2xl mx-auto">
+                                Register with friends for <span className="font-bold text-white">Freshers or Improvers Complete Bundle</span> and unlock exclusive group savings!
+                            </p>
+
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-3xl mx-auto">
+                                {/* 2 Students */}
+                                <div className="bg-white/15 backdrop-blur-sm rounded-2xl p-5 border border-white/20 hover:bg-white/25 transition-all hover:scale-105 cursor-pointer">
+                                    <div className="text-4xl md:text-5xl font-black text-yellow-300 mb-1">30%</div>
+                                    <div className="text-white font-bold text-lg">2 Students</div>
+                                    <div className="text-green-200 text-xs mt-1">Joint Registration</div>
+                                </div>
+
+                                {/* 3 Students */}
+                                <div className="bg-white/15 backdrop-blur-sm rounded-2xl p-5 border border-white/20 hover:bg-white/25 transition-all hover:scale-105 cursor-pointer relative">
+                                    <div className="absolute -top-2 -right-2 bg-orange-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">POPULAR</div>
+                                    <div className="text-4xl md:text-5xl font-black text-yellow-300 mb-1">40%</div>
+                                    <div className="text-white font-bold text-lg">3 Students</div>
+                                    <div className="text-green-200 text-xs mt-1">Group Deal</div>
+                                </div>
+
+                                {/* 4 Students */}
+                                <div className="bg-white/15 backdrop-blur-sm rounded-2xl p-5 border border-white/20 hover:bg-white/25 transition-all hover:scale-105 cursor-pointer relative">
+                                    <div className="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">BEST VALUE</div>
+                                    <div className="text-4xl md:text-5xl font-black text-yellow-300 mb-1">50%</div>
+                                    <div className="text-white font-bold text-lg">4 Students</div>
+                                    <div className="text-green-200 text-xs mt-1">Maximum Savings</div>
+                                </div>
+                            </div>
+
+                            <p className="text-white/80 text-xs mt-6">
+                                💬 WhatsApp <span className="font-bold">0323-7507673</span> with all student details to avail group discount
+                            </p>
+                        </div>
+                    </div>
 
                     {/* Toggle Switch */}
                     <div className="inline-flex bg-white dark:bg-slate-900 p-2 rounded-full border border-slate-200 dark:border-slate-800 shadow-sm relative">
@@ -113,8 +159,7 @@ const PricingBundles = () => {
                                                 </div>
                                             </div>
                                             <div className="self-end text-right">
-                                                <div className="text-xs text-slate-400 line-through">Rs. 1000</div>
-                                                <div className="font-bold text-xl text-slate-800 dark:text-white">Rs. 700</div>
+                                                <div className="font-bold text-xl text-slate-800 dark:text-white">Rs. 1000</div>
                                             </div>
                                         </div>
 
@@ -128,8 +173,7 @@ const PricingBundles = () => {
                                                 </div>
                                             </div>
                                             <div className="self-end text-right">
-                                                <div className="text-xs text-slate-400 line-through">Rs. 500</div>
-                                                <div className="font-bold text-xl text-slate-800 dark:text-white">Rs. 350</div>
+                                                <div className="font-bold text-xl text-slate-800 dark:text-white">Rs. 500</div>
                                             </div>
                                         </div>
 
@@ -142,8 +186,7 @@ const PricingBundles = () => {
                                                 </div>
                                             </div>
                                             <div className="self-end text-right">
-                                                <div className="text-xs text-slate-400 line-through">Rs. 500</div>
-                                                <div className="font-bold text-xl text-slate-800 dark:text-white">Rs. 350</div>
+                                                <div className="font-bold text-xl text-slate-800 dark:text-white">Rs. 500</div>
                                             </div>
                                         </div>
 
@@ -164,8 +207,7 @@ const PricingBundles = () => {
                                                 </div>
                                             </div>
                                             <div className="self-end text-right">
-                                                <div className="text-xs text-slate-400 line-through">Rs. 1500</div>
-                                                <div className="font-bold text-xl text-slate-800 dark:text-white">Rs. 1050</div>
+                                                <div className="font-bold text-xl text-slate-800 dark:text-white">Rs. 1500</div>
                                             </div>
                                         </div>
 
@@ -186,8 +228,7 @@ const PricingBundles = () => {
                                                 </div>
                                             </div>
                                             <div className="self-end text-right">
-                                                <div className="text-xs text-slate-400 line-through">Rs. 2000</div>
-                                                <div className="font-bold text-xl text-slate-800 dark:text-white">Rs. 1400</div>
+                                                <div className="font-bold text-xl text-slate-800 dark:text-white">Rs. 2000</div>
                                             </div>
                                         </div>
                                     </div>
@@ -213,8 +254,7 @@ const PricingBundles = () => {
                                                 <div className="flex justify-between items-start mb-2">
                                                     <div className="inline-block px-3 py-1 rounded-full text-xs font-bold text-white bg-blue-500 mb-2">Starts 15 Jan</div>
                                                     <div className="text-right">
-                                                        <div className="text-xs text-slate-400 line-through">Rs. 1000</div>
-                                                        <div className="text-xl font-bold text-slate-900 dark:text-white">Rs. 700</div>
+                                                        <div className="text-xl font-bold text-slate-900 dark:text-white">Rs. 1000</div>
                                                     </div>
                                                 </div>
                                                 <div className="flex items-center gap-2 mb-2">
@@ -239,8 +279,7 @@ const PricingBundles = () => {
                                                 <div className="flex justify-between items-start mb-2">
                                                     <div className="inline-block px-3 py-1 rounded-full text-xs font-bold text-white bg-indigo-500 mb-2">Starts 01 April</div>
                                                     <div className="text-right">
-                                                        <div className="text-xs text-slate-400 line-through">Rs. 1000</div>
-                                                        <div className="text-xl font-bold text-slate-900 dark:text-white">Rs. 700</div>
+                                                        <div className="text-xl font-bold text-slate-900 dark:text-white">Rs. 1000</div>
                                                     </div>
                                                 </div>
                                                 <div className="flex items-center gap-2 mb-2">
@@ -265,8 +304,7 @@ const PricingBundles = () => {
                                                 <div className="flex justify-between items-start mb-2">
                                                     <div className="inline-block px-3 py-1 rounded-full text-xs font-bold text-white bg-purple-500 mb-2">Starts 01 July</div>
                                                     <div className="text-right">
-                                                        <div className="text-xs text-slate-400 line-through">Rs. 2000</div>
-                                                        <div className="text-xl font-bold text-slate-900 dark:text-white">Rs. 1400</div>
+                                                        <div className="text-xl font-bold text-slate-900 dark:text-white">Rs. 2000</div>
                                                     </div>
                                                 </div>
                                                 <div className="flex items-center gap-2 mb-2">
@@ -291,8 +329,7 @@ const PricingBundles = () => {
                                                 <div className="flex justify-between items-start mb-2">
                                                     <div className="inline-block px-3 py-1 rounded-full text-xs font-bold text-white bg-fuchsia-500 mb-2">will be live from 01 Feb</div>
                                                     <div className="text-right">
-                                                        <div className="text-xs text-slate-400 line-through">Rs. 1500</div>
-                                                        <div className="text-xl font-bold text-slate-900 dark:text-white">Rs. 1050</div>
+                                                        <div className="text-xl font-bold text-slate-900 dark:text-white">Rs. 1500</div>
                                                     </div>
                                                 </div>
                                                 <div className="flex items-center gap-2 mb-2">
@@ -345,16 +382,13 @@ const PricingBundles = () => {
                             <div className="mb-6 relative z-10">
                                 <div className="flex items-baseline gap-2">
                                     <span className="text-4xl md:text-5xl font-black text-slate-900 dark:text-white">
-                                        Rs. {activeTab === 'freshers' ? '3500' : '2800'}
-                                    </span>
-                                    <span className="text-lg text-slate-400 line-through decoration-red-400">
                                         Rs. {activeTab === 'freshers' ? '5000' : '4000'}
                                     </span>
                                 </div>
-                                <div className="flex items-center gap-3 mt-2">
+                                <div className="flex items-center gap-3 mt-2 flex-wrap">
                                     <p className="text-slate-500 dark:text-slate-400 text-sm">One-time payment</p>
                                     <span className="bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-400 text-xs font-bold px-2 py-1 rounded-full border border-green-200 dark:border-green-800">
-                                        SAVE Rs. {activeTab === 'freshers' ? '1500' : '1200'}
+                                        GROUP DISCOUNT ELIGIBLE
                                     </span>
                                 </div>
                             </div>
@@ -410,13 +444,12 @@ const PricingBundles = () => {
                                 <h4 className="text-2xl font-bold mb-3">Freshers Chapter-Wise Bundle</h4>
                                 <ul className="text-slate-300 text-base space-y-2 mb-4">
                                     <li className="flex items-center gap-2"><div className="w-1.5 h-1.5 bg-slate-400 rounded-full"></div> All Chapter-Wise Tests Included</li>
-                                    <li className="flex items-center gap-2"><div className="w-1.5 h-1.5 bg-slate-400 rounded-full"></div> Save Rs. 1000</li>
+                                    <li className="flex items-center gap-2"><div className="w-1.5 h-1.5 bg-slate-400 rounded-full"></div> 3 Science Subjects</li>
                                 </ul>
                             </div>
                             <div className="flex items-center justify-between mt-auto pt-4 border-t border-slate-700/50">
                                 <div>
-                                    <span className="text-3xl font-bold">Rs. 2800</span>
-                                    <span className="text-sm text-slate-400 line-through ml-2">Rs. 4000</span>
+                                    <span className="text-3xl font-bold">Rs. 4000</span>
                                 </div>
                             </div>
                         </div>
@@ -433,8 +466,7 @@ const PricingBundles = () => {
                             </div>
                             <div className="flex items-center justify-between mt-auto pt-4 border-white/20">
                                 <div>
-                                    <span className="text-3xl font-bold">Rs. 1050</span>
-                                    <span className="text-sm text-blue-200 line-through ml-2">Rs. 1500</span>
+                                    <span className="text-3xl font-bold">Rs. 1500</span>
                                 </div>
                             </div>
                         </div>
@@ -567,8 +599,7 @@ const SubjectCard = ({ title, icon: Icon, price, color, details }: any) => {
                     <Icon className="w-6 h-6" />
                 </div>
                 <div className="flex flex-col items-end">
-                    <span className="text-xs text-slate-400 line-through">Rs. {price}</span>
-                    <div className="text-xl font-bold text-slate-800 dark:text-white">Rs. {price * 0.7}</div>
+                    <div className="text-xl font-bold text-slate-800 dark:text-white">Rs. {price}</div>
                 </div>
             </div>
             <h4 className="font-bold text-lg mb-1 text-slate-900 dark:text-white">{title}</h4>

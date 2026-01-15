@@ -106,15 +106,21 @@ export default function StudentDashboard() {
   };
 
   // Performance Trend Data
+  // Performance Trend Data
   const performanceTrendData = useMemo(() => {
     return [...recentQuizzes]
       .reverse()
-      .map((q, i) => ({
-        name: `Q${i + 1}`,
-        score: parseFloat(((q.score / q.total) * 100).toFixed(1)),
-        title: q.title || 'Untitled',
-        type: q.quizType === 'user' ? 'Custom' : 'Official'
-      }));
+      .map((q, i) => {
+        const rawScore = q.total > 0 ? (q.score / q.total) * 100 : 0;
+        const score = isNaN(rawScore) ? 0 : parseFloat(rawScore.toFixed(1));
+
+        return {
+          name: `Q${i + 1}`,
+          score: score,
+          title: q.title || 'Untitled',
+          type: q.quizType === 'user' ? 'Custom' : 'Official'
+        };
+      });
   }, [recentQuizzes]);
 
   // Subject Stats Data

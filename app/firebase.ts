@@ -22,6 +22,15 @@ const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 const auth = getAuth(app);
 const provider = new GoogleAuthProvider();
 const db = getFirestore(app);
+// Enable ignoreUndefinedProperties to prevent crashes when saving objects with undefined fields
+// @ts-ignore
+if (db._settings) { db._settings.ignoreUndefinedProperties = true; }
+// A safer way if the above internal access isn't desired:
+// initializeFirestore(app, { ignoreUndefinedProperties: true });
+// But since getFirestore is already used, we can re-initialize or configure it.
+// Ideally replace `getFirestore(app)` with:
+// import { initializeFirestore } from "firebase/firestore";
+// const db = initializeFirestore(app, { ignoreUndefinedProperties: true });
 const storage = getStorage(app);
 
 // Initialize Messaging only on client side

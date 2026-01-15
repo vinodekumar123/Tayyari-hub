@@ -6,7 +6,7 @@ import { createUserWithEmailAndPassword, signInWithPopup } from "firebase/auth";
 import { auth, provider, db } from "../../firebase";
 import { doc, getDoc } from "firebase/firestore";
 import Link from "next/link";
-import { logUserSession } from "@/lib/sessionUtils";
+import { logUserSession, setLoginInProgress, clearLoginInProgress } from "@/lib/sessionUtils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -29,19 +29,22 @@ export default function RegisterPage() {
     }
 
     setIsLoading(true);
+    setLoginInProgress(); // Set flag BEFORE registration
     document.body.style.cursor = "wait";
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       // Log initial session for new user
-      // Log initial session for new user
       try {
         await logUserSession(userCredential.user);
+        clearLoginInProgress();
       } catch (sessionError) {
         console.warn('Initial session logging failed, will retry on next page load:', sessionError);
+        clearLoginInProgress();
         // Don't block registration flow
       }
       router.push("/auth/onboarding");
     } catch (err: any) {
+      clearLoginInProgress();
       setError(
         err.code === "auth/email-already-in-use"
           ? "Account exists. Please sign in."
@@ -55,12 +58,14 @@ export default function RegisterPage() {
 
   const handleGoogleSignup = async () => {
     setIsLoading(true);
+    setLoginInProgress(); // Set flag BEFORE Google signup
     try {
       const result = await signInWithPopup(auth, provider);
       const user = result.user;
 
       // Log session for Google signup
-      await logUserSession(user).catch(console.error);
+      await logUserSession(user);
+      clearLoginInProgress();
 
       // Check if user exists and is complete
       const userRef = doc(db, 'users', user.uid);
@@ -83,6 +88,7 @@ export default function RegisterPage() {
       }
     } catch (err: any) {
       console.error(err);
+      clearLoginInProgress();
       setError("Google signup failed.");
     } finally {
       setIsLoading(false);

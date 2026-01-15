@@ -24,7 +24,7 @@ import {
   Sparkles
 } from 'lucide-react';
 import Link from 'next/link';
-import { logUserSession } from '@/lib/sessionUtils';
+import { logUserSession, setLoginInProgress, clearLoginInProgress } from '@/lib/sessionUtils';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -76,13 +76,16 @@ export default function LoginPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
+    setLoginInProgress(); // Set flag BEFORE login to prevent race conditions
     try {
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      // Log session
-      logUserSession(userCredential.user).catch(err => console.error("Session logging failed", err));
-    } catch (error) {
+      // Log session and clear flag after successful session creation
+      await logUserSession(userCredential.user);
+      clearLoginInProgress();
+    } catch (error: any) {
       console.error(error);
-      alert('Login failed. Check credentials.');
+      clearLoginInProgress(); // Clear flag on error
+      alert(error.message || 'Login failed. Check credentials.');
     } finally {
       setIsLoading(false);
     }
@@ -90,11 +93,14 @@ export default function LoginPage() {
 
   const handleGoogleLogin = async () => {
     setIsLoading(true);
+    setLoginInProgress(); // Set flag BEFORE login
     try {
       const result = await signInWithPopup(auth, provider);
-      logUserSession(result.user).catch(err => console.error("Session logging failed", err));
+      await logUserSession(result.user);
+      clearLoginInProgress();
     } catch (error) {
       console.error(error);
+      clearLoginInProgress();
     } finally {
       setIsLoading(false);
     }
@@ -259,4 +265,4 @@ export default function LoginPage() {
       </div>
     </div>
   );
-  }
+}

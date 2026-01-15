@@ -116,6 +116,30 @@ const getDeviceId = () => {
     return deviceId;
 };
 
+// Login state management to prevent race conditions
+const LOGIN_IN_PROGRESS_KEY = 'tayyari_login_in_progress';
+const LOGIN_GRACE_PERIOD_MS = 30000; // 30 seconds
+
+export const setLoginInProgress = () => {
+    localStorage.setItem(LOGIN_IN_PROGRESS_KEY, Date.now().toString());
+};
+
+export const clearLoginInProgress = () => {
+    localStorage.removeItem(LOGIN_IN_PROGRESS_KEY);
+};
+
+export const isLoginInProgress = (): boolean => {
+    const timestamp = localStorage.getItem(LOGIN_IN_PROGRESS_KEY);
+    if (!timestamp) return false;
+    const elapsed = Date.now() - parseInt(timestamp, 10);
+    // Auto-clear if grace period exceeded
+    if (elapsed > LOGIN_GRACE_PERIOD_MS) {
+        clearLoginInProgress();
+        return false;
+    }
+    return true;
+};
+
 /**
  * Helper to reliably get millis from a Firestore Timestamp or ServerTimestamp behavior
  * Improved to handle edge cases more predictably
@@ -361,22 +385,31 @@ export const subscribeToSession = (user: any, onStatusChange: (status: 'active' 
     const q = query(sessionsRef, where('userId', '==', user.uid), where('deviceId', '==', deviceId));
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
+        // CRITICAL: Skip revocation check if login is in progress
+        if (isLoginInProgress()) {
+            // Don't trigger any status change during login grace period
+            return;
+        }
+
         if (!snapshot.empty) {
             const docs = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as any));
 
             // Sort by loginTime desc to get latest
-            // CRITICAL FIX: Handle pending timestamps (null/serverTimestamp) efficiently to avoid race condition
             docs.sort((a, b) => getTimeMillis(b.loginTime) - getTimeMillis(a.loginTime));
 
             const session = docs[0];
 
             if (session.isBlocked) {
-                // If the latest session is blocked, it means they tried to login but failed validation
-                // We should theoretically trigger revoked, but 'blocked' is clearer if we had a status for it.
-                // For now, revoked works to kick them out.
                 onStatusChange('revoked');
             } else if (!session.isActive) {
-                onStatusChange('revoked');
+                // CRITICAL FIX: Only revoke if session was explicitly revoked by admin
+                // Normal logout sets isActive=false but wasAdminRevoked remains false
+                if (session.wasAdminRevoked === true) {
+                    onStatusChange('revoked');
+                }
+                // If wasAdminRevoked is false/undefined, this is a normal logout
+                // The user is either logging in again (new session being created)
+                // or they've already been redirected to login page
             } else {
                 onStatusChange('active');
             }

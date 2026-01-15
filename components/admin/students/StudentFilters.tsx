@@ -99,19 +99,46 @@ export function StudentFilters({
                                     </Select>
                                 </div>
                                 <div className='space-y-2'>
-                                    <Label>Series Enrolled</Label>
-                                    <Select value={seriesFilter} onValueChange={onSeriesFilterChange}>
+                                    <Label>Access Type</Label>
+                                    <Select
+                                        value={seriesFilter === 'all' ? 'all' : seriesFilter === 'public' ? 'public' : 'series'}
+                                        onValueChange={(v) => {
+                                            if (v === 'all') onSeriesFilterChange('all');
+                                            else if (v === 'public') onSeriesFilterChange('public');
+                                            else onSeriesFilterChange('series-all'); // Default to all series
+                                        }}
+                                    >
                                         <SelectTrigger>
                                             <SelectValue />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            <SelectItem value='all'>All Series</SelectItem>
-                                            {series.map(seriesItem => (
-                                                <SelectItem key={seriesItem.id} value={seriesItem.id}>{seriesItem.name}</SelectItem>
-                                            ))}
+                                            <SelectItem value='all'>All Students</SelectItem>
+                                            <SelectItem value='public'>Public (Not Enrolled)</SelectItem>
+                                            <SelectItem value='series'>Series Enrolled</SelectItem>
                                         </SelectContent>
                                     </Select>
                                 </div>
+
+                                {/* Show specific series selector only when "Series Enrolled" is selected */}
+                                {seriesFilter !== 'all' && seriesFilter !== 'public' && (
+                                    <div className='space-y-2'>
+                                        <Label>Select Series</Label>
+                                        <Select
+                                            value={seriesFilter === 'series-all' ? 'series-all' : seriesFilter}
+                                            onValueChange={onSeriesFilterChange}
+                                        >
+                                            <SelectTrigger>
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value='series-all'>All Series (Any Enrollment)</SelectItem>
+                                                {series.map(seriesItem => (
+                                                    <SelectItem key={seriesItem.id} value={seriesItem.id}>{seriesItem.name}</SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                )}
                                 <div className='space-y-2'>
                                     <Label>Items Per Page</Label>
                                     <Select value={itemsPerPage.toString()} onValueChange={(v) => onItemsPerPageChange(Number(v))}>

@@ -68,6 +68,7 @@ export default function SessionManagementPage() {
 
             await updateDoc(doc(db, 'sessions', sessionId), {
                 isActive: false,
+                wasAdminRevoked: true, // CRITICAL: Mark as admin-revoked so client knows to show revocation message
                 lastActive: serverTimestamp(),
                 loggedOutAt: serverTimestamp()
             });

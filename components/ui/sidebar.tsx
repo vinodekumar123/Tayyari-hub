@@ -13,7 +13,7 @@ import Image from "next/image";
 import { getAuth, onAuthStateChanged, signOut } from 'firebase/auth';
 import { getFirestore, doc, getDoc } from 'firebase/firestore';
 import { app } from '../../app/firebase';
-import { ensureSessionActive, subscribeToSession, updateSessionHeartbeat, logoutUserSession } from '@/lib/sessionUtils';
+import { ensureSessionActive, subscribeToSession, updateSessionHeartbeat, logoutUserSession, isLoginInProgress } from '@/lib/sessionUtils';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ModeToggle } from '@/components/mode-toggle';
@@ -257,8 +257,8 @@ export function Sidebar() {
           // FIX #4: Faster revocation check every 30 seconds
           // This ensures admin force-logout is detected quickly without overwhelming Firestore
           const revocationInterval = setInterval(() => {
-            // Grace period: skip check within 10 seconds of login to prevent race conditions
-            if (Date.now() - loginTimeRef.current < 10000) {
+            // Grace period: skip check within 30 seconds of login OR if login is in progress
+            if (Date.now() - loginTimeRef.current < 30000 || isLoginInProgress()) {
               return;
             }
 

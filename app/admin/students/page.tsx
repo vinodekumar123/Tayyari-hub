@@ -259,10 +259,41 @@ export default function StudentsPage() {
       const usersRef = collection(db, 'users');
 
 
-      // --- SERIES FILTER LOGIC (Two-Step Query) ---
-      if (seriesFilter !== 'all') {
-        // 1. Fetch Enrollments
-        const enrollQuery = query(collection(db, 'enrollments'), where('seriesId', '==', seriesFilter), where('status', '==', 'active'));
+      // --- SERIES/ACCESS TYPE FILTER LOGIC ---
+      if (seriesFilter === 'public') {
+        // PUBLIC: Users NOT enrolled in any active series
+        // 1. Get all users with active enrollments
+        const enrollQuery = query(collection(db, 'enrollments'), where('status', '==', 'active'));
+        const enrollSnap = await getDocs(enrollQuery);
+        const enrolledStudentIds = new Set(enrollSnap.docs.map(d => d.data().studentId as string));
+
+        // 2. Get all users and filter out enrolled ones
+        const allUsersSnap = await getDocs(query(usersRef, orderBy(sortField, sortDirection), limit(200)));
+        let fetchedUsers = allUsersSnap.docs
+          .map(d => ({ id: d.id, ...d.data() } as Student))
+          .filter(user => !enrolledStudentIds.has(user.id));
+
+        // Apply OTHER filters client-side
+        fetchedUsers = fetchedUsers.filter(user => {
+          if (filterType === 'premium' && user.plan !== 'premium') return false;
+          if (filterType === 'free' && user.plan === 'premium') return false;
+          if (courseFilter !== 'all' && user.course !== courseFilter) return false;
+          if (term) {
+            const searchStr = (user.fullName + user.email + user.phone).toLowerCase();
+            return searchStr.includes(term.toLowerCase());
+          }
+          return true;
+        });
+
+        setStudents(fetchedUsers.slice(0, itemsPerPage));
+        setHasMore(fetchedUsers.length > itemsPerPage);
+        setLoading(false);
+        return;
+      }
+
+      if (seriesFilter === 'series-all') {
+        // SERIES-ALL: Users enrolled in ANY active series
+        const enrollQuery = query(collection(db, 'enrollments'), where('status', '==', 'active'));
         const enrollSnap = await getDocs(enrollQuery);
         const studentIds = Array.from(new Set(enrollSnap.docs.map(d => d.data().studentId as string)));
 
@@ -273,11 +304,7 @@ export default function StudentsPage() {
           return;
         }
 
-        // 2. Fetch Users by IDs (Batching handled if > 10 in logic, but simplistic here)
-        // Firestore 'in' limitation: max 10. For >10, we usually need multiple queries or client-side filter.
-        // For simplicity/robustness with potentially large lists, we might filter client-side if list is huge?
-        // Or chunk it.
-        // Let's implement chunking for correctness.
+        // Chunk and fetch users
         const chunks = [];
         for (let i = 0; i < studentIds.length; i += 10) {
           chunks.push(studentIds.slice(i, i + 10));
@@ -290,12 +317,11 @@ export default function StudentsPage() {
           fetchedUsers.push(...snap.docs.map(d => ({ id: d.id, ...d.data() } as Student)));
         });
 
-        // Apply OTHER filters client-side on this specific set
+        // Apply OTHER filters client-side
         fetchedUsers = fetchedUsers.filter(user => {
           if (filterType === 'premium' && user.plan !== 'premium') return false;
           if (filterType === 'free' && user.plan === 'premium') return false;
           if (courseFilter !== 'all' && user.course !== courseFilter) return false;
-          // Search term check
           if (term) {
             const searchStr = (user.fullName + user.email + user.phone).toLowerCase();
             return searchStr.includes(term.toLowerCase());
@@ -311,9 +337,60 @@ export default function StudentsPage() {
         });
 
         setStudents(fetchedUsers);
-        setHasMore(false); // Pagination disabled for filtered view
+        setHasMore(false);
         setLoading(false);
-        return; // EXIT EARLY
+        return;
+      }
+
+      if (seriesFilter !== 'all') {
+        // SPECIFIC SERIES: Users enrolled in a specific series
+        const enrollQuery = query(collection(db, 'enrollments'), where('seriesId', '==', seriesFilter), where('status', '==', 'active'));
+        const enrollSnap = await getDocs(enrollQuery);
+        const studentIds = Array.from(new Set(enrollSnap.docs.map(d => d.data().studentId as string)));
+
+        if (studentIds.length === 0) {
+          setStudents([]);
+          setHasMore(false);
+          setLoading(false);
+          return;
+        }
+
+        // Chunk and fetch users
+        const chunks = [];
+        for (let i = 0; i < studentIds.length; i += 10) {
+          chunks.push(studentIds.slice(i, i + 10));
+        }
+
+        const userPromises = chunks.map(chunk => getDocs(query(usersRef, where(documentId(), 'in', chunk))));
+        const userSnaps = await Promise.all(userPromises);
+        let fetchedUsers: Student[] = [];
+        userSnaps.forEach(snap => {
+          fetchedUsers.push(...snap.docs.map(d => ({ id: d.id, ...d.data() } as Student)));
+        });
+
+        // Apply OTHER filters client-side
+        fetchedUsers = fetchedUsers.filter(user => {
+          if (filterType === 'premium' && user.plan !== 'premium') return false;
+          if (filterType === 'free' && user.plan === 'premium') return false;
+          if (courseFilter !== 'all' && user.course !== courseFilter) return false;
+          if (term) {
+            const searchStr = (user.fullName + user.email + user.phone).toLowerCase();
+            return searchStr.includes(term.toLowerCase());
+          }
+          return true;
+        });
+
+        // Sort locally
+        fetchedUsers.sort((a, b) => {
+          const valA = (a[sortField] || '').toString().toLowerCase();
+          const valB = (b[sortField] || '').toString().toLowerCase();
+          return sortDirection === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
+        });
+
+        setStudents(fetchedUsers);
+        setHasMore(false);
+        setLoading(false);
+        return;
       }
 
       // --- ROBUST SEARCH LOGIC ---

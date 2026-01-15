@@ -424,35 +424,31 @@ function CreateQuizContent() {
     // eslint-disable-next-line
   }, [quizConfig.course, courses, isEditMode]);
 
-  // Chapters by subjects
+  // Chapters by subjects - now grouped by subject for better UX
+  const [chaptersBySubject, setChaptersBySubject] = useState<Record<string, string[]>>({});
+
   useEffect(() => {
     const fetchChapters = async () => {
-      let allChapters = new Set();
-      if (quizConfig.subjects.includes('all-subjects') || quizConfig.subjects.length === 0) {
-        await Promise.all(subjects.map(async (s) => {
-          const subjectRef = doc(db, 'subjects', s.id);
-          const subjectSnap = await getDoc(subjectRef);
-          if (subjectSnap.exists()) {
-            const data = subjectSnap.data();
-            const chaptersList = data.chapters ? Object.keys(data.chapters).filter(ch => ch && ch.trim() !== '') : [];
-            chaptersList.forEach((ch) => allChapters.add(ch));
-          }
-        }));
-      } else {
-        await Promise.all(quizConfig.subjects.map(async (subjectName) => {
-          const subject = subjects.find(s => s.name === subjectName);
-          if (subject) {
-            const subjectRef = doc(db, 'subjects', subject.id);
-            const subjectSnap = await getDoc(subjectRef);
-            if (subjectSnap.exists()) {
-              const data = subjectSnap.data();
-              const chaptersList = data.chapters ? Object.keys(data.chapters).filter(ch => ch && ch.trim() !== '') : [];
-              chaptersList.forEach((ch) => allChapters.add(ch));
-            }
-          }
-        }));
-      }
-      setChapters(Array.from(allChapters) as string[]);
+      const chaptersMap: Record<string, string[]> = {};
+      const allChaptersSet = new Set<string>();
+
+      const subjectsToFetch = quizConfig.subjects.includes('all-subjects') || quizConfig.subjects.length === 0
+        ? subjects
+        : subjects.filter(s => quizConfig.subjects.includes(s.name));
+
+      await Promise.all(subjectsToFetch.map(async (s) => {
+        const subjectRef = doc(db, 'subjects', s.id);
+        const subjectSnap = await getDoc(subjectRef);
+        if (subjectSnap.exists()) {
+          const data = subjectSnap.data();
+          const chaptersList = data.chapters ? Object.keys(data.chapters).filter(ch => ch && ch.trim() !== '') : [];
+          chaptersMap[s.name] = chaptersList.sort();
+          chaptersList.forEach(ch => allChaptersSet.add(ch));
+        }
+      }));
+
+      setChaptersBySubject(chaptersMap);
+      setChapters(Array.from(allChaptersSet) as string[]);
     };
     fetchChapters();
     // eslint-disable-next-line
@@ -532,6 +528,36 @@ function CreateQuizContent() {
     setQuizConfig((prev) => ({
       ...prev,
       selectedQuestions: selected,
+    }));
+  };
+
+  // Auto add per subject: adds all questions from a specific subject (most recent first)
+  const handleAutoAddSubject = (subject: string, questions: any[]) => {
+    // Sort by createdAt desc to ensure most recent first
+    const sortedQuestions = [...questions].sort((a, b) => {
+      const aTime = a.createdAt?.seconds ? a.createdAt.seconds * 1000 : (a.createdAt ? new Date(a.createdAt).getTime() : 0);
+      const bTime = b.createdAt?.seconds ? b.createdAt.seconds * 1000 : (b.createdAt ? new Date(b.createdAt).getTime() : 0);
+      return bTime - aTime; // desc
+    });
+
+    setQuizConfig((prev) => {
+      // Get existing selected question IDs
+      const existingIds = new Set(prev.selectedQuestions.map(q => q.id));
+      // Filter out already selected questions
+      const newQuestions = sortedQuestions.filter(q => !existingIds.has(q.id));
+      // Add new questions to the end (most recent of subject first)
+      return {
+        ...prev,
+        selectedQuestions: [...prev.selectedQuestions, ...newQuestions],
+      };
+    });
+  };
+
+  // Remove all questions from a specific subject
+  const handleRemoveSubject = (subject: string) => {
+    setQuizConfig((prev) => ({
+      ...prev,
+      selectedQuestions: prev.selectedQuestions.filter(q => q.subject !== subject),
     }));
   };
 
@@ -680,10 +706,10 @@ function CreateQuizContent() {
 
   const getDifficultyColor = (difficulty: string) => {
     switch (difficulty) {
-      case 'Easy': return 'bg-green-100 text-green-800';
-      case 'Medium': return 'bg-yellow-100 text-yellow-800';
-      case 'Hard': return 'bg-red-100 text-red-800';
-      default: return 'bg-gray-100 text-gray-800';
+      case 'Easy': return 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300';
+      case 'Medium': return 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300';
+      case 'Hard': return 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300';
+      default: return 'bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-300';
     }
   };
 
@@ -819,25 +845,185 @@ function CreateQuizContent() {
     );
   };
 
+  // Enhanced Chapter Multi-Select with search and subject grouping
+  const ChapterMultiSelect = ({ value, onChange, chaptersBySubject, disabled }: {
+    value: string[],
+    onChange: (v: string[]) => void,
+    chaptersBySubject: Record<string, string[]>,
+    disabled?: boolean
+  }) => {
+    const [searchTerm, setSearchTerm] = useState('');
+
+    const displayValue = value.includes('all-chapters')
+      ? 'All Chapters'
+      : value.length > 0
+        ? `${value.length} chapters selected`
+        : 'Select chapters';
+
+    // Filter chapters based on search term
+    const filteredChaptersBySubject = useMemo(() => {
+      if (!searchTerm.trim()) return chaptersBySubject;
+
+      const filtered: Record<string, string[]> = {};
+      Object.entries(chaptersBySubject).forEach(([subject, chapters]) => {
+        const matchingChapters = chapters.filter(ch =>
+          ch.toLowerCase().includes(searchTerm.toLowerCase())
+        );
+        if (matchingChapters.length > 0) {
+          filtered[subject] = matchingChapters;
+        }
+      });
+      return filtered;
+    }, [chaptersBySubject, searchTerm]);
+
+    const totalChapters = Object.values(chaptersBySubject).flat().length;
+    const selectedFromSubject = (subject: string) => {
+      const subjectChapters = chaptersBySubject[subject] || [];
+      return subjectChapters.filter(ch => value.includes(ch)).length;
+    };
+
+    const selectAllFromSubject = (subject: string) => {
+      const subjectChapters = chaptersBySubject[subject] || [];
+      const newValue = [...new Set([...value.filter(v => v !== 'all-chapters'), ...subjectChapters])];
+      onChange(newValue);
+    };
+
+    const deselectAllFromSubject = (subject: string) => {
+      const subjectChapters = chaptersBySubject[subject] || [];
+      const newValue = value.filter(v => !subjectChapters.includes(v));
+      onChange(newValue);
+    };
+
+    return (
+      <Popover>
+        <PopoverTrigger asChild>
+          <Button
+            variant="outline"
+            className="w-full justify-between h-12 bg-white/50 dark:bg-black/20 border-white/20 dark:border-white/10 rounded-xl text-left font-normal"
+            disabled={disabled}
+          >
+            <span className="truncate">{displayValue}</span>
+            <span className="opacity-50">▼</span>
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className={`${glassmorphism.light} w-[350px] p-0 border-white/20 dark:border-white/10`} align="start">
+          {/* Search Input */}
+          <div className="p-3 border-b border-white/10">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search chapters..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-9 h-9 bg-white/50 dark:bg-black/20 border-white/20 dark:border-white/10 rounded-lg text-sm"
+              />
+            </div>
+          </div>
+
+          {/* All Chapters Option */}
+          <div className="p-2 border-b border-white/10">
+            <div
+              className="flex items-center space-x-2 p-2 rounded-lg hover:bg-black/5 dark:hover:bg-white/10 cursor-pointer transition-colors"
+              onClick={() => {
+                if (value.includes('all-chapters')) {
+                  onChange([]);
+                } else {
+                  onChange(['all-chapters']);
+                }
+              }}
+            >
+              <Checkbox checked={value.includes('all-chapters')} className="border-gray-400 dark:border-gray-500" />
+              <span className="flex-1 text-sm font-medium">All Chapters</span>
+              <Badge variant="secondary" className="bg-black/5 dark:bg-white/10 text-xs">{totalChapters}</Badge>
+            </div>
+          </div>
+
+          {/* Grouped Chapters by Subject */}
+          <div className="max-h-[300px] overflow-y-auto custom-scrollbar p-2 space-y-3">
+            {Object.entries(filteredChaptersBySubject).length === 0 ? (
+              <div className="text-center text-muted-foreground text-sm py-4">
+                {searchTerm ? 'No chapters found' : 'No chapters available'}
+              </div>
+            ) : (
+              Object.entries(filteredChaptersBySubject).map(([subject, chapters]) => (
+                <div key={subject} className="space-y-1">
+                  {/* Subject Header */}
+                  <div className="flex items-center justify-between px-2 py-1">
+                    <span className="text-xs font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider">{subject}</span>
+                    <div className="flex items-center gap-1">
+                      <Badge variant="secondary" className="bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-xs">
+                        {selectedFromSubject(subject)}/{chapters.length}
+                      </Badge>
+                      {selectedFromSubject(subject) < chapters.length ? (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-5 px-1 text-xs text-green-600 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-900/30"
+                          onClick={(e) => { e.stopPropagation(); selectAllFromSubject(subject); }}
+                        >
+                          +All
+                        </Button>
+                      ) : (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-5 px-1 text-xs text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/30"
+                          onClick={(e) => { e.stopPropagation(); deselectAllFromSubject(subject); }}
+                        >
+                          Clear
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                  {/* Chapter Items */}
+                  {chapters.map((chapter) => (
+                    <div
+                      key={`${subject}-${chapter}`}
+                      className="flex items-center space-x-2 p-2 rounded-lg hover:bg-black/5 dark:hover:bg-white/10 cursor-pointer transition-colors ml-2"
+                      onClick={() => {
+                        const isSelected = value.includes(chapter);
+                        if (isSelected) {
+                          onChange(value.filter(v => v !== chapter));
+                        } else {
+                          onChange([...value.filter(v => v !== 'all-chapters'), chapter]);
+                        }
+                      }}
+                    >
+                      <Checkbox checked={value.includes(chapter)} className="border-gray-400 dark:border-gray-500" />
+                      <span className="flex-1 text-sm truncate">{chapter}</span>
+                      <Badge variant="secondary" className="bg-black/5 dark:bg-white/10 text-xs text-muted-foreground">
+                        {countQuestionsFor({ chapter })}
+                      </Badge>
+                    </div>
+                  ))}
+                </div>
+              ))
+            )}
+          </div>
+        </PopoverContent>
+      </Popover>
+    );
+  };
+
   return (
     <div className="min-h-screen bg-background text-foreground bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-blue-50 via-background to-background dark:from-blue-950/20 dark:via-background dark:to-background">
       <header className={`${glassmorphism.light} sticky top-0 z-50 border-b border-white/20 dark:border-white/10`}>
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
-          <div className="flex items-center space-x-4">
-            <div className="h-10 w-10 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/20">
-              <BookOpen className="h-5 w-5 text-white" />
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 sm:py-4 flex items-center justify-between gap-2">
+          <div className="flex items-center space-x-3 min-w-0">
+            <div className="h-8 w-8 sm:h-10 sm:w-10 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/20 flex-shrink-0">
+              <BookOpen className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
             </div>
-            <div>
-              <h1 className="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400">
-                {isEditMode ? 'Edit Quiz' : 'Create New Quiz'}
+            <div className="min-w-0">
+              <h1 className="text-lg sm:text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400 truncate">
+                {isEditMode ? 'Edit Quiz' : 'Create Quiz'}
               </h1>
-              <p className="text-xs text-muted-foreground font-medium">
+              <p className="text-xs text-muted-foreground font-medium hidden sm:block">
                 {isEditMode ? 'Modify existing quiz details' : 'Set up a new assessment'}
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-3">
-            <Button variant="ghost" size="sm" onClick={() => router.back()} className="text-muted-foreground hover:text-foreground">
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <Button variant="ghost" size="sm" onClick={() => router.back()} className="text-muted-foreground hover:text-foreground text-xs sm:text-sm">
               Cancel
             </Button>
           </div>
@@ -846,11 +1032,11 @@ function CreateQuizContent() {
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <Tabs defaultValue="basic" className="space-y-8">
-          <TabsList className={`${glassmorphism.medium} p-1 rounded-2xl border border-white/20 dark:border-white/10 w-full grid grid-cols-4 lg:w-[600px] mx-auto`}>
-            <TabsTrigger value="basic" className="rounded-xl data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-600 data-[state=active]:to-indigo-600 data-[state=active]:text-white transition-all duration-300">Basic Info</TabsTrigger>
-            <TabsTrigger value="settings" className="rounded-xl data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-600 data-[state=active]:to-indigo-600 data-[state=active]:text-white transition-all duration-300">Settings</TabsTrigger>
-            <TabsTrigger value="questions" className="rounded-xl data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-600 data-[state=active]:to-indigo-600 data-[state=active]:text-white transition-all duration-300">Questions</TabsTrigger>
-            <TabsTrigger value="schedule" className="rounded-xl data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-600 data-[state=active]:to-indigo-600 data-[state=active]:text-white transition-all duration-300">Schedule</TabsTrigger>
+          <TabsList className={`${glassmorphism.medium} p-1 rounded-2xl border border-white/20 dark:border-white/10 w-full grid grid-cols-2 sm:grid-cols-4 gap-1 mx-auto max-w-[600px]`}>
+            <TabsTrigger value="basic" className="rounded-xl text-xs sm:text-sm data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-600 data-[state=active]:to-indigo-600 data-[state=active]:text-white transition-all duration-300">Basic</TabsTrigger>
+            <TabsTrigger value="settings" className="rounded-xl text-xs sm:text-sm data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-600 data-[state=active]:to-indigo-600 data-[state=active]:text-white transition-all duration-300">Settings</TabsTrigger>
+            <TabsTrigger value="questions" className="rounded-xl text-xs sm:text-sm data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-600 data-[state=active]:to-indigo-600 data-[state=active]:text-white transition-all duration-300">Questions</TabsTrigger>
+            <TabsTrigger value="schedule" className="rounded-xl text-xs sm:text-sm data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-600 data-[state=active]:to-indigo-600 data-[state=active]:text-white transition-all duration-300">Schedule</TabsTrigger>
           </TabsList>
 
           <TabsContent value="basic" className="space-y-8 focus-visible:outline-none">
@@ -886,7 +1072,7 @@ function CreateQuizContent() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
                   <div className="space-y-3">
                     <Label htmlFor="course" className="text-base font-semibold">Course <span className="text-red-500">*</span></Label>
                     <Popover>
@@ -948,13 +1134,11 @@ function CreateQuizContent() {
 
                   <div className="space-y-3">
                     <Label htmlFor="chapters" className="text-base font-semibold">Chapters</Label>
-                    <MultiSelect
+                    <ChapterMultiSelect
                       value={quizConfig.chapters}
                       onChange={(value) => handleMultiSelectChange('chapters', value)}
-                      options={[{ value: 'all-chapters', label: 'All Chapters' }, ...chapters.filter(ch => ch && ch.trim() !== '').map(ch => ({ value: ch, label: ch }))]}
-                      placeholder="Select chapters"
+                      chaptersBySubject={chaptersBySubject}
                       disabled={!quizConfig.subjects.length}
-                      type="chapter"
                     />
                   </div>
 
@@ -971,7 +1155,7 @@ function CreateQuizContent() {
                 <p className="text-sm text-muted-foreground">Customize how the quiz behaves.</p>
               </CardHeader>
               <CardContent className="space-y-6 pt-8">
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 sm:gap-6">
                   <div className="space-y-3">
                     <Label htmlFor="totalQuestions" className="text-base font-semibold">Total Questions</Label>
                     <Input
@@ -1022,7 +1206,7 @@ function CreateQuizContent() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 p-6 bg-white/30 dark:bg-black/20 rounded-xl border border-white/10">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6 p-4 sm:p-6 bg-white/30 dark:bg-black/20 rounded-xl border border-white/10">
                   <div className="flex items-center space-x-3">
                     <Checkbox
                       id="shuffleQuestions"
@@ -1104,52 +1288,58 @@ function CreateQuizContent() {
 
           <TabsContent value="questions" className="space-y-8 focus-visible:outline-none">
             <Card className={`${glassmorphism.light} border-white/20 dark:border-white/10 shadow-xl`}>
-              <CardHeader className="border-b border-gray-200">
-                <div className="flex justify-between items-center">
-                  <div className="flex items-center gap-3">
-                    <CardTitle className="text-2xl font-semibold text-gray-900">Question Selection</CardTitle>
+              <CardHeader className="border-b border-white/10 dark:border-white/10 pb-6">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <CardTitle className="text-xl sm:text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-gray-900 to-gray-600 dark:from-white dark:to-gray-300">Question Selection</CardTitle>
                     {/* FIX #8: Selected count badge */}
-                    <Badge variant="outline" className="text-lg px-3 py-1 bg-blue-50 text-blue-700 border-blue-300">
+                    <Badge variant="outline" className="text-sm sm:text-lg px-3 py-1 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-700">
                       {quizConfig.selectedQuestions.length} / {quizConfig.totalQuestions} Selected
                     </Badge>
                   </div>
-                  <div className="flex space-x-3">
+                  <div className="flex flex-wrap gap-2">
                     {/* FIX #11: Separate Clear All button */}
                     {quizConfig.selectedQuestions.length > 0 && (
                       <Button
                         variant="outline"
-                        className="border-red-300 text-red-600 hover:bg-red-50 transition-all duration-200"
+                        size="sm"
+                        className="border-red-300 dark:border-red-700 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all duration-200"
                         onClick={handleClearSelection}
                       >
-                        <X className="h-4 w-4 mr-2" /> Clear All ({quizConfig.selectedQuestions.length})
+                        <X className="h-4 w-4 mr-1 sm:mr-2" />
+                        <span className="hidden sm:inline">Clear All </span>({quizConfig.selectedQuestions.length})
                       </Button>
                     )}
                     <Button
                       variant="outline"
-                      className="border-gray-300 hover:bg-gray-100 transition-all duration-200"
+                      size="sm"
+                      className="border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all duration-200"
                       onClick={handleAutoSelectQuestions}
                     >
-                      <Plus className="h-5 w-5 mr-2" /> Auto Select ({quizConfig.totalQuestions})
+                      <Plus className="h-4 w-4 mr-1 sm:mr-2" />
+                      <span className="hidden sm:inline">Auto Select</span> ({quizConfig.totalQuestions})
                     </Button>
                     <Button
                       variant="secondary"
+                      size="sm"
                       className="bg-green-600 hover:bg-green-700 text-white transition-all duration-200"
                       onClick={handleSaveToMockQuestions}
                     >
-                      <SaveIcon className="h-5 w-5 mr-2" /> Save to Mock Questions
+                      <SaveIcon className="h-4 w-4 mr-1 sm:mr-2" />
+                      <span className="hidden sm:inline">Save to Mock</span>
                     </Button>
                   </div>
                 </div>
               </CardHeader>
               <CardContent className="space-y-6 pt-6">
                 <div className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
-                    <div className="space-y-2">
-                      <Label className="text-lg font-medium text-gray-700">Search</Label>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
+                    <div className="col-span-2 sm:col-span-1 space-y-2">
+                      <Label className="text-sm sm:text-base font-medium text-foreground">Search</Label>
                       <div className="relative">
-                        <Search className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                         <Input
-                          placeholder="Search questions..."
+                          placeholder="Search..."
                           value={quizConfig.questionFilters.searchTerm}
                           onChange={(e) =>
                             setQuizConfig((prev) => ({
@@ -1160,15 +1350,12 @@ function CreateQuizContent() {
                               },
                             }))
                           }
-                          className="pl-12 pr-4 py-2 border-gray-300 focus:border-blue-500 focus:ring-blue-500 rounded-xl"
+                          className="pl-10 pr-4 py-2 h-10 bg-white/50 dark:bg-black/20 border-white/20 dark:border-white/10 focus:ring-blue-500 rounded-xl text-sm"
                         />
                       </div>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Search applies to loaded questions only. Load more to search deeper.
-                      </p>
                     </div>
                     <div className="space-y-2">
-                      <Label className="text-lg font-medium text-gray-700">Subjects</Label>
+                      <Label className="text-sm sm:text-base font-medium text-foreground">Subjects</Label>
                       <MultiSelect
                         value={quizConfig.questionFilters.subjects}
                         onChange={(value) => handleQuestionFilterChange('subjects', value)}
@@ -1179,34 +1366,32 @@ function CreateQuizContent() {
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label className="text-lg font-medium text-gray-700">Chapters</Label>
-                      <MultiSelect
+                      <Label className="text-sm sm:text-base font-medium text-foreground">Chapters</Label>
+                      <ChapterMultiSelect
                         value={quizConfig.questionFilters.chapters}
                         onChange={(value) => handleQuestionFilterChange('chapters', value)}
-                        options={[{ value: 'all-chapters', label: 'All Chapters' }, ...chapters.map(ch => ({ value: ch, label: ch }))]}
-                        placeholder="All chapters"
-                        type="chapter"
+                        chaptersBySubject={chaptersBySubject}
                         disabled={false}
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label className="text-lg font-medium text-gray-700">Difficulty</Label>
+                      <Label className="text-sm sm:text-base font-medium text-foreground">Difficulty</Label>
                       <Popover>
                         <PopoverTrigger asChild>
                           <Button
                             variant="outline"
-                            className="w-full justify-between border-gray-300 focus:border-blue-500 rounded-xl"
+                            className="w-full justify-between h-10 bg-white/50 dark:bg-black/20 border-white/20 dark:border-white/10 rounded-xl text-sm"
                           >
-                            <span>{quizConfig.questionFilters.difficulty || 'All difficulties'}</span>
-                            <span>▼</span>
+                            <span className="truncate">{quizConfig.questionFilters.difficulty === '__all-difficulties__' ? 'All' : quizConfig.questionFilters.difficulty || 'All'}</span>
+                            <span className="opacity-50">▼</span>
                           </Button>
                         </PopoverTrigger>
-                        <PopoverContent className="w-full">
-                          <div className="space-y-2">
+                        <PopoverContent className="w-48 p-2 bg-white dark:bg-slate-900 border border-white/20 dark:border-white/10">
+                          <div className="space-y-1">
                             {['__all-difficulties__', 'Easy', 'Medium', 'Hard'].map(difficulty => (
                               <div
                                 key={difficulty}
-                                className="flex items-center cursor-pointer hover:bg-blue-100 p-2 rounded"
+                                className="flex items-center cursor-pointer hover:bg-blue-100 dark:hover:bg-blue-900/30 p-2 rounded-lg text-sm text-foreground"
                                 onClick={() => setQuizConfig(prev => ({
                                   ...prev,
                                   questionFilters: {
@@ -1223,23 +1408,23 @@ function CreateQuizContent() {
                       </Popover>
                     </div>
                     <div className="space-y-2">
-                      <Label className="text-lg font-medium text-gray-700">Topic</Label>
+                      <Label className="text-sm sm:text-base font-medium text-foreground">Topic</Label>
                       <Popover>
                         <PopoverTrigger asChild>
                           <Button
                             variant="outline"
-                            className="w-full justify-between border-gray-300 focus:border-blue-500 rounded-xl"
+                            className="w-full justify-between h-10 bg-white/50 dark:bg-black/20 border-white/20 dark:border-white/10 rounded-xl text-sm"
                           >
-                            <span>{quizConfig.questionFilters.topic || 'All topics'}</span>
-                            <span>▼</span>
+                            <span className="truncate">{quizConfig.questionFilters.topic === '__all-topics__' ? 'All' : quizConfig.questionFilters.topic || 'All'}</span>
+                            <span className="opacity-50">▼</span>
                           </Button>
                         </PopoverTrigger>
-                        <PopoverContent className="w-full">
-                          <div className="space-y-2">
+                        <PopoverContent className="w-48 p-2 max-h-64 overflow-y-auto bg-white dark:bg-slate-900 border border-white/20 dark:border-white/10">
+                          <div className="space-y-1">
                             {['__all-topics__', ...new Set(availableQuestions.map(q => q.topic).filter(t => t && t.trim() !== ''))].map(topic => (
                               <div
                                 key={topic}
-                                className="flex items-center cursor-pointer hover:bg-blue-100 p-2 rounded"
+                                className="flex items-center cursor-pointer hover:bg-blue-100 dark:hover:bg-blue-900/30 p-2 rounded-lg text-sm text-foreground"
                                 onClick={() => setQuizConfig(prev => ({
                                   ...prev,
                                   questionFilters: {
@@ -1256,7 +1441,7 @@ function CreateQuizContent() {
                       </Popover>
                     </div>
                     <div className="space-y-2">
-                      <Label className="text-lg font-medium text-gray-700">Created After</Label>
+                      <Label className="text-sm sm:text-base font-medium text-foreground">Created After</Label>
                       <Input
                         type="date"
                         value={quizConfig.questionFilters.createdAfter}
@@ -1267,10 +1452,10 @@ function CreateQuizContent() {
                             createdAfter: e.target.value
                           }
                         }))}
-                        className="border-gray-300 focus:border-blue-500 focus:ring-blue-500 rounded-xl"
+                        className="h-10 bg-white/50 dark:bg-black/20 border-white/20 dark:border-white/10 focus:ring-blue-500 rounded-xl text-sm"
                       />
-                      <div className="text-xs text-gray-500">
-                        {filteredQuestions.length} questions found
+                      <div className="text-xs text-muted-foreground">
+                        {filteredQuestions.length} found
                       </div>
                     </div>
                   </div>
@@ -1280,9 +1465,37 @@ function CreateQuizContent() {
                     const questions = rawQuestions as any[];
                     return (
                       <div key={subject} className="space-y-4">
-                        <div className="border-b border-white/10 pb-2 flex items-center">
-                          <h3 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400">{subject}</h3>
-                          <Badge variant="secondary" className="ml-3 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300">{questions.length}</Badge>
+                        <div className="border-b border-white/10 pb-2 flex items-center justify-between flex-wrap gap-2">
+                          <div className="flex items-center gap-2">
+                            <h3 className="text-lg sm:text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400">{subject}</h3>
+                            <Badge variant="secondary" className="bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300">{questions.length}</Badge>
+                          </div>
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-7 text-xs bg-green-50 dark:bg-green-900/20 border-green-300 dark:border-green-700 text-green-700 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-900/40"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleAutoAddSubject(subject, questions);
+                              }}
+                            >
+                              <Plus className="w-3 h-3 mr-1" /> Add All
+                            </Button>
+                            {quizConfig.selectedQuestions.some(q => q.subject === subject) && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-7 text-xs bg-red-50 dark:bg-red-900/20 border-red-300 dark:border-red-700 text-red-700 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/40"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleRemoveSubject(subject);
+                                }}
+                              >
+                                <X className="w-3 h-3 mr-1" /> Remove
+                              </Button>
+                            )}
+                          </div>
                         </div>
                         {questions.map((question) => {
                           const isSelected = quizConfig.selectedQuestions.some((q) => q.id === question.id);
@@ -1369,7 +1582,7 @@ function CreateQuizContent() {
                 <p className="text-sm text-muted-foreground">Set timing and publication status.</p>
               </CardHeader>
               <CardContent className="space-y-6 pt-8">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                   <div className="space-y-3">
                     <Label htmlFor="startDate" className="text-base font-semibold">Start Date</Label>
                     <div className="relative">
@@ -1397,7 +1610,7 @@ function CreateQuizContent() {
                     </div>
                   </div>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                   <div className="space-y-3">
                     <Label htmlFor="startTime" className="text-base font-semibold">Start Time</Label>
                     <div className="relative">
@@ -1435,12 +1648,12 @@ function CreateQuizContent() {
                   </div>
                 </div>
 
-                <div className="bg-white/40 dark:bg-black/40 p-6 rounded-2xl border border-white/10 backdrop-blur-sm">
+                <div className="bg-white/40 dark:bg-black/40 p-4 sm:p-6 rounded-2xl border border-white/10 backdrop-blur-sm">
                   <h4 className="text-xl font-bold mb-6 flex items-center gap-2">
                     <span className="w-1 h-6 bg-blue-500 rounded-full inline-block"></span>
                     Quiz Summary
                   </h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 text-sm">
                     <div className="space-y-3">
                       <div className="flex justify-between border-b border-white/5 pb-2">
                         <span className="text-muted-foreground">Title</span>

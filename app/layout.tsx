@@ -11,6 +11,8 @@ import { NavigationLoader } from '@/components/ui/navigation-loader'
 import { Toaster } from "@/components/ui/toaster";
 import { ThemeProvider } from "@/components/theme-provider";
 
+import { GlobalAuthListener } from '@/components/global-auth-listener';
+
 const inter = Inter({ subsets: ['latin'] });
 
 
@@ -28,6 +30,7 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
+          <GlobalAuthListener />
           <React.Suspense fallback={null}>
             <NavigationLoader />
           </React.Suspense>

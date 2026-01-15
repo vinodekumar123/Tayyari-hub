@@ -61,8 +61,13 @@ service cloud.firestore {
         )
       );
 
-      // Delete: Only Admins can delete users (or users deleting themselves if we wanted, but let's restrict to admin for now)
+      // Delete: Only Admins can delete users
       allow delete: if isAuthenticated() && isAdmin();
+
+      // Subcollection: Quiz Attempts (Autosave)
+      match /quizAttempts/{quizId} {
+        allow read, write: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
+      }
     }
 
     // 2. COURSES / SERIES / SUBJECTS (Content Structure)
