@@ -336,5 +336,6 @@ export default function StudentSettingsPage() {
                     </TabsContent>
                 </Tabs>
             </div>
-            );
+        </div>
+    );
 }
