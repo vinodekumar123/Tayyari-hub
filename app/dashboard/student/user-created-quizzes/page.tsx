@@ -145,22 +145,23 @@ const UserCreatedQuizzesPageOriginal = () => {
         <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-indigo-200/20 rounded-full blur-3xl animate-pulse delay-500"></div>
       </div>
 
+      <UnifiedHeader
+        title="Your Quizzes"
+        subtitle="Manage and track your custom test collection"
+        icon={<Sparkles className="w-6 h-6" />}
+      >
+        <Button
+          onClick={() => router.push('/quiz/create-mock')}
+          className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-lg shadow-blue-500/30 transition-all duration-300 hover:scale-105 border-0"
+        >
+          <Plus className="mr-2 h-5 w-5" />
+          Create New Quiz
+        </Button>
+      </UnifiedHeader>
+
       <div className="relative max-w-7xl mx-auto py-12 px-4 sm:px-6 lg:px-8">
         {/* Header Section */}
         <div className="mb-12">
-          <UnifiedHeader
-            title="Your Quizzes"
-            subtitle="Manage and track your custom test collection"
-            icon={<Sparkles className="w-6 h-6" />}
-          >
-            <Button
-              onClick={() => router.push('/quiz/create-mock')}
-              className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-lg shadow-blue-500/30 transition-all duration-300 hover:scale-105 border-0"
-            >
-              <Plus className="mr-2 h-5 w-5" />
-              Create New Quiz
-            </Button>
-          </UnifiedHeader>
 
           {/* Stats Cards */}
           {totalQuizzes > 0 && (

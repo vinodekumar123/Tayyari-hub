@@ -722,7 +722,7 @@ export default function StudentsPage() {
     setEnrollLoading(true);
     try {
       const enrollmentsToAdd: any[] = [];
-      const batch = [];
+      const newSeriesIds: string[] = []; // Track IDs to update User Profile
 
       // If engaging in a Bundle
       if (enrollType === 'bundle') {
@@ -741,6 +741,7 @@ export default function StudentsPage() {
               bundleId: selectedBundle.id,
               price: Number(enrollmentData.price) / selectedBundle.seriesIds.length, // Split price for record keeping or just store 0/full on one? Storing split for now.
             });
+            newSeriesIds.push(sId);
           }
         }
       } else {
@@ -752,6 +753,7 @@ export default function StudentsPage() {
           seriesName: selectedSeries.name,
           price: Number(enrollmentData.price),
         });
+        newSeriesIds.push(selectedSeries.id);
       }
 
       // Create Records
@@ -772,6 +774,25 @@ export default function StudentsPage() {
           enrolledAt: new Date().toISOString(),
           status: 'active'
         });
+      }
+
+      // CRITICAL FIX: Update User Profile 'enrolledSeries' array
+      // This ensures the Student Schedule page (which filters by filters user.enrolledSeries) works correctly.
+      if (newSeriesIds.length > 0) {
+        const userRef = doc(db, 'users', currentStudent.id);
+        await updateDoc(userRef, {
+          enrolledSeries: arrayUnion(...newSeriesIds)
+        });
+
+        // Update local state to reflect change immediately if viewed
+        setStudents(prev => prev.map(s => {
+          if (s.id === currentStudent.id) {
+            const currentSeries = s.enrolledSeries || [];
+            const updatedSeries = [...new Set([...currentSeries, ...newSeriesIds])];
+            return { ...s, enrolledSeries: updatedSeries };
+          }
+          return s;
+        }));
       }
 
       toast.success(`Enrolled successfully`);
@@ -846,6 +867,56 @@ export default function StudentsPage() {
     } catch (error: any) {
       console.error('Error revoking enrollment:', error);
       toast.error('Failed to revoke enrollment');
+    }
+  };
+
+  // Sync Enrollments Handler
+  const handleSyncEnrollments = async () => {
+    const confirm = window.confirm("This will scan ALL valid enrollment receipts and update every student's profile to ensure they match. This fixes 'Schedule' page issues for old students. Continue?");
+    if (!confirm) return;
+
+    setLoading(true);
+    try {
+      console.log("Starting Sync...");
+      const q = query(collection(db, 'enrollments'), where('status', '==', 'active'));
+      const snapshot = await getDocs(q);
+
+      const map = new Map<string, Set<string>>();
+
+      snapshot.docs.forEach(doc => {
+        const data = doc.data();
+        const sid = data.studentId;
+        const serId = data.seriesId;
+        if (sid && serId) {
+          if (!map.has(sid)) map.set(sid, new Set());
+          map.get(sid)?.add(serId);
+        }
+      });
+
+      console.log(`Found ${map.size} students to sync.`);
+
+      // Concurrent Updates with limit (simple Loop for safety)
+      let successCount = 0;
+      const total = map.size;
+
+      for (const [studentId, seriesSet] of map) {
+        try {
+          await updateDoc(doc(db, 'users', studentId), {
+            enrolledSeries: Array.from(seriesSet)
+          });
+          successCount++;
+        } catch (e) {
+          console.error(`Failed to sync user ${studentId}`, e);
+        }
+      }
+
+      toast.success(`Synced profiles for ${successCount}/${total} students.`);
+
+    } catch (error: any) {
+      console.error(error);
+      toast.error("Sync failed: " + error.message);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -1004,6 +1075,16 @@ export default function StudentsPage() {
                 {totalStudentsCount} total students
               </p>
             </div>
+            {isSuperadmin && (
+              <Button
+                variant="outline"
+                className="gap-2 border-blue-200 hover:bg-blue-50 text-blue-700"
+                onClick={handleSyncEnrollments}
+              >
+                <div className="w-4 h-4 rounded-full border-2 border-blue-600 border-t-transparent animate-spin" style={{ animation: 'none' }} />
+                Sync Enrollments
+              </Button>
+            )}
           </div>
         </div>
       </div>
@@ -1032,57 +1113,63 @@ export default function StudentsPage() {
       />
 
       {/* Bulk Toolbar */}
-      {selectedIds.size > 0 && (
-        <Card className={`${glassmorphism.light} border-2 border-[#0066FF] shadow-xl`}>
-          <CardContent className='p-4'>
-            <div className='flex items-center justify-between'>
-              <div className='flex items-center gap-4'>
-                <Badge variant='secondary' className='text-lg px-4 py-2'>{selectedIds.size} selected</Badge>
-                <Button variant='outline' size='sm' onClick={clearSelection} className='gap-2'><X className='w-4 h-4' /> Clear</Button>
+      {
+        selectedIds.size > 0 && (
+          <Card className={`${glassmorphism.light} border-2 border-[#0066FF] shadow-xl`}>
+            <CardContent className='p-4'>
+              <div className='flex items-center justify-between'>
+                <div className='flex items-center gap-4'>
+                  <Badge variant='secondary' className='text-lg px-4 py-2'>{selectedIds.size} selected</Badge>
+                  <Button variant='outline' size='sm' onClick={clearSelection} className='gap-2'><X className='w-4 h-4' /> Clear</Button>
+                </div>
+                <div className='flex items-center gap-2'>
+                  <Button variant='outline' size='sm' onClick={handleExportCSV} className='gap-2'><Download className='w-4 h-4' /> Export CSV</Button>
+                  {isSuperadmin && (
+                    <Button variant='destructive' size='sm' onClick={() => setBulkDeleteModal(true)} className='gap-2'><Trash2 className='w-4 h-4' /> Delete({selectedIds.size})</Button>
+                  )}
+                </div>
               </div>
-              <div className='flex items-center gap-2'>
-                <Button variant='outline' size='sm' onClick={handleExportCSV} className='gap-2'><Download className='w-4 h-4' /> Export CSV</Button>
-                {isSuperadmin && (
-                  <Button variant='destructive' size='sm' onClick={() => setBulkDeleteModal(true)} className='gap-2'><Trash2 className='w-4 h-4' /> Delete({selectedIds.size})</Button>
-                )}
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+            </CardContent>
+          </Card>
+        )
+      }
 
-      {loading && students.length === 0 ? (
-        <TableSkeleton rows={8} columns={7} />
-      ) : (
-        <StudentTable
-          students={students}
-          selectedIds={selectedIds}
-          isAllSelected={isAllSelected}
-          onSelectAll={handleSelectAll}
-          onSelectOne={handleSelectOne}
-          sortField={sortField}
-          sortDirection={sortDirection}
-          onSort={(f) => {
-            if (sortField === f) setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
-            else { setSortField(f); setSortDirection('asc'); }
-          }}
-          onEdit={handleEditClick}
-          onEnroll={handleEnrollClick}
-          onHistory={handleHistoryClick}
-          onDelete={handleDeleteClick}
-          onPasswordReset={handlePasswordReset}
-          onToggleStatus={handleToggleStatus}
-          onViewResults={handleViewResults}
-          loading={loading}
-        />
-      )}
+      {
+        loading && students.length === 0 ? (
+          <TableSkeleton rows={8} columns={7} />
+        ) : (
+          <StudentTable
+            students={students}
+            selectedIds={selectedIds}
+            isAllSelected={isAllSelected}
+            onSelectAll={handleSelectAll}
+            onSelectOne={handleSelectOne}
+            sortField={sortField}
+            sortDirection={sortDirection}
+            onSort={(f) => {
+              if (sortField === f) setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+              else { setSortField(f); setSortDirection('asc'); }
+            }}
+            onEdit={handleEditClick}
+            onEnroll={handleEnrollClick}
+            onHistory={handleHistoryClick}
+            onDelete={handleDeleteClick}
+            onPasswordReset={handlePasswordReset}
+            onToggleStatus={handleToggleStatus}
+            onViewResults={handleViewResults}
+            loading={loading}
+          />
+        )
+      }
 
       {/* Infinite Scroll Loader / Sentinel */}
-      {hasMore && (
-        <div ref={observerTarget} className="flex justify-center items-center py-6 h-20">
-          {loading && <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>}
-        </div>
-      )}
+      {
+        hasMore && (
+          <div ref={observerTarget} className="flex justify-center items-center py-6 h-20">
+            {loading && <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>}
+          </div>
+        )
+      }
 
       {/* Modals - Simplified for brevity in this rewrite, but fully functional */}
       <Dialog open={editModal} onOpenChange={setEditModal}>

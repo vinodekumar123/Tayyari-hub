@@ -237,7 +237,7 @@ export default function FlashcardsPage() {
     if (loading) return <div className="flex justify-center items-center h-screen bg-gray-50 dark:bg-slate-950"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 dark:border-indigo-400"></div></div>;
 
     return (
-        <div className="p-6 md:p-12 max-w-7xl mx-auto space-y-8 animate-in fade-in duration-500">
+        <div className="min-h-screen bg-slate-50/[0.6] dark:bg-slate-950">
             {/* Unified Header */}
             <UnifiedHeader
                 title="My Flashcards"
@@ -256,320 +256,322 @@ export default function FlashcardsPage() {
                     </Card>
                 </div>
             </UnifiedHeader>
+            <div className="p-6 md:p-12 max-w-7xl mx-auto space-y-8 animate-in fade-in duration-500">
 
-            {/* Analytics Section */}
-            {analytics.total > 0 && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <Card className="border-0 shadow-lg bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm">
-                        <CardHeader className="pb-2">
-                            <CardTitle className="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Subject Breakdown</CardTitle>
-                        </CardHeader>
-                        <CardContent className="h-[200px]">
-                            <ResponsiveContainer width="100%" height="100%">
-                                <BarChart data={analytics.subjectData} layout="vertical" margin={{ left: 10 }}>
-                                    <XAxis type="number" hide />
-                                    <YAxis dataKey="name" type="category" width={100} tick={{ fontSize: 12, fill: '#9ca3af' }} axisLine={false} tickLine={false} />
-                                    <Tooltip cursor={{ fill: 'transparent' }} contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)', backgroundColor: 'rgba(255, 255, 255, 0.9)', color: '#1f2937' }} itemStyle={{ color: '#4f46e5' }} />
-                                    <Bar dataKey="value" fill="#6366f1" radius={[0, 4, 4, 0]} barSize={20} />
-                                </BarChart>
-                            </ResponsiveContainer>
-                        </CardContent>
-                    </Card>
-                    <Card className="border-0 shadow-lg bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm">
-                        <CardHeader className="pb-2">
-                            <CardTitle className="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Distribution</CardTitle>
-                        </CardHeader>
-                        <CardContent className="h-[200px] flex justify-center">
-                            <ResponsiveContainer width="100%" height="100%">
-                                <PieChart>
-                                    <Pie
-                                        data={analytics.subjectData}
-                                        cx="50%"
-                                        cy="50%"
-                                        innerRadius={50}
-                                        outerRadius={70}
-                                        paddingAngle={5}
-                                        dataKey="value"
-                                    >
-                                        {analytics.subjectData.map((entry, index) => (
-                                            <Cell key={`cell-${index}`} fill={['#6366f1', '#ec4899', '#f59e0b', '#10b981', '#ef4444'][index % 5]} />
-                                        ))}
-                                    </Pie>
-                                    <Tooltip />
-                                    <Legend verticalAlign="middle" align="right" layout="vertical" iconType="circle" />
-                                </PieChart>
-                            </ResponsiveContainer>
-                        </CardContent>
-                    </Card>
-                </div>
-            )}
-
-            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-6">
-                    <TabsList>
-                        <TabsTrigger value="active" className="gap-2">
-                            <Grid className="w-4 h-4" /> Active Cards
-                        </TabsTrigger>
-                        <TabsTrigger value="recycle" className="gap-2">
-                            <Trash2 className="w-4 h-4" /> Recycle Bin
-                        </TabsTrigger>
-                    </TabsList>
-
-                    <div className="flex flex-1 md:flex-none w-full md:w-auto gap-2">
-                        <div className="relative">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500" />
-                            <Input
-                                placeholder="Search questions..."
-                                value={searchTerm}
-                                onChange={e => setSearchTerm(e.target.value)}
-                                className="pl-9 w-full md:min-w-[250px] bg-white dark:bg-slate-900 border-gray-200 dark:border-slate-800 focus:ring-indigo-500 dark:focus:ring-indigo-400 placeholder:text-gray-400 dark:placeholder:text-gray-600 text-gray-900 dark:text-gray-100"
-                            />
-                        </div>
-                        <select
-                            value={subjectFilter}
-                            onChange={(e) => setSubjectFilter(e.target.value)}
-                            className="h-10 px-3 rounded-md border border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-sm text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 focus:outline-none"
-                        >
-                            <option value="all">All Subjects</option>
-                            {uniqueSubjects.map(sub => (
-                                <option key={sub} value={sub}>{sub}</option>
-                            ))}
-                        </select>
-                    </div>
-                </div>
-
-                <TabsContent value="active" className="space-y-6">
-                    {filteredCards.length > 0 ? (
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                            {filteredCards.map(card => {
-                                const isRevealed = revealedCards.has(card.id);
-                                return (
-                                    <Card key={card.id} className="group hover:shadow-xl transition-all duration-300 border-t-4 border-t-indigo-500 dark:border-t-indigo-500 overflow-hidden flex flex-col bg-white dark:bg-slate-900 border-x border-b border-gray-200 dark:border-slate-800">
-                                        <CardHeader className="bg-gray-50/50 dark:bg-slate-800/50 pb-3">
-                                            <div className="flex justify-between items-start gap-2">
-                                                <Badge variant="outline" className="bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800">
-                                                    {card.subject || 'General'}
-                                                </Badge>
-                                                <Button variant="ghost" size="icon" className="h-8 w-8 text-gray-400 dark:text-gray-500 hover:text-red-500 dark:hover:text-red-400 -mt-1 -mr-2" onClick={() => handleDelete(card)}>
-                                                    <Trash2 className="w-4 h-4" />
-                                                </Button>
-                                            </div>
-                                            {card.topic && <div className="text-xs text-gray-500 dark:text-gray-400 font-medium truncate">{card.topic}</div>}
-                                        </CardHeader>
-                                        <CardContent className="pt-4 flex-1 flex flex-col">
-                                            <div className="flex-1 mb-4 text-gray-800 dark:text-gray-100" dangerouslySetInnerHTML={{ __html: card.questionText }} />
-
-                                            {/* Options Display */}
-                                            {card.options && card.options.length > 0 && (
-                                                <div className="space-y-2 mb-4">
-                                                    {card.options.map((opt, i) => {
-                                                        const isCorrect = card.correctAnswer === opt;
-                                                        // If revealed, highlight correct answer. If not revealed, generic style.
-                                                        const styleClass = isRevealed && isCorrect
-                                                            ? "bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800 text-green-900 dark:text-green-300 font-medium ring-1 ring-green-200 dark:ring-green-800"
-                                                            : "bg-gray-50 dark:bg-slate-800 border-gray-200 dark:border-slate-700 text-gray-700 dark:text-gray-300";
-
-                                                        return (
-                                                            <div key={i} className={`p-3 rounded-lg border text-sm flex items-start gap-3 transition-colors ${styleClass}`}>
-                                                                <div className={`flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-xs border ${isRevealed && isCorrect ? 'bg-green-100 dark:bg-green-900/40 border-green-300 dark:border-green-700 text-green-700 dark:text-green-400' : 'bg-white dark:bg-slate-700 border-gray-300 dark:border-slate-600 text-gray-500 dark:text-gray-400'}`}>
-                                                                    {String.fromCharCode(65 + i)}
-                                                                </div>
-                                                                <span className="flex-1">{opt}</span>
-                                                                {isRevealed && isCorrect && <CheckCircle className="w-4 h-4 text-green-600 dark:text-green-400 mt-0.5" />}
-                                                            </div>
-                                                        );
-                                                    })}
-                                                </div>
-                                            )}
-
-                                            {isRevealed ? (
-                                                <div className="animate-in fade-in slide-in-from-bottom-2 duration-300 space-y-3 bg-green-50 dark:bg-green-900/10 p-4 rounded-lg text-sm border border-green-100 dark:border-green-900/30">
-                                                    <div>
-                                                        <span className="font-bold text-green-800 dark:text-green-400 block mb-1">Correct Answer:</span>
-                                                        <span className="text-green-900 dark:text-green-300 font-medium">{card.correctAnswer}</span>
-                                                    </div>
-                                                    {card.explanation && (
-                                                        <div className="pt-2 border-t border-green-200/50 dark:border-green-800/30">
-                                                            <span className="font-bold text-green-800 dark:text-green-400 text-xs uppercase tracking-wide block mb-1">Explanation:</span>
-                                                            <div className="text-green-900 dark:text-green-300" dangerouslySetInnerHTML={{ __html: card.explanation }} />
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            ) : (
-                                                <div className="bg-gray-50 dark:bg-slate-800 h-24 rounded-lg border border-dashed border-gray-300 dark:border-slate-700 flex items-center justify-center text-gray-400 dark:text-gray-500 text-sm cursor-pointer hover:bg-gray-100 dark:hover:bg-slate-750 hover:text-gray-600 dark:hover:text-gray-300 transition-colors" onClick={() => toggleReveal(card.id)}>
-                                                    <div className="flex items-center gap-2">
-                                                        <Eye className="w-4 h-4" /> Click to reveal answer
-                                                    </div>
-                                                </div>
-                                            )}
-                                        </CardContent>
-                                        <div className="p-3 border-t border-gray-100 dark:border-slate-800 bg-gray-50/30 dark:bg-slate-800/30 flex justify-end">
-                                            <Button variant="ghost" size="sm" onClick={() => toggleReveal(card.id)} className="text-xs text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200">
-                                                {isRevealed ? <><EyeOff className="w-3 h-3 mr-1" /> Hide Answer</> : <><Eye className="w-3 h-3 mr-1" /> Show Answer</>}
-                                            </Button>
-                                        </div>
-                                    </Card>
-                                );
-                            })}
-                        </div>
-                    ) : (
-                        <div className="text-center py-20 bg-gray-50 dark:bg-slate-900/50 rounded-xl border border-dashed border-gray-200 dark:border-slate-800">
-                            <Bookmark className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
-                            <h3 className="text-lg font-medium text-gray-900 dark:text-gray-200">No active flashcards</h3>
-                            <p className="text-gray-500 dark:text-gray-400">Save questions from your quiz results to see them here.</p>
-                        </div>
-                    )}
-                </TabsContent>
-
-                {/* Load More Button */}
-                {hasMore && activeTab === 'active' && !subjectFilter && !searchTerm && (
-                    <div className="mt-8 flex justify-center">
-                        <Button
-                            variant="outline"
-                            onClick={loadMoreCards}
-                            disabled={loadingMore}
-                            className="w-full md:w-auto min-w-[200px]"
-                        >
-                            {loadingMore ? 'Loading...' : 'Load More Cards'}
-                        </Button>
+                {/* Analytics Section */}
+                {analytics.total > 0 && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <Card className="border-0 shadow-lg bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm">
+                            <CardHeader className="pb-2">
+                                <CardTitle className="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Subject Breakdown</CardTitle>
+                            </CardHeader>
+                            <CardContent className="h-[200px]">
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <BarChart data={analytics.subjectData} layout="vertical" margin={{ left: 10 }}>
+                                        <XAxis type="number" hide />
+                                        <YAxis dataKey="name" type="category" width={100} tick={{ fontSize: 12, fill: '#9ca3af' }} axisLine={false} tickLine={false} />
+                                        <Tooltip cursor={{ fill: 'transparent' }} contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)', backgroundColor: 'rgba(255, 255, 255, 0.9)', color: '#1f2937' }} itemStyle={{ color: '#4f46e5' }} />
+                                        <Bar dataKey="value" fill="#6366f1" radius={[0, 4, 4, 0]} barSize={20} />
+                                    </BarChart>
+                                </ResponsiveContainer>
+                            </CardContent>
+                        </Card>
+                        <Card className="border-0 shadow-lg bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm">
+                            <CardHeader className="pb-2">
+                                <CardTitle className="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Distribution</CardTitle>
+                            </CardHeader>
+                            <CardContent className="h-[200px] flex justify-center">
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <PieChart>
+                                        <Pie
+                                            data={analytics.subjectData}
+                                            cx="50%"
+                                            cy="50%"
+                                            innerRadius={50}
+                                            outerRadius={70}
+                                            paddingAngle={5}
+                                            dataKey="value"
+                                        >
+                                            {analytics.subjectData.map((entry, index) => (
+                                                <Cell key={`cell-${index}`} fill={['#6366f1', '#ec4899', '#f59e0b', '#10b981', '#ef4444'][index % 5]} />
+                                            ))}
+                                        </Pie>
+                                        <Tooltip />
+                                        <Legend verticalAlign="middle" align="right" layout="vertical" iconType="circle" />
+                                    </PieChart>
+                                </ResponsiveContainer>
+                            </CardContent>
+                        </Card>
                     </div>
                 )}
 
-                <TabsContent value="recycle" className="space-y-6">
-                    {filteredCards.length > 0 ? (
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                            {filteredCards.map(card => (
-                                <Card key={card.id} className="opacity-75 hover:opacity-100 transition-opacity bg-gray-50 border-gray-200 dark:bg-slate-900/60 dark:border-slate-800">
-                                    <CardHeader className="pb-2">
-                                        <div className="flex justify-between">
-                                            <Badge variant="secondary" className="dark:bg-slate-800 dark:text-slate-300">{card.subject || 'General'}</Badge>
-                                            <Badge variant="destructive" className="bg-red-100 text-red-700 border-red-200 shadow-none hover:bg-red-200 dark:bg-red-900/30 dark:text-red-400 dark:border-red-900/50">Deleted</Badge>
-                                        </div>
-                                    </CardHeader>
-                                    <CardContent className="pt-4">
-                                        <div className="line-clamp-3 text-sm text-gray-600 dark:text-gray-400 mb-4" dangerouslySetInnerHTML={{ __html: card.questionText }} />
-                                        <div className="flex gap-2 mt-4">
-                                            <Button size="sm" variant="outline" className="flex-1 text-blue-600 hover:text-blue-700 hover:bg-blue-50 border-blue-200 dark:border-blue-900/30 dark:text-blue-400 dark:hover:bg-blue-900/20" onClick={() => handleRestore(card)}>
-                                                <RotateCcw className="w-4 h-4 mr-2" /> Restore
-                                            </Button>
-                                            <Button size="sm" variant="destructive" className="flex-1 dark:bg-red-900/50 dark:hover:bg-red-900/70" onClick={() => confirmPermanentDelete(card)}>
-                                                <X className="w-4 h-4 mr-2" /> Delete
-                                            </Button>
-                                        </div>
-                                    </CardContent>
-                                </Card>
-                            ))}
-                        </div>
-                    ) : (
-                        <div className="text-center py-20 bg-gray-50 dark:bg-slate-900/50 rounded-xl border border-dashed border-gray-200 dark:border-slate-800">
-                            <Trash2 className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
-                            <h3 className="text-lg font-medium text-gray-900 dark:text-gray-200">Recycle Bin is empty</h3>
-                            <p className="text-gray-500 dark:text-gray-400">Items you delete will show up here.</p>
-                        </div>
-                    )}
-                </TabsContent>
-            </Tabs>
+                <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+                    <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-6">
+                        <TabsList>
+                            <TabsTrigger value="active" className="gap-2">
+                                <Grid className="w-4 h-4" /> Active Cards
+                            </TabsTrigger>
+                            <TabsTrigger value="recycle" className="gap-2">
+                                <Trash2 className="w-4 h-4" /> Recycle Bin
+                            </TabsTrigger>
+                        </TabsList>
 
-            <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-                <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle>Permanent Deletion</DialogTitle>
-                        <DialogDescription>
-                            Are you sure you want to permanently delete this flashcard? This action cannot be undone.
-                        </DialogDescription>
-                    </DialogHeader>
-                    <DialogFooter>
-                        <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>Cancel</Button>
-                        <Button variant="destructive" onClick={handlePermanentDelete}>Delete Forever</Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
-
-            {/* Study Mode Dialog */}
-            <Dialog open={isStudyOpen} onOpenChange={setIsStudyOpen}>
-                <DialogContent className="max-w-4xl h-[80vh] flex flex-col p-0 gap-0 bg-gray-50 dark:bg-slate-950 border-none overflow-hidden">
-                    <div className="p-4 border-b border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex justify-between items-center">
-                        <div className="flex items-center gap-2">
-                            <Badge variant="outline" className="bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400">
-                                Card {studyIndex + 1} of {filteredCards.length}
-                            </Badge>
-                            {filteredCards[studyIndex]?.subject && (
-                                <Badge variant="secondary" className="hidden sm:inline-flex">
-                                    {filteredCards[studyIndex].subject}
-                                </Badge>
-                            )}
+                        <div className="flex flex-1 md:flex-none w-full md:w-auto gap-2">
+                            <div className="relative">
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500" />
+                                <Input
+                                    placeholder="Search questions..."
+                                    value={searchTerm}
+                                    onChange={e => setSearchTerm(e.target.value)}
+                                    className="pl-9 w-full md:min-w-[250px] bg-white dark:bg-slate-900 border-gray-200 dark:border-slate-800 focus:ring-indigo-500 dark:focus:ring-indigo-400 placeholder:text-gray-400 dark:placeholder:text-gray-600 text-gray-900 dark:text-gray-100"
+                                />
+                            </div>
+                            <select
+                                value={subjectFilter}
+                                onChange={(e) => setSubjectFilter(e.target.value)}
+                                className="h-10 px-3 rounded-md border border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-sm text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 focus:outline-none"
+                            >
+                                <option value="all">All Subjects</option>
+                                {uniqueSubjects.map(sub => (
+                                    <option key={sub} value={sub}>{sub}</option>
+                                ))}
+                            </select>
                         </div>
-                        <Button variant="ghost" size="icon" onClick={() => setIsStudyOpen(false)}>
-                            <X className="w-5 h-5" />
-                        </Button>
                     </div>
 
-                    <div className="flex-1 overflow-y-auto p-4 md:p-8 flex items-center justify-center relative">
-                        {filteredCards.length > 0 && filteredCards[studyIndex] ? (
-                            <div
-                                className="w-full max-w-2xl aspect-video md:aspect-[4/3] perspective-1000 cursor-pointer group"
-                                onClick={() => setIsFlipped(!isFlipped)}
-                            >
-                                <div className={`relative w-full h-full transition-all duration-500 transform-style-3d ${isFlipped ? 'rotate-y-180' : ''}`}>
-                                    {/* Front */}
-                                    <div className="absolute w-full h-full backface-hidden bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-gray-200 dark:border-slate-800 p-8 flex flex-col items-center justify-center text-center">
-                                        <h3 className="text-xl md:text-2xl font-medium text-gray-800 dark:text-gray-100 mb-6 font-serif">
-                                            Question
-                                        </h3>
-                                        <div
-                                            className="prose dark:prose-invert max-w-none text-lg md:text-xl"
-                                            dangerouslySetInnerHTML={{ __html: filteredCards[studyIndex].questionText }}
-                                        />
-                                        <div className="mt-8 text-sm text-gray-400 dark:text-gray-500 flex items-center gap-2 animate-pulse">
-                                            <Repeat className="w-4 h-4" /> Click to flip
-                                        </div>
-                                    </div>
+                    <TabsContent value="active" className="space-y-6">
+                        {filteredCards.length > 0 ? (
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                {filteredCards.map(card => {
+                                    const isRevealed = revealedCards.has(card.id);
+                                    return (
+                                        <Card key={card.id} className="group hover:shadow-xl transition-all duration-300 border-t-4 border-t-indigo-500 dark:border-t-indigo-500 overflow-hidden flex flex-col bg-white dark:bg-slate-900 border-x border-b border-gray-200 dark:border-slate-800">
+                                            <CardHeader className="bg-gray-50/50 dark:bg-slate-800/50 pb-3">
+                                                <div className="flex justify-between items-start gap-2">
+                                                    <Badge variant="outline" className="bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800">
+                                                        {card.subject || 'General'}
+                                                    </Badge>
+                                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-gray-400 dark:text-gray-500 hover:text-red-500 dark:hover:text-red-400 -mt-1 -mr-2" onClick={() => handleDelete(card)}>
+                                                        <Trash2 className="w-4 h-4" />
+                                                    </Button>
+                                                </div>
+                                                {card.topic && <div className="text-xs text-gray-500 dark:text-gray-400 font-medium truncate">{card.topic}</div>}
+                                            </CardHeader>
+                                            <CardContent className="pt-4 flex-1 flex flex-col">
+                                                <div className="flex-1 mb-4 text-gray-800 dark:text-gray-100" dangerouslySetInnerHTML={{ __html: card.questionText }} />
 
-                                    {/* Back */}
-                                    <div className="absolute w-full h-full backface-hidden rotate-y-180 bg-indigo-50 dark:bg-slate-900 rounded-2xl shadow-xl border-2 border-indigo-100 dark:border-indigo-900/30 p-8 flex flex-col items-center justify-center text-center overflow-y-auto">
-                                        <h3 className="text-xl md:text-2xl font-medium text-indigo-600 dark:text-indigo-400 mb-6 font-serif">
-                                            Answer
-                                        </h3>
-                                        <div className="text-xl md:text-2xl font-bold text-gray-900 dark:text-gray-100 mb-4">
-                                            {filteredCards[studyIndex].correctAnswer}
-                                        </div>
-                                        {filteredCards[studyIndex].explanation && (
-                                            <div className="mt-4 p-4 bg-white/50 dark:bg-slate-800/50 rounded-lg text-sm md:text-base text-gray-600 dark:text-gray-300 max-h-[200px] overflow-y-auto">
-                                                <div dangerouslySetInnerHTML={{ __html: filteredCards[studyIndex].explanation }} />
+                                                {/* Options Display */}
+                                                {card.options && card.options.length > 0 && (
+                                                    <div className="space-y-2 mb-4">
+                                                        {card.options.map((opt, i) => {
+                                                            const isCorrect = card.correctAnswer === opt;
+                                                            // If revealed, highlight correct answer. If not revealed, generic style.
+                                                            const styleClass = isRevealed && isCorrect
+                                                                ? "bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800 text-green-900 dark:text-green-300 font-medium ring-1 ring-green-200 dark:ring-green-800"
+                                                                : "bg-gray-50 dark:bg-slate-800 border-gray-200 dark:border-slate-700 text-gray-700 dark:text-gray-300";
+
+                                                            return (
+                                                                <div key={i} className={`p-3 rounded-lg border text-sm flex items-start gap-3 transition-colors ${styleClass}`}>
+                                                                    <div className={`flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-xs border ${isRevealed && isCorrect ? 'bg-green-100 dark:bg-green-900/40 border-green-300 dark:border-green-700 text-green-700 dark:text-green-400' : 'bg-white dark:bg-slate-700 border-gray-300 dark:border-slate-600 text-gray-500 dark:text-gray-400'}`}>
+                                                                        {String.fromCharCode(65 + i)}
+                                                                    </div>
+                                                                    <span className="flex-1">{opt}</span>
+                                                                    {isRevealed && isCorrect && <CheckCircle className="w-4 h-4 text-green-600 dark:text-green-400 mt-0.5" />}
+                                                                </div>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                )}
+
+                                                {isRevealed ? (
+                                                    <div className="animate-in fade-in slide-in-from-bottom-2 duration-300 space-y-3 bg-green-50 dark:bg-green-900/10 p-4 rounded-lg text-sm border border-green-100 dark:border-green-900/30">
+                                                        <div>
+                                                            <span className="font-bold text-green-800 dark:text-green-400 block mb-1">Correct Answer:</span>
+                                                            <span className="text-green-900 dark:text-green-300 font-medium">{card.correctAnswer}</span>
+                                                        </div>
+                                                        {card.explanation && (
+                                                            <div className="pt-2 border-t border-green-200/50 dark:border-green-800/30">
+                                                                <span className="font-bold text-green-800 dark:text-green-400 text-xs uppercase tracking-wide block mb-1">Explanation:</span>
+                                                                <div className="text-green-900 dark:text-green-300" dangerouslySetInnerHTML={{ __html: card.explanation }} />
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                ) : (
+                                                    <div className="bg-gray-50 dark:bg-slate-800 h-24 rounded-lg border border-dashed border-gray-300 dark:border-slate-700 flex items-center justify-center text-gray-400 dark:text-gray-500 text-sm cursor-pointer hover:bg-gray-100 dark:hover:bg-slate-750 hover:text-gray-600 dark:hover:text-gray-300 transition-colors" onClick={() => toggleReveal(card.id)}>
+                                                        <div className="flex items-center gap-2">
+                                                            <Eye className="w-4 h-4" /> Click to reveal answer
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </CardContent>
+                                            <div className="p-3 border-t border-gray-100 dark:border-slate-800 bg-gray-50/30 dark:bg-slate-800/30 flex justify-end">
+                                                <Button variant="ghost" size="sm" onClick={() => toggleReveal(card.id)} className="text-xs text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200">
+                                                    {isRevealed ? <><EyeOff className="w-3 h-3 mr-1" /> Hide Answer</> : <><Eye className="w-3 h-3 mr-1" /> Show Answer</>}
+                                                </Button>
                                             </div>
-                                        )}
-                                    </div>
-                                </div>
+                                        </Card>
+                                    );
+                                })}
                             </div>
                         ) : (
-                            <div className="text-center">
-                                <p className="text-gray-500">No cards accessible to study.</p>
+                            <div className="text-center py-20 bg-gray-50 dark:bg-slate-900/50 rounded-xl border border-dashed border-gray-200 dark:border-slate-800">
+                                <Bookmark className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
+                                <h3 className="text-lg font-medium text-gray-900 dark:text-gray-200">No active flashcards</h3>
+                                <p className="text-gray-500 dark:text-gray-400">Save questions from your quiz results to see them here.</p>
                             </div>
                         )}
-                    </div>
+                    </TabsContent>
 
-                    <div className="p-4 border-t border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex justify-between items-center gap-4">
-                        <Button
-                            variant="outline"
-                            onClick={prevCard}
-                            disabled={studyIndex === 0}
-                            className="w-32"
-                        >
-                            <ArrowLeft className="w-4 h-4 mr-2" /> Previous
-                        </Button>
-                        <div className="text-sm text-gray-400 hidden sm:block">
-                            Use arrow keys to navigate
+                    {/* Load More Button */}
+                    {hasMore && activeTab === 'active' && !subjectFilter && !searchTerm && (
+                        <div className="mt-8 flex justify-center">
+                            <Button
+                                variant="outline"
+                                onClick={loadMoreCards}
+                                disabled={loadingMore}
+                                className="w-full md:w-auto min-w-[200px]"
+                            >
+                                {loadingMore ? 'Loading...' : 'Load More Cards'}
+                            </Button>
                         </div>
-                        <Button
-                            onClick={nextCard}
-                            disabled={studyIndex === filteredCards.length - 1}
-                            className="w-32 bg-indigo-600 text-white hover:bg-indigo-700"
-                        >
-                            Next <ArrowRight className="w-4 h-4 ml-2" />
-                        </Button>
-                    </div>
-                </DialogContent>
-            </Dialog>
+                    )}
+
+                    <TabsContent value="recycle" className="space-y-6">
+                        {filteredCards.length > 0 ? (
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                {filteredCards.map(card => (
+                                    <Card key={card.id} className="opacity-75 hover:opacity-100 transition-opacity bg-gray-50 border-gray-200 dark:bg-slate-900/60 dark:border-slate-800">
+                                        <CardHeader className="pb-2">
+                                            <div className="flex justify-between">
+                                                <Badge variant="secondary" className="dark:bg-slate-800 dark:text-slate-300">{card.subject || 'General'}</Badge>
+                                                <Badge variant="destructive" className="bg-red-100 text-red-700 border-red-200 shadow-none hover:bg-red-200 dark:bg-red-900/30 dark:text-red-400 dark:border-red-900/50">Deleted</Badge>
+                                            </div>
+                                        </CardHeader>
+                                        <CardContent className="pt-4">
+                                            <div className="line-clamp-3 text-sm text-gray-600 dark:text-gray-400 mb-4" dangerouslySetInnerHTML={{ __html: card.questionText }} />
+                                            <div className="flex gap-2 mt-4">
+                                                <Button size="sm" variant="outline" className="flex-1 text-blue-600 hover:text-blue-700 hover:bg-blue-50 border-blue-200 dark:border-blue-900/30 dark:text-blue-400 dark:hover:bg-blue-900/20" onClick={() => handleRestore(card)}>
+                                                    <RotateCcw className="w-4 h-4 mr-2" /> Restore
+                                                </Button>
+                                                <Button size="sm" variant="destructive" className="flex-1 dark:bg-red-900/50 dark:hover:bg-red-900/70" onClick={() => confirmPermanentDelete(card)}>
+                                                    <X className="w-4 h-4 mr-2" /> Delete
+                                                </Button>
+                                            </div>
+                                        </CardContent>
+                                    </Card>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="text-center py-20 bg-gray-50 dark:bg-slate-900/50 rounded-xl border border-dashed border-gray-200 dark:border-slate-800">
+                                <Trash2 className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
+                                <h3 className="text-lg font-medium text-gray-900 dark:text-gray-200">Recycle Bin is empty</h3>
+                                <p className="text-gray-500 dark:text-gray-400">Items you delete will show up here.</p>
+                            </div>
+                        )}
+                    </TabsContent>
+                </Tabs>
+
+                <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+                    <DialogContent>
+                        <DialogHeader>
+                            <DialogTitle>Permanent Deletion</DialogTitle>
+                            <DialogDescription>
+                                Are you sure you want to permanently delete this flashcard? This action cannot be undone.
+                            </DialogDescription>
+                        </DialogHeader>
+                        <DialogFooter>
+                            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>Cancel</Button>
+                            <Button variant="destructive" onClick={handlePermanentDelete}>Delete Forever</Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
+
+                {/* Study Mode Dialog */}
+                <Dialog open={isStudyOpen} onOpenChange={setIsStudyOpen}>
+                    <DialogContent className="max-w-4xl h-[80vh] flex flex-col p-0 gap-0 bg-gray-50 dark:bg-slate-950 border-none overflow-hidden">
+                        <div className="p-4 border-b border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex justify-between items-center">
+                            <div className="flex items-center gap-2">
+                                <Badge variant="outline" className="bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400">
+                                    Card {studyIndex + 1} of {filteredCards.length}
+                                </Badge>
+                                {filteredCards[studyIndex]?.subject && (
+                                    <Badge variant="secondary" className="hidden sm:inline-flex">
+                                        {filteredCards[studyIndex].subject}
+                                    </Badge>
+                                )}
+                            </div>
+                            <Button variant="ghost" size="icon" onClick={() => setIsStudyOpen(false)}>
+                                <X className="w-5 h-5" />
+                            </Button>
+                        </div>
+
+                        <div className="flex-1 overflow-y-auto p-4 md:p-8 flex items-center justify-center relative">
+                            {filteredCards.length > 0 && filteredCards[studyIndex] ? (
+                                <div
+                                    className="w-full max-w-2xl aspect-video md:aspect-[4/3] perspective-1000 cursor-pointer group"
+                                    onClick={() => setIsFlipped(!isFlipped)}
+                                >
+                                    <div className={`relative w-full h-full transition-all duration-500 transform-style-3d ${isFlipped ? 'rotate-y-180' : ''}`}>
+                                        {/* Front */}
+                                        <div className="absolute w-full h-full backface-hidden bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-gray-200 dark:border-slate-800 p-8 flex flex-col items-center justify-center text-center">
+                                            <h3 className="text-xl md:text-2xl font-medium text-gray-800 dark:text-gray-100 mb-6 font-serif">
+                                                Question
+                                            </h3>
+                                            <div
+                                                className="prose dark:prose-invert max-w-none text-lg md:text-xl"
+                                                dangerouslySetInnerHTML={{ __html: filteredCards[studyIndex].questionText }}
+                                            />
+                                            <div className="mt-8 text-sm text-gray-400 dark:text-gray-500 flex items-center gap-2 animate-pulse">
+                                                <Repeat className="w-4 h-4" /> Click to flip
+                                            </div>
+                                        </div>
+
+                                        {/* Back */}
+                                        <div className="absolute w-full h-full backface-hidden rotate-y-180 bg-indigo-50 dark:bg-slate-900 rounded-2xl shadow-xl border-2 border-indigo-100 dark:border-indigo-900/30 p-8 flex flex-col items-center justify-center text-center overflow-y-auto">
+                                            <h3 className="text-xl md:text-2xl font-medium text-indigo-600 dark:text-indigo-400 mb-6 font-serif">
+                                                Answer
+                                            </h3>
+                                            <div className="text-xl md:text-2xl font-bold text-gray-900 dark:text-gray-100 mb-4">
+                                                {filteredCards[studyIndex].correctAnswer}
+                                            </div>
+                                            {filteredCards[studyIndex].explanation && (
+                                                <div className="mt-4 p-4 bg-white/50 dark:bg-slate-800/50 rounded-lg text-sm md:text-base text-gray-600 dark:text-gray-300 max-h-[200px] overflow-y-auto">
+                                                    <div dangerouslySetInnerHTML={{ __html: filteredCards[studyIndex].explanation }} />
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="text-center">
+                                    <p className="text-gray-500">No cards accessible to study.</p>
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="p-4 border-t border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex justify-between items-center gap-4">
+                            <Button
+                                variant="outline"
+                                onClick={prevCard}
+                                disabled={studyIndex === 0}
+                                className="w-32"
+                            >
+                                <ArrowLeft className="w-4 h-4 mr-2" /> Previous
+                            </Button>
+                            <div className="text-sm text-gray-400 hidden sm:block">
+                                Use arrow keys to navigate
+                            </div>
+                            <Button
+                                onClick={nextCard}
+                                disabled={studyIndex === filteredCards.length - 1}
+                                className="w-32 bg-indigo-600 text-white hover:bg-indigo-700"
+                            >
+                                Next <ArrowRight className="w-4 h-4 ml-2" />
+                            </Button>
+                        </div>
+                    </DialogContent>
+                </Dialog>
+            </div>
         </div>
     );
 }

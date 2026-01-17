@@ -364,13 +364,14 @@ export default function UnifiedResultsPage() {
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:from-slate-950 dark:via-slate-900 dark:to-indigo-950 transition-colors duration-300">
+            {/* Header */}
+            <UnifiedHeader
+                title="Quiz Results Dashboard"
+                subtitle="Track your progress and review your performance"
+                icon={<BarChart3 className="w-6 h-6" />}
+            />
+
             <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
-                {/* Header */}
-                <UnifiedHeader
-                    title="Quiz Results Dashboard"
-                    subtitle="Track your progress and review your performance"
-                    icon={<BarChart3 className="w-6 h-6" />}
-                />
 
                 {/* Stats Cards */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">

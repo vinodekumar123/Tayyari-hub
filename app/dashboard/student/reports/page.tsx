@@ -153,13 +153,13 @@ export default function StudentReportsPage() {
     }
 
     return (
-        <div className="min-h-screen bg-background text-foreground bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-blue-50 via-background to-background dark:from-blue-950/20 dark:via-background dark:to-background p-6 md:p-12">
-            <div className="max-w-5xl mx-auto space-y-8">
-                <UnifiedHeader
-                    title="Reported Questions"
-                    subtitle="Track the status of your reported issues and view admin replies."
-                    icon={<Flag className="w-6 h-6" />}
-                />
+        <div className="min-h-screen bg-background text-foreground bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-blue-50 via-background to-background dark:from-blue-950/20 dark:via-background dark:to-background">
+            <UnifiedHeader
+                title="Reported Questions"
+                subtitle="Track the status of your reported issues and view admin replies."
+                icon={<Flag className="w-6 h-6" />}
+            />
+            <div className="max-w-5xl mx-auto space-y-8 p-6 md:p-12">
 
                 {/* Filters */}
                 <div className={`${glassmorphism.light} p-5 rounded-2xl border border-white/20 dark:border-white/10 shadow-sm flex flex-col md:flex-row gap-4 items-center justify-between`}>

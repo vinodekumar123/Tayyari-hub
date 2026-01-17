@@ -148,8 +148,7 @@ function StudentCommunityPageOriginal() {
     });
 
     return (
-        <div className="max-w-7xl mx-auto p-4 md:p-8 space-y-6">
-            {/* Header */}
+        <div className="min-h-screen bg-slate-50/[0.6] dark:bg-slate-950">
             <UnifiedHeader
                 title="Student Community"
                 subtitle="Ask doubts, share knowledge, and learn together"
@@ -212,93 +211,95 @@ function StudentCommunityPageOriginal() {
                     </DialogContent>
                 </Dialog>
             </UnifiedHeader>
+            <div className="max-w-7xl mx-auto p-4 md:p-8 space-y-6">
 
-            {/* Filters and Search */}
-            <div className={`flex flex-col sm:flex-row gap-4 ${glassmorphism.light} p-4 rounded-xl border border-white/20 dark:border-white/10 shadow-sm`}>
-                <div className="relative flex-1">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input
-                        placeholder="Search questions..."
-                        className="pl-9 bg-transparent border-none shadow-none focus-visible:ring-0"
-                        value={search}
-                        onChange={e => setSearch(e.target.value)}
-                    />
-                </div>
-                <div className="flex items-center gap-2 border-l pl-4 dark:border-gray-700">
-                    <Filter className="h-4 w-4 text-muted-foreground" />
-                    <Select value={subjectFilter} onValueChange={setSubjectFilter}>
-                        <SelectTrigger className="w-[150px] border-none shadow-none focus:ring-0 bg-transparent">
-                            <SelectValue placeholder="All Subjects" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="all">All Subjects</SelectItem>
-                            {subjects.map(s => <SelectItem key={s.id} value={s.name}>{s.name}</SelectItem>)}
-                        </SelectContent>
-                    </Select>
-                </div>
-            </div>
-
-            {/* Posts List */}
-            <div className="space-y-4">
-                {filteredPosts.map(post => (
-                    <Link href={`/dashboard/community/${post.id}`} key={post.id} className="block group">
-                        <Card className="hover:border-blue-500/50 hover:shadow-lg transition-all duration-300">
-                            <CardContent className="p-6">
-                                <div className="flex items-start gap-4">
-                                    {/* Upvote Box */}
-                                    <div className="flex flex-col items-center gap-1 min-w-[50px]">
-                                        <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            className={`h-auto p-2 flex flex-col gap-1 rounded-xl hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-blue-900/20 ${post.upvotedBy?.includes(user?.uid || '') ? 'text-blue-600 bg-blue-50 dark:bg-blue-900/20' : 'text-muted-foreground'}`}
-                                            onClick={(e) => { e.preventDefault(); handleUpvote(post.id, post.upvotedBy || []); }}
-                                        >
-                                            <ThumbsUp className={`h-5 w-5 ${post.upvotedBy?.includes(user?.uid || '') ? 'fill-current' : ''}`} />
-                                            <span className="font-bold text-sm">{post.upvotes || 0}</span>
-                                        </Button>
-                                    </div>
-
-                                    {/* Content */}
-                                    <div className="flex-1 min-w-0">
-                                        <div className="flex items-center gap-2 mb-2">
-                                            <Badge variant="outline" className="text-xs font-normal bg-gray-50 dark:bg-gray-800">{post.subject}</Badge>
-                                            <span className="text-xs text-muted-foreground">• Posted by {post.authorName}</span>
-                                            <span className="text-xs text-muted-foreground">• {post.createdAt?.toDate ? formatDistanceToNow(post.createdAt.toDate()) + ' ago' : 'Just now'}</span>
-                                        </div>
-                                        <h3 className="text-lg font-bold text-foreground mb-2 group-hover:text-blue-600 transition-colors line-clamp-1">
-                                            {post.title}
-                                        </h3>
-                                        <p className="text-muted-foreground text-sm line-clamp-2 mb-4">
-                                            {post.content}
-                                        </p>
-
-                                        <div className="flex items-center gap-4 text-xs font-medium text-muted-foreground">
-                                            <div className="flex items-center gap-1 hover:text-foreground">
-                                                <MessageSquare className="h-4 w-4" />
-                                                {post.replyCount || 0} Answers
-                                            </div>
-                                            {post.isSolved && (
-                                                <div className="flex items-center gap-1 text-green-600 bg-green-50 dark:bg-green-900/20 px-2 py-0.5 rounded-full">
-                                                    <CheckCircle className="h-3 w-3" /> Solved
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-                                </div>
-                            </CardContent>
-                        </Card>
-                    </Link>
-                ))}
-
-                {filteredPosts.length === 0 && !loading && (
-                    <div className="text-center py-20 text-muted-foreground">
-                        <MessageSquare className="h-16 w-16 mx-auto mb-4 opacity-20" />
-                        <h3 className="text-xl font-bold">No questions found</h3>
-                        <p>Be the first to ask a doubt!</p>
+                {/* Filters and Search */}
+                <div className={`flex flex-col sm:flex-row gap-4 ${glassmorphism.light} p-4 rounded-xl border border-white/20 dark:border-white/10 shadow-sm`}>
+                    <div className="relative flex-1">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Input
+                            placeholder="Search questions..."
+                            className="pl-9 bg-transparent border-none shadow-none focus-visible:ring-0"
+                            value={search}
+                            onChange={e => setSearch(e.target.value)}
+                        />
                     </div>
-                )}
+                    <div className="flex items-center gap-2 border-l pl-4 dark:border-gray-700">
+                        <Filter className="h-4 w-4 text-muted-foreground" />
+                        <Select value={subjectFilter} onValueChange={setSubjectFilter}>
+                            <SelectTrigger className="w-[150px] border-none shadow-none focus:ring-0 bg-transparent">
+                                <SelectValue placeholder="All Subjects" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All Subjects</SelectItem>
+                                {subjects.map(s => <SelectItem key={s.id} value={s.name}>{s.name}</SelectItem>)}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                </div>
+
+                {/* Posts List */}
+                <div className="space-y-4">
+                    {filteredPosts.map(post => (
+                        <Link href={`/dashboard/community/${post.id}`} key={post.id} className="block group">
+                            <Card className="hover:border-blue-500/50 hover:shadow-lg transition-all duration-300">
+                                <CardContent className="p-6">
+                                    <div className="flex items-start gap-4">
+                                        {/* Upvote Box */}
+                                        <div className="flex flex-col items-center gap-1 min-w-[50px]">
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                className={`h-auto p-2 flex flex-col gap-1 rounded-xl hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-blue-900/20 ${post.upvotedBy?.includes(user?.uid || '') ? 'text-blue-600 bg-blue-50 dark:bg-blue-900/20' : 'text-muted-foreground'}`}
+                                                onClick={(e) => { e.preventDefault(); handleUpvote(post.id, post.upvotedBy || []); }}
+                                            >
+                                                <ThumbsUp className={`h-5 w-5 ${post.upvotedBy?.includes(user?.uid || '') ? 'fill-current' : ''}`} />
+                                                <span className="font-bold text-sm">{post.upvotes || 0}</span>
+                                            </Button>
+                                        </div>
+
+                                        {/* Content */}
+                                        <div className="flex-1 min-w-0">
+                                            <div className="flex items-center gap-2 mb-2">
+                                                <Badge variant="outline" className="text-xs font-normal bg-gray-50 dark:bg-gray-800">{post.subject}</Badge>
+                                                <span className="text-xs text-muted-foreground">• Posted by {post.authorName}</span>
+                                                <span className="text-xs text-muted-foreground">• {post.createdAt?.toDate ? formatDistanceToNow(post.createdAt.toDate()) + ' ago' : 'Just now'}</span>
+                                            </div>
+                                            <h3 className="text-lg font-bold text-foreground mb-2 group-hover:text-blue-600 transition-colors line-clamp-1">
+                                                {post.title}
+                                            </h3>
+                                            <p className="text-muted-foreground text-sm line-clamp-2 mb-4">
+                                                {post.content}
+                                            </p>
+
+                                            <div className="flex items-center gap-4 text-xs font-medium text-muted-foreground">
+                                                <div className="flex items-center gap-1 hover:text-foreground">
+                                                    <MessageSquare className="h-4 w-4" />
+                                                    {post.replyCount || 0} Answers
+                                                </div>
+                                                {post.isSolved && (
+                                                    <div className="flex items-center gap-1 text-green-600 bg-green-50 dark:bg-green-900/20 px-2 py-0.5 rounded-full">
+                                                        <CheckCircle className="h-3 w-3" /> Solved
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        </Link>
+                    ))}
+
+                    {filteredPosts.length === 0 && !loading && (
+                        <div className="text-center py-20 text-muted-foreground">
+                            <MessageSquare className="h-16 w-16 mx-auto mb-4 opacity-20" />
+                            <h3 className="text-xl font-bold">No questions found</h3>
+                            <p>Be the first to ask a doubt!</p>
+                        </div>
+                    )}
+                </div>
             </div>
-        </div >
+        </div>
     );
 }
 

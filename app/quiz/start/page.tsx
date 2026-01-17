@@ -245,7 +245,8 @@ const StartQuizPageContent: React.FC = () => {
         // Fetch user profile to check admin status
         const userDoc = await getDoc(doc(db, 'users', user.uid));
         const userData = userDoc.data();
-        const adminStatus = userData?.admin || userData?.superadmin || false;
+        // Allow Teachers, Admins, and SuperAdmins
+        const adminStatus = userData?.role === 'teacher' || userData?.role === 'admin' || userData?.role === 'superadmin' || userData?.admin === true || userData?.superadmin === true;
         setIsAdmin(adminStatus);
 
         // Fetch quiz data

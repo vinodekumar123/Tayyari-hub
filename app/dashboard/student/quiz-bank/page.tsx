@@ -136,10 +136,19 @@ export default function StudentQuizBankPage() {
             setMissingIndexUrl(null); // Reset on new fetch
 
             try {
-                // 1. Resolve Enrolled Series
-                let enrolledSeries: string[] = (user as any).enrolledSeries || [];
+                // 1. Resolve Enrolled Series (Robust fetch)
+                // Fetch true source of truth: Enrollment Receipts
+                const enrollmentsQ = query(collection(db, 'enrollments'), where('studentId', '==', user.uid), where('status', '==', 'active'));
+                const enrollmentsSnap = await getDocs(enrollmentsQ);
+                const receiptSeriesIds = enrollmentsSnap.docs.map(d => d.data().seriesId as string).filter(Boolean);
+
+                const profileSeriesIds: string[] = (user as any).enrolledSeries || [];
+
+                // Merge and Deduplicate
+                const enrolledSeries: string[] = Array.from(new Set([...profileSeriesIds, ...receiptSeriesIds]));
+
                 setUserEnrolledSeries(enrolledSeries);
-                console.log('QuizBank: Enrolled Series:', enrolledSeries);
+                console.log('QuizBank: Enrolled Series (Merged):', enrolledSeries);
 
                 // 2. Define Fetch Promises with Granular Error Handling
                 const safeFetch = async (promise: Promise<any>, name: string) => {
@@ -474,278 +483,280 @@ export default function StudentQuizBankPage() {
     }
 
     return (
-        <div className="w-full max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+        <div className="min-h-screen bg-background font-sans">
             <UnifiedHeader
                 title="My Quiz Bank"
                 subtitle={`${filteredQuizzes.length} quizzes available from your enrolled series`}
                 icon={<Files className="w-6 h-6" />}
             />
+            <div className="w-full max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
 
-            {/* MISSING INDEX ALERT */}
-            {missingIndexUrl && (
-                <div className="p-4 rounded-xl border border-red-500/50 bg-red-500/10 text-red-700 dark:text-red-300 animate-in fade-in slide-in-from-top-4">
-                    <div className="flex items-start gap-3">
-                        <div className="p-2 rounded-full bg-red-500/20">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-alert-triangle"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" /><path d="M12 9v4" /><path d="M12 17h.01" /></svg>
-                        </div>
-                        <div className="flex-1">
-                            <h3 className="font-bold text-lg mb-1">Database Index Missing</h3>
-                            <p className="text-sm mb-3">
-                                The system requires a new database index to load these quizzes efficiently.
-                                Please act as an administrator or ask your developer to click the link below.
-                            </p>
-                            <a
-                                href={missingIndexUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 transition-colors font-medium text-sm"
-                            >
-                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /><polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" /></svg>
-                                Create Required Index
-                            </a>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* Series Analytics Section */}
-            {seriesStats.length > 0 && (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
-                    {seriesStats.map((stat, i) => (
-                        <Card key={i} className={`${glassmorphism.light} border border-[#004AAD]/10 dark:border-[#0066FF]/20 shadow-md`}>
-                            <CardHeader className="pb-2">
-                                <CardTitle className="text-lg font-bold truncate" title={stat.name}>{stat.name}</CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                <div className="space-y-4">
-                                    <div className="flex justify-between items-end">
-                                        <div>
-                                            <p className="text-sm text-muted-foreground">Recent Progress</p>
-                                            <p className="text-2xl font-bold text-[#004AAD] dark:text-[#00B4D8]">{stat.attemptedCount}/{stat.totalQuizzes}</p>
-                                        </div>
-                                        <div className="text-right">
-                                            <p className="text-sm text-muted-foreground">Accuracy</p>
-                                            <p className={`text-xl font-bold ${stat.avgAccuracy >= 80 ? 'text-green-500' : stat.avgAccuracy >= 50 ? 'text-amber-500' : 'text-red-500'}`}>
-                                                {stat.avgAccuracy}%
-                                            </p>
-                                        </div>
-                                    </div>
-                                    <div className="w-full bg-secondary/50 rounded-full h-2 overflow-hidden">
-                                        <div
-                                            className="bg-gradient-to-r from-[#004AAD] to-[#00B4D8] h-full transition-all duration-1000"
-                                            style={{ width: `${stat.progress}%` }}
-                                        />
-                                    </div>
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        className="w-full text-xs"
-                                        onClick={() => setFilters({ ...filters, series: stat.id })}
-                                    >
-                                        View Quizzes <ArrowRight className="w-3 h-3 ml-1" />
-                                    </Button>
-                                </div>
-                            </CardContent>
-                        </Card>
-                    ))}
-                </div>
-            )}
-
-            {/* Filters */}
-            <Card className={`${glassmorphism.light} border border-[#004AAD]/10 dark:border-[#0066FF]/20 shadow-xl`}>
-                <CardContent className="p-6">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div className="relative">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                            <Input
-                                placeholder="Search quizzes..."
-                                value={filters.search}
-                                onChange={(e) => setFilters({ ...filters, search: e.target.value })}
-                                className="pl-10 bg-background/50 border-[#004AAD]/20 focus:border-[#0066FF]"
-                            />
-                        </div>
-
-                        <Select
-                            value={filters.status}
-                            onValueChange={(v) => setFilters({ ...filters, status: v })}
-                        >
-                            <SelectTrigger className="bg-background/50 border-[#004AAD]/20">
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">All Status</SelectItem>
-                                <SelectItem value="active">Active</SelectItem>
-                                <SelectItem value="upcoming">Upcoming</SelectItem>
-                                <SelectItem value="ended">Ended</SelectItem>
-                            </SelectContent>
-                        </Select>
-                        <Select
-                            value={filters.series}
-                            onValueChange={(v) => setFilters({ ...filters, series: v })}
-                        >
-                            <SelectTrigger className="bg-background/50 border-[#004AAD]/20">
-                                <SelectValue placeholder="Filter by Series" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">All My Series</SelectItem>
-                                {seriesList.length === 0 && (
-                                    <SelectItem value="none" disabled>No Enrolled Series</SelectItem>
-                                )}
-                                {seriesList.map(s => (
-                                    <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
-                </CardContent>
-            </Card>
-
-            {/* Quiz Grid */}
-            {filteredQuizzes.length === 0 ? (
-                <div className="text-center py-16">
-                    <BookOpen className="w-16 h-16 mx-auto text-muted-foreground mb-4" />
-                    <p className="text-xl font-semibold text-muted-foreground">No quizzes found</p>
-                    <p className="text-sm text-muted-foreground mt-2">
-                        {userEnrolledSeries.length === 0
-                            ? "You are not enrolled in any series yet."
-                            : missingIndexUrl
-                                ? "System configuration required."
-                                : "Try adjusting your filters"}
-                    </p>
-                </div>
-            ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {filteredQuizzes.map((quiz) => {
-                        const status = getQuizStatus(quiz.startDate, quiz.endDate, quiz.startTime, quiz.endTime);
-                        const attemptCount = attemptedQuizzes[quiz.id] || 0;
-                        const canAttempt = attemptCount < (quiz.maxAttempts || 1);
-
-                        return (
-                            <div key={quiz.id} className="group relative">
-                                <div className="absolute inset-0 bg-gradient-to-br from-[#004AAD]/5 to-[#00B4D8]/5 rounded-2xl blur-lg opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-
-                                <Card className={`relative ${glassmorphism.light} border border-[#004AAD]/10 dark:border-[#0066FF]/20 shadow-lg ${animations.smooth} group-hover:scale-[1.02]`}>
-                                    <CardHeader>
-                                        <div className="flex items-start justify-between mb-2">
-                                            <div className={`px-3 py-1 rounded-full text-xs font-bold ${status === 'active'
-                                                ? 'bg-gradient-to-r from-[#00B4D8]/20 to-[#66D9EF]/20 text-[#00B4D8] dark:text-[#66D9EF]'
-                                                : status === 'upcoming'
-                                                    ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400'
-                                                    : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400'
-                                                }`}>
-                                                {status}
-                                            </div>
-                                            {quiz.accessType === 'paid' && (
-                                                <div className="px-3 py-1 rounded-full text-xs font-bold bg-gradient-to-r from-amber-100 to-yellow-100 dark:from-amber-900/30 dark:to-yellow-900/30 text-amber-700 dark:text-amber-400">
-                                                    Premium
-                                                </div>
-                                            )}
-                                        </div>
-
-                                        <CardTitle className="text-xl font-black text-foreground line-clamp-2">
-                                            {quiz.title}
-                                        </CardTitle>
-                                        <p className="text-sm text-muted-foreground line-clamp-2">
-                                            {quiz.description}
-                                        </p>
-                                    </CardHeader>
-
-                                    <CardContent className="space-y-4">
-                                        <div className="grid grid-cols-2 gap-3 text-sm">
-                                            <div className="flex items-center gap-2 text-muted-foreground">
-                                                <BookOpen className="w-4 h-4" />
-                                                <span>{quiz.selectedQuestions?.length || 0} questions</span>
-                                            </div>
-                                            <div className="flex items-center gap-2 text-muted-foreground">
-                                                <Clock className="w-4 h-4" />
-                                                <span>{quiz.duration} min</span>
-                                            </div>
-                                            <div className="flex items-center gap-2 text-muted-foreground">
-                                                <Calendar className="w-4 h-4" />
-                                                <span>{quiz.startDate}</span>
-                                            </div>
-                                            {quiz.endDate && (
-                                                <div className="flex items-center gap-2 text-muted-foreground">
-                                                    <Calendar className="w-4 h-4 text-red-400" />
-                                                    <span>{quiz.endDate}</span>
-                                                </div>
-                                            )}
-                                        </div>
-
-                                        <div className={`${glassmorphism.medium} p-3 rounded-xl border border-[#004AAD]/10 space-y-2 text-sm`}>
-                                            <div className="flex justify-between">
-                                                <span className="text-muted-foreground">Course:</span>
-                                                <span className="font-semibold text-foreground">{typeof quiz.course === 'object' ? quiz.course.name : quiz.course}</span>
-                                            </div>
-                                            {quiz.series && quiz.series.length > 0 && (
-                                                <div className="flex justify-between">
-                                                    <span className="text-muted-foreground">Series:</span>
-                                                    <span className="font-semibold text-foreground truncate max-w-[150px] text-right">
-                                                        {seriesList.filter(s => quiz.series?.includes(s.id)).map(s => s.name).join(', ') || 'Linked'}
-                                                    </span>
-                                                </div>
-                                            )}
-                                            <div className="flex justify-between">
-                                                <span className="text-muted-foreground">Attempts:</span>
-                                                <span className="font-semibold text-foreground">{attemptCount} / {quiz.maxAttempts || 1}</span>
-                                            </div>
-                                        </div>
-
-                                        <div className="space-y-2">
-                                            <Button
-                                                className={`w-full ${status === 'active' && canAttempt
-                                                    ? 'bg-gradient-to-r from-[#00B4D8] to-[#66D9EF] text-white'
-                                                    : ''
-                                                    }`}
-                                                disabled={status !== 'active' || !canAttempt}
-                                                onClick={() => handleQuizClick(quiz)}
-                                            >
-                                                <Play className="w-4 h-4 mr-2" />
-                                                {attemptCount > 0 ? 'Retake Quiz' : 'Start Quiz'}
-                                                <ArrowRight className="w-4 h-4 ml-2" />
-                                            </Button>
-                                        </div>
-                                    </CardContent>
-                                </Card>
+                {/* MISSING INDEX ALERT */}
+                {missingIndexUrl && (
+                    <div className="p-4 rounded-xl border border-red-500/50 bg-red-500/10 text-red-700 dark:text-red-300 animate-in fade-in slide-in-from-top-4">
+                        <div className="flex items-start gap-3">
+                            <div className="p-2 rounded-full bg-red-500/20">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-alert-triangle"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" /><path d="M12 9v4" /><path d="M12 17h.01" /></svg>
                             </div>
-                        );
-                    })}
-                </div>
-            )}
+                            <div className="flex-1">
+                                <h3 className="font-bold text-lg mb-1">Database Index Missing</h3>
+                                <p className="text-sm mb-3">
+                                    The system requires a new database index to load these quizzes efficiently.
+                                    Please act as an administrator or ask your developer to click the link below.
+                                </p>
+                                <a
+                                    href={missingIndexUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 transition-colors font-medium text-sm"
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /><polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" /></svg>
+                                    Create Required Index
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                )}
 
-            {/* Load more */}
-            {hasMore && (
-                <div className="flex justify-center mt-8">
-                    <Button onClick={handleLoadMore} disabled={loading} className="px-6 py-2">
-                        {loading ? 'Loading...' : 'Load more quizzes'}
-                    </Button>
-                </div>
-            )}
+                {/* Series Analytics Section */}
+                {seriesStats.length > 0 && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
+                        {seriesStats.map((stat, i) => (
+                            <Card key={i} className={`${glassmorphism.light} border border-[#004AAD]/10 dark:border-[#0066FF]/20 shadow-md`}>
+                                <CardHeader className="pb-2">
+                                    <CardTitle className="text-lg font-bold truncate" title={stat.name}>{stat.name}</CardTitle>
+                                </CardHeader>
+                                <CardContent>
+                                    <div className="space-y-4">
+                                        <div className="flex justify-between items-end">
+                                            <div>
+                                                <p className="text-sm text-muted-foreground">Recent Progress</p>
+                                                <p className="text-2xl font-bold text-[#004AAD] dark:text-[#00B4D8]">{stat.attemptedCount}/{stat.totalQuizzes}</p>
+                                            </div>
+                                            <div className="text-right">
+                                                <p className="text-sm text-muted-foreground">Accuracy</p>
+                                                <p className={`text-xl font-bold ${stat.avgAccuracy >= 80 ? 'text-green-500' : stat.avgAccuracy >= 50 ? 'text-amber-500' : 'text-red-500'}`}>
+                                                    {stat.avgAccuracy}%
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <div className="w-full bg-secondary/50 rounded-full h-2 overflow-hidden">
+                                            <div
+                                                className="bg-gradient-to-r from-[#004AAD] to-[#00B4D8] h-full transition-all duration-1000"
+                                                style={{ width: `${stat.progress}%` }}
+                                            />
+                                        </div>
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            className="w-full text-xs"
+                                            onClick={() => setFilters({ ...filters, series: stat.id })}
+                                        >
+                                            View Quizzes <ArrowRight className="w-3 h-3 ml-1" />
+                                        </Button>
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        ))}
+                    </div>
+                )}
 
-            {/* Premium Dialog */}
-            <Dialog open={showPremiumDialog} onOpenChange={setShowPremiumDialog}>
-                <DialogContent className={`${glassmorphism.medium} border-[#004AAD]/20`}>
-                    <DialogHeader>
-                        <DialogTitle className="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-[#004AAD] to-[#0066FF]">
-                            Premium Required
-                        </DialogTitle>
-                        <DialogDescription>
-                            This quiz requires a premium subscription. Upgrade now to access all premium content!
-                        </DialogDescription>
-                    </DialogHeader>
-                    <DialogFooter>
-                        <Button variant="outline" onClick={() => setShowPremiumDialog(false)}>
-                            Cancel
+                {/* Filters */}
+                <Card className={`${glassmorphism.light} border border-[#004AAD]/10 dark:border-[#0066FF]/20 shadow-xl`}>
+                    <CardContent className="p-6">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div className="relative">
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                                <Input
+                                    placeholder="Search quizzes..."
+                                    value={filters.search}
+                                    onChange={(e) => setFilters({ ...filters, search: e.target.value })}
+                                    className="pl-10 bg-background/50 border-[#004AAD]/20 focus:border-[#0066FF]"
+                                />
+                            </div>
+
+                            <Select
+                                value={filters.status}
+                                onValueChange={(v) => setFilters({ ...filters, status: v })}
+                            >
+                                <SelectTrigger className="bg-background/50 border-[#004AAD]/20">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All Status</SelectItem>
+                                    <SelectItem value="active">Active</SelectItem>
+                                    <SelectItem value="upcoming">Upcoming</SelectItem>
+                                    <SelectItem value="ended">Ended</SelectItem>
+                                </SelectContent>
+                            </Select>
+                            <Select
+                                value={filters.series}
+                                onValueChange={(v) => setFilters({ ...filters, series: v })}
+                            >
+                                <SelectTrigger className="bg-background/50 border-[#004AAD]/20">
+                                    <SelectValue placeholder="Filter by Series" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All My Series</SelectItem>
+                                    {seriesList.length === 0 && (
+                                        <SelectItem value="none" disabled>No Enrolled Series</SelectItem>
+                                    )}
+                                    {seriesList.map(s => (
+                                        <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    </CardContent>
+                </Card>
+
+                {/* Quiz Grid */}
+                {filteredQuizzes.length === 0 ? (
+                    <div className="text-center py-16">
+                        <BookOpen className="w-16 h-16 mx-auto text-muted-foreground mb-4" />
+                        <p className="text-xl font-semibold text-muted-foreground">No quizzes found</p>
+                        <p className="text-sm text-muted-foreground mt-2">
+                            {userEnrolledSeries.length === 0
+                                ? "You are not enrolled in any series yet."
+                                : missingIndexUrl
+                                    ? "System configuration required."
+                                    : "Try adjusting your filters"}
+                        </p>
+                    </div>
+                ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {filteredQuizzes.map((quiz) => {
+                            const status = getQuizStatus(quiz.startDate, quiz.endDate, quiz.startTime, quiz.endTime);
+                            const attemptCount = attemptedQuizzes[quiz.id] || 0;
+                            const canAttempt = attemptCount < (quiz.maxAttempts || 1);
+
+                            return (
+                                <div key={quiz.id} className="group relative">
+                                    <div className="absolute inset-0 bg-gradient-to-br from-[#004AAD]/5 to-[#00B4D8]/5 rounded-2xl blur-lg opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+
+                                    <Card className={`relative ${glassmorphism.light} border border-[#004AAD]/10 dark:border-[#0066FF]/20 shadow-lg ${animations.smooth} group-hover:scale-[1.02]`}>
+                                        <CardHeader>
+                                            <div className="flex items-start justify-between mb-2">
+                                                <div className={`px-3 py-1 rounded-full text-xs font-bold ${status === 'active'
+                                                    ? 'bg-gradient-to-r from-[#00B4D8]/20 to-[#66D9EF]/20 text-[#00B4D8] dark:text-[#66D9EF]'
+                                                    : status === 'upcoming'
+                                                        ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400'
+                                                        : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400'
+                                                    }`}>
+                                                    {status}
+                                                </div>
+                                                {quiz.accessType === 'paid' && (
+                                                    <div className="px-3 py-1 rounded-full text-xs font-bold bg-gradient-to-r from-amber-100 to-yellow-100 dark:from-amber-900/30 dark:to-yellow-900/30 text-amber-700 dark:text-amber-400">
+                                                        Premium
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            <CardTitle className="text-xl font-black text-foreground line-clamp-2">
+                                                {quiz.title}
+                                            </CardTitle>
+                                            <p className="text-sm text-muted-foreground line-clamp-2">
+                                                {quiz.description}
+                                            </p>
+                                        </CardHeader>
+
+                                        <CardContent className="space-y-4">
+                                            <div className="grid grid-cols-2 gap-3 text-sm">
+                                                <div className="flex items-center gap-2 text-muted-foreground">
+                                                    <BookOpen className="w-4 h-4" />
+                                                    <span>{quiz.selectedQuestions?.length || 0} questions</span>
+                                                </div>
+                                                <div className="flex items-center gap-2 text-muted-foreground">
+                                                    <Clock className="w-4 h-4" />
+                                                    <span>{quiz.duration} min</span>
+                                                </div>
+                                                <div className="flex items-center gap-2 text-muted-foreground">
+                                                    <Calendar className="w-4 h-4" />
+                                                    <span>{quiz.startDate}</span>
+                                                </div>
+                                                {quiz.endDate && (
+                                                    <div className="flex items-center gap-2 text-muted-foreground">
+                                                        <Calendar className="w-4 h-4 text-red-400" />
+                                                        <span>{quiz.endDate}</span>
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            <div className={`${glassmorphism.medium} p-3 rounded-xl border border-[#004AAD]/10 space-y-2 text-sm`}>
+                                                <div className="flex justify-between">
+                                                    <span className="text-muted-foreground">Course:</span>
+                                                    <span className="font-semibold text-foreground">{typeof quiz.course === 'object' ? quiz.course.name : quiz.course}</span>
+                                                </div>
+                                                {quiz.series && quiz.series.length > 0 && (
+                                                    <div className="flex justify-between">
+                                                        <span className="text-muted-foreground">Series:</span>
+                                                        <span className="font-semibold text-foreground truncate max-w-[150px] text-right">
+                                                            {seriesList.filter(s => quiz.series?.includes(s.id)).map(s => s.name).join(', ') || 'Linked'}
+                                                        </span>
+                                                    </div>
+                                                )}
+                                                <div className="flex justify-between">
+                                                    <span className="text-muted-foreground">Attempts:</span>
+                                                    <span className="font-semibold text-foreground">{attemptCount} / {quiz.maxAttempts || 1}</span>
+                                                </div>
+                                            </div>
+
+                                            <div className="space-y-2">
+                                                <Button
+                                                    className={`w-full ${status === 'active' && canAttempt
+                                                        ? 'bg-gradient-to-r from-[#00B4D8] to-[#66D9EF] text-white'
+                                                        : ''
+                                                        }`}
+                                                    disabled={status !== 'active' || !canAttempt}
+                                                    onClick={() => handleQuizClick(quiz)}
+                                                >
+                                                    <Play className="w-4 h-4 mr-2" />
+                                                    {attemptCount > 0 ? 'Retake Quiz' : 'Start Quiz'}
+                                                    <ArrowRight className="w-4 h-4 ml-2" />
+                                                </Button>
+                                            </div>
+                                        </CardContent>
+                                    </Card>
+                                </div>
+                            );
+                        })}
+                    </div>
+                )}
+
+                {/* Load more */}
+                {hasMore && (
+                    <div className="flex justify-center mt-8">
+                        <Button onClick={handleLoadMore} disabled={loading} className="px-6 py-2">
+                            {loading ? 'Loading...' : 'Load more quizzes'}
                         </Button>
-                        <Button
-                            className="bg-gradient-to-r from-[#004AAD] to-[#0066FF] text-white"
-                            onClick={() => router.push('/pricing')}
-                        >
-                            Upgrade Now
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
+                    </div>
+                )}
+
+                {/* Premium Dialog */}
+                <Dialog open={showPremiumDialog} onOpenChange={setShowPremiumDialog}>
+                    <DialogContent className={`${glassmorphism.medium} border-[#004AAD]/20`}>
+                        <DialogHeader>
+                            <DialogTitle className="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-[#004AAD] to-[#0066FF]">
+                                Premium Required
+                            </DialogTitle>
+                            <DialogDescription>
+                                This quiz requires a premium subscription. Upgrade now to access all premium content!
+                            </DialogDescription>
+                        </DialogHeader>
+                        <DialogFooter>
+                            <Button variant="outline" onClick={() => setShowPremiumDialog(false)}>
+                                Cancel
+                            </Button>
+                            <Button
+                                className="bg-gradient-to-r from-[#004AAD] to-[#0066FF] text-white"
+                                onClick={() => router.push('/pricing')}
+                            >
+                                Upgrade Now
+                            </Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
+            </div>
         </div>
     );
 }
