@@ -1197,9 +1197,10 @@ export default function QuestionBankPage() {
                   <h4 className="font-bold text-blue-800 dark:text-blue-300 text-sm mb-2 flex items-center gap-2">
                     <Eye className="h-4 w-4" /> Explanation
                   </h4>
-                  <p className="text-sm text-blue-700 dark:text-blue-400">
-                    {previewQuestion.explanation}
-                  </p>
+                  <div
+                    className="text-sm text-blue-700 dark:text-blue-400 prose prose-sm dark:prose-invert max-w-none"
+                    dangerouslySetInnerHTML={{ __html: previewQuestion.explanation }}
+                  />
                 </div>
               )}
             </div>

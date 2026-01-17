@@ -64,6 +64,7 @@ function CreateQuizContent() {
   const [assignedSubjects, setAssignedSubjects] = useState<string[]>([]);
   const [currentUserId, setCurrentUserId] = useState<string>('');
 
+
   // Fetch User Role
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (user) => {
@@ -152,6 +153,16 @@ function CreateQuizContent() {
       createdAfter: '', // Added for filter
     },
   });
+
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
+
+  // Debounce Effect for Search
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearchTerm(quizConfig.questionFilters.searchTerm);
+    }, 500);
+    return () => clearTimeout(handler);
+  }, [quizConfig.questionFilters.searchTerm]);
 
   useEffect(() => {
     // Prefetch all required data in parallel for optimization
@@ -303,6 +314,24 @@ function CreateQuizContent() {
         }
       }
 
+      // --- SERVER SIDE SEARCH (PREFIX QUERY) ---
+      const searchTermClean = quizConfig.questionFilters.searchTerm?.trim();
+      // User asked for "simple firestore search". Uses 'questionText'.
+
+      let sortConstraint;
+
+      if (searchTermClean) {
+        // Prefix Search:  term <= field <= term + \uf8ff
+        constraints.push(where('questionText', '>=', searchTermClean));
+        constraints.push(where('questionText', '<=', searchTermClean + '\uf8ff'));
+
+        // Firestore Requirement: Must sort by the inequality field first
+        sortConstraint = orderBy("questionText", "asc");
+      } else {
+        // Default Sort
+        sortConstraint = orderBy("createdAt", "desc");
+      }
+
       // 4. Equality Filters
       if (difficulty && difficulty !== '__all-difficulties__') {
         constraints.push(where('difficulty', '==', difficulty));
@@ -313,12 +342,16 @@ function CreateQuizContent() {
 
       // 5. Date Filter (Inequality)
       if (createdAfter) {
-        const date = new Date(createdAfter);
-        constraints.push(where('createdAt', '>=', Timestamp.fromDate(date)));
+        // If searching, we ALREADY have a range filter on questionText. 
+        // Firestore allows range filters on ONLY ONE field.
+        // So if searching, we MUST IGNORE date filter on server and filter client-side.
+        if (!searchTermClean) {
+          const date = new Date(createdAfter);
+          constraints.push(where('createdAt', '>=', Timestamp.fromDate(date)));
+        }
       }
 
-      // 6. Ordering
-      const sortConstraint = orderBy("createdAt", "desc");
+      // 6. Ordering (Applied above)
 
       // Construct Query
       if (reset) {
@@ -397,7 +430,10 @@ function CreateQuizContent() {
     quizConfig.questionFilters.chapters,
     quizConfig.questionFilters.difficulty,
     quizConfig.questionFilters.topic,
-    quizConfig.questionFilters.createdAfter // Added dependency
+    quizConfig.questionFilters.difficulty,
+    quizConfig.questionFilters.topic,
+    quizConfig.questionFilters.createdAfter, // Added dependency
+    debouncedSearchTerm // Trigger fetch when search term changes (debounced)
   ]);
 
   // Subjects by course
@@ -584,6 +620,46 @@ function CreateQuizContent() {
       return;
     }
 
+    // --- AUTO-REFRESH QUESTIONS START ---
+    // Fetch fresh data for all selected questions to ensure updates are propagated
+    let finalSelectedQuestions = quizConfig.selectedQuestions || [];
+    if (finalSelectedQuestions.length > 0) {
+      try {
+        const freshQuestionsPromises = finalSelectedQuestions.map(async (q: any) => {
+          const qRef = doc(db, 'questions', q.id);
+          const qSnap = await getDoc(qRef);
+          if (qSnap.exists()) {
+            const data = qSnap.data();
+            // Normalize data consistent with fetchMoreQuestions
+            const courseName = data.course?.name || data.course || data.courseName || data.courseId || '';
+            const subjectName = data.subject?.name || data.subject || data.subjectName || data.subjectId || '';
+            const chapterName = data.chapter?.name || data.chapter || data.chapterName || '';
+            const createdAtVal = data.createdAt;
+
+            return {
+              id: qSnap.id,
+              ...data,
+              course: courseName,
+              subject: subjectName,
+              chapter: chapterName,
+              createdAt: createdAtVal,
+              usedInQuizzes: data.usedInQuizzes || 0,
+            };
+          } else {
+            console.warn(`Question ${q.id} not found during refresh, keeping snapshot.`);
+            return q;
+          }
+        });
+
+        finalSelectedQuestions = await Promise.all(freshQuestionsPromises);
+        console.log("Refreshed questions data successfully.");
+      } catch (error) {
+        console.error("Failed to refresh questions on save:", error);
+        // Fallback is to keep finalSelectedQuestions as is (the snapshot)
+      }
+    }
+    // --- AUTO-REFRESH QUESTIONS END ---
+
     const selectedCourse = courses.find(c => c.name === quizConfig.course);
     const selectedSubjects = quizConfig.subjects.includes('all-subjects')
       ? subjects
@@ -591,6 +667,7 @@ function CreateQuizContent() {
 
     const quizPayload = {
       ...quizConfig,
+      selectedQuestions: finalSelectedQuestions, // Use the refreshed list
       course: {
         id: selectedCourse?.id || '',
         name: selectedCourse?.name || '',
