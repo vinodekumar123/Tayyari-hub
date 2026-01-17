@@ -18,7 +18,8 @@ import {
   deleteDoc,
   getCountFromServer,
   Timestamp,
-  documentId
+  documentId,
+  arrayUnion
 } from 'firebase/firestore';
 import {
   Dialog,
