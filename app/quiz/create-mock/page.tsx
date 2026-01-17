@@ -545,4 +545,13 @@ function CreateUserQuizPageOriginal() {
   );
 }
 
-export default function CreateUserQuizPage() { return <ComingSoon />; }
+export default function CreateUserQuizPage() {
+  return (
+    <div className="flex h-screen overflow-hidden bg-background flex-col md:flex-row">
+      <Sidebar />
+      <main className="flex-1 overflow-y-auto h-full md:pt-0">
+        <ComingSoon />
+      </main>
+    </div>
+  );
+}

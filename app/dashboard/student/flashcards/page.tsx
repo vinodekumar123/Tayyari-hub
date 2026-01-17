@@ -489,6 +489,7 @@ export default function FlashcardsPage() {
                 {/* Study Mode Dialog */}
                 <Dialog open={isStudyOpen} onOpenChange={setIsStudyOpen}>
                     <DialogContent className="max-w-4xl h-[80vh] flex flex-col p-0 gap-0 bg-gray-50 dark:bg-slate-950 border-none overflow-hidden">
+                        <DialogTitle className="sr-only">Study Flashcards</DialogTitle>
                         <div className="p-4 border-b border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex justify-between items-center">
                             <div className="flex items-center gap-2">
                                 <Badge variant="outline" className="bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400">

@@ -1,5 +1,15 @@
 'use client';
 
+import ComingSoon from '@/components/ComingSoon';
+
+export default function SchedulePage() {
+    return <ComingSoon />;
+}
+
+/*
+// ORIGINAL CODE PRESERVED BELOW
+'use client';
+
 import { useState, useEffect } from 'react';
 import { db } from '@/app/firebase';
 import { collection, query, where, getDocs, getDoc, doc } from 'firebase/firestore';
@@ -194,7 +204,7 @@ export default function SchedulePage() {
                 <div className="space-y-8">
                     {scheduleGroups.map((group, idx) => (
                         <div key={idx} className="relative pl-8 border-l-2 border-slate-200 dark:border-slate-800 pb-8 last:pb-0">
-                            {/* Date Bead */}
+                            // Date Bead
                             <div className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-purple-600 ring-4 ring-white dark:ring-slate-950" />
 
                             <h3 className={`text-xl font-bold mb-4 ${group.dateLabel === 'Today' ? 'text-purple-600' : ''}`}>
@@ -251,7 +261,7 @@ export default function SchedulePage() {
                                                 </div>
 
                                                 <div className="flex items-center gap-3">
-                                                    {/* Syllabus / Details Button */}
+                                                    // Syllabus / Details Button
                                                     <Dialog>
                                                         <DialogTrigger asChild>
                                                             <Button variant={isLive ? "outline" : "default"} className={!isLive ? "bg-blue-600 hover:bg-blue-700 text-white" : ""}>
@@ -312,7 +322,7 @@ export default function SchedulePage() {
                                                         </DialogContent>
                                                     </Dialog>
 
-                                                    {/* Join Button (if Live) */}
+                                                    // Join Button (if Live)
                                                     {isLive && (
                                                         <Link href={`/quiz/start/${quiz.id}`}>
                                                             <Button className="bg-red-600 hover:bg-red-700">
@@ -334,3 +344,4 @@ export default function SchedulePage() {
         </div>
     );
 }
+*/
