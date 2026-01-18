@@ -398,7 +398,7 @@ export function Sidebar() {
         className={`fixed top-0 left-0 h-full z-[60] bg-background border-r border-border flex flex-col transition-transform duration-300
           ${collapsed ? 'w-16' : 'w-64'}
           ${mobileOpen ? 'translate-x-0' : '-translate-x-full'}
-          md:translate-x-0 md:static md:flex`}
+          md:translate-x-0 md:static md:flex shrink-0`}
       >
         {/* Header */}
         <div className="p-4 border-b flex items-center justify-between">
