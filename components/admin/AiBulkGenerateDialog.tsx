@@ -45,6 +45,7 @@ export function AiBulkGenerateDialog({
     const [mode, setMode] = useState<'parse' | 'generate'>('parse');
     const [strategy, setStrategy] = useState<'auto' | 'strict'>('auto');
     const [correctGrammar, setCorrectGrammar] = useState(true);
+    const [strictPreservation, setStrictPreservation] = useState(false); // New Flag
     const [loading, setLoading] = useState(false);
 
     const handleGenerate = async () => {
@@ -63,7 +64,8 @@ export function AiBulkGenerateDialog({
                     action: mode,
                     count: count[0],
                     strictMode: strategy === 'strict',
-                    correctGrammar,
+                    correctGrammar: strictPreservation ? false : correctGrammar, // Strict overrides grammar
+                    strictPreservation, // Pass new flag
                     metadata: defaultMetadata,
                     validChapters
                 })
@@ -92,7 +94,7 @@ export function AiBulkGenerateDialog({
 
     return (
         <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-            <DialogContent className="sm:max-w-[80vw] w-[80vw] h-[80vh] flex flex-col">
+            <DialogContent className="sm:max-w-[80vw] w-[80vw] h-[85vh] flex flex-col">
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-2 text-xl">
                         <Sparkles className="w-5 h-5 text-purple-600" />
@@ -158,51 +160,68 @@ export function AiBulkGenerateDialog({
                         </TabsContent>
                     </Tabs>
 
-                    <div className="space-y-3 border rounded-lg p-3 bg-muted/20">
-                        <Label className="text-base font-semibold">Metadata Strategy</Label>
-                        <RadioGroup value={strategy} onValueChange={(v: any) => setStrategy(v)}>
-                            <div className="flex items-start space-x-2">
-                                <RadioGroupItem value="auto" id="r1" className="mt-1" />
-                                <div className="grid gap-1.5 leading-none">
-                                    <Label htmlFor="r1" className="cursor-pointer font-medium">
-                                        Auto-Detect (Creative)
-                                    </Label>
-                                    <p className="text-xs text-muted-foreground">
-                                        AI decides appropriate Difficulty, Topic, and Chapter for each question.
-                                    </p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-3 border rounded-lg p-3 bg-muted/20">
+                            <Label className="text-base font-semibold">Metadata Strategy</Label>
+                            <RadioGroup value={strategy} onValueChange={(v: any) => setStrategy(v)}>
+                                <div className="flex items-start space-x-2">
+                                    <RadioGroupItem value="auto" id="r1" className="mt-1" />
+                                    <div className="grid gap-1.5 leading-none">
+                                        <Label htmlFor="r1" className="cursor-pointer font-medium">
+                                            Auto-Detect (Creative)
+                                        </Label>
+                                        <p className="text-xs text-muted-foreground">
+                                            AI decides appropriate Difficulty, Topic, and Chapter.
+                                        </p>
+                                    </div>
                                 </div>
-                            </div>
-                            <div className="flex items-start space-x-2">
-                                <RadioGroupItem value="strict" id="r2" className="mt-1" />
-                                <div className="grid gap-1.5 leading-none">
-                                    <Label htmlFor="r2" className="cursor-pointer font-medium">
-                                        Force Global Settings (Strict)
-                                    </Label>
-                                    <p className="text-xs text-muted-foreground">
-                                        All questions will be tagged with:
-                                        <span className="block mt-1 font-mono bg-background px-1 rounded border">
-                                            {defaultMetadata.subject || 'N/A'} • {defaultMetadata.chapter || 'No Chapter'} • {defaultMetadata.difficulty || 'Default'}
-                                        </span>
-                                    </p>
+                                <div className="flex items-start space-x-2">
+                                    <RadioGroupItem value="strict" id="r2" className="mt-1" />
+                                    <div className="grid gap-1.5 leading-none">
+                                        <Label htmlFor="r2" className="cursor-pointer font-medium">
+                                            Force Global Settings
+                                        </Label>
+                                        <p className="text-xs text-muted-foreground">
+                                            Force Subject, Chapter, and Difficulty tags.
+                                        </p>
+                                    </div>
                                 </div>
-                            </div>
-                        </RadioGroup>
-                    </div>
+                            </RadioGroup>
+                        </div>
 
-                    <div className="flex items-center justify-between border rounded-lg p-3 bg-muted/20">
-                        <div className="flex items-center gap-2">
-                            <SpellCheck className="w-5 h-5 text-blue-600" />
-                            <div className="space-y-0.5">
-                                <Label className="text-base">Grammar Correction</Label>
-                                <p className="text-xs text-muted-foreground">
-                                    Enforce strict academic English
-                                </p>
+                        <div className="space-y-3 border rounded-lg p-3 bg-muted/20 flex flex-col justify-center">
+                            <div className="flex items-center justify-between mb-2">
+                                <div className="space-y-0.5">
+                                    <Label className="text-base font-semibold flex items-center gap-2">
+                                        Strict Preservation
+                                        <div className="bg-orange-100 text-orange-700 text-[10px] px-1.5 py-0.5 rounded uppercase font-bold tracking-wider">New</div>
+                                    </Label>
+                                    <p className="text-xs text-muted-foreground">
+                                        Do NOT modify text or fix grammar. Extract exactly as provided.
+                                    </p>
+                                </div>
+                                <Switch
+                                    checked={strictPreservation}
+                                    onCheckedChange={setStrictPreservation}
+                                />
+                            </div>
+
+                            <div className={`flex items-center justify-between transition-opacity ${strictPreservation ? 'opacity-40 pointer-events-none' : ''}`}>
+                                <div className="flex items-center gap-2">
+                                    <SpellCheck className="w-5 h-5 text-blue-600" />
+                                    <div className="space-y-0.5">
+                                        <Label className="text-base">Grammar Correction</Label>
+                                        <p className="text-xs text-muted-foreground">
+                                            Enforce strict academic English
+                                        </p>
+                                    </div>
+                                </div>
+                                <Switch
+                                    checked={correctGrammar}
+                                    onCheckedChange={setCorrectGrammar}
+                                />
                             </div>
                         </div>
-                        <Switch
-                            checked={correctGrammar}
-                            onCheckedChange={setCorrectGrammar}
-                        />
                     </div>
                 </div>
 

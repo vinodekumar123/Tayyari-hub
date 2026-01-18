@@ -6,7 +6,7 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
 
 export async function POST(req: NextRequest) {
     try {
-        const { prompt, count, metadata, strictMode, correctGrammar, validChapters, action = 'generate' } = await req.json();
+        const { prompt, count, metadata, strictMode, correctGrammar, strictPreservation, validChapters, action = 'generate' } = await req.json();
 
         if (!process.env.GEMINI_API_KEY) {
             return NextResponse.json({ error: 'GEMINI_API_KEY not configured' }, { status: 500 });
@@ -71,24 +71,35 @@ export async function POST(req: NextRequest) {
       `;
         }
 
+        if (strictPreservation) {
+            finalPrompt += `
+      5. STRICT PRESERVATION MODE (CRITICAL):
+         - DO NOT MODIFY THE QUESTION TEXT OR OPTIONS.
+         - DO NOT CORRECT GRAMMAR OR SPELLING.
+         - EXTRACT EXACTLY AS PROVIDED.
+         - IGNORE ANY INSTRUCTIONS TO MODIFY OR GENERATE CONTENT.
+         - ACT AS A DUMB PARSER ONLY.
+      `;
+        }
+
         if (strictMode) {
             finalPrompt += `
-      5. STRICT CONTEXT:
+      6. STRICT METADATA CONTEXT:
          - Subject: "${metadata.subject}" (Set 'subject' field to this value for ALL questions).
          - Chapter: "${metadata.chapter}" (If this is not "All Chapters", force this chapter for ALL questions, ignoring auto-detection).
          - Difficulty: "${metadata.difficulty}" (Force this difficulty).
       `;
         } else {
             finalPrompt += `
-      5. AUTO-DETECT:
+      6. AUTO-DETECT METADATA:
          - Subject: "${metadata.subject}" (Use this subject).
          - Logic: Auto-detect the most appropriate 'difficulty' and 'chapter' (from the valid list) based on content.
       `;
         }
 
-        if (correctGrammar) {
+        if (correctGrammar && !strictPreservation) {
             finalPrompt += `
-      6. GRAMMAR: Ensure strict academic English.
+      7. GRAMMAR: Ensure strict academic English.
       `;
         }
 

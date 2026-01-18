@@ -380,8 +380,9 @@ function CreateQuizContent() {
           chapter: chapterName,
           createdAt: createdAtVal,
           usedInQuizzes: data.usedInQuizzes || 0,
+          isDeleted: data.isDeleted, // Ensure we pass this through
         };
-      });
+      }).filter(q => q.isDeleted !== true); // FILTER OUT DELETED QUESTIONS
 
       if (reset) {
         setAvailableQuestions(newQuestions);

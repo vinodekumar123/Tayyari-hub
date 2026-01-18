@@ -419,16 +419,37 @@ export default function QuestionBankPage() {
 
       // Server-Side Filtering for Deleted Items Only
       // We ONLY apply this constraint if we are looking for the Delete Bin.
-      // For "Active" items, we cannot simply say `where('isDeleted', '==', false)` because
-      // legacy documents missing the 'isDeleted' field would be EXCLUDED by Firestore.
       if (showDeleted) {
         constraints.push(where('isDeleted', '==', true));
+      } else {
+        // For Active Items, we generally filter Client-Side to support legacy docs (missing field).
+        // However, to ensure we don't over-fetch deleted items, we can try using 'Not Equal' if possible,
+        // but 'Not Equal' disables other ordering. Best to stick to Client-Side for Active view
+        // OR rely on a compound index if it exists. 
+        // Let's rely on Client-Side filter for now, but if the user wants strict server filtering:
+        // constraints.push(where('isDeleted', '!=', true)); 
+      }
+
+      // Server-Side Date Filter
+      if (dateRange && dateRange.from) {
+        // Start of day
+        const start = new Date(dateRange.from);
+        start.setHours(0, 0, 0, 0);
+        constraints.push(where('createdAt', '>=', start)); // Auto-converts JS Date to Timestamp
+
+        if (dateRange.to) {
+          // End of day
+          const end = new Date(dateRange.to);
+          end.setHours(23, 59, 59, 999);
+          constraints.push(where('createdAt', '<=', end));
+        }
       }
 
       if (constraints.length > 0) {
+        // If sorting by text search, that takes precedence. Otherwise desc sort by createdAt.
+        // Note: usage of '!=' or 'array-contains' might limit sorting.
         q = query(collection(db, 'questions'), ...constraints, orderBy('createdAt', 'desc'), limit(ITEMS_PER_PAGE));
       } else {
-        // Fallback to simple query
         q = query(collection(db, 'questions'), orderBy('createdAt', 'desc'), limit(ITEMS_PER_PAGE));
       }
 
@@ -447,28 +468,11 @@ export default function QuestionBankPage() {
 
       // Client-side filtering:
       // 1. isDeleted status (to avoid querying legacy docs without the field)
-      // 2. Date Range (to avoid composite index complexity)
       const filtered = fetched.filter(q => {
         // If we are in "Active Mode" (showDeleted=false), we must HIDE items that are isDeleted=true
         // We include items where isDeleted is false OR undefined.
         const matchesStatus = showDeleted ? true : (q.isDeleted !== true);
-
-        // Date Logic
-        let matchesDate = true;
-        if (dateRange && dateRange.from) {
-          const qDate = q.createdAt;
-          if (qDate) {
-            if (dateRange.from && qDate < dateRange.from) matchesDate = false;
-            if (dateRange.to) {
-              // End of day
-              const endOfDay = new Date(dateRange.to);
-              endOfDay.setHours(23, 59, 59, 999);
-              if (qDate > endOfDay) matchesDate = false;
-            }
-          }
-        }
-
-        return matchesStatus && matchesDate;
+        return matchesStatus;
       });
 
       console.log("Total fetched:", fetched.length, "After filtering:", filtered.length);

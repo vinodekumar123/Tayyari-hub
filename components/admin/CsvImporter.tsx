@@ -10,7 +10,9 @@ import {
     X,
     Loader2,
     ArrowRight,
-    Database
+    Database,
+    Plus,
+    Trash2
 } from 'lucide-react';
 import Papa from 'papaparse';
 import { Button } from '@/components/ui/button';
@@ -45,6 +47,18 @@ interface CsvImporterProps {
     validChapters?: string[];
 }
 
+// Helper to extract option keys sorted
+const getOptionKeys = (row: any) => {
+    return Object.keys(row)
+        .filter(k => k.startsWith('option'))
+        .sort((a, b) => {
+            // Sort by number: option1, option2, option10
+            const numA = parseInt(a.replace('option', '')) || 0;
+            const numB = parseInt(b.replace('option', '')) || 0;
+            return numA - numB;
+        });
+};
+
 export function CsvImporter({
     isOpen,
     onClose,
@@ -72,14 +86,15 @@ export function CsvImporter({
         if (!row.questionText?.trim()) errors.push("Missing Question Text");
         if (!row.correctAnswer?.trim()) errors.push("Missing Correct Answer");
 
-        // Check options
-        const options = [row.option1, row.option2, row.option3, row.option4].filter(Boolean);
-        if (options.length < 2) errors.push("At least 2 options required");
+        // Check options dynamically
+        const validOptions = getOptionKeys(row).map(k => row[k]).filter(val => val && val.trim() !== '');
+
+        if (validOptions.length < 2) errors.push("At least 2 options required");
 
         // Check correct answer matches options
-        if (row.correctAnswer && options.length >= 2) {
+        if (row.correctAnswer && validOptions.length >= 2) {
             const normalizedCorrect = row.correctAnswer.trim();
-            const match = options.find(o => o.toString().trim() === normalizedCorrect);
+            const match = validOptions.find(o => o.toString().trim() === normalizedCorrect);
             if (!match) errors.push(`Correct answer '${row.correctAnswer}' not found in options`);
         }
 
@@ -128,8 +143,9 @@ export function CsvImporter({
 
     const downloadTemplate = () => {
         // Only include question-specific fields, not the global metadata
-        const headers = ['questionText', 'option1', 'option2', 'option3', 'option4', 'correctAnswer', 'explanation', 'chapter', 'difficulty', 'imageUrl'];
-        const dummy = ['What is the speed of light?', '3x10^8 m/s', '3x10^6 m/s', 'Zero', 'Infinite', '3x10^8 m/s', 'It is constant in vacuum', validChapters[0] || 'Chapter 1', 'Medium', ''];
+        // Dynamic template with 5 options
+        const headers = ['questionText', 'option1', 'option2', 'option3', 'option4', 'option5', 'correctAnswer', 'explanation', 'chapter', 'difficulty', 'imageUrl'];
+        const dummy = ['What is the speed of light?', '3x10^8 m/s', '3x10^6 m/s', 'Zero', 'Infinite', 'Unknown', '3x10^8 m/s', 'It is constant in vacuum', validChapters[0] || 'Chapter 1', 'Medium', ''];
         const csvContent = "data:text/csv;charset=utf-8," + [headers.join(','), dummy.join(',')].join('\n');
         const encodedUri = encodeURI(csvContent);
         const link = document.createElement("a");
@@ -198,7 +214,18 @@ export function CsvImporter({
 
         setIsImporting(true);
         try {
-            // Merge metadata with each row
+            // Merge metadata with each row and normalize options structure for firestore if needed
+            // NOTE: The parent `onImport` (in page.tsx) usually handles the final "options: []" array construction,
+            // but we should pass clean data. The parent currently reads row.option1...row.option4. 
+            // We should ensure the parent `handleSmartImport` is robust enough. 
+            // Currently `handleSmartImport` does: `options: [row.option1, row.option2...].filter(Boolean)`.
+            // We'll leave `optionN` keys in the object so the parent can adapt or we can update the parent.
+            // Actually, we should update the parent to read dynamic keys too, OR we ensure we pass explicit `options` array?
+            // The `handleSmartImport` in parent currently loops hardcoded. 
+            // **CRITICAL**: We must NOT break the parent. 
+            // Better approach: We pass the raw row with `optionN` keys, but let's check `handleSmartImport` in page.tsx later.
+            // For now, CsvImporter just passes `finalData`.
+
             const finalData = csvData.map(row => ({
                 ...defaultMetadata,
                 ...row
@@ -317,6 +344,10 @@ export function CsvImporter({
                                         <TableBody>
                                             {csvData.map((row, i) => {
                                                 const error = validationErrors.find(e => e.row === i + 1);
+                                                // Dynamic options display
+                                                const optionKeys = getOptionKeys(row);
+                                                const optionsDisplay = optionKeys.map(k => row[k]).filter(Boolean).join(', ');
+
                                                 return (
                                                     <TableRow key={i} className={error ? "bg-red-50/50 dark:bg-red-900/10 hover:bg-red-100/50" : ""}>
                                                         <TableCell className="text-xs text-muted-foreground">{i + 1}</TableCell>
@@ -325,7 +356,7 @@ export function CsvImporter({
                                                             {row.chapter && <Badge variant="outline" className="text-[10px] mt-1">{row.chapter}</Badge>}
                                                         </TableCell>
                                                         <TableCell className="text-xs text-muted-foreground max-w-[250px] whitespace-pre-wrap">
-                                                            {[row.option1, row.option2, row.option3, row.option4].join(', ')}
+                                                            {optionsDisplay}
                                                         </TableCell>
                                                         <TableCell className="text-xs font-medium">{row.correctAnswer}</TableCell>
                                                         <TableCell>
@@ -415,15 +446,40 @@ export function CsvImporter({
 function EditRowDialog({ open, onOpenChange, rowData, onSave, validChapters = [] }: { open: boolean, onOpenChange: (o: boolean) => void, rowData: any, onSave: (d: any) => void, validChapters?: string[] }) {
     const [localData, setLocalData] = useState<any>(rowData || {});
 
+    // Derived state for option keys to render dynamic list
+    // We update this whenever localData changes options
+    const optionKeys = getOptionKeys(localData);
+
     // Sync state when rowData changes
     const prevRowDataRef = useRef(rowData);
     if (rowData !== prevRowDataRef.current) {
         prevRowDataRef.current = rowData;
-        setLocalData(rowData || {});
+
+        // Ensure at least 2 options exist in localData if empty
+        let initialData = rowData || {};
+        if (!initialData.option1) initialData.option1 = '';
+        if (!initialData.option2) initialData.option2 = '';
+
+        setLocalData(initialData);
     }
 
     const handleChange = (field: string, val: string) => {
         setLocalData({ ...localData, [field]: val });
+    };
+
+    const handleAddOption = () => {
+        const nextIndex = optionKeys.length + 1;
+        setLocalData({ ...localData, [`option${nextIndex}`]: '' });
+    };
+
+    const handleRemoveOption = (keyToRemove: string) => {
+        // We actually want to shift keys down if we remove strict key, 
+        // OR just delete the key. Deleting key is easier but might leave gaps (option1, option3).
+        // Sorting logic in `getOptionKeys` handles gaps fine (1, 3 will be sorted).
+        // But re-labelling "Option 1..N" in UI checks index.
+        const newData = { ...localData };
+        delete newData[keyToRemove];
+        setLocalData(newData);
     };
 
     return (
@@ -443,18 +499,34 @@ function EditRowDialog({ open, onOpenChange, rowData, onSave, validChapters = []
                                 onChange={(e) => handleChange('questionText', e.target.value)}
                             />
                         </div>
+
                         <div className="grid grid-cols-2 gap-4">
-                            {[1, 2, 3, 4].map(num => (
-                                <div key={num} className="grid gap-2">
-                                    <label className="text-sm font-medium">Option {num}</label>
+                            {optionKeys.map((key, idx) => (
+                                <div key={key} className="grid gap-2 relative">
+                                    <label className="text-sm font-medium flex justify-between">
+                                        Option {idx + 1}
+                                        {optionKeys.length > 2 && (
+                                            <button
+                                                onClick={() => handleRemoveOption(key)}
+                                                className="text-red-500 hover:text-red-600"
+                                                title="Remove Option"
+                                            >
+                                                <Trash2 className="w-4 h-4" />
+                                            </button>
+                                        )}
+                                    </label>
                                     <input
                                         className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                                        value={localData[`option${num}`] || ''}
-                                        onChange={(e) => handleChange(`option${num}`, e.target.value)}
+                                        value={localData[key] || ''}
+                                        onChange={(e) => handleChange(key, e.target.value)}
                                     />
                                 </div>
                             ))}
+                            <Button variant="outline" size="sm" onClick={handleAddOption} className="h-10 mt-auto border-dashed">
+                                <Plus className="w-4 h-4 mr-2" /> Add Option
+                            </Button>
                         </div>
+
                         <div className="grid gap-2">
                             <label className="text-sm font-medium text-green-600">Correct Answer</label>
                             <input
@@ -463,7 +535,7 @@ function EditRowDialog({ open, onOpenChange, rowData, onSave, validChapters = []
                                 onChange={(e) => handleChange('correctAnswer', e.target.value)}
                                 placeholder="Must match one option exactly"
                             />
-                            {localData.correctAnswer && ![localData.option1, localData.option2, localData.option3, localData.option4].includes(localData.correctAnswer) && (
+                            {localData.correctAnswer && !optionKeys.map(k => localData[k]).includes(localData.correctAnswer) && (
                                 <span className="text-xs text-red-500">Warning: Does not match any option currently.</span>
                             )}
                         </div>
