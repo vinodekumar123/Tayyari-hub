@@ -990,7 +990,11 @@ const StartQuizPageContent: React.FC = () => {
                           <p className="font-bold flex items-center gap-2 mb-1">
                             <Info className="w-4 h-4" /> Explanation:
                           </p>
-                          <p>{q.explanation}</p>
+                          <div
+                            className="prose dark:prose-invert max-w-none break-words overflow-auto"
+                            style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}
+                            dangerouslySetInnerHTML={{ __html: q.explanation }}
+                          />
                         </div>
                       )}
                     </div>
