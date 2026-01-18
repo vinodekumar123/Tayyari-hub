@@ -469,10 +469,12 @@ export default function QuestionBankPage() {
       // Client-side filtering:
       // 1. isDeleted status (to avoid querying legacy docs without the field)
       const filtered = fetched.filter(q => {
-        // If we are in "Active Mode" (showDeleted=false), we must HIDE items that are isDeleted=true
-        // We include items where isDeleted is false OR undefined.
-        const matchesStatus = showDeleted ? true : (q.isDeleted !== true);
-        return matchesStatus;
+        if (showDeleted) {
+          return q.isDeleted === true;
+        } else {
+          // If we are in "Active Mode", HIDE items that are isDeleted=true
+          return q.isDeleted !== true;
+        }
       });
 
       console.log("Total fetched:", fetched.length, "After filtering:", filtered.length);
@@ -545,25 +547,26 @@ export default function QuestionBankPage() {
     );
   };
 
-  const handleSoftDelete = async () => {
-    if (selectedQuestions.length === 0) return;
-    if (!confirm(`Move ${selectedQuestions.length} questions to Delete Bin?`)) return;
+  const handleSoftDelete = async (ids?: string[]) => {
+    const targetIds = ids || selectedQuestions;
+    if (targetIds.length === 0) return;
+    if (!confirm(`Move ${targetIds.length} questions to Delete Bin?`)) return;
 
     setLoading(true);
     try {
       // Helper for chunking
       const chunkSize = 450;
-      for (let i = 0; i < selectedQuestions.length; i += chunkSize) {
+      for (let i = 0; i < targetIds.length; i += chunkSize) {
         const batch = writeBatch(db);
-        const chunk = selectedQuestions.slice(i, i + chunkSize);
+        const chunk = targetIds.slice(i, i + chunkSize);
         chunk.forEach(id => {
           batch.update(doc(db, 'questions', id), { isDeleted: true, updatedAt: new Date() });
         });
         await batch.commit();
       }
 
-      setQuestions(prev => prev.filter(q => !selectedQuestions.includes(q.id)));
-      setSelectedQuestions([]);
+      setQuestions(prev => prev.filter(q => !targetIds.includes(q.id)));
+      if (!ids) setSelectedQuestions([]);
       toast.success("Questions moved to Delete Bin");
     } catch (err) {
       console.error(err);
@@ -573,22 +576,23 @@ export default function QuestionBankPage() {
     }
   };
 
-  const handleRestore = async () => {
-    if (selectedQuestions.length === 0) return;
+  const handleRestore = async (ids?: string[]) => {
+    const targetIds = ids || selectedQuestions;
+    if (targetIds.length === 0) return;
     setLoading(true);
     try {
       const chunkSize = 450;
-      for (let i = 0; i < selectedQuestions.length; i += chunkSize) {
+      for (let i = 0; i < targetIds.length; i += chunkSize) {
         const batch = writeBatch(db);
-        const chunk = selectedQuestions.slice(i, i + chunkSize);
+        const chunk = targetIds.slice(i, i + chunkSize);
         chunk.forEach(id => {
           batch.update(doc(db, 'questions', id), { isDeleted: false, updatedAt: new Date() });
         });
         await batch.commit();
       }
 
-      setQuestions(prev => prev.filter(q => !selectedQuestions.includes(q.id)));
-      setSelectedQuestions([]);
+      setQuestions(prev => prev.filter(q => !targetIds.includes(q.id)));
+      if (!ids) setSelectedQuestions([]);
       toast.success("Questions restored successfully");
     } catch (err) {
       console.error(err);
@@ -598,24 +602,25 @@ export default function QuestionBankPage() {
     }
   };
 
-  const handlePermanentDelete = async () => {
-    if (selectedQuestions.length === 0) return;
-    if (!confirm(`PERMANENTLY DELETE ${selectedQuestions.length} questions? This cannot be undone.`)) return;
+  const handlePermanentDelete = async (ids?: string[]) => {
+    const targetIds = ids || selectedQuestions;
+    if (targetIds.length === 0) return;
+    if (!confirm(`PERMANENTLY DELETE ${targetIds.length} questions? This cannot be undone.`)) return;
 
     setLoading(true);
     try {
       const chunkSize = 450;
-      for (let i = 0; i < selectedQuestions.length; i += chunkSize) {
+      for (let i = 0; i < targetIds.length; i += chunkSize) {
         const batch = writeBatch(db);
-        const chunk = selectedQuestions.slice(i, i + chunkSize);
+        const chunk = targetIds.slice(i, i + chunkSize);
         chunk.forEach(id => {
           batch.delete(doc(db, 'questions', id));
         });
         await batch.commit();
       }
 
-      setQuestions(prev => prev.filter(q => !selectedQuestions.includes(q.id)));
-      setSelectedQuestions([]);
+      setQuestions(prev => prev.filter(q => !targetIds.includes(q.id)));
+      if (!ids) setSelectedQuestions([]);
       toast.success("Questions permanently deleted");
     } catch (err) {
       console.error(err);
@@ -917,15 +922,15 @@ export default function QuestionBankPage() {
               {(isSuperAdmin || userRole === 'admin') && (
                 <>
                   {!showDeleted ? (
-                    <Button size="sm" variant="ghost" className="text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/30" onClick={handleSoftDelete}>
+                    <Button size="sm" variant="ghost" className="text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/30" onClick={() => handleSoftDelete()}>
                       <Trash2 className="h-4 w-4 mr-1" /> Delete
                     </Button>
                   ) : (
                     <>
-                      <Button size="sm" variant="ghost" className="text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 hover:bg-green-50 dark:hover:bg-green-900/30" onClick={handleRestore}>
+                      <Button size="sm" variant="ghost" className="text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 hover:bg-green-50 dark:hover:bg-green-900/30" onClick={() => handleRestore()}>
                         <RefreshCw className="h-4 w-4 mr-1" /> Restore
                       </Button>
-                      <Button size="sm" variant="ghost" className="text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/30" onClick={handlePermanentDelete}>
+                      <Button size="sm" variant="ghost" className="text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/30" onClick={() => handlePermanentDelete()}>
                         <AlertTriangle className="h-4 w-4 mr-1" /> Permanent Delete
                       </Button>
                     </>
@@ -1091,12 +1096,20 @@ export default function QuestionBankPage() {
                           </DropdownMenuItem>
 
                           <DropdownMenuSeparator />
-                          <DropdownMenuItem onClick={() => {
-                            setSelectedQuestions([question.id]);
-                            handleSoftDelete();
-                          }} className="text-red-600 dark:text-red-400">
-                            <Trash2 className="mr-2 h-4 w-4" /> Delete
-                          </DropdownMenuItem>
+                          {question.isDeleted ? (
+                            <>
+                              <DropdownMenuItem onClick={() => handleRestore([question.id])} className="text-green-600 dark:text-green-400">
+                                <RefreshCw className="mr-2 h-4 w-4" /> Restore
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handlePermanentDelete([question.id])} className="text-red-600 dark:text-red-400">
+                                <AlertTriangle className="mr-2 h-4 w-4" /> Permanent Delete
+                              </DropdownMenuItem>
+                            </>
+                          ) : (
+                            <DropdownMenuItem onClick={() => handleSoftDelete([question.id])} className="text-red-600 dark:text-red-400">
+                              <Trash2 className="mr-2 h-4 w-4" /> Delete
+                            </DropdownMenuItem>
+                          )}
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </div>
