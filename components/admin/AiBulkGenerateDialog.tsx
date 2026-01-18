@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import {
     Dialog,
@@ -19,6 +19,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Wand2, Loader2, Sparkles, SpellCheck, FileText, Bot } from 'lucide-react';
 import { toast } from 'sonner';
+import { Progress } from '@/components/ui/progress';
 
 interface AiBulkGenerateDialogProps {
     isOpen: boolean;
@@ -45,8 +46,27 @@ export function AiBulkGenerateDialog({
     const [mode, setMode] = useState<'parse' | 'generate'>('parse');
     const [strategy, setStrategy] = useState<'auto' | 'strict'>('auto');
     const [correctGrammar, setCorrectGrammar] = useState(true);
-    const [strictPreservation, setStrictPreservation] = useState(false); // New Flag
+    const [strictPreservation, setStrictPreservation] = useState(false);
     const [loading, setLoading] = useState(false);
+    const [progress, setProgress] = useState(0);
+
+    // Progress simulation effect
+    useEffect(() => {
+        let interval: NodeJS.Timeout;
+        if (loading) {
+            setProgress(0);
+            interval = setInterval(() => {
+                setProgress((prev) => {
+                    // Fast initially, then slow down as it approaches 90%
+                    const increment = prev < 50 ? 5 : prev < 80 ? 2 : 0.5;
+                    return Math.min(prev + increment, 90);
+                });
+            }, 500);
+        } else {
+            setProgress(0);
+        }
+        return () => clearInterval(interval);
+    }, [loading]);
 
     const handleGenerate = async () => {
         if (!prompt.trim()) {
@@ -65,7 +85,7 @@ export function AiBulkGenerateDialog({
                     count: count[0],
                     strictMode: strategy === 'strict',
                     correctGrammar: strictPreservation ? false : correctGrammar, // Strict overrides grammar
-                    strictPreservation, // Pass new flag
+                    strictPreservation,
                     metadata: defaultMetadata,
                     validChapters
                 })
@@ -78,8 +98,12 @@ export function AiBulkGenerateDialog({
             }
 
             if (data.questions && Array.isArray(data.questions)) {
+                setProgress(100); // Success!
+                // Small delay to show 100%
+                await new Promise(resolve => setTimeout(resolve, 500));
+
                 onGenerate(data.questions);
-                onClose(); // Close this dialog, the parent will open Importer
+                onClose();
             } else {
                 throw new Error("Invalid response format from AI");
             }
@@ -225,16 +249,27 @@ export function AiBulkGenerateDialog({
                     </div>
                 </div>
 
-                <DialogFooter>
-                    <Button variant="ghost" onClick={onClose}>Cancel</Button>
-                    <Button
-                        onClick={handleGenerate}
-                        disabled={loading}
-                        className="bg-gradient-to-r from-purple-600 to-blue-600 text-white hover:opacity-90"
-                    >
-                        {loading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : (mode === 'parse' ? <FileText className="w-4 h-4 mr-2" /> : <Wand2 className="w-4 h-4 mr-2" />)}
-                        {mode === 'parse' ? 'Parse & Import' : 'Generate Questions'}
-                    </Button>
+                <DialogFooter className="flex-col !space-x-0 gap-2">
+                    {loading && (
+                        <div className="w-full space-y-1 mb-2">
+                            <div className="flex justify-between text-xs text-muted-foreground">
+                                <span>Generating...</span>
+                                <span>{Math.round(progress)}%</span>
+                            </div>
+                            <Progress value={progress} className="h-2" />
+                        </div>
+                    )}
+                    <div className="flex justify-end gap-2 w-full">
+                        <Button variant="ghost" onClick={onClose} disabled={loading}>Cancel</Button>
+                        <Button
+                            onClick={handleGenerate}
+                            disabled={loading}
+                            className="bg-gradient-to-r from-purple-600 to-blue-600 text-white hover:opacity-90"
+                        >
+                            {loading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : (mode === 'parse' ? <FileText className="w-4 h-4 mr-2" /> : <Wand2 className="w-4 h-4 mr-2" />)}
+                            {mode === 'parse' ? 'Parse & Import' : 'Generate Questions'}
+                        </Button>
+                    </div>
                 </DialogFooter>
             </DialogContent>
         </Dialog>

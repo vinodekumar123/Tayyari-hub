@@ -232,7 +232,13 @@ export function CsvImporter({
             }));
 
             await onImport(finalData);
-            toast.success(`Successfully imported ${finalData.length} questions!`);
+
+            // Success Confirmation
+            toast.success("Import Successful", {
+                description: `Successfully added ${finalData.length} questions to the Question Bank.`,
+                duration: 5000,
+            });
+
             handleClose();
         } catch (error) {
             console.error("Import failed:", error);
