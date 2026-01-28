@@ -68,26 +68,27 @@ const PricingBundles = () => {
 
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-3xl mx-auto">
                                 {/* 2 Students */}
-                                <div className="bg-white/15 backdrop-blur-sm rounded-2xl p-5 border border-white/20 hover:bg-white/25 transition-all hover:scale-105 cursor-pointer">
-                                    <div className="text-4xl md:text-5xl font-black text-yellow-300 mb-1">30%</div>
+                                <div className="bg-white/15 backdrop-blur-sm rounded-2xl p-5 border border-white/20 hover:bg-white/25 transition-all hover:scale-105 cursor-pointer relative">
+                                    <div className="absolute -top-2 -right-2 bg-orange-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">POPULAR</div>
+                                    <div className="text-4xl md:text-5xl font-black text-yellow-300 mb-1">40%</div>
                                     <div className="text-white font-bold text-lg">2 Students</div>
                                     <div className="text-green-200 text-xs mt-1">Joint Registration</div>
                                 </div>
 
                                 {/* 3 Students */}
                                 <div className="bg-white/15 backdrop-blur-sm rounded-2xl p-5 border border-white/20 hover:bg-white/25 transition-all hover:scale-105 cursor-pointer relative">
-                                    <div className="absolute -top-2 -right-2 bg-orange-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">POPULAR</div>
-                                    <div className="text-4xl md:text-5xl font-black text-yellow-300 mb-1">40%</div>
+                                    <div className="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">BEST VALUE</div>
+                                    <div className="text-4xl md:text-5xl font-black text-yellow-300 mb-1">50%</div>
                                     <div className="text-white font-bold text-lg">3 Students</div>
                                     <div className="text-green-200 text-xs mt-1">Group Deal</div>
                                 </div>
 
-                                {/* 4 Students */}
+                                {/* Single Student - New Addition to Banner for clarity */}
                                 <div className="bg-white/15 backdrop-blur-sm rounded-2xl p-5 border border-white/20 hover:bg-white/25 transition-all hover:scale-105 cursor-pointer relative">
-                                    <div className="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">BEST VALUE</div>
-                                    <div className="text-4xl md:text-5xl font-black text-yellow-300 mb-1">50%</div>
-                                    <div className="text-white font-bold text-lg">4 Students</div>
-                                    <div className="text-green-200 text-xs mt-1">Maximum Savings</div>
+                                    <div className="absolute -top-2 -right-2 bg-blue-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">NEW OFFER</div>
+                                    <div className="text-4xl md:text-5xl font-black text-yellow-300 mb-1">30%</div>
+                                    <div className="text-white font-bold text-lg">Single</div>
+                                    <div className="text-green-200 text-xs mt-1">Limited Time</div>
                                 </div>
                             </div>
 
@@ -382,6 +383,9 @@ const PricingBundles = () => {
                             <div className="mb-6 relative z-10">
                                 <div className="flex items-baseline gap-2">
                                     <span className="text-4xl md:text-5xl font-black text-slate-900 dark:text-white">
+                                        Rs. {activeTab === 'freshers' ? '3500' : '2800'}
+                                    </span>
+                                    <span className="text-xl text-slate-400 font-bold line-through decoration-red-500 decoration-2">
                                         Rs. {activeTab === 'freshers' ? '5000' : '4000'}
                                     </span>
                                 </div>

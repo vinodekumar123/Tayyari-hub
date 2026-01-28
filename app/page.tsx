@@ -12,6 +12,7 @@ const SeriesSchedule = dynamic(() => import("@/components/Home/series-schedule")
 const PricingBundles = dynamic(() => import("@/components/Home/pricing-bundles"), { ssr: true });
 const WhatsappInviteSection = dynamic(() => import("@/components/Home/whatsapp"), { ssr: true });
 const TestimonialSection = dynamic(() => import("@/components/Home/reviews"), { ssr: true });
+const HowToRegister = dynamic(() => import("@/components/Home/how-to-register"), { ssr: true });
 
 export default function Home() {
   return (
@@ -41,6 +42,10 @@ export default function Home() {
 
       <ScrollReveal>
         <TestimonialSection />
+      </ScrollReveal>
+
+      <ScrollReveal>
+        <HowToRegister />
       </ScrollReveal>
 
       <Footer />

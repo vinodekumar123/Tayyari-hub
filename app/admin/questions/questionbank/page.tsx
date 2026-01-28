@@ -505,9 +505,13 @@ export default function QuestionBankPage() {
 
       // Previously: fetchStats(fetched.map(q => q.id)); -> REMOVED for performance
 
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error fetching questions:", error);
-      toast.error("Failed to fetch questions");
+      if (error?.code === 'failed-precondition') {
+        toast.error("Missing Index: Please check console for the link to create it.");
+      } else {
+        toast.error("Failed to fetch questions");
+      }
     } finally {
       setLoading(false);
     }
@@ -519,6 +523,7 @@ export default function QuestionBankPage() {
   useEffect(() => {
     if (!isRoleLoaded) return; // Don't fetch until we know the user's role
     setLastDoc(null);
+    setQuestions([]); // Clear current list to avoid showing stale data while loading or on error
     fetchQuestions(false);
   }, [isRoleLoaded, filterCourse, filterSubject, filterDifficulty, filterYear, filterStatus, filterTeacher, filterChapter, dateRange, showDeleted, searchQuery, currentUserId, userRole, teacherSubjects]); // eslint-disable-line
 

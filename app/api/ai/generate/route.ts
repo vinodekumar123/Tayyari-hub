@@ -39,7 +39,7 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'Prompt is required' }, { status: 400 });
         }
 
-        const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+        const model = genAI.getGenerativeModel({ model: 'gemini-3-pro-preview' });
 
         // Detailed prompt to ensure structured JSON output
         const systemInstruction = `

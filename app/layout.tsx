@@ -6,14 +6,20 @@ import { Inter } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
 import { SpeedInsights } from '@vercel/speed-insights/next'
 
-import { NavigationLoader } from '@/components/ui/navigation-loader'
 
-import { Toaster } from "@/components/ui/toaster";
+
+import { NavigationLoader } from '@/components/ui/navigation-loader';
+import { LoadingOverlay } from '@/components/ui/loading-overlay';
+import { Toaster } from "@/components/ui/sonner";
 import { ThemeProvider } from "@/components/theme-provider";
+import { GoodNewsPopup } from "@/components/ui/good-news-popup";
 
 import { GlobalAuthListener } from '@/components/global-auth-listener';
 
+import { HelpChatWidget } from '@/components/HelpChatWidget';
+
 const inter = Inter({ subsets: ['latin'] });
+
 
 
 export default function RootLayout({
@@ -33,9 +39,12 @@ export default function RootLayout({
           <GlobalAuthListener />
           <React.Suspense fallback={null}>
             <NavigationLoader />
+            <LoadingOverlay />
           </React.Suspense>
           {children}
           <Toaster />
+          <HelpChatWidget />
+          <GoodNewsPopup />
           {process.env.NODE_ENV === 'production' && (
             <>
               <Analytics />

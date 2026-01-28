@@ -143,6 +143,8 @@ export function Sidebar() {
         { icon: Trophy, label: 'Quizzes', href: '/admin/quizzes/quizebank' },
         { icon: Plus, label: 'Create Quiz', href: '/admin/quizzes/create' },
         { icon: BrainCircuit, label: 'AI Auto-Tagger', href: '/admin/questions/auto-tagger' },
+        { icon: BookOpen, label: 'Knowledge Base', href: '/admin/knowledge-base' },
+        { icon: BrainCircuit, label: 'AI Tutor Test', href: '/admin/ai-tutor-test' },
         { icon: Flag, label: 'Reported Questions', href: '/admin/reports' },
       ],
     },
@@ -385,7 +387,7 @@ export function Sidebar() {
   return (
     <>
       {/* Mobile Menu Button */}
-      <div className="md:hidden fixed top-4 left-4 z-50">
+      <div className="md:hidden fixed top-4 left-4 z-[100]">
         {!mobileOpen && !sidebarTriggerHidden && (
           <Button variant="ghost" size="icon" onClick={() => setMobileOpen(true)}>
             <Menu className="h-6 w-6 text-foreground" />
@@ -395,7 +397,7 @@ export function Sidebar() {
 
       {/* Sidebar */}
       <div
-        className={`fixed top-0 left-0 h-full z-50 bg-background border-r border-border flex flex-col transition-transform duration-300
+        className={`fixed top-0 left-0 h-full z-[100] bg-background border-r border-border flex flex-col transition-transform duration-300
           ${collapsed ? 'w-16' : 'w-64'}
           ${mobileOpen ? 'translate-x-0' : '-translate-x-full'}
           md:translate-x-0 md:static md:flex shrink-0`}
@@ -489,7 +491,7 @@ export function Sidebar() {
 
       {/* Backdrop */}
       {mobileOpen && (
-        <div className="fixed inset-0 z-40 bg-black/30 md:hidden" onClick={() => setMobileOpen(false)} />
+        <div className="fixed inset-0 z-[90] bg-black/30 md:hidden" onClick={() => setMobileOpen(false)} />
       )}
 
       {/* Sign Out Dialog */}

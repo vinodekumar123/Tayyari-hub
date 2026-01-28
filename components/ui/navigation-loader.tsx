@@ -30,9 +30,13 @@ export function NavigationLoader() {
                 });
             }, 500);
             return () => clearInterval(timer);
+        } else if (progress === 0 && !isNavigating) {
+            // ensure progress resets if not navigating
+            setProgress(0);
         }
-    }, [isNavigating]);
+    }, [isNavigating, progress]);
 
+    // Simple top loader bar only (overlay handled by app/loading.tsx or global overlay component)
     if (!isNavigating && progress === 0) return null;
 
     return (

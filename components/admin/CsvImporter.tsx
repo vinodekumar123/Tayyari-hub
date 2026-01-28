@@ -402,7 +402,7 @@ export function CsvImporter({
                             {/* Error List */}
                             {validationErrors.length > 0 && (
                                 <div className="h-[100px] border rounded-lg bg-red-50/30 dark:bg-red-900/10 overflow-auto p-3 text-xs space-y-1">
-                                    <div className="font-semibold text-red-700 sticky top-0 bg-transparent">Validation Issues:</div>
+                                    <div className="font-semibold text-red-700 sticky top-0 bg-red-50 dark:bg-red-950 z-10 px-2 py-1 -mx-2 mb-2 border-b border-red-200 dark:border-red-900">Validation Issues:</div>
                                     {validationErrors.map((e, i) => (
                                         <div key={i} className="text-red-600">Row {e.row}: {e.error}</div>
                                     ))}

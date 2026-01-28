@@ -3,22 +3,26 @@
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { getAuth } from "firebase/auth";
-import { getFirestore, doc, getDoc } from "firebase/firestore";
-import { Menu, X } from "lucide-react";
-import { app } from "../../app/firebase";
+import { doc, getDoc } from "firebase/firestore";
+import { Menu, X, ChevronDown } from "lucide-react";
+import { auth, db } from "../../app/firebase";
 import { ModeToggle } from "@/components/mode-toggle";
 
 const Navbar = () => {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const router = useRouter();
-  const auth = getAuth(app);
-  const db = getFirestore(app);
 
   useEffect(() => {
+    let ticking = false;
     const handleScroll = () => {
-      setScrolled(window.scrollY > 50);
+      if (!ticking) {
+        window.requestAnimationFrame(() => {
+          setScrolled(window.scrollY > 50);
+          ticking = false;
+        });
+        ticking = true;
+      }
     };
     window.addEventListener("scroll", handleScroll);
     return () => window.removeEventListener("scroll", handleScroll);
@@ -82,6 +86,19 @@ const Navbar = () => {
 
         {/* Desktop Nav */}
         <nav className={`hidden md:flex items-center gap-8 font-medium ${scrolled ? 'text-gray-700 dark:text-gray-200' : 'text-gray-700 dark:text-gray-200'}`}>
+          <div className="relative group">
+            <button className="flex items-center gap-1 hover:text-blue-500 dark:hover:text-blue-400 transition">
+              Series <ChevronDown size={14} />
+            </button>
+            <div className="absolute top-full left-0 mt-2 w-48 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 transform origin-top-left overflow-hidden">
+              <Link href="/series/fresher" className="block px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800 text-sm font-medium">
+                Fresher Series
+              </Link>
+              <Link href="/series/improver" className="block px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800 text-sm font-medium">
+                Improver Series
+              </Link>
+            </div>
+          </div>
           <a href="#courses" className="hover:text-blue-500 dark:hover:text-blue-400 transition">
             Courses
           </a>
@@ -135,6 +152,15 @@ const Navbar = () => {
       {/* Mobile Dropdown */}
       {mobileOpen && (
         <div className="md:hidden absolute top-full left-0 w-full bg-white/95 dark:bg-slate-950/95 backdrop-blur-lg shadow-xl border-t dark:border-slate-800 px-6 py-6 space-y-4 text-gray-800 dark:text-gray-200 font-medium flex flex-col items-center animate-fade-in-down">
+          <div className="w-full border-b border-gray-100 dark:border-gray-800 pb-2 mb-2 space-y-2 flex flex-col items-center">
+            <span className="text-sm font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Series</span>
+            <Link href="/series/fresher" onClick={toggleMenu} className="block hover:text-blue-600 dark:hover:text-blue-400 text-lg">
+              Fresher Series
+            </Link>
+            <Link href="/series/improver" onClick={toggleMenu} className="block hover:text-blue-600 dark:hover:text-blue-400 text-lg">
+              Improver Series
+            </Link>
+          </div>
           <a href="#courses" onClick={toggleMenu} className="block hover:text-blue-600 dark:hover:text-blue-400 text-lg">
             Courses
           </a>

@@ -8,6 +8,13 @@ const nextConfig = {
     ignoreDuringBuilds: true,
   },
 
+  // Increase Server Actions Body Limit for PDF Uploads
+  experimental: {
+    serverActions: {
+      bodySizeLimit: '300mb',
+    },
+  },
+
   // Enable Image Optimization with Remote Patterns
   images: {
     unoptimized: false, // Enable optimization

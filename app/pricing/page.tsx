@@ -4,6 +4,7 @@ import PricingBundles from '@/components/Home/pricing-bundles';
 import { Button } from '@/components/ui/button';
 import { ChevronLeft } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import HowToRegister from '@/components/Home/how-to-register';
 
 export default function PricingPage() {
   const router = useRouter();
@@ -24,6 +25,8 @@ export default function PricingPage() {
 
       {/* Main Pricing Component */}
       <PricingBundles />
+
+      <HowToRegister />
     </div>
   );
 }

@@ -65,7 +65,7 @@ export function AboutContent() {
                                             "Massive Question Bank with high-yield MCQs",
                                             "Chapter-wise tests & Full-length Mocks",
                                             "AI-Powered Learning Paths & Analytics",
-                                            "20+ Years Past Papers Coverage"
+                                            "4 Years of Legacy of Medico Engineer"
                                         ].map((item, i) => (
                                             <li key={i} className="flex items-start gap-3 text-slate-700 dark:text-slate-300 text-sm font-medium">
                                                 <CheckCircle className="w-5 h-5 text-emerald-500 shrink-0" />
@@ -136,7 +136,7 @@ export function AboutContent() {
                             {
                                 icon: <History className="w-6 h-6 text-orange-500" />,
                                 title: "Past Papers",
-                                desc: "20+ years of solved past papers to help you understand exam patterns."
+                                desc: "Building on 4 years of legacy of Medico Engineer to guide your preparation."
                             },
                             {
                                 icon: <Calculator className="w-6 h-6 text-purple-500" />,

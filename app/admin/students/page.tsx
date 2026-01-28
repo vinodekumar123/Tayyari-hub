@@ -1041,7 +1041,7 @@ export default function StudentsPage() {
                       {item.seriesName || 'Series Enrollment'} <span className="text-sm text-slate-400 block font-normal">{item.transactionId}</span>
                     </td>
                     <td className="py-4 text-slate-800 font-bold text-lg text-right">
-                      ₹{item.price}
+                      PKR {item.price}
                     </td>
                   </tr>
                 ))}
@@ -1049,7 +1049,7 @@ export default function StudentsPage() {
               <tfoot>
                 <tr className="border-t-2 border-slate-100">
                   <td className="pt-6 text-right text-slate-500 font-bold">Total Paid</td>
-                  <td className="pt-6 text-right text-2xl font-black text-blue-600">₹{totalPaid}</td>
+                  <td className="pt-6 text-right text-2xl font-black text-blue-600">PKR {totalPaid}</td>
                 </tr>
               </tfoot>
             </table>
@@ -1288,8 +1288,8 @@ export default function StudentsPage() {
                 <SelectTrigger><SelectValue placeholder={enrollType === 'series' ? "Choose a series" : "Choose a bundle"} /></SelectTrigger>
                 <SelectContent>
                   {enrollType === 'series'
-                    ? seriesList.map(s => <SelectItem key={s.id} value={s.id}>{s.name} (₹{s.price})</SelectItem>)
-                    : bundlesList.map(b => <SelectItem key={b.id} value={b.id}>{b.name} (₹{b.price}) - {b.seriesIds.length} Series</SelectItem>)
+                    ? seriesList.map(s => <SelectItem key={s.id} value={s.id}>{s.name} (PKR {s.price})</SelectItem>)
+                    : bundlesList.map(b => <SelectItem key={b.id} value={b.id}>{b.name} (PKR {b.price}) - {b.seriesIds.length} Series</SelectItem>)
                   }
                 </SelectContent>
               </Select>
@@ -1338,7 +1338,7 @@ export default function StudentsPage() {
                 <div className='text-right flex items-center gap-4'>
                   <div className="hidden sm:block">
                     <Badge variant={rec.status === 'active' ? 'default' : 'destructive'} className="mr-2">{rec.status}</Badge>
-                    <span className='text-sm font-bold'>₹{rec.price}</span>
+                    <span className='text-sm font-bold'>PKR {rec.price}</span>
                   </div>
                   <div className="flex items-center">
                     <Button

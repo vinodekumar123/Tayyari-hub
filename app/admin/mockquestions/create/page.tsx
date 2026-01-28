@@ -30,6 +30,8 @@ import {
 import { InlineMath, BlockMath } from 'react-katex';
 import 'katex/dist/katex.min.css';
 
+
+import { AiBulkGenerateDialog } from '@/components/admin/AiBulkGenerateDialog';
 import {
   RotateCcw,
   CheckCircle2,
@@ -48,7 +50,9 @@ import {
   FileText,
   AlertCircle,
   History,
-  Download
+  Download,
+  Sparkles,
+  Loader2
 } from 'lucide-react';
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -242,6 +246,11 @@ function CreateQuestionPageContent() {
   const [aiPrompt, setAiPrompt] = useState("");
   // CSV State - Only need dialog visibility
   const [isCsvDialogOpen, setIsCsvDialogOpen] = useState(false);
+  const [importInitialData, setImportInitialData] = useState<any[] | undefined>(undefined);
+
+  // AI Bulk State
+  const [isAiBulkOpen, setIsAiBulkOpen] = useState(false);
+  const [isAiBulkLoading, setIsAiBulkLoading] = useState(false);
 
   const [history, setHistory] = useState<any[]>([]);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
@@ -546,6 +555,11 @@ function CreateQuestionPageContent() {
     }
   };
 
+  const handleAiBulkSuccess = (data: any[]) => {
+    setImportInitialData(data);
+    setIsCsvDialogOpen(true); // Open CSV/Preview Dialog directly
+  };
+
   const handleSmartImport = async (importedData: any[]) => {
     setIsSaving(true);
     let successCount = 0;
@@ -743,6 +757,25 @@ function CreateQuestionPageContent() {
           <Button
             variant="outline"
             onClick={() => {
+              if (!questionData.course || !questionData.subject) {
+                toast.error("Please select Course and Subject first");
+                return;
+              }
+              setIsAiBulkLoading(true);
+              setTimeout(() => {
+                setIsAiBulkOpen(true);
+                setIsAiBulkLoading(false);
+              }, 800);
+            }}
+            className="bg-white dark:bg-gray-800 dark:border-gray-700 dark:hover:bg-gray-700"
+          >
+            {isAiBulkLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4 text-purple-500" />}
+            AI Bulk Import
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => {
+              setImportInitialData(undefined);
               if (!questionData.course || !questionData.subject) {
                 toast.error("Please select Course and Subject first");
                 return;
@@ -1123,6 +1156,32 @@ function CreateQuestionPageContent() {
           Topic: questionData.topic || 'General',
           Chapter: questionData.chapter || 'General',
           Difficulty: questionData.difficulty
+        }}
+        validChapters={chapters}
+      />
+      <CsvImporter
+        isOpen={isCsvDialogOpen}
+        onClose={() => setIsCsvDialogOpen(false)}
+        onImport={handleSmartImport}
+        initialData={importInitialData}
+        defaultMetadata={{
+          course: questionData.course,
+          subject: questionData.subject,
+          chapter: questionData.chapter,
+          difficulty: questionData.difficulty
+        }}
+        validChapters={chapters}
+      />
+
+      <AiBulkGenerateDialog
+        isOpen={isAiBulkOpen}
+        onClose={() => setIsAiBulkOpen(false)}
+        onGenerate={handleAiBulkSuccess}
+        defaultMetadata={{
+          courseId: '', // Mock questions might not have courseId strictly or we map it from name
+          subject: questionData.subject,
+          chapter: questionData.chapter,
+          difficulty: questionData.difficulty
         }}
         validChapters={chapters}
       />

@@ -12,7 +12,10 @@ out/
 .env.local
 serviceAccountKey.json
 temp-service-account.json
+temp-creds.json
 *firebase-adminsdk*.json
+*.pem
+*.key
 
 # Logs and Debugging
 debug_log.txt
