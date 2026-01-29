@@ -12,9 +12,9 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'GEMINI_API_KEY not configured' }, { status: 500 });
         }
 
-        // Using Gemini 3 Pro (Preview)
+        // Using Gemini 3 Flash (Preview)
         const model = genAI.getGenerativeModel({
-            model: 'gemini-3-pro-preview',
+            model: 'gemini-3-flash-preview',
             generationConfig: { responseMimeType: 'application/json' }
         });
 

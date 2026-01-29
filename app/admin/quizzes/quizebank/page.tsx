@@ -46,10 +46,15 @@ import {
 } from '@/components/ui/dialog';
 import {
   ArrowRight, BookOpen, Calendar, Clock, Pencil, Eye, Trash2,
-  Search, Database, Zap
+  Search, Database, Zap, CheckSquare, Square, MoreHorizontal,
+  Globe, Lock, Play, Pause, Tag, ListChecks, XCircle, CheckCircle
 } from 'lucide-react';
 import Link from 'next/link';
 import { UnifiedHeader } from '@/components/unified-header';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Badge } from '@/components/ui/badge';
+import { writeBatch, updateDoc } from 'firebase/firestore';
+import { toast } from 'sonner';
 
 // Quiz status helper
 function getQuizStatus(startDate: string, endDate: string, startTime?: string, endTime?: string) {
@@ -109,6 +114,14 @@ export default function AdminQuizBankPage() {
   const [hasMore, setHasMore] = useState(true);
   const [deleteModal, setDeleteModal] = useState(false);
   const [quizToDelete, setQuizToDelete] = useState<Quiz | null>(null);
+
+  // Bulk actions state
+  const [selectedQuizzes, setSelectedQuizzes] = useState<Set<string>>(new Set());
+  const [bulkActionLoading, setBulkActionLoading] = useState(false);
+  const [bulkEditModal, setBulkEditModal] = useState(false);
+  const [bulkSeriesModal, setBulkSeriesModal] = useState(false);
+  const [bulkDeleteModal, setBulkDeleteModal] = useState(false);
+  const [bulkEditData, setBulkEditData] = useState({ accessType: '', status: '' });
 
   // Admin/Teacher Access Check
   useEffect(() => {
@@ -296,6 +309,155 @@ export default function AdminQuizBankPage() {
     }
   };
 
+  // Bulk Selection Handlers
+  const toggleSelectQuiz = (quizId: string) => {
+    const newSet = new Set(selectedQuizzes);
+    if (newSet.has(quizId)) newSet.delete(quizId);
+    else newSet.add(quizId);
+    setSelectedQuizzes(newSet);
+  };
+
+  const selectAllVisible = () => {
+    if (selectedQuizzes.size === filteredQuizzes.length) {
+      setSelectedQuizzes(new Set());
+    } else {
+      setSelectedQuizzes(new Set(filteredQuizzes.map(q => q.id)));
+    }
+  };
+
+  const clearSelection = () => setSelectedQuizzes(new Set());
+
+  // Bulk Publish
+  const handleBulkPublish = async () => {
+    if (selectedQuizzes.size === 0) return;
+    setBulkActionLoading(true);
+    try {
+      const batch = writeBatch(db);
+      selectedQuizzes.forEach(id => {
+        batch.update(doc(db, 'quizzes', id), { accessType: 'free', isPublished: true });
+      });
+      await batch.commit();
+
+      setQuizzes(prev => prev.map(q =>
+        selectedQuizzes.has(q.id) ? { ...q, accessType: 'free', isPublished: true } : q
+      ));
+      cache.invalidatePattern('quizzes');
+      toast.success(`${selectedQuizzes.size} quizzes published`);
+      clearSelection();
+    } catch (e: any) {
+      toast.error('Failed to publish: ' + e.message);
+    } finally {
+      setBulkActionLoading(false);
+    }
+  };
+
+  // Bulk Unpublish
+  const handleBulkUnpublish = async () => {
+    if (selectedQuizzes.size === 0) return;
+    setBulkActionLoading(true);
+    try {
+      const batch = writeBatch(db);
+      selectedQuizzes.forEach(id => {
+        batch.update(doc(db, 'quizzes', id), { isPublished: false });
+      });
+      await batch.commit();
+
+      setQuizzes(prev => prev.map(q =>
+        selectedQuizzes.has(q.id) ? { ...q, isPublished: false } : q
+      ));
+      cache.invalidatePattern('quizzes');
+      toast.success(`${selectedQuizzes.size} quizzes unpublished`);
+      clearSelection();
+    } catch (e: any) {
+      toast.error('Failed to unpublish: ' + e.message);
+    } finally {
+      setBulkActionLoading(false);
+    }
+  };
+
+  // Bulk Make Premium
+  const handleBulkPremium = async () => {
+    if (selectedQuizzes.size === 0) return;
+    setBulkActionLoading(true);
+    try {
+      const batch = writeBatch(db);
+      selectedQuizzes.forEach(id => {
+        batch.update(doc(db, 'quizzes', id), { accessType: 'paid' });
+      });
+      await batch.commit();
+
+      setQuizzes(prev => prev.map(q =>
+        selectedQuizzes.has(q.id) ? { ...q, accessType: 'paid' } : q
+      ));
+      cache.invalidatePattern('quizzes');
+      toast.success(`${selectedQuizzes.size} quizzes set to Premium`);
+      clearSelection();
+    } catch (e: any) {
+      toast.error('Failed: ' + e.message);
+    } finally {
+      setBulkActionLoading(false);
+    }
+  };
+
+  // Bulk Delete
+  const handleBulkDelete = async () => {
+    if (selectedQuizzes.size === 0) return;
+    setBulkActionLoading(true);
+    try {
+      const batch = writeBatch(db);
+      selectedQuizzes.forEach(id => {
+        batch.delete(doc(db, 'quizzes', id));
+      });
+      await batch.commit();
+
+      setQuizzes(prev => prev.filter(q => !selectedQuizzes.has(q.id)));
+      cache.invalidatePattern('quizzes');
+      toast.success(`${selectedQuizzes.size} quizzes deleted`);
+      clearSelection();
+      setBulkDeleteModal(false);
+    } catch (e: any) {
+      toast.error('Failed to delete: ' + e.message);
+    } finally {
+      setBulkActionLoading(false);
+    }
+  };
+
+  // Bulk Assign Series
+  const handleBulkAssignSeries = async (seriesId: string) => {
+    if (selectedQuizzes.size === 0 || !seriesId) return;
+    setBulkActionLoading(true);
+    try {
+      const batch = writeBatch(db);
+      selectedQuizzes.forEach(id => {
+        const quiz = quizzes.find(q => q.id === id);
+        const currentSeries = quiz?.series || [];
+        if (!currentSeries.includes(seriesId)) {
+          batch.update(doc(db, 'quizzes', id), { series: [...currentSeries, seriesId] });
+        }
+      });
+      await batch.commit();
+
+      setQuizzes(prev => prev.map(q => {
+        if (selectedQuizzes.has(q.id)) {
+          const currentSeries = q.series || [];
+          if (!currentSeries.includes(seriesId)) {
+            return { ...q, series: [...currentSeries, seriesId] };
+          }
+        }
+        return q;
+      }));
+      cache.invalidatePattern('quizzes');
+      const seriesName = seriesList.find(s => s.id === seriesId)?.name || seriesId;
+      toast.success(`${selectedQuizzes.size} quizzes assigned to ${seriesName}`);
+      clearSelection();
+      setBulkSeriesModal(false);
+    } catch (e: any) {
+      toast.error('Failed: ' + e.message);
+    } finally {
+      setBulkActionLoading(false);
+    }
+  };
+
   // Show skeleton while loading
   // ... (Lines 285-290 unchanged in replacements, but including for context matching if needed)
   if (loading && quizzes.length === 0) {
@@ -399,6 +561,89 @@ export default function AdminQuizBankPage() {
         </CardContent>
       </Card>
 
+      {/* Bulk Actions Toolbar */}
+      {selectedQuizzes.size > 0 && (
+        <Card className="bg-gradient-to-r from-indigo-500/10 to-purple-500/10 border-indigo-300 dark:border-indigo-700 shadow-lg sticky top-4 z-10">
+          <CardContent className="p-4">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <Badge variant="secondary" className="text-base px-3 py-1">
+                  <CheckSquare className="w-4 h-4 mr-2" />
+                  {selectedQuizzes.size} selected
+                </Badge>
+                <Button variant="ghost" size="sm" onClick={clearSelection}>
+                  <XCircle className="w-4 h-4 mr-1" /> Clear
+                </Button>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleBulkPublish}
+                  disabled={bulkActionLoading}
+                  className="bg-green-50 hover:bg-green-100 border-green-300 text-green-700 dark:bg-green-900/20 dark:text-green-400"
+                >
+                  <Globe className="w-4 h-4 mr-1" /> Publish
+                </Button>
+
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleBulkUnpublish}
+                  disabled={bulkActionLoading}
+                  className="bg-gray-50 hover:bg-gray-100 border-gray-300 text-gray-700 dark:bg-gray-900/20 dark:text-gray-400"
+                >
+                  <Lock className="w-4 h-4 mr-1" /> Unpublish
+                </Button>
+
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleBulkPremium}
+                  disabled={bulkActionLoading}
+                  className="bg-amber-50 hover:bg-amber-100 border-amber-300 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400"
+                >
+                  <Tag className="w-4 h-4 mr-1" /> Make Premium
+                </Button>
+
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setBulkSeriesModal(true)}
+                  disabled={bulkActionLoading}
+                  className="bg-blue-50 hover:bg-blue-100 border-blue-300 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400"
+                >
+                  <ListChecks className="w-4 h-4 mr-1" /> Assign Series
+                </Button>
+
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  onClick={() => setBulkDeleteModal(true)}
+                  disabled={bulkActionLoading}
+                >
+                  <Trash2 className="w-4 h-4 mr-1" /> Delete
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Quick Select All */}
+      {filteredQuizzes.length > 0 && (
+        <div className="flex items-center gap-3">
+          <Button variant="outline" size="sm" onClick={selectAllVisible}>
+            {selectedQuizzes.size === filteredQuizzes.length ? (
+              <><Square className="w-4 h-4 mr-2" /> Deselect All</>
+            ) : (
+              <><CheckSquare className="w-4 h-4 mr-2" /> Select All ({filteredQuizzes.length})</>
+            )}
+          </Button>
+        </div>
+      )}
+
       {/* Quiz Grid */}
       {filteredQuizzes.length === 0 ? (
         <div className="text-center py-16">
@@ -415,16 +660,23 @@ export default function AdminQuizBankPage() {
               <div key={quiz.id} className="group relative">
                 <div className="absolute inset-0 bg-gradient-to-br from-[#004AAD]/5 to-[#00B4D8]/5 rounded-2xl blur-lg opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
 
-                <Card className={`relative ${glassmorphism.light} border border-[#004AAD]/10 dark:border-[#0066FF]/20 shadow-lg ${animations.smooth} group-hover:scale-[1.02]`}>
+                <Card className={`relative ${glassmorphism.light} border ${selectedQuizzes.has(quiz.id) ? 'border-indigo-500 ring-2 ring-indigo-500/30' : 'border-[#004AAD]/10 dark:border-[#0066FF]/20'} shadow-lg ${animations.smooth} group-hover:scale-[1.02]`}>
                   <CardHeader>
                     <div className="flex items-start justify-between mb-2">
-                      <div className={`px-3 py-1 rounded-full text-xs font-bold ${status === 'active'
-                        ? 'bg-gradient-to-r from-[#00B4D8]/20 to-[#66D9EF]/20 text-[#00B4D8] dark:text-[#66D9EF]'
-                        : status === 'upcoming'
-                          ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400'
-                          : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400'
-                        }`}>
-                        {status}
+                      <div className="flex items-center gap-2">
+                        <Checkbox
+                          checked={selectedQuizzes.has(quiz.id)}
+                          onCheckedChange={() => toggleSelectQuiz(quiz.id)}
+                          className="border-2"
+                        />
+                        <div className={`px-3 py-1 rounded-full text-xs font-bold ${status === 'active'
+                          ? 'bg-gradient-to-r from-[#00B4D8]/20 to-[#66D9EF]/20 text-[#00B4D8] dark:text-[#66D9EF]'
+                          : status === 'upcoming'
+                            ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400'
+                            : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400'
+                          }`}>
+                          {status}
+                        </div>
                       </div>
                       {quiz.accessType === 'paid' && (
                         <div className="px-3 py-1 rounded-full text-xs font-bold bg-gradient-to-r from-amber-100 to-yellow-100 dark:from-amber-900/30 dark:to-yellow-900/30 text-amber-700 dark:text-amber-400">
@@ -538,6 +790,70 @@ export default function AdminQuizBankPage() {
             </Button>
             <Button variant="destructive" onClick={handleDelete}>
               Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk Delete Dialog */}
+      <Dialog open={bulkDeleteModal} onOpenChange={setBulkDeleteModal}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-600">
+              <Trash2 className="w-5 h-5" />
+              Confirm Bulk Delete
+            </DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete <strong>{selectedQuizzes.size} quizzes</strong>? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBulkDeleteModal(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleBulkDelete}
+              disabled={bulkActionLoading}
+            >
+              {bulkActionLoading ? 'Deleting...' : `Delete ${selectedQuizzes.size} Quizzes`}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk Series Assignment Dialog */}
+      <Dialog open={bulkSeriesModal} onOpenChange={setBulkSeriesModal}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ListChecks className="w-5 h-5 text-blue-600" />
+              Assign Series
+            </DialogTitle>
+            <DialogDescription>
+              Choose a series to assign to {selectedQuizzes.size} selected quizzes.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4 space-y-3">
+            {seriesList.map(series => (
+              <Button
+                key={series.id}
+                variant="outline"
+                className="w-full justify-start"
+                onClick={() => handleBulkAssignSeries(series.id)}
+                disabled={bulkActionLoading}
+              >
+                <Tag className="w-4 h-4 mr-2" />
+                {series.name}
+              </Button>
+            ))}
+            {seriesList.length === 0 && (
+              <p className="text-center text-muted-foreground py-4">No series available</p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBulkSeriesModal(false)}>
+              Cancel
             </Button>
           </DialogFooter>
         </DialogContent>

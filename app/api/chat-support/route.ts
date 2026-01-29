@@ -2,23 +2,26 @@ import { NextRequest, NextResponse } from 'next/server';
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const genAI = new GoogleGenerativeAI(process.env.NEXT_PUBLIC_GEMINI_API_KEY || "");
-const model = genAI.getGenerativeModel({ model: "gemini-3-pro-preview" });
+const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
 
 // Cache context to avoid scraping on every request
 let cachedContext: string | null = null;
 let lastCacheTime = 0;
-const CACHE_DURATION = 1000 * 60 * 30; // 30 minutes cache
+const CACHE_DURATION = 1000 * 60 * 60; // 1 hour cache (increased from 30 min)
 
 async function fetchWebsiteContent(url: string): Promise<string> {
     try {
-        const response = await fetch(url, { next: { revalidate: 1800 } });
+        const response = await fetch(url, {
+            next: { revalidate: 3600 }, // Cache for 1 hour
+            signal: AbortSignal.timeout(5000) // 5s timeout per request
+        });
         if (!response.ok) return `[Failed to fetch ${url}]`;
         const html = await response.text();
         return html.replace(/<script\b[^>]*>([\s\S]*?)<\/script>/gm, "")
             .replace(/<style\b[^>]*>([\s\S]*?)<\/style>/gm, "")
             .replace(/<[^>]+>/g, ' ')
             .replace(/\s+/g, ' ').trim()
-            .substring(0, 10000); // Limit each site to 10k chars
+            .substring(0, 8000); // Reduced to 8k chars for speed
     } catch (error) {
         console.error(`Error fetching ${url}:`, error);
         return `[Error accessing ${url}]`;
@@ -33,14 +36,10 @@ async function getMultiSiteContext() {
 
     try {
         console.log("Fetching contexts...");
-        // Fetch Homepages first (Priority)
-        const [tayyariText, medicoText] = await Promise.all([
+        // Fetch all pages in parallel for speed
+        const [tayyariText, medicoText, aboutText, contactText, privacyText, fresherText, improverText] = await Promise.all([
             fetchWebsiteContent('https://tayyarihub.com'),
-            fetchWebsiteContent('https://medicoengineer.com')
-        ]);
-
-        // Fetch Secondary Pages (Best effort)
-        const [aboutText, contactText, privacyText, fresherText, improverText] = await Promise.all([
+            fetchWebsiteContent('https://medicoengineer.com'),
             fetchWebsiteContent('https://tayyarihub.com/about-us'),
             fetchWebsiteContent('https://tayyarihub.com/contact-us'),
             fetchWebsiteContent('https://tayyarihub.com/privacy-policy'),
@@ -137,7 +136,7 @@ export async function POST(req: NextRequest) {
             history: [
                 { role: 'user', parts: [{ text: systemPrompt }] },
                 { role: 'model', parts: [{ text: "Understood. I will use the context from both Tayyari Hub and MedicoEngineer to assist the user." }] },
-                ...chatHistory.slice(-4)
+                ...chatHistory.slice(-4) // Keep last 4 for speed
             ]
         });
 

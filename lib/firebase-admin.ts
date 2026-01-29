@@ -67,20 +67,12 @@ if (!admin.apps.length) {
                 isInitialized = true;
                 console.log('✅ Firebase Admin SDK initialized successfully from individual env vars');
             } else {
-                throw new Error('No valid Firebase Admin configuration found (checked serviceAccountKey.json, FIREBASE_SERVICE_ACCOUNT_KEY, and individual vars)');
+                console.warn('⚠️ No valid Firebase Admin configuration found (checked serviceAccountKey.json, FIREBASE_SERVICE_ACCOUNT_KEY, and individual vars). Admin features will not work.');
             }
         }
     } catch (error: any) {
         initializationError = error;
-        try {
-            const fs = require('fs');
-            const path = require('path');
-            const logPath = path.join(process.cwd(), 'debug_log.txt');
-            fs.appendFileSync(logPath, `[${new Date().toISOString()}] Firebase Admin Init Failed: ${error.message}\nStack: ${error.stack}\n`);
-        } catch (e) { /* ignore */ }
-
-        console.error('❌ Firebase Admin SDK initialization failed:', error.message);
-        console.error('Stack:', error.stack);
+        console.warn('⚠️ Firebase Admin SDK initialization failed (continuing safely):', error.message);
         // DON'T throw - let the app continue and handle errors in API routes
     }
 } else {

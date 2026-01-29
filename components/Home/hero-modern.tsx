@@ -12,7 +12,7 @@ import { TextGenerateEffect } from "@/components/ui/text-generate-effect";
 const HeroModern = () => {
     return (
         <section
-            className="relative min-h-[90vh] grid place-content-center overflow-hidden bg-white dark:bg-gray-950 px-4 py-24 text-gray-900 dark:text-gray-200"
+            className="relative min-h-screen grid place-content-center overflow-hidden bg-white dark:bg-gray-950 px-4 py-24 text-gray-900 dark:text-gray-200"
         >
             {/* Animated Gradient Background via CSS */}
             <div className="absolute inset-0 bg-[radial-gradient(125%_125%_at_50%_0%,transparent_50%,var(--token-color))] animate-gradient-slow opacity-40 pointer-events-none"

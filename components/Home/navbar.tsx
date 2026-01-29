@@ -2,9 +2,9 @@
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { doc, getDoc } from "firebase/firestore";
-import { Menu, X, ChevronDown } from "lucide-react";
+import { Menu, X, ChevronDown, ArrowLeft } from "lucide-react";
 import { auth, db } from "../../app/firebase";
 import { ModeToggle } from "@/components/mode-toggle";
 
@@ -12,6 +12,7 @@ const Navbar = () => {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const router = useRouter();
+  const pathname = usePathname();
 
   useEffect(() => {
     let ticking = false;
@@ -69,6 +70,8 @@ const Navbar = () => {
     }
   };
 
+  const isHomePage = pathname === "/";
+
   return (
     <header
       className={`fixed top-0 left-0 w-full z-50 transition-all duration-300 ${scrolled
@@ -77,12 +80,28 @@ const Navbar = () => {
         }`}
     >
       <div className="max-w-7xl mx-auto px-6 flex items-center justify-between">
-        {/* Logo */}
-        <Link href="/" className="flex items-center gap-2">
-          <div className={`text-2xl font-black tracking-tighter ${scrolled ? 'text-blue-600 dark:text-blue-500' : 'text-slate-900 dark:text-white'}`}>
-            TayyariHub
-          </div>
-        </Link>
+        <div className="flex items-center gap-4">
+          {/* Back Button */}
+          {!isHomePage && (
+            <button
+              onClick={() => router.back()}
+              className={`flex items-center gap-1 text-sm font-medium transition-colors ${scrolled
+                ? "text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400"
+                : "text-gray-700 dark:text-gray-200 hover:text-blue-600 dark:hover:text-blue-400"
+                }`}
+            >
+              <ArrowLeft size={18} />
+              <span className="hidden md:inline">Back</span>
+            </button>
+          )}
+
+          {/* Logo */}
+          <Link href="/" className="flex items-center gap-2">
+            <div className={`text-2xl font-black tracking-tighter ${scrolled ? 'text-blue-600 dark:text-blue-500' : 'text-slate-900 dark:text-white'}`}>
+              TayyariHub
+            </div>
+          </Link>
+        </div>
 
         {/* Desktop Nav */}
         <nav className={`hidden md:flex items-center gap-8 font-medium ${scrolled ? 'text-gray-700 dark:text-gray-200' : 'text-gray-700 dark:text-gray-200'}`}>

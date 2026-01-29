@@ -171,7 +171,7 @@ export default function MockQuestionBankPage() {
   const [availableYears, setAvailableYears] = useState<string[]>([]);
 
   // Initial Fetch & Filter Sync
-  const fetchQuestions = useCallback(async (isLoadMore = false) => {
+  const fetchQuestions = useCallback(async (isLoadMore = false, currentLastDoc: QueryDocumentSnapshot<DocumentData> | null = null) => {
     setLoading(true);
     try {
       let q;
@@ -192,8 +192,8 @@ export default function MockQuestionBankPage() {
         q = query(collection(db, 'mock-questions'), limit(ITEMS_PER_PAGE));
       }
 
-      if (isLoadMore && lastDoc) {
-        q = query(q, startAfter(lastDoc));
+      if (isLoadMore && currentLastDoc) {
+        q = query(q, startAfter(currentLastDoc));
       }
 
       const snapshot = await getDocs(q);
@@ -208,7 +208,7 @@ export default function MockQuestionBankPage() {
       // Client-side filtering
       const filtered = fetched.filter(q => {
         const matchesSearch = searchQuery ? q.questionText.toLowerCase().includes(searchQuery.toLowerCase()) : true;
-        const matchesDeleted = showDeleted ? true : q.isDeleted !== true;
+        const matchesDeleted = showDeleted ? q.isDeleted === true : q.isDeleted !== true;
         return matchesSearch && matchesDeleted;
       });
 
@@ -220,7 +220,7 @@ export default function MockQuestionBankPage() {
         setQuestions(filtered);
       }
 
-      setLastDoc(snapshot.docs[snapshot.docs.length - 1]);
+      setLastDoc(snapshot.docs[snapshot.docs.length - 1] || null);
       setHasMore(snapshot.docs.length === ITEMS_PER_PAGE);
 
       // Extract unique values for filters
@@ -241,16 +241,16 @@ export default function MockQuestionBankPage() {
     } finally {
       setLoading(false);
     }
-  }, [filterCourse, filterSubject, filterDifficulty, filterYear, filterStatus, searchQuery, showDeleted, lastDoc]); // eslint-disable-line
+  }, [filterCourse, filterSubject, filterDifficulty, filterYear, filterStatus, searchQuery, showDeleted]); // eslint-disable-line
 
   // Debounced Search
   useEffect(() => {
     const timer = setTimeout(() => {
       setLastDoc(null);
-      fetchQuestions(false);
+      fetchQuestions(false, null);
     }, 500);
     return () => clearTimeout(timer);
-  }, [searchQuery, filterCourse, filterSubject, filterDifficulty, filterYear, filterStatus, showDeleted, fetchQuestions]);
+  }, [searchQuery, filterCourse, filterSubject, filterDifficulty, filterYear, filterStatus, showDeleted]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchStats = async (ids: string[]) => {
     if (ids.length === 0) return;
@@ -287,20 +287,21 @@ export default function MockQuestionBankPage() {
     );
   };
 
-  const handleSoftDelete = async () => {
-    if (selectedQuestions.length === 0) return;
-    if (!confirm(`Move ${selectedQuestions.length} questions to Delete Bin?`)) return;
+  const handleSoftDelete = async (questionIds?: string[]) => {
+    const idsToDelete = questionIds || selectedQuestions;
+    if (idsToDelete.length === 0) return;
+    if (!confirm(`Move ${idsToDelete.length} question(s) to Delete Bin?`)) return;
 
     setLoading(true);
     try {
       const batch = writeBatch(db);
-      selectedQuestions.forEach(id => {
+      idsToDelete.forEach(id => {
         batch.update(doc(db, 'mock-questions', id), { isDeleted: true, updatedAt: new Date() });
       });
       await batch.commit();
 
-      setQuestions(prev => prev.filter(q => !selectedQuestions.includes(q.id)));
-      setSelectedQuestions([]);
+      setQuestions(prev => prev.filter(q => !idsToDelete.includes(q.id)));
+      setSelectedQuestions(prev => prev.filter(id => !idsToDelete.includes(id)));
       toast.success("Questions moved to Delete Bin");
     } catch (err) {
       toast.error("Failed to delete questions");
@@ -309,18 +310,19 @@ export default function MockQuestionBankPage() {
     }
   };
 
-  const handleRestore = async () => {
-    if (selectedQuestions.length === 0) return;
+  const handleRestore = async (questionIds?: string[]) => {
+    const idsToRestore = questionIds || selectedQuestions;
+    if (idsToRestore.length === 0) return;
     setLoading(true);
     try {
       const batch = writeBatch(db);
-      selectedQuestions.forEach(id => {
+      idsToRestore.forEach(id => {
         batch.update(doc(db, 'mock-questions', id), { isDeleted: false, updatedAt: new Date() });
       });
       await batch.commit();
 
-      setQuestions(prev => prev.filter(q => !selectedQuestions.includes(q.id)));
-      setSelectedQuestions([]);
+      setQuestions(prev => prev.filter(q => !idsToRestore.includes(q.id)));
+      setSelectedQuestions(prev => prev.filter(id => !idsToRestore.includes(id)));
       toast.success("Questions restored successfully");
     } catch (err) {
       toast.error("Failed to restore questions");
@@ -329,20 +331,21 @@ export default function MockQuestionBankPage() {
     }
   };
 
-  const handlePermanentDelete = async () => {
-    if (selectedQuestions.length === 0) return;
-    if (!confirm(`PERMANENTLY DELETE ${selectedQuestions.length} questions? This cannot be undone.`)) return;
+  const handlePermanentDelete = async (questionIds?: string[]) => {
+    const idsToDelete = questionIds || selectedQuestions;
+    if (idsToDelete.length === 0) return;
+    if (!confirm(`PERMANENTLY DELETE ${idsToDelete.length} question(s)? This cannot be undone.`)) return;
 
     setLoading(true);
     try {
       const batch = writeBatch(db);
-      selectedQuestions.forEach(id => {
+      idsToDelete.forEach(id => {
         batch.delete(doc(db, 'mock-questions', id));
       });
       await batch.commit();
 
-      setQuestions(prev => prev.filter(q => !selectedQuestions.includes(q.id)));
-      setSelectedQuestions([]);
+      setQuestions(prev => prev.filter(q => !idsToDelete.includes(q.id)));
+      setSelectedQuestions(prev => prev.filter(id => !idsToDelete.includes(id)));
       toast.success("Questions permanently deleted");
     } catch (err) {
       toast.error("Failed to delete questions");
@@ -438,7 +441,7 @@ export default function MockQuestionBankPage() {
           <Button variant="outline" onClick={() => router.push('/admin/mockquestions/create')} className="bg-white dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700">
             <Plus className="mr-2 h-4 w-4" /> New Question
           </Button>
-          <Button variant="secondary" className="gap-2" onClick={() => fetchQuestions(false)}>
+          <Button variant="secondary" className="gap-2" onClick={() => { setLastDoc(null); fetchQuestions(false, null); }}>
             <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
           </Button>
           <Button
@@ -549,15 +552,15 @@ export default function MockQuestionBankPage() {
             <div className="h-4 w-px bg-blue-200 dark:bg-blue-700 mx-2" />
 
             {!showDeleted ? (
-              <Button size="sm" variant="ghost" className="text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/30" onClick={handleSoftDelete}>
+              <Button size="sm" variant="ghost" className="text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/30" onClick={() => handleSoftDelete()}>
                 <Trash2 className="h-4 w-4 mr-1" /> Delete
               </Button>
             ) : (
               <>
-                <Button size="sm" variant="ghost" className="text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 hover:bg-green-50 dark:hover:bg-green-900/30" onClick={handleRestore}>
+                <Button size="sm" variant="ghost" className="text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 hover:bg-green-50 dark:hover:bg-green-900/30" onClick={() => handleRestore()}>
                   <RefreshCw className="h-4 w-4 mr-1" /> Restore
                 </Button>
-                <Button size="sm" variant="ghost" className="text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/30" onClick={handlePermanentDelete}>
+                <Button size="sm" variant="ghost" className="text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/30" onClick={() => handlePermanentDelete()}>
                   <AlertTriangle className="h-4 w-4 mr-1" /> Permanent Delete
                 </Button>
               </>
@@ -708,12 +711,20 @@ export default function MockQuestionBankPage() {
                           </DropdownMenuItem>
 
                           <DropdownMenuSeparator />
-                          <DropdownMenuItem onClick={() => {
-                            setSelectedQuestions([question.id]);
-                            handleSoftDelete();
-                          }} className="text-red-600 dark:text-red-400">
-                            <Trash2 className="mr-2 h-4 w-4" /> Delete
-                          </DropdownMenuItem>
+                          {showDeleted ? (
+                            <>
+                              <DropdownMenuItem onClick={() => handleRestore([question.id])} className="text-green-600 dark:text-green-400">
+                                <RefreshCw className="mr-2 h-4 w-4" /> Restore
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handlePermanentDelete([question.id])} className="text-red-600 dark:text-red-400">
+                                <AlertTriangle className="mr-2 h-4 w-4" /> Permanent Delete
+                              </DropdownMenuItem>
+                            </>
+                          ) : (
+                            <DropdownMenuItem onClick={() => handleSoftDelete([question.id])} className="text-red-600 dark:text-red-400">
+                              <Trash2 className="mr-2 h-4 w-4" /> Delete
+                            </DropdownMenuItem>
+                          )}
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </div>
@@ -741,7 +752,7 @@ export default function MockQuestionBankPage() {
         {/* Load More Footer */}
         {hasMore && !loading && questions.length > 0 && (
           <div className="p-4 border-t border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-900 flex justify-center">
-            <Button variant="outline" onClick={() => fetchQuestions(true)} className="w-full sm:w-auto bg-white dark:bg-gray-800 dark:border-gray-700">
+            <Button variant="outline" onClick={() => fetchQuestions(true, lastDoc)} className="w-full sm:w-auto bg-white dark:bg-gray-800 dark:border-gray-700">
               Load More Questions <ChevronDown className="ml-2 h-4 w-4" />
             </Button>
           </div>

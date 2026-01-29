@@ -23,7 +23,7 @@ export async function POST(req: Request) {
         }
 
         // Use selected model or default
-        const model = genAI.getGenerativeModel({ model: selectedModel || 'gemini-3-pro-preview' });
+        const model = genAI.getGenerativeModel({ model: selectedModel || 'gemini-3-flash-preview' });
 
         // Construct the prompt
         // Simplified prompt to avoid markdown code blocks if possible, though flash usually handles it well.

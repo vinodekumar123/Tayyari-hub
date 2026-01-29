@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { db, auth } from '@/app/firebase';
 import { collection, query, where, getDocs, doc, updateDoc, deleteDoc, serverTimestamp, orderBy, limit, startAfter, Timestamp, QueryDocumentSnapshot, DocumentData } from 'firebase/firestore';
 import { onAuthStateChanged, User } from 'firebase/auth';
@@ -10,12 +10,13 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Bookmark, Trash2, RotateCcw, X, Eye, EyeOff, Search, Clock, BookOpen, BarChart3, Grid, CheckCircle, Play, ArrowRight, ArrowLeft, Repeat } from 'lucide-react';
+import { Bookmark, Trash2, RotateCcw, X, Eye, EyeOff, Search, Clock, BookOpen, BarChart3, Grid, CheckCircle, Play, ArrowRight, ArrowLeft, Repeat, Shuffle, Trophy, Timer, Keyboard } from 'lucide-react';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend } from 'recharts';
 import { format } from 'date-fns';
 import { UnifiedHeader } from '@/components/unified-header';
+import { Progress } from '@/components/ui/progress';
 
 interface Flashcard {
     id: string;
@@ -28,6 +29,16 @@ interface Flashcard {
     savedAt?: Timestamp;
     isDeleted?: boolean;
     [key: string]: any;
+}
+
+// Fisher-Yates shuffle algorithm
+function shuffleArray<T>(array: T[]): T[] {
+    const shuffled = [...array];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    return shuffled;
 }
 
 export default function FlashcardsPage() {
@@ -51,6 +62,11 @@ export default function FlashcardsPage() {
     const [isStudyOpen, setIsStudyOpen] = useState(false);
     const [studyIndex, setStudyIndex] = useState(0);
     const [isFlipped, setIsFlipped] = useState(false);
+    const [isShuffled, setIsShuffled] = useState(false);
+    const [shuffledCards, setShuffledCards] = useState<Flashcard[]>([]);
+    const [showCompletionDialog, setShowCompletionDialog] = useState(false);
+    const [studyStartTime, setStudyStartTime] = useState<Date | null>(null);
+    const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
 
     useEffect(() => {
         const unsubscribe = onAuthStateChanged(auth, u => {
@@ -116,28 +132,144 @@ export default function FlashcardsPage() {
         loadInitial();
     }, [user]);
 
+    // Filter Logic
+    const filteredCards = useMemo(() => {
+        let list = activeTab === 'active' ? flashcards.filter(c => !c.isDeleted) : flashcards.filter(c => c.isDeleted);
+
+        if (subjectFilter !== 'all') {
+            list = list.filter(c => (c.subject || 'Unknown') === subjectFilter);
+        }
+
+        if (searchTerm) {
+            const lower = searchTerm.toLowerCase();
+            list = list.filter(c => c.questionText.toLowerCase().includes(lower) || c.topic?.toLowerCase().includes(lower));
+        }
+
+        return list;
+
+    }, [flashcards, activeTab, subjectFilter, searchTerm]);
+
+    // Get study cards (either shuffled or filtered)
+    const studyCards = useMemo(() => {
+        return isShuffled ? shuffledCards : filteredCards;
+    }, [isShuffled, shuffledCards, filteredCards]);
+
     const startStudySession = () => {
-        if (flashcards.length === 0) {
+        const activeCards = filteredCards.filter(c => !c.isDeleted);
+        if (activeCards.length === 0) {
             toast.error("No cards to study!");
             return;
         }
         setStudyIndex(0);
         setIsFlipped(false);
+        setIsShuffled(false);
+        setShuffledCards([]);
+        setSelectedAnswer(null);
+        setStudyStartTime(new Date());
         setIsStudyOpen(true);
     };
 
-    const nextCard = () => {
-        if (studyIndex < filteredCards.length - 1) {
-            setStudyIndex(prev => prev + 1);
-            setIsFlipped(false);
+    const handleShuffle = () => {
+        if (isShuffled) {
+            // Unshuffle - go back to original order
+            setIsShuffled(false);
+            setShuffledCards([]);
+        } else {
+            // Shuffle the cards
+            const shuffled = shuffleArray(filteredCards);
+            setShuffledCards(shuffled);
+            setIsShuffled(true);
         }
+        setStudyIndex(0);
+        setIsFlipped(false);
+        setSelectedAnswer(null);
+        toast.success(isShuffled ? "Cards restored to original order" : "Cards shuffled!");
     };
 
-    const prevCard = () => {
+    const nextCard = useCallback(() => {
+        if (studyIndex < studyCards.length - 1) {
+            setStudyIndex(prev => prev + 1);
+            setIsFlipped(false);
+            setSelectedAnswer(null);
+        } else {
+            // Reached the end - show completion dialog
+            setShowCompletionDialog(true);
+        }
+    }, [studyIndex, studyCards.length]);
+
+    const prevCard = useCallback(() => {
         if (studyIndex > 0) {
             setStudyIndex(prev => prev - 1);
             setIsFlipped(false);
+            setSelectedAnswer(null);
         }
+    }, [studyIndex]);
+
+    const flipCard = useCallback(() => {
+        setIsFlipped(prev => !prev);
+    }, []);
+
+    const closeStudyMode = useCallback(() => {
+        setIsStudyOpen(false);
+        setShowCompletionDialog(false);
+    }, []);
+
+    // Keyboard navigation for study mode
+    useEffect(() => {
+        if (!isStudyOpen) return;
+
+        const handleKeyDown = (e: KeyboardEvent) => {
+            // Don't trigger if user is typing in an input
+            if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+
+            switch (e.key) {
+                case 'ArrowRight':
+                    e.preventDefault();
+                    nextCard();
+                    break;
+                case 'ArrowLeft':
+                    e.preventDefault();
+                    prevCard();
+                    break;
+                case ' ':
+                    e.preventDefault();
+                    flipCard();
+                    break;
+                case 'Escape':
+                    e.preventDefault();
+                    closeStudyMode();
+                    break;
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [isStudyOpen, nextCard, prevCard, flipCard, closeStudyMode]);
+
+    const handleAnswerSelect = (option: string) => {
+        setSelectedAnswer(option);
+        // Auto-flip to show answer after selection
+        setTimeout(() => setIsFlipped(true), 300);
+    };
+
+    const restartStudySession = () => {
+        setStudyIndex(0);
+        setIsFlipped(false);
+        setSelectedAnswer(null);
+        setShowCompletionDialog(false);
+        setStudyStartTime(new Date());
+        if (isShuffled) {
+            setShuffledCards(shuffleArray(filteredCards));
+        }
+    };
+
+    // Calculate study session duration
+    const getStudyDuration = () => {
+        if (!studyStartTime) return '0:00';
+        const diff = Math.floor((new Date().getTime() - studyStartTime.getTime()) / 1000);
+        const mins = Math.floor(diff / 60);
+        const secs = diff % 60;
+        return `${mins}:${secs.toString().padStart(2, '0')}`;
     };
 
     // Handle soft delete
@@ -193,23 +325,16 @@ export default function FlashcardsPage() {
         setRevealedCards(newSet);
     };
 
-    // Filter Logic
-    const filteredCards = useMemo(() => {
-        let list = activeTab === 'active' ? flashcards.filter(c => !c.isDeleted) : flashcards.filter(c => c.isDeleted);
+    const revealAllCards = () => {
+        const allIds = new Set(filteredCards.map(c => c.id));
+        setRevealedCards(allIds);
+        toast.success("All answers revealed!");
+    };
 
-        if (subjectFilter !== 'all') {
-            list = list.filter(c => (c.subject || 'Unknown') === subjectFilter);
-        }
-
-        if (searchTerm) {
-            const lower = searchTerm.toLowerCase();
-            list = list.filter(c => c.questionText.toLowerCase().includes(lower) || c.topic?.toLowerCase().includes(lower));
-        }
-
-        // Time filter logic could be added here if needed
-        return list;
-
-    }, [flashcards, activeTab, subjectFilter, searchTerm]);
+    const hideAllCards = () => {
+        setRevealedCards(new Set());
+        toast.success("All answers hidden!");
+    };
 
     const analytics = useMemo(() => {
         const activeCards = flashcards.filter(c => !c.isDeleted);
@@ -233,6 +358,9 @@ export default function FlashcardsPage() {
         return Array.from(subjects).sort();
     }, [flashcards]);
 
+    // Progress percentage for study mode
+    const studyProgress = studyCards.length > 0 ? ((studyIndex + 1) / studyCards.length) * 100 : 0;
+
 
     if (loading) return <div className="flex justify-center items-center h-screen bg-gray-50 dark:bg-slate-950"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 dark:border-indigo-400"></div></div>;
 
@@ -244,14 +372,14 @@ export default function FlashcardsPage() {
                 subtitle="Review your saved questions and concepts."
                 icon={<BookOpen className="w-6 h-6" />}
             >
-                <div className="flex items-center gap-4">
-                    <Button onClick={startStudySession} className="hidden md:flex bg-indigo-600 hover:bg-indigo-700 text-white gap-2 shadow-lg shadow-indigo-200 dark:shadow-indigo-900/20">
-                        <Play className="w-4 h-4 fill-current" /> Study Mode
+                <div className="flex items-center gap-2 md:gap-4">
+                    <Button onClick={startStudySession} className="bg-indigo-600 hover:bg-indigo-700 text-white gap-2 shadow-lg shadow-indigo-200 dark:shadow-indigo-900/20">
+                        <Play className="w-4 h-4 fill-current" /> <span className="hidden sm:inline">Study Mode</span>
                     </Button>
-                    <Card className="bg-indigo-50 border-indigo-100 dark:bg-indigo-900/20 dark:border-indigo-900/50 px-4 py-2 h-10 flex items-center justify-center min-w-[120px]">
+                    <Card className="bg-indigo-50 border-indigo-100 dark:bg-indigo-900/20 dark:border-indigo-900/50 px-4 py-2 h-10 flex items-center justify-center min-w-[80px] md:min-w-[120px]">
                         <div className="flex items-center gap-2">
                             <div className="text-indigo-600 dark:text-indigo-400 font-bold text-lg">{analytics.total}</div>
-                            <div className="text-[10px] text-indigo-400 dark:text-indigo-500 font-medium uppercase tracking-wider">Saved Cards</div>
+                            <div className="text-[10px] text-indigo-400 dark:text-indigo-500 font-medium uppercase tracking-wider hidden sm:block">Saved Cards</div>
                         </div>
                     </Card>
                 </div>
@@ -317,7 +445,7 @@ export default function FlashcardsPage() {
                         </TabsList>
 
                         <div className="flex flex-1 md:flex-none w-full md:w-auto gap-2">
-                            <div className="relative">
+                            <div className="relative flex-1 md:flex-none">
                                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500" />
                                 <Input
                                     placeholder="Search questions..."
@@ -340,6 +468,23 @@ export default function FlashcardsPage() {
                     </div>
 
                     <TabsContent value="active" className="space-y-6">
+                        {/* Bulk Actions */}
+                        {filteredCards.length > 0 && (
+                            <div className="flex items-center justify-between bg-gray-50 dark:bg-slate-900/50 rounded-lg px-4 py-2 border border-gray-100 dark:border-slate-800">
+                                <span className="text-sm text-gray-500 dark:text-gray-400">
+                                    {filteredCards.length} card{filteredCards.length !== 1 ? 's' : ''}
+                                </span>
+                                <div className="flex gap-2">
+                                    <Button variant="ghost" size="sm" onClick={revealAllCards} className="text-xs">
+                                        <Eye className="w-3 h-3 mr-1" /> Reveal All
+                                    </Button>
+                                    <Button variant="ghost" size="sm" onClick={hideAllCards} className="text-xs">
+                                        <EyeOff className="w-3 h-3 mr-1" /> Hide All
+                                    </Button>
+                                </div>
+                            </div>
+                        )}
+
                         {filteredCards.length > 0 ? (
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                                 {filteredCards.map(card => {
@@ -422,8 +567,8 @@ export default function FlashcardsPage() {
                         )}
                     </TabsContent>
 
-                    {/* Load More Button */}
-                    {hasMore && activeTab === 'active' && !subjectFilter && !searchTerm && (
+                    {/* Load More Button - Fixed logic */}
+                    {hasMore && activeTab === 'active' && (
                         <div className="mt-8 flex justify-center">
                             <Button
                                 variant="outline"
@@ -488,56 +633,147 @@ export default function FlashcardsPage() {
 
                 {/* Study Mode Dialog */}
                 <Dialog open={isStudyOpen} onOpenChange={setIsStudyOpen}>
-                    <DialogContent className="max-w-4xl h-[80vh] flex flex-col p-0 gap-0 bg-gray-50 dark:bg-slate-950 border-none overflow-hidden">
+                    <DialogContent className="max-w-4xl h-[90vh] md:h-[85vh] flex flex-col p-0 gap-0 bg-gray-50 dark:bg-slate-950 border-none overflow-hidden">
                         <DialogTitle className="sr-only">Study Flashcards</DialogTitle>
-                        <div className="p-4 border-b border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex justify-between items-center">
-                            <div className="flex items-center gap-2">
-                                <Badge variant="outline" className="bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400">
-                                    Card {studyIndex + 1} of {filteredCards.length}
-                                </Badge>
-                                {filteredCards[studyIndex]?.subject && (
-                                    <Badge variant="secondary" className="hidden sm:inline-flex">
-                                        {filteredCards[studyIndex].subject}
+
+                        {/* Header */}
+                        <div className="p-4 border-b border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+                            <div className="flex justify-between items-center mb-3">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                    <Badge variant="outline" className="bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400">
+                                        Card {studyIndex + 1} of {studyCards.length}
                                     </Badge>
-                                )}
+                                    {studyCards[studyIndex]?.subject && (
+                                        <Badge variant="secondary" className="hidden sm:inline-flex">
+                                            {studyCards[studyIndex].subject}
+                                        </Badge>
+                                    )}
+                                    {isShuffled && (
+                                        <Badge variant="secondary" className="bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400">
+                                            <Shuffle className="w-3 h-3 mr-1" /> Shuffled
+                                        </Badge>
+                                    )}
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <Button variant="ghost" size="icon" onClick={handleShuffle} title={isShuffled ? "Restore Order" : "Shuffle Cards"}>
+                                        <Shuffle className={`w-5 h-5 ${isShuffled ? 'text-amber-500' : ''}`} />
+                                    </Button>
+                                    <Button variant="ghost" size="icon" onClick={closeStudyMode}>
+                                        <X className="w-5 h-5" />
+                                    </Button>
+                                </div>
                             </div>
-                            <Button variant="ghost" size="icon" onClick={() => setIsStudyOpen(false)}>
-                                <X className="w-5 h-5" />
-                            </Button>
+
+                            {/* Progress Bar */}
+                            <div className="space-y-1">
+                                <Progress value={studyProgress} className="h-2" />
+                                <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400">
+                                    <span>{Math.round(studyProgress)}% complete</span>
+                                    <span className="flex items-center gap-1">
+                                        <Timer className="w-3 h-3" /> {getStudyDuration()}
+                                    </span>
+                                </div>
+                            </div>
                         </div>
 
+                        {/* Card Area */}
                         <div className="flex-1 overflow-y-auto p-4 md:p-8 flex items-center justify-center relative">
-                            {filteredCards.length > 0 && filteredCards[studyIndex] ? (
+                            {studyCards.length > 0 && studyCards[studyIndex] ? (
                                 <div
-                                    className="w-full max-w-2xl aspect-video md:aspect-[4/3] perspective-1000 cursor-pointer group"
-                                    onClick={() => setIsFlipped(!isFlipped)}
+                                    className="w-full max-w-2xl cursor-pointer group"
+                                    onClick={flipCard}
+                                    style={{ perspective: '1000px' }}
                                 >
-                                    <div className={`relative w-full h-full transition-all duration-500 transform-style-3d ${isFlipped ? 'rotate-y-180' : ''}`}>
-                                        {/* Front */}
-                                        <div className="absolute w-full h-full backface-hidden bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-gray-200 dark:border-slate-800 p-8 flex flex-col items-center justify-center text-center">
-                                            <h3 className="text-xl md:text-2xl font-medium text-gray-800 dark:text-gray-100 mb-6 font-serif">
+                                    <div
+                                        className="relative w-full min-h-[400px] md:min-h-[450px] transition-transform duration-500"
+                                        style={{
+                                            transformStyle: 'preserve-3d',
+                                            transform: isFlipped ? 'rotateY(180deg)' : 'rotateY(0deg)'
+                                        }}
+                                    >
+                                        {/* Front - Question */}
+                                        <div
+                                            className="absolute w-full h-full bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-gray-200 dark:border-slate-800 p-6 md:p-8 flex flex-col"
+                                            style={{ backfaceVisibility: 'hidden' }}
+                                        >
+                                            <h3 className="text-lg md:text-xl font-medium text-gray-800 dark:text-gray-100 mb-4 font-serif text-center">
                                                 Question
                                             </h3>
                                             <div
-                                                className="prose dark:prose-invert max-w-none text-lg md:text-xl"
-                                                dangerouslySetInnerHTML={{ __html: filteredCards[studyIndex].questionText }}
+                                                className="prose dark:prose-invert max-w-none text-base md:text-lg mb-6"
+                                                dangerouslySetInnerHTML={{ __html: studyCards[studyIndex].questionText }}
                                             />
-                                            <div className="mt-8 text-sm text-gray-400 dark:text-gray-500 flex items-center gap-2 animate-pulse">
-                                                <Repeat className="w-4 h-4" /> Click to flip
+
+                                            {/* MCQ Options */}
+                                            {studyCards[studyIndex].options && studyCards[studyIndex].options.length > 0 && (
+                                                <div className="space-y-2 flex-1">
+                                                    {studyCards[studyIndex].options.map((opt, i) => (
+                                                        <button
+                                                            key={i}
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                handleAnswerSelect(opt);
+                                                            }}
+                                                            className={`w-full p-3 rounded-lg border text-sm text-left flex items-start gap-3 transition-all ${selectedAnswer === opt
+                                                                    ? 'bg-indigo-50 dark:bg-indigo-900/20 border-indigo-300 dark:border-indigo-700 ring-2 ring-indigo-200 dark:ring-indigo-800'
+                                                                    : 'bg-gray-50 dark:bg-slate-800 border-gray-200 dark:border-slate-700 hover:bg-gray-100 dark:hover:bg-slate-750'
+                                                                }`}
+                                                        >
+                                                            <div className={`flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium border ${selectedAnswer === opt
+                                                                    ? 'bg-indigo-100 dark:bg-indigo-900/40 border-indigo-400 dark:border-indigo-600 text-indigo-700 dark:text-indigo-300'
+                                                                    : 'bg-white dark:bg-slate-700 border-gray-300 dark:border-slate-600 text-gray-500 dark:text-gray-400'
+                                                                }`}>
+                                                                {String.fromCharCode(65 + i)}
+                                                            </div>
+                                                            <span className="flex-1 text-gray-700 dark:text-gray-300">{opt}</span>
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            )}
+
+                                            <div className="mt-4 text-sm text-gray-400 dark:text-gray-500 flex items-center justify-center gap-2 animate-pulse">
+                                                <Repeat className="w-4 h-4" /> Click card or press Space to flip
                                             </div>
                                         </div>
 
-                                        {/* Back */}
-                                        <div className="absolute w-full h-full backface-hidden rotate-y-180 bg-indigo-50 dark:bg-slate-900 rounded-2xl shadow-xl border-2 border-indigo-100 dark:border-indigo-900/30 p-8 flex flex-col items-center justify-center text-center overflow-y-auto">
-                                            <h3 className="text-xl md:text-2xl font-medium text-indigo-600 dark:text-indigo-400 mb-6 font-serif">
+                                        {/* Back - Answer */}
+                                        <div
+                                            className="absolute w-full h-full bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-slate-900 dark:to-indigo-950/30 rounded-2xl shadow-xl border-2 border-indigo-100 dark:border-indigo-900/30 p-6 md:p-8 flex flex-col overflow-y-auto"
+                                            style={{
+                                                backfaceVisibility: 'hidden',
+                                                transform: 'rotateY(180deg)'
+                                            }}
+                                        >
+                                            <h3 className="text-lg md:text-xl font-medium text-indigo-600 dark:text-indigo-400 mb-4 font-serif text-center">
                                                 Answer
                                             </h3>
-                                            <div className="text-xl md:text-2xl font-bold text-gray-900 dark:text-gray-100 mb-4">
-                                                {filteredCards[studyIndex].correctAnswer}
+
+                                            {/* Show if user selected answer */}
+                                            {selectedAnswer && (
+                                                <div className={`mb-4 p-3 rounded-lg text-center ${selectedAnswer === studyCards[studyIndex].correctAnswer
+                                                        ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
+                                                        : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400'
+                                                    }`}>
+                                                    {selectedAnswer === studyCards[studyIndex].correctAnswer ? (
+                                                        <span className="flex items-center justify-center gap-2">
+                                                            <CheckCircle className="w-5 h-5" /> Correct!
+                                                        </span>
+                                                    ) : (
+                                                        <span className="flex items-center justify-center gap-2">
+                                                            <X className="w-5 h-5" /> Incorrect - You selected: {selectedAnswer}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            )}
+
+                                            <div className="text-xl md:text-2xl font-bold text-gray-900 dark:text-gray-100 mb-4 text-center bg-white/50 dark:bg-slate-800/50 p-4 rounded-lg">
+                                                <span className="text-green-600 dark:text-green-400">✓</span> {studyCards[studyIndex].correctAnswer}
                                             </div>
-                                            {filteredCards[studyIndex].explanation && (
-                                                <div className="mt-4 p-4 bg-white/50 dark:bg-slate-800/50 rounded-lg text-sm md:text-base text-gray-600 dark:text-gray-300 max-h-[200px] overflow-y-auto">
-                                                    <div dangerouslySetInnerHTML={{ __html: filteredCards[studyIndex].explanation }} />
+
+                                            {studyCards[studyIndex].explanation && (
+                                                <div className="flex-1 p-4 bg-white/50 dark:bg-slate-800/50 rounded-lg text-sm md:text-base text-gray-600 dark:text-gray-300">
+                                                    <span className="font-semibold text-indigo-600 dark:text-indigo-400 text-xs uppercase tracking-wide block mb-2">Explanation:</span>
+                                                    <div dangerouslySetInnerHTML={{ __html: studyCards[studyIndex].explanation }} />
                                                 </div>
                                             )}
                                         </div>
@@ -550,26 +786,74 @@ export default function FlashcardsPage() {
                             )}
                         </div>
 
-                        <div className="p-4 border-t border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex justify-between items-center gap-4">
-                            <Button
-                                variant="outline"
-                                onClick={prevCard}
-                                disabled={studyIndex === 0}
-                                className="w-32"
-                            >
-                                <ArrowLeft className="w-4 h-4 mr-2" /> Previous
-                            </Button>
-                            <div className="text-sm text-gray-400 hidden sm:block">
-                                Use arrow keys to navigate
+                        {/* Footer Navigation */}
+                        <div className="p-4 border-t border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+                            <div className="flex justify-between items-center gap-4">
+                                <Button
+                                    variant="outline"
+                                    onClick={prevCard}
+                                    disabled={studyIndex === 0}
+                                    className="w-28 md:w-32"
+                                >
+                                    <ArrowLeft className="w-4 h-4 mr-2" /> <span className="hidden sm:inline">Previous</span><span className="sm:hidden">Prev</span>
+                                </Button>
+                                <div className="text-xs text-gray-400 hidden md:flex items-center gap-2">
+                                    <Keyboard className="w-4 h-4" />
+                                    <span>← → to navigate • Space to flip • Esc to close</span>
+                                </div>
+                                <Button
+                                    onClick={nextCard}
+                                    className="w-28 md:w-32 bg-indigo-600 text-white hover:bg-indigo-700"
+                                >
+                                    {studyIndex === studyCards.length - 1 ? (
+                                        <>Finish <Trophy className="w-4 h-4 ml-2" /></>
+                                    ) : (
+                                        <>Next <ArrowRight className="w-4 h-4 ml-2" /></>
+                                    )}
+                                </Button>
                             </div>
-                            <Button
-                                onClick={nextCard}
-                                disabled={studyIndex === filteredCards.length - 1}
-                                className="w-32 bg-indigo-600 text-white hover:bg-indigo-700"
-                            >
-                                Next <ArrowRight className="w-4 h-4 ml-2" />
-                            </Button>
                         </div>
+                    </DialogContent>
+                </Dialog>
+
+                {/* Completion Dialog */}
+                <Dialog open={showCompletionDialog} onOpenChange={setShowCompletionDialog}>
+                    <DialogContent className="max-w-md">
+                        <DialogHeader>
+                            <div className="flex justify-center mb-4">
+                                <div className="w-20 h-20 rounded-full bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shadow-lg">
+                                    <Trophy className="w-10 h-10 text-white" />
+                                </div>
+                            </div>
+                            <DialogTitle className="text-center text-2xl">Session Complete! 🎉</DialogTitle>
+                            <DialogDescription className="text-center">
+                                Great job! You've reviewed all the flashcards in this session.
+                            </DialogDescription>
+                        </DialogHeader>
+
+                        <div className="grid grid-cols-2 gap-4 py-4">
+                            <Card className="bg-indigo-50 dark:bg-indigo-900/20 border-indigo-100 dark:border-indigo-900/50">
+                                <CardContent className="pt-4 text-center">
+                                    <div className="text-3xl font-bold text-indigo-600 dark:text-indigo-400">{studyCards.length}</div>
+                                    <div className="text-xs text-indigo-500 dark:text-indigo-500 uppercase tracking-wide">Cards Reviewed</div>
+                                </CardContent>
+                            </Card>
+                            <Card className="bg-green-50 dark:bg-green-900/20 border-green-100 dark:border-green-900/50">
+                                <CardContent className="pt-4 text-center">
+                                    <div className="text-3xl font-bold text-green-600 dark:text-green-400">{getStudyDuration()}</div>
+                                    <div className="text-xs text-green-500 dark:text-green-500 uppercase tracking-wide">Time Spent</div>
+                                </CardContent>
+                            </Card>
+                        </div>
+
+                        <DialogFooter className="flex-col sm:flex-row gap-2">
+                            <Button variant="outline" onClick={closeStudyMode} className="flex-1">
+                                Exit Study Mode
+                            </Button>
+                            <Button onClick={restartStudySession} className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white">
+                                <Repeat className="w-4 h-4 mr-2" /> Study Again
+                            </Button>
+                        </DialogFooter>
                     </DialogContent>
                 </Dialog>
             </div>

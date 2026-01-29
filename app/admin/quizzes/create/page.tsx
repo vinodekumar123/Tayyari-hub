@@ -713,7 +713,7 @@ function CreateQuizContent() {
       // Perform usage tracking update
       await updateQuestionUsage(currentIds, previousIds);
 
-      router.push("/dashboard/admin");
+      router.push("/admin/quizzes/quizebank");
     } catch (error) {
       console.error("Error saving quiz:", error);
       alert("Failed to save quiz.");

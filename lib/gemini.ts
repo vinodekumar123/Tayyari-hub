@@ -9,7 +9,7 @@ if (!GEMINI_API_KEY) {
 const genAI = new GoogleGenerativeAI(GEMINI_API_KEY || "");
 
 // Models
-export const geminiFlashModel = genAI.getGenerativeModel({ model: "gemini-3-pro-preview" });
+export const geminiFlashModel = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
 export const geminiEmbeddingModel = genAI.getGenerativeModel({ model: "text-embedding-004" });
 
 export async function generateEmbedding(text: string) {

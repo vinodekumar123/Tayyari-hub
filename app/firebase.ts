@@ -19,19 +19,32 @@ const firebaseConfig = {
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 
 // 🔑 Firebase services
-const auth = getAuth(app);
+let auth: any;
+let db: any;
+let storage: any;
+
+if (!process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
+  console.warn("⚠️ NEXT_PUBLIC_FIREBASE_API_KEY is missing. Firebase services will be mocked to prevent build crash.");
+  const mockService = {
+    currentUser: null,
+    onAuthStateChanged: () => () => { },
+    signInWithPopup: () => Promise.reject("Missing Firebase Key"),
+    signOut: () => Promise.resolve(),
+    // Add other methods as needed to satisfy direct access during build
+  } as any;
+  auth = mockService;
+  db = {} as any; // Mock DB to prevent immediate crash, though queries will fail if run
+  storage = {} as any;
+} else {
+  auth = getAuth(app);
+  db = getFirestore(app);
+  // Enable ignoreUndefinedProperties to prevent crashes when saving objects with undefined fields
+  // @ts-ignore
+  if (db._settings) { db._settings.ignoreUndefinedProperties = true; }
+  storage = getStorage(app);
+}
+
 const provider = new GoogleAuthProvider();
-const db = getFirestore(app);
-// Enable ignoreUndefinedProperties to prevent crashes when saving objects with undefined fields
-// @ts-ignore
-if (db._settings) { db._settings.ignoreUndefinedProperties = true; }
-// A safer way if the above internal access isn't desired:
-// initializeFirestore(app, { ignoreUndefinedProperties: true });
-// But since getFirestore is already used, we can re-initialize or configure it.
-// Ideally replace `getFirestore(app)` with:
-// import { initializeFirestore } from "firebase/firestore";
-// const db = initializeFirestore(app, { ignoreUndefinedProperties: true });
-const storage = getStorage(app);
 
 // Initialize Messaging only on client side
 // Initialize Messaging only on client side
