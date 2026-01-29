@@ -339,7 +339,7 @@ export default function AdminQuizBankPage() {
       await batch.commit();
 
       setQuizzes(prev => prev.map(q =>
-        selectedQuizzes.has(q.id) ? { ...q, accessType: 'free', isPublished: true } : q
+        selectedQuizzes.has(q.id) ? { ...q, accessType: 'public', isPublished: true } : q
       ));
       cache.invalidatePattern('quizzes');
       toast.success(`${selectedQuizzes.size} quizzes published`);
