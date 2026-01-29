@@ -247,7 +247,7 @@ export default function SyncPage() {
             const sourceSnap = await getDocs(q);
             let sources: Question[] = sourceSnap.docs.map(d => ({
                 id: d.id,
-                ...d.data()
+                ...(d.data() as any)
             })) as Question[];
 
             // Client-side filtering for complex conditions
