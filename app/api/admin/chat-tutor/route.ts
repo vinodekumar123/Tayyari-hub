@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { geminiFlashModel, generateEmbedding } from '@/lib/gemini';
-import { adminDb } from '@/lib/firebaseAdmin';
+import { adminDb } from '@/lib/firebase-admin';
 
 export const runtime = 'nodejs'; // Required for Firebase Admin
 

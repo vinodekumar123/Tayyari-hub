@@ -1,7 +1,7 @@
 'use server';
 
 import { geminiFlashModel, geminiEmbeddingModel } from '@/lib/gemini';
-import { adminDb } from '@/lib/firebaseAdmin';
+import { adminDb } from '@/lib/firebase-admin';
 import { FieldValue } from 'firebase-admin/firestore';
 import { SchemaType } from '@google/generative-ai';
 

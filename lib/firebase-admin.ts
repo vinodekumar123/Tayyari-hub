@@ -49,12 +49,25 @@ if (!admin.apps.length) {
                     });
 
                     isInitialized = true;
-                    console.log('✅ Firebase Admin SDK initialized successfully from environment variable');
+                    console.log('✅ Firebase Admin SDK initialized successfully from environment variable (JSON)');
                 } catch (parseError: any) {
                     throw new Error(`Failed to parse FIREBASE_SERVICE_ACCOUNT_KEY: ${parseError.message}`);
                 }
+            } else if (process.env.FIREBASE_CLIENT_EMAIL && process.env.FIREBASE_PRIVATE_KEY) {
+                // Fallback to individual variables
+                console.log('✅ Found individual FIREBASE env vars');
+                admin.initializeApp({
+                    credential: admin.credential.cert({
+                        projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+                        clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+                        privateKey: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n'),
+                    }),
+                    projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+                });
+                isInitialized = true;
+                console.log('✅ Firebase Admin SDK initialized successfully from individual env vars');
             } else {
-                throw new Error('Neither serviceAccountKey.json nor FIREBASE_SERVICE_ACCOUNT_KEY environment variable found');
+                throw new Error('No valid Firebase Admin configuration found (checked serviceAccountKey.json, FIREBASE_SERVICE_ACCOUNT_KEY, and individual vars)');
             }
         }
     } catch (error: any) {
