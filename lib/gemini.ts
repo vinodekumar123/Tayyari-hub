@@ -1,9 +1,9 @@
-export const GEMINI_API_KEY = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
+export const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
 if (!GEMINI_API_KEY) {
-    console.warn("Missing NEXT_PUBLIC_GEMINI_API_KEY environment variable.");
+    console.warn("Missing GEMINI_API_KEY environment variable.");
 }
 
 const genAI = new GoogleGenerativeAI(GEMINI_API_KEY || "");
