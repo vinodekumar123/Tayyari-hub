@@ -6,7 +6,7 @@ import Link from 'next/link';
 import {
   BookOpen, Users, Trophy, BarChart3, Settings, Plus,
   Database, Home, ChevronDown, ChevronRight, LogOut,
-  ClipboardList, UserCircle, Menu, X, FileBarChart, Flag, Calendar, BrainCircuit, HelpCircle
+  ClipboardList, UserCircle, Menu, X, FileBarChart, Flag, Calendar, BrainCircuit, HelpCircle, ArrowLeftRight
 } from 'lucide-react';
 import logo from "../../app/assets/logo.png";
 import Image from "next/image";
@@ -140,6 +140,7 @@ export function Sidebar() {
         { icon: Plus, label: 'Add Question', href: '/admin/questions/create' },
         { icon: Database, label: 'Mock Questions', href: '/admin/mockquestions/questionbank' },
         { icon: Plus, label: 'Add Mock Question', href: '/admin/mockquestions/create' },
+        { icon: ArrowLeftRight, label: 'Sync Questions', href: '/admin/sync' },
         { icon: Trophy, label: 'Quizzes', href: '/admin/quizzes/quizebank' },
         { icon: Plus, label: 'Create Quiz', href: '/admin/quizzes/create' },
         { icon: BrainCircuit, label: 'AI Auto-Tagger', href: '/admin/questions/auto-tagger' },
@@ -498,7 +499,7 @@ export function Sidebar() {
 
       {/* Sign Out Dialog */}
       {showSignOutDialog && (
-        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center">
+        <div className="fixed inset-0 z-[200] bg-black/40 flex items-center justify-center">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-6">
             <h2 className="text-lg font-semibold text-gray-900 mb-2">Are you sure?</h2>
             <p className="text-sm text-gray-600 mb-4">Do you really want to sign out?</p>

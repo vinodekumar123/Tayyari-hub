@@ -64,7 +64,7 @@ export default function AutoTaggerPage() {
     const [allSubjects, setAllSubjects] = useState<Subject[]>([]);
     const [selectedCourse, setSelectedCourse] = useState('');
     const [selectedSubject, setSelectedSubject] = useState('');
-    const [selectedModel, setSelectedModel] = useState('gemini-2.0-flash-exp');
+    const [selectedModel, setSelectedModel] = useState('gemini-3-flash-preview');
     const [processingMode, setProcessingMode] = useState<'pending' | 'all'>('pending');
     const [syllabusContext, setSyllabusContext] = useState('FSC Sindh Board New Syllabus');
     const [validChapters, setValidChapters] = useState<string[]>([]);
@@ -256,12 +256,13 @@ export default function AutoTaggerPage() {
             if (batchDocs.length === 0) break;
 
             try {
-                // Prepare payload
+                // Prepare payload - send full questionText so API can extract images
                 const questionsPayload = batchDocs.map(d => {
                     const data = d.data();
                     return {
                         id: d.id,
-                        text: data.questionText?.replace(/<[^>]*>/g, '') || '', // Strip HTML for AI cost saving
+                        questionText: data.questionText || '', // Full HTML for image extraction
+                        text: data.questionText?.replace(/<[^>]*>/g, '') || '', // Clean text for display
                         options: data.options
                     };
                 });
@@ -474,9 +475,9 @@ export default function AutoTaggerPage() {
                                 <Select value={selectedModel} onValueChange={setSelectedModel} disabled={status === 'running'}>
                                     <SelectTrigger><SelectValue placeholder="Select Model" /></SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="gemini-1.5-flash">Gemini 1.5 Flash (Fast)</SelectItem>
+                                        <SelectItem value="gemini-3-flash-preview">Gemini 3 Flash Preview (Vision)</SelectItem>
+                                        <SelectItem value="gemini-2.0-flash-exp">Gemini 2.0 Flash (Fast)</SelectItem>
                                         <SelectItem value="gemini-1.5-pro">Gemini 1.5 Pro (Smart)</SelectItem>
-                                        <SelectItem value="gemini-2.0-flash-exp">Gemini 2.0 Flash (Preview)</SelectItem>
                                     </SelectContent>
                                 </Select>
                             </div>

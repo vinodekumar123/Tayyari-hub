@@ -681,7 +681,7 @@ function SeriesModal({ isOpen, onClose, onSuccess, courseId, seriesToEdit }: { i
     : formData.price;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 overflow-y-auto">
+    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 overflow-y-auto">
       <motion.div
         initial={{ scale: 0.9, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
@@ -875,7 +875,7 @@ function CreateCourseModal({ isOpen, onClose, onSuccess, subjects }: { isOpen: b
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
       <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-lg shadow-2xl p-6">
         <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-100 mb-6">Create New Course</h2>
         <div className="space-y-4">
@@ -1060,7 +1060,7 @@ function ManageSubjectsModal({ isOpen, onClose, subjects, onUpdate }: { isOpen: 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
       <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-lg shadow-2xl p-6 flex flex-col max-h-[85vh]">
         <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100 mb-4">Manage Subjects & Chapters</h2>
 
