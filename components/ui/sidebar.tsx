@@ -6,7 +6,7 @@ import Link from 'next/link';
 import {
   BookOpen, Users, Trophy, BarChart3, Settings, Plus,
   Database, Home, ChevronDown, ChevronRight, LogOut,
-  ClipboardList, UserCircle, Menu, X, FileBarChart, Flag, Calendar, BrainCircuit
+  ClipboardList, UserCircle, Menu, X, FileBarChart, Flag, Calendar, BrainCircuit, HelpCircle
 } from 'lucide-react';
 import logo from "../../app/assets/logo.png";
 import Image from "next/image";
@@ -144,6 +144,7 @@ export function Sidebar() {
         { icon: Plus, label: 'Create Quiz', href: '/admin/quizzes/create' },
         { icon: BrainCircuit, label: 'AI Auto-Tagger', href: '/admin/questions/auto-tagger' },
         { icon: BookOpen, label: 'Knowledge Base', href: '/admin/knowledge-base' },
+        { icon: Database, label: 'Manage KB', href: '/admin/knowledge-base/manage' },
         { icon: BrainCircuit, label: 'AI Tutor Test', href: '/admin/ai-tutor-test' },
         { icon: Flag, label: 'Reported Questions', href: '/admin/reports' },
       ],
@@ -172,6 +173,7 @@ export function Sidebar() {
       items: [
         { icon: Home, label: 'Dashboard', href: '/dashboard/student' },
         { icon: Calendar, label: 'Quiz Schedule', href: '/dashboard/student/schedule' },
+        { icon: HelpCircle, label: 'How to Register', href: '/dashboard/student/how-to-register' },
       ],
     },
     {

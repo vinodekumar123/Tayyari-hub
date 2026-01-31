@@ -92,7 +92,7 @@ const ResultPageContent: React.FC = () => {
         onAuthStateChanged(auth, u => setUser(u));
     }, []);
 
-    // Check Enrollment Status (Admin always allowed)
+    // Check Enrollment Status - Any enrolled student (free or paid) is considered premium
     useEffect(() => {
         if (!user) return;
         const checkEnrollments = async () => {
@@ -107,19 +107,17 @@ const ResultPageContent: React.FC = () => {
                     return;
                 }
 
-                // Check for Paid Enrollments
+                // Check for enrollments with any valid status (active, paid, enrolled)
                 const q = query(
                     collection(db, 'enrollments'),
                     where('studentId', '==', user.uid),
-                    where('status', '==', 'active')
+                    where('status', 'in', ['active', 'paid', 'enrolled'])
                 );
                 const snapshot = await getDocs(q);
-                const isPaidUser = snapshot.docs.some(doc => {
-                    const data = doc.data();
-                    return data.price > 0;
-                });
+                // Any enrollment counts - student is premium if enrolled in ANY series
+                const isEnrolledUser = snapshot.docs.length > 0;
 
-                setHasPaidEnrollment(isPaidUser);
+                setHasPaidEnrollment(isEnrolledUser);
             } catch (error) {
                 console.error("Error checking enrollments:", error);
             } finally {
@@ -364,10 +362,10 @@ const ResultPageContent: React.FC = () => {
             <Card key={q.id} className="mb-6 shadow-lg border border-border/50 bg-card/50 backdrop-blur-sm hover:shadow-xl transition-all duration-300">
                 <CardHeader className="dir-ltr rounded-t-lg bg-muted/30 border-b border-border/50 pb-4">
                     <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
-                        <CardTitle className="text-lg font-semibold text-foreground flex gap-2 items-start leading-relaxed w-full">
-                            <span className="text-primary font-bold min-w-[2.5rem]">Q{idx + 1}.</span>
-                            <div className="flex-1">
-                                <span dangerouslySetInnerHTML={{ __html: q.questionText }} />
+                        <CardTitle className="text-lg font-semibold text-foreground flex gap-2 items-start leading-relaxed w-full min-w-0">
+                            <span className="text-primary font-bold min-w-[2.5rem] shrink-0">Q{idx + 1}.</span>
+                            <div className="flex-1 min-w-0 overflow-hidden">
+                                <div className="break-words" dangerouslySetInnerHTML={{ __html: q.questionText }} />
                                 {q.graceMark && <span className="ml-2 text-xs bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded border border-yellow-200 font-normal inline-block">Grace Mark Awarded</span>}
                             </div>
                         </CardTitle>
@@ -457,9 +455,9 @@ const ResultPageContent: React.FC = () => {
                     {q.explanation && (
                         <div className="mt-4 bg-blue-50/50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-800 p-4 rounded-xl flex items-start gap-3 text-sm text-blue-800 dark:text-blue-300">
                             <Info className="h-5 w-5 mt-0.5 shrink-0 text-blue-600 dark:text-blue-400" />
-                            <div className="leading-relaxed">
+                            <div className="leading-relaxed min-w-0 flex-1">
                                 <span className="font-semibold block mb-1">Explanation:</span>
-                                {q.explanation}
+                                <div className="break-words" dangerouslySetInnerHTML={{ __html: q.explanation }} />
                             </div>
                         </div>
                     )}
@@ -497,22 +495,22 @@ const ResultPageContent: React.FC = () => {
                 </div>
 
                 {/* Stats Grid */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 md:gap-4 overflow-hidden">
                     {[
-                        { label: 'Score', value: `${score} / ${totalQuestions}`, color: 'text-primary', bg: 'bg-primary/10', icon: Target },
+                        { label: 'Score', value: `${score}/${totalQuestions}`, color: 'text-primary', bg: 'bg-primary/10', icon: Target },
                         { label: 'Percentage', value: `${percentage.toFixed(1)}%`, color: 'text-purple-600 dark:text-purple-400', bg: 'bg-purple-100/50 dark:bg-purple-900/20', icon: BarChart3 },
                         { label: 'Correct', value: score, color: 'text-green-600 dark:text-green-400', bg: 'bg-green-100/50 dark:bg-green-900/20', icon: CheckCircle },
                         { label: 'Wrong', value: wrongAnswers, color: 'text-red-600 dark:text-red-400', bg: 'bg-red-100/50 dark:bg-red-900/20', icon: XCircle },
                         { label: 'Skipped', value: skippedQuestions, color: 'text-yellow-600 dark:text-yellow-400', bg: 'bg-yellow-100/50 dark:bg-yellow-900/20', icon: Clock },
                     ].map((stat, i) => (
-                        <Card key={i} className="border-border/60 bg-card/60 backdrop-blur-sm hover:translate-y-[-2px] transition-transform duration-200 shadow-sm">
-                            <CardContent className="p-4 flex items-center justify-between">
-                                <div>
-                                    <p className="text-sm font-medium text-muted-foreground">{stat.label}</p>
-                                    <p className={`text-2xl font-bold mt-1 ${stat.color}`}>{stat.value}</p>
+                        <Card key={i} className="border-border/60 bg-card/60 backdrop-blur-sm hover:translate-y-[-2px] transition-transform duration-200 shadow-sm min-w-0">
+                            <CardContent className="p-3 md:p-4 flex items-center justify-between gap-2">
+                                <div className="min-w-0 flex-1">
+                                    <p className="text-xs md:text-sm font-medium text-muted-foreground truncate">{stat.label}</p>
+                                    <p className={`text-lg md:text-2xl font-bold mt-0.5 md:mt-1 ${stat.color} truncate`}>{stat.value}</p>
                                 </div>
-                                <div className={`p-2.5 rounded-xl ${stat.bg}`}>
-                                    <stat.icon className={`w-5 h-5 ${stat.color}`} />
+                                <div className={`p-2 md:p-2.5 rounded-xl ${stat.bg} shrink-0`}>
+                                    <stat.icon className={`w-4 h-4 md:w-5 md:h-5 ${stat.color}`} />
                                 </div>
                             </CardContent>
                         </Card>

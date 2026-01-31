@@ -7,9 +7,11 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { toast } from 'sonner';
-import { Loader2, Upload } from 'lucide-react';
+import { Loader2, Upload, FileText, Image as ImageIcon } from 'lucide-react';
 import { analyzeDocument, saveToKnowledgeBase } from '@/app/actions/knowledgeBase';
+import { splitPdfToPages } from '@/lib/pdfProcessor';
 import { Progress } from '@/components/ui/progress';
+import Link from 'next/link';
 
 export default function KnowledgeBasePage() {
     const [loading, setLoading] = useState(false);
@@ -27,16 +29,57 @@ export default function KnowledgeBasePage() {
     const [currentStep, setCurrentStep] = useState<string>('');
     const [progress, setProgress] = useState(0);
 
+    // Stats for summary
+    const [stats, setStats] = useState({ processed: 0, saved: 0, failed: 0 });
+
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files.length > 0) {
             setFiles(e.target.files);
             setLogs([]);
             setProgress(0);
             setCurrentStep('');
+            setStats({ processed: 0, saved: 0, failed: 0 });
         }
     };
 
     const addLog = (msg: string) => setLogs(prev => [...prev, msg]);
+
+    const processPage = async (
+        pageData: { base64: string; mimeType: string },
+        fileName: string,
+        pageLabel: string
+    ): Promise<boolean> => {
+        try {
+            // Analyze
+            const analysisRes = await analyzeDocument({ fileData: pageData.base64, mimeType: pageData.mimeType });
+
+            if (!analysisRes.success) {
+                addLog(`   ❌ Analysis failed: ${analysisRes.error}`);
+                return false;
+            }
+
+            const { text, description, chapter, page_number } = analysisRes.data;
+            addLog(`   ↳ Detected: ${chapter} (Page ${page_number || 'Unknown'})`);
+
+            // Save
+            const saveRes = await saveToKnowledgeBase({
+                text, description, chapter, page_number,
+                fileName: `${fileName}_${pageLabel}`,
+                metadata
+            });
+
+            if (saveRes.success) {
+                addLog(`   ✅ Saved successfully.`);
+                return true;
+            } else {
+                addLog(`   ❌ Save failed: ${saveRes.error}`);
+                return false;
+            }
+        } catch (error: any) {
+            addLog(`   ❌ Error: ${error.message}`);
+            return false;
+        }
+    };
 
     const handleUpload = async () => {
         if (!files || files.length === 0) {
@@ -51,72 +94,172 @@ export default function KnowledgeBasePage() {
         setLoading(true);
         setLogs([]);
         setProgress(0);
+        setStats({ processed: 0, saved: 0, failed: 0 });
+
+        let totalSaved = 0;
+        let totalFailed = 0;
+        let totalProcessed = 0;
 
         try {
-            const totalFiles = files.length;
+            // First, calculate total pages for accurate progress
+            const fileArray = Array.from(files);
+            let totalItems = 0;
+            const fileInfo: { file: File; isPdf: boolean; pageCount: number }[] = [];
 
-            for (let i = 0; i < totalFiles; i++) {
-                const file = files[i];
-                const fileNum = i + 1;
+            setCurrentStep('📊 Calculating total pages...');
+            addLog('📊 Scanning files...');
 
-                // Update Progress (Start of file)
-                setProgress(Math.round(((i) / totalFiles) * 100));
-                setCurrentStep(`File ${fileNum}/${totalFiles}: ${file.name}`);
-                addLog(`▶ Processing ${file.name}...`);
+            for (const file of fileArray) {
+                const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
 
-                // 1. Read File
-                setCurrentStep(`File ${fileNum}/${totalFiles}: Reading Data...`);
-                const reader = new FileReader();
-                const base64Promise = new Promise<{ base64: string, mimeType: string }>((resolve, reject) => {
-                    reader.onload = () => {
-                        const result = reader.result as string;
-                        const [header, base64] = result.split(',');
-                        const mimeType = header.match(/:(.*?);/)?.[1] || 'image/jpeg';
-                        resolve({ base64, mimeType });
-                    };
-                    reader.onerror = reject;
-                    reader.readAsDataURL(file);
-                });
-                const { base64, mimeType } = await base64Promise;
+                if (isPdf) {
+                    // Read and count pages
+                    const reader = new FileReader();
+                    const base64Promise = new Promise<string>((resolve, reject) => {
+                        reader.onload = () => {
+                            const result = reader.result as string;
+                            const [, base64] = result.split(',');
+                            resolve(base64);
+                        };
+                        reader.onerror = reject;
+                        reader.readAsDataURL(file);
+                    });
+                    const base64 = await base64Promise;
 
-                // 2. Analyze (OCR)
-                setCurrentStep(`File ${fileNum}/${totalFiles}: 🧠 AI Analyzing (OCR)...`);
-                addLog(`   ↳ AI Analysis started...`);
-
-                const analysisRes = await analyzeDocument({ fileData: base64, mimeType });
-
-                if (!analysisRes.success) {
-                    addLog(`❌ Failed to analyze ${file.name}: ${analysisRes.error}`);
-                    continue; // Skip specific file error
-                }
-
-                const { text, description, chapter, page_number } = analysisRes.data;
-                addLog(`   ↳ Detected: ${chapter} (Page ${page_number})`);
-
-                // 3. Save (Embed + DB)
-                setCurrentStep(`File ${fileNum}/${totalFiles}: 💾 Generating Vectors & Saving...`);
-                const saveRes = await saveToKnowledgeBase({
-                    text, description, chapter, page_number,
-                    fileName: file.name,
-                    metadata
-                });
-
-                if (saveRes.success) {
-                    addLog(`✅ Saved successfully.`);
+                    const splitResult = await splitPdfToPages(base64);
+                    if (splitResult.success && splitResult.totalPages) {
+                        fileInfo.push({ file, isPdf: true, pageCount: splitResult.totalPages });
+                        totalItems += splitResult.totalPages;
+                        addLog(`   📄 ${file.name}: ${splitResult.totalPages} pages`);
+                    } else {
+                        fileInfo.push({ file, isPdf: true, pageCount: 0 });
+                        addLog(`   ⚠️ ${file.name}: Could not read PDF`);
+                    }
                 } else {
-                    addLog(`❌ Database Save Failed: ${saveRes.error}`);
+                    fileInfo.push({ file, isPdf: false, pageCount: 1 });
+                    totalItems += 1;
+                    addLog(`   🖼️ ${file.name}: 1 image`);
+                }
+            }
+
+            addLog(`\n📋 Total items to process: ${totalItems}\n`);
+
+            let currentItem = 0;
+
+            for (const { file, isPdf, pageCount } of fileInfo) {
+                addLog(`\n▶ Processing ${file.name}...`);
+
+                if (isPdf) {
+                    if (pageCount === 0) {
+                        addLog(`   ⚠️ Skipping - could not read PDF`);
+                        totalFailed++;
+                        continue;
+                    }
+
+                    // Re-read the file
+                    const reader = new FileReader();
+                    const base64Promise = new Promise<string>((resolve, reject) => {
+                        reader.onload = () => {
+                            const result = reader.result as string;
+                            const [, base64] = result.split(',');
+                            resolve(base64);
+                        };
+                        reader.onerror = reject;
+                        reader.readAsDataURL(file);
+                    });
+                    const base64 = await base64Promise;
+
+                    const splitResult = await splitPdfToPages(base64);
+                    if (!splitResult.success || !splitResult.pages) {
+                        addLog(`   ❌ Failed to split PDF: ${splitResult.error}`);
+                        totalFailed++;
+                        continue;
+                    }
+
+                    // Process each page
+                    for (const page of splitResult.pages) {
+                        currentItem++;
+                        const progressPercent = Math.round((currentItem / totalItems) * 100);
+                        setProgress(progressPercent);
+                        setCurrentStep(`📄 ${file.name} - Page ${page.pageNumber}/${pageCount} (${progressPercent}%)`);
+
+                        addLog(`   📖 Page ${page.pageNumber}/${pageCount}: Analyzing...`);
+
+                        const success = await processPage(
+                            { base64: page.base64, mimeType: page.mimeType },
+                            file.name,
+                            `page_${page.pageNumber}`
+                        );
+
+                        totalProcessed++;
+                        if (success) {
+                            totalSaved++;
+                        } else {
+                            totalFailed++;
+                        }
+
+                        setStats({ processed: totalProcessed, saved: totalSaved, failed: totalFailed });
+                    }
+                } else {
+                    // Image file - process directly
+                    currentItem++;
+                    const progressPercent = Math.round((currentItem / totalItems) * 100);
+                    setProgress(progressPercent);
+                    setCurrentStep(`🖼️ ${file.name} (${progressPercent}%)`);
+
+                    const reader = new FileReader();
+                    const base64Promise = new Promise<{ base64: string, mimeType: string }>((resolve, reject) => {
+                        reader.onload = () => {
+                            const result = reader.result as string;
+                            const [header, base64] = result.split(',');
+                            const mimeType = header.match(/:(.*?);/)?.[1] || 'image/jpeg';
+                            resolve({ base64, mimeType });
+                        };
+                        reader.onerror = reject;
+                        reader.readAsDataURL(file);
+                    });
+                    const { base64, mimeType } = await base64Promise;
+
+                    addLog(`   🖼️ Analyzing image...`);
+
+                    const success = await processPage(
+                        { base64, mimeType },
+                        file.name,
+                        'image'
+                    );
+
+                    totalProcessed++;
+                    if (success) {
+                        totalSaved++;
+                    } else {
+                        totalFailed++;
+                    }
+
+                    setStats({ processed: totalProcessed, saved: totalSaved, failed: totalFailed });
                 }
             }
 
             setProgress(100);
-            setCurrentStep('Done!');
-            toast.success('Batch processing completed!');
+            setCurrentStep('✅ Processing Complete!');
+            addLog(`\n═══════════════════════════════════════`);
+            addLog(`📊 SUMMARY: ${totalSaved} saved, ${totalFailed} failed, ${totalProcessed} total`);
+            addLog(`═══════════════════════════════════════`);
+
+            if (totalFailed === 0) {
+                toast.success(`Successfully processed ${totalSaved} pages!`);
+            } else {
+                toast.warning(`Completed: ${totalSaved} saved, ${totalFailed} failed`);
+            }
+
             setFiles(null);
+            // Reset input
+            const fileInput = document.getElementById('file-upload') as HTMLInputElement;
+            if (fileInput) fileInput.value = '';
 
         } catch (error: any) {
             console.error(error);
             toast.error('Unexpected error during batch process');
-            addLog(`💥 Critical Error: ${error.message}`);
+            addLog(`\n💥 Critical Error: ${error.message}`);
         } finally {
             setLoading(false);
         }
@@ -129,12 +272,20 @@ export default function KnowledgeBasePage() {
                     <h1 className="text-3xl font-bold tracking-tight">Knowledge Base Ingestion</h1>
                     <p className="text-slate-500">Upload scanned book pages (Images or PDF) for the AI Tutor.</p>
                 </div>
+                <Link href="/admin/knowledge-base/manage">
+                    <Button variant="outline">
+                        <FileText className="w-4 h-4 mr-2" />
+                        Manage KB
+                    </Button>
+                </Link>
             </div>
 
             <Card>
                 <CardHeader>
                     <CardTitle>Upload Content</CardTitle>
-                    <CardDescription>Upload images or PDFs. The AI will extract text, visual descriptions, and metadata.</CardDescription>
+                    <CardDescription>
+                        Upload images or multi-page PDFs. The AI will extract text, visual descriptions, and metadata from each page.
+                    </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
                     {/* Metadata Inputs */}
@@ -171,9 +322,36 @@ export default function KnowledgeBasePage() {
                     <div className="space-y-2 border-2 border-dashed rounded-lg p-6 flex flex-col items-center justify-center cursor-pointer hover:bg-slate-50 transition-colors">
                         <Upload className="h-10 w-10 text-slate-400 mb-2" />
                         <Label htmlFor="file-upload" className="cursor-pointer text-lg text-slate-700">Click to Select Files (Images or PDF)</Label>
+                        <p className="text-xs text-slate-400">PDFs will be split into individual pages for processing</p>
                         <Input id="file-upload" type="file" multiple accept=".pdf, image/*" className="hidden" onChange={handleFileChange} />
-                        {files && <p className="text-sm text-green-600 font-medium mt-2">{files.length} files selected</p>}
+                        {files && (
+                            <div className="flex items-center gap-2 mt-2 text-sm text-green-600 font-medium">
+                                {Array.from(files).some(f => f.type === 'application/pdf' || f.name.endsWith('.pdf')) ? (
+                                    <FileText className="w-4 h-4" />
+                                ) : (
+                                    <ImageIcon className="w-4 h-4" />
+                                )}
+                                {files.length} files selected
+                            </div>
+                        )}
                     </div>
+
+                    {/* Stats Summary */}
+                    {stats.processed > 0 && (
+                        <div className="flex gap-4 justify-center text-sm">
+                            <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full">
+                                📊 Processed: {stats.processed}
+                            </span>
+                            <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full">
+                                ✅ Saved: {stats.saved}
+                            </span>
+                            {stats.failed > 0 && (
+                                <span className="px-3 py-1 bg-red-100 text-red-700 rounded-full">
+                                    ❌ Failed: {stats.failed}
+                                </span>
+                            )}
+                        </div>
+                    )}
 
                     {/* Progress Section */}
                     {(loading || progress > 0) && (
@@ -192,9 +370,9 @@ export default function KnowledgeBasePage() {
 
                     {/* Detailed Logs */}
                     {logs.length > 0 && (
-                        <div className="mt-4 p-4 bg-slate-900 text-green-400 rounded-lg max-h-60 overflow-y-auto font-mono text-xs shadow-inner">
+                        <div className="mt-4 p-4 bg-slate-900 text-green-400 rounded-lg max-h-80 overflow-y-auto font-mono text-xs shadow-inner">
                             {logs.map((log, i) => (
-                                <div key={i} className="py-0.5">{log}</div>
+                                <div key={i} className="py-0.5 whitespace-pre-wrap">{log}</div>
                             ))}
                             {loading && <div className="animate-pulse">_</div>}
                         </div>

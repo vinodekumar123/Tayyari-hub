@@ -70,28 +70,26 @@ const ResultPageContent: React.FC = () => {
   const [upgradeDialogOpen, setUpgradeDialogOpen] = useState(false);
   const [enrollmentCheckDone, setEnrollmentCheckDone] = useState(false);
 
-  // Fetch Enrollment Status
+  // Fetch Enrollment Status - Any enrolled student (free or paid) is considered premium
   useEffect(() => {
     if (!user) return;
     const checkEnrollments = async () => {
       try {
+        // Check for enrollments with any valid status (active, paid, enrolled)
         const q = query(
           collection(db, 'enrollments'),
           where('studentId', '==', user.uid),
-          where('status', '==', 'active')
+          where('status', 'in', ['active', 'paid', 'enrolled'])
         );
         const snapshot = await getDocs(q);
-        // Check if ANY active enrollment has price > 0
-        const isPaidUser = snapshot.docs.some(doc => {
-          const data = doc.data();
-          return data.price > 0;
-        });
+        // Any enrollment counts - student is premium if enrolled in ANY series
+        const isEnrolledUser = snapshot.docs.length > 0;
 
         // Also check if user is admin (implicitly allowed)
         const userDoc = await getDoc(doc(db, 'users', user.uid));
         const isAdmin = userDoc.exists() && (userDoc.data().admin === true || userDoc.data().superadmin === true);
 
-        setHasPaidEnrollment(isPaidUser || isAdmin);
+        setHasPaidEnrollment(isEnrolledUser || isAdmin);
       } catch (error) {
         console.error("Error checking enrollments:", error);
       } finally {

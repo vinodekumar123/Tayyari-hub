@@ -15,14 +15,7 @@ export async function POST(req: NextRequest) {
         // 1. Generate Embedding for Question
         const questionVector = await generateEmbedding(message);
 
-        // 2. Vector Search (Using Firestore Native or Manual Cosine - Assuming Native for simplicity/production)
-        // Note: Since Vector Search is preview/requires index, we assume it's enabled.
-        // If exact vector search isn't set up yet, we might fail here.
-        // We will simulate Retrieval if index is missing or use a basic query if vector search is strictly required.
-
-        // For this implementation, we will use the standard Vector Query logic.
-        // NOTE: This requires you to have created a Vector Index on `knowledge_base` collection for `embedding` field.
-
+        // 2. Vector Search (Using Firestore Native)
         const knowledgeColl = adminDb.collection('knowledge_base');
 
         // Search for Books
@@ -63,8 +56,6 @@ Content: ${data.content}`;
     
     User Question: "${message}"
 
-    Use the following retrieved context to answer.
-
     CONTEXT FROM BOOKS:
     ${bookContext}
 
@@ -72,12 +63,24 @@ Content: ${data.content}`;
     ${syllabusContext}
 
     INSTRUCTIONS:
-    1. Answer the question comprehensively using the BOOK context. Cite specific Book Names and Page Numbers if available.
-    2. After the answer, create a section called "**Syllabus Check**". I Check if the user's topic is mentioned in the SYLLABUS context. 
-       - If yes, say "✅ This topic is explicitly listed in the PMDC Syllabus."
-       - If no, say "⚠️ Note: This topic was not found in the retrieved PMDC Syllabus sections."
+    1. **Analyze the Input:**
+       - If it's a greeting ("hi", "thanks"), reply naturally and briefly without academic fluff.
+       - If it's a question, answer it directly.
+
+    2. **Answering Style:**
+       - **Be direct:** Start immediately with the answer. Do NOT say "Based on the provided documents" or "Hello I am your AI Tutor".
+       - **Be natural:** Integrate citations smoothly.
+       - **Explain efficiently:** Explain the concept clearly as a teacher would.
+       - **FORMATTING RULES:**
+         - Use **LaTeX** for ALL math, chemical formulas ($H_2O$), and units ($mol/L$). Wrap inline math in single dollar signs like $E=mc^2$ and block math in double dollar signs.
+         - Use **Markdown Tables** when listing properties, differences, or steps.
+         - Use **Bold** for key terms and Lists for steps.
+
+    3. **Syllabus Check:**
+       - If the topic appears in the SYLLABUS context, mention it: "✅ This is explicitly in the PMDC Syllabus."
+       - If NOT found, simply add a small note at the very bottom: "_Note: Exact syllabus match not retrieved for this specific query._" rather than a big warning.
     
-    Keep the tone encouraging and academic.
+    Keep the tone encouraging, professional, and helpful.
     `;
 
         // 4. Stream Response

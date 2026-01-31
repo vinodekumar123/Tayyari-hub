@@ -20,6 +20,7 @@ import { Badge } from '@/components/ui/badge';
 import Link from 'next/link';
 
 import { UnifiedHeader } from '@/components/unified-header';
+import { EnrollmentPromptPopup } from '@/components/student/EnrollmentPromptPopup';
 
 export default function StudentDashboard() {
   // const [greeting, setGreeting] = useState(''); // Moved to Header
@@ -144,6 +145,8 @@ export default function StudentDashboard() {
 
   return (
     <div className="min-h-screen bg-slate-50/[0.6] dark:bg-slate-950 font-sans text-slate-900 dark:text-slate-100">
+      {/* Enrollment Popup for Unenrolled Students */}
+      <EnrollmentPromptPopup />
 
       {/* 1. New Top Header - Full Width */}
       <UnifiedHeader
