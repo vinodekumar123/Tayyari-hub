@@ -191,25 +191,29 @@ export default function StudentDashboard() {
   // Subject Stats Data (Admin)
   const subjectBreakdownAdmin = useMemo(() => {
     const sStats = studentData?.stats?.subjectStats || {};
-    return Object.entries(sStats).map(([subject, data]: [string, any]) => ({
-      subject,
-      accuracy: data.accuracy || 0,
-      attempted: data.attempted || 0,
-      correct: data.correct || 0,
-      wrong: (data.attempted || 0) - (data.correct || 0)
-    })).sort((a, b) => b.attempted - a.attempted);
+    return Object.entries(sStats)
+      .filter(([subject]) => subject !== 'Uncategorized' && subject !== 'General')
+      .map(([subject, data]: [string, any]) => ({
+        subject,
+        accuracy: data.accuracy || 0,
+        attempted: data.attempted || 0,
+        correct: data.correct || 0,
+        wrong: (data.attempted || 0) - (data.correct || 0)
+      })).sort((a, b) => b.attempted - a.attempted);
   }, [studentData]);
 
   // Subject Stats Data (User/Custom)
   const subjectBreakdownUser = useMemo(() => {
     const sStats = studentData?.stats?.userSubjectStats || {};
-    return Object.entries(sStats).map(([subject, data]: [string, any]) => ({
-      subject,
-      accuracy: data.accuracy || 0,
-      attempted: data.attempted || 0,
-      correct: data.correct || 0,
-      wrong: (data.attempted || 0) - (data.correct || 0)
-    })).sort((a, b) => b.attempted - a.attempted);
+    return Object.entries(sStats)
+      .filter(([subject]) => subject !== 'Uncategorized' && subject !== 'General')
+      .map(([subject, data]: [string, any]) => ({
+        subject,
+        accuracy: data.accuracy || 0,
+        attempted: data.attempted || 0,
+        correct: data.correct || 0,
+        wrong: (data.attempted || 0) - (data.correct || 0)
+      })).sort((a, b) => b.attempted - a.attempted);
   }, [studentData]);
 
 

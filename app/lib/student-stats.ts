@@ -81,7 +81,14 @@ export async function updateStudentStats(userId: string, result: QuizResult, typ
 
                 // Precise Subject Breakdown
                 result.selectedQuestions.forEach(q => {
-                    const qSub = q.subject?.name || q.subject || 'Uncategorized';
+                    let qSub = q.subject?.name || q.subject;
+
+                    // Fallback: If question subject is missing/Uncategorized, try to use Quiz Subject if it's a single value
+                    if ((!qSub || qSub === 'Uncategorized') && typeof result.subject === 'string' && result.subject) {
+                        qSub = result.subject;
+                    }
+
+                    qSub = qSub || 'Uncategorized';
                     // User answer
                     const ans = result.answers[q.id];
                     if (ans) { // Attempted
@@ -128,9 +135,16 @@ export async function updateStudentStats(userId: string, result: QuizResult, typ
                     }
                 });
 
-                // Precise Subject Breakdown for User Quizzes
                 result.selectedQuestions.forEach(q => {
-                    const qSub = q.subject?.name || q.subject || 'Uncategorized';
+                    let qSub = q.subject?.name || q.subject;
+
+                    // Fallback: If question subject is missing/Uncategorized, try to use Quiz Subject if it's a single value
+                    if ((!qSub || qSub === 'Uncategorized') && typeof result.subject === 'string' && result.subject) {
+                        qSub = result.subject;
+                    }
+
+                    qSub = qSub || 'Uncategorized';
+
                     const ans = result.answers[q.id];
 
                     if (ans) { // Attempted
