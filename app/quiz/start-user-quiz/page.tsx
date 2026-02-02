@@ -243,6 +243,34 @@ const StartUserQuizPageContent: React.FC = () => {
     return () => stopTimerSync();
   }, [loading, quiz, startTimerSync, stopTimerSync]);
 
+  // Local Timer Countdown
+  useEffect(() => {
+    if (loading || !hasLoadedTime || alreadyCompleted) return;
+
+    timerRef.current = setInterval(() => {
+      setTimeLeft((prev) => {
+        if (prev <= 0) {
+          if (timerRef.current) clearInterval(timerRef.current);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, [loading, hasLoadedTime, alreadyCompleted]);
+
+  // Auto-submit on time out
+  useEffect(() => {
+    if (!loading && hasLoadedTime && timeLeft === 0 && !alreadyCompleted && !hasSubmittedRef.current) {
+      toast.info("Time's up! Submitting your test...");
+      handleSubmit();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [timeLeft, loading, hasLoadedTime, alreadyCompleted]);
+
   // Cleanup on unload
   useEffect(() => {
     const handleUnload = () => {
