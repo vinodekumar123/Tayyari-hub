@@ -6,7 +6,7 @@ import Link from 'next/link';
 import {
   BookOpen, Users, Trophy, BarChart3, Settings, Plus,
   Database, Home, ChevronDown, ChevronRight, LogOut,
-  ClipboardList, UserCircle, Menu, X, FileBarChart, Flag, Calendar, BrainCircuit, HelpCircle, ArrowLeftRight
+  ClipboardList, UserCircle, Menu, X, FileBarChart, Flag, Calendar, BrainCircuit, HelpCircle, ArrowLeftRight, Lock
 } from 'lucide-react';
 import logo from "../../app/assets/logo.png";
 import Image from "next/image";
@@ -140,6 +140,7 @@ export function Sidebar() {
         { icon: Plus, label: 'Add Question', href: '/admin/questions/create' },
         { icon: Database, label: 'Mock Questions', href: '/admin/mockquestions/questionbank' },
         { icon: Plus, label: 'Add Mock Question', href: '/admin/mockquestions/create' },
+        { icon: Lock, label: 'Mock Access Control', href: '/admin/mock-tests/access-control' },
         { icon: ArrowLeftRight, label: 'Sync Questions', href: '/admin/sync' },
         { icon: Trophy, label: 'Quizzes', href: '/admin/quizzes/quizebank' },
         { icon: Plus, label: 'Create Quiz', href: '/admin/quizzes/create' },

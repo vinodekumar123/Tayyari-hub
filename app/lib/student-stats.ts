@@ -52,13 +52,16 @@ export async function updateStudentStats(userId: string, result: QuizResult, typ
                 stats.totalWrong = (stats.totalWrong || 0) + wrong;
                 // Add totalScore for Leaderboard
                 stats.totalScore = (stats.totalScore || 0) + result.score;
-                // Total Time? Passed in result? The limit was passed, but actual time taken?
-                // We'll skip time for now as it wasn't passed in the simple result object payload in the plan, 
-                // but we can add it if available in the calling context.
 
                 stats.overallAccuracy = stats.totalQuestions > 0
                     ? Math.round((stats.totalCorrect / stats.totalQuestions) * 100)
                     : 0;
+
+                // --- ADMIN SPECIFIC STATS (Synced with Generic) ---
+                stats.adminAttempts = stats.totalQuizzes;
+                stats.adminCorrect = stats.totalCorrect;
+                stats.adminWrong = stats.totalWrong;
+                stats.adminAccuracy = stats.overallAccuracy;
 
                 stats.lastQuizDate = result.timestamp;
 
@@ -67,23 +70,13 @@ export async function updateStudentStats(userId: string, result: QuizResult, typ
                 const subjects = Array.isArray(result.subject) ? result.subject : [result.subject || 'Uncategorized'];
 
                 subjects.forEach((sub: string) => {
-                    // Fix: Clean up subject name if it's an object (shouldn't be based on calling code, but safe to check)
+                    // Fix: Clean up subject name if it's an object
                     const subjectName = typeof sub === 'object' ? (sub as any).name : sub;
                     if (!subjectName) return;
 
                     if (!stats.subjectStats[subjectName]) {
                         stats.subjectStats[subjectName] = { attempted: 0, correct: 0, wrong: 0, accuracy: 0 };
                     }
-
-                    // We need to know how many questions belonging to THIS subject were answered/correct.
-                    // If the quiz is mixed, we need per-question subject info.
-                    // The `result.selectedQuestions` should have `subject` on them.
-
-                    // Recalculate per-subject breakdown from the specific questions in this result
-                    // This is more accurate than assuming the whole quiz belongs to the quiz.subject
-
-                    // However, if we are inside this loop, we might be double counting if we iterate all questions for every subject tag.
-                    // Better strategy: Iterate questions once, update stats, then merge.
                 });
 
                 // Precise Subject Breakdown
@@ -114,6 +107,48 @@ export async function updateStudentStats(userId: string, result: QuizResult, typ
                 stats.mockAccuracy = stats.totalMockQuestions > 0
                     ? Math.round((stats.totalMockCorrect / stats.totalMockQuestions) * 100)
                     : 0;
+
+                // --- USER SPECIFIC STATS ---
+                stats.userAttempts = stats.totalMockQuizzes;
+                stats.userCorrect = stats.totalMockCorrect;
+                stats.userWrong = (stats.userWrong || 0) + wrong; // Need to track wrong separately if not in mock vars
+                stats.userAccuracy = stats.mockAccuracy;
+
+                // --- NEW: User Subject Stats Tracking ---
+                // Handle array of subjects or single subject
+                const subjects = Array.isArray(result.subject) ? result.subject : [result.subject || 'Uncategorized'];
+
+                subjects.forEach((sub: string) => {
+                    const subjectName = typeof sub === 'object' ? (sub as any).name : sub;
+                    if (!subjectName) return;
+
+                    if (!stats.userSubjectStats) stats.userSubjectStats = {};
+                    if (!stats.userSubjectStats[subjectName]) {
+                        stats.userSubjectStats[subjectName] = { attempted: 0, correct: 0, wrong: 0, accuracy: 0 };
+                    }
+                });
+
+                // Precise Subject Breakdown for User Quizzes
+                result.selectedQuestions.forEach(q => {
+                    const qSub = q.subject?.name || q.subject || 'Uncategorized';
+                    const ans = result.answers[q.id];
+
+                    if (ans) { // Attempted
+                        if (!stats.userSubjectStats) stats.userSubjectStats = {};
+                        if (!stats.userSubjectStats[qSub]) {
+                            stats.userSubjectStats[qSub] = { attempted: 0, correct: 0, wrong: 0, accuracy: 0 };
+                        }
+                        const sStat = stats.userSubjectStats[qSub];
+                        sStat.attempted++;
+                        if (ans === q.correctAnswer) {
+                            sStat.correct++;
+                        } else {
+                            sStat.wrong++;
+                        }
+                        sStat.accuracy = Math.round((sStat.correct / sStat.attempted) * 100);
+                    }
+                });
+
 
                 // Optionally update subject stats for mocks too? 
                 // User request: "Update mock question bank statistics ... Total questions, Questions used".

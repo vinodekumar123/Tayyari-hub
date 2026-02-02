@@ -15,6 +15,7 @@ import {
   increment,
   getDoc,
   limit,
+  getCountFromServer,
 } from 'firebase/firestore';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { db, auth } from '@/app/firebase';
@@ -41,8 +42,67 @@ import { glassmorphism, animations } from '@/lib/design-tokens';
 import { UnifiedHeader } from '@/components/unified-header';
 import { createMockQuiz } from '@/app/actions/create-quiz';
 import { useTransition } from 'react';
+import { collectionGroup } from 'firebase/firestore';
+import Link from 'next/link';
+import { Lock, Info } from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 const MAX_QUESTIONS = 100;
+
+function CreateQuizSkeleton() {
+  return (
+    <div className="flex min-h-screen bg-background text-foreground animate-in fade-in duration-500">
+      <Sidebar />
+      <main className="flex-1 overflow-auto h-screen">
+        <div className="w-full max-w-6xl mx-auto px-4 py-8 md:py-12 space-y-8">
+          <div className="space-y-2">
+            <Skeleton className="h-10 w-64" />
+            <Skeleton className="h-4 w-full max-w-2xl" />
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <div className="lg:col-span-2 space-y-6">
+              <Card className="border-primary/10">
+                <CardHeader><Skeleton className="h-6 w-32" /></CardHeader>
+                <CardContent><Skeleton className="h-12 w-full" /></CardContent>
+              </Card>
+              <Card className="border-primary/10">
+                <CardHeader><Skeleton className="h-6 w-40" /></CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-24 w-full rounded-xl" />)}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+            <div className="space-y-6">
+              <Card className="border-primary/10">
+                <CardHeader><Skeleton className="h-6 w-32" /></CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <Skeleton className="h-16 w-full" />
+                    <Skeleton className="h-16 w-full" />
+                  </div>
+                  <Skeleton className="h-20 w-full" />
+                  <Skeleton className="h-14 w-full" />
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+  );
+}
 
 interface MockQuestion {
   id: string;
@@ -61,6 +121,7 @@ interface SubjectUsageDoc {
   totalQuestions: number;
   usedQuestionsCount: number;
   unusedQuestionsCount: number;
+  chapterStats?: Record<string, number>; // New: Chapter Usage
   updatedAt: any;
 }
 
@@ -82,72 +143,224 @@ function CreateUserQuizPageOriginal() {
   const [error, setError] = useState<string | null>(null);
 
   const [subjectAnalytics, setSubjectAnalytics] = useState<Record<string, SubjectUsageDoc>>({});
+  const [chapterTotals, setChapterTotals] = useState<Record<string, Record<string, number>>>({}); // New: Cache for chapter totals
+  const [questionStats, setQuestionStats] = useState({ total: 0, used: 0 });
+  const [authChecked, setAuthChecked] = useState(false);
+  const [accessStatus, setAccessStatus] = useState<'loading' | 'allowed' | 'denied' | 'limit_reached'>('loading');
+  const [accessMessage, setAccessMessage] = useState('');
+  const [usageInfo, setUsageInfo] = useState({ count: 0, limit: 0, frequency: '' });
+  const [showAlert, setShowAlert] = useState(false);
+  const [alertConfig, setAlertConfig] = useState({ title: '', description: '', type: 'enroll' });
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (u) => {
+      console.log("[Auth] State changed:", u?.uid || "Logged Out");
       setUser(u);
+      setAuthChecked(true);
     });
     return () => unsub();
   }, []);
 
+  // 1. Access Control Check
+  useEffect(() => {
+    let mounted = true;
+    const checkAccess = async () => {
+      if (!authChecked) return;
+      if (!user) {
+        console.log("[AccessCheck] No user, access denied");
+        setAccessStatus('denied');
+        setAccessMessage("Please log in to design your own test.");
+        return;
+      }
+      console.log("[AccessCheck] Starting for user:", user.uid);
+      setAccessStatus('loading');
+      try {
+        const rulesSnap = await getDocs(query(collection(db, 'mock-test-access-rules'), where('isActive', '==', true)));
+        const rules = rulesSnap.docs.map(d => d.data());
+        if (rules.length === 0) {
+          if (mounted) setAccessStatus('allowed');
+          return;
+        }
+        const enrollSnap = await getDocs(query(
+          collection(db, 'enrollments'),
+          where('studentId', '==', user.uid),
+          where('status', 'in', ['active', 'paid', 'enrolled'])
+        ));
+        const enrolledSeriesIds = enrollSnap.docs.map(d => d.data().seriesId);
+        const matchingRules = rules.filter(r => enrolledSeriesIds.includes(r.seriesId));
+        if (matchingRules.length === 0) {
+          if (mounted) {
+            setAccessStatus('denied');
+            setAccessMessage("You need to enroll in a Test Series (e.g. MDCAT/NUMS) to access this feature.");
+          }
+          return;
+        }
+        const rule = matchingRules[0];
+        if (mounted) setUsageInfo(prev => ({ ...prev, limit: rule.limitCount, frequency: rule.limitFrequency }));
+
+        // Compute Period Key (Must match backend logic)
+        const now = new Date();
+        const year = now.getFullYear();
+        let periodKey = 'lifetime';
+
+        if (rule.limitFrequency === 'daily') {
+          const m = String(now.getMonth() + 1).padStart(2, '0');
+          const d = String(now.getDate()).padStart(2, '0');
+          periodKey = `daily-${year}-${m}-${d}`;
+        } else if (rule.limitFrequency === 'weekly') {
+          // ISO Week number logic
+          const date = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
+          date.setUTCDate(date.getUTCDate() + 4 - (date.getUTCDay() || 7));
+          const weekNo = Math.ceil((((date.getTime() - new Date(Date.UTC(date.getUTCFullYear(), 0, 1)).getTime()) / 86400000) + 1) / 7);
+          periodKey = `weekly-${year}-W${weekNo}`;
+        } else if (rule.limitFrequency === 'monthly') {
+          const m = String(now.getMonth() + 1).padStart(2, '0');
+          periodKey = `monthly-${year}-${m}`;
+        }
+
+        // Read User usage from profile
+        const userDocRef = doc(db, 'users', user.uid);
+        const userDocSnap = await getDoc(userDocRef);
+        const qUsage = userDocSnap.data()?.quizUsage || {};
+
+        const usageCount = (qUsage.periodKey === periodKey) ? (qUsage.count || 0) : 0;
+
+        if (mounted) setUsageInfo(prev => ({ ...prev, count: usageCount }));
+
+        if (usageCount >= rule.limitCount) {
+          if (mounted) {
+            setAccessStatus('limit_reached');
+            setAccessMessage(`You have reached your limit of ${rule.limitCount} tests per ${rule.limitFrequency}.`);
+          }
+        } else {
+          console.log("[AccessCheck] Allowed. Usage:", usageCount, "/", rule.limitCount);
+          if (mounted) setAccessStatus('allowed');
+        }
+      } catch (e) {
+        console.error("[AccessCheck] Failed", e);
+        if (mounted) {
+          setAccessStatus('denied'); // Default to denied if check fails or no enrollment found
+          setAccessMessage("Unable to verify enrollment. Only enrolled students can start tests.");
+        }
+      }
+    };
+    checkAccess();
+    return () => { mounted = false; };
+  }, [user, authChecked]);
+
+  // 2. Meta Loading
   useEffect(() => {
     let mounted = true;
     const loadMeta = async () => {
+      if (!authChecked) return;
+      if (!user) {
+        console.log("[LoadMeta] No user, stopping loading");
+        setLoading(false);
+        return;
+      }
+      console.log("[LoadMeta] Starting...");
       setLoading(true);
       try {
-        // [OPTIMIZED] Try fetching pre-aggregated metadata first
+        let subjectsArr: string[] = [];
+        let chaptersObj: Record<string, string[]> = {};
+        let initialTotals: Record<string, number> = {};
+
         const metaDocRef = doc(db, 'mock-questions-metadata', 'config');
         const metaSnap = await getDoc(metaDocRef);
 
         if (metaSnap.exists()) {
           const data = metaSnap.data();
-          if (mounted) {
-            setSubjects(data.subjects || []);
-            setChaptersBySubject(data.chaptersBySubject || {});
-            setLoading(false);
-          }
-          return;
+          subjectsArr = data.subjects || [];
+          chaptersObj = data.chaptersBySubject || {};
+          initialTotals = data.totalQuestionsBySubject || {};
+        } else {
+          console.warn('Metadata not found, falling back to full scan.');
+          const q = query(collection(db, 'mock-questions'), limit(2000));
+          const snap = await getDocs(q);
+          const sSet = new Set<string>();
+          const chMap: Record<string, Set<string>> = {};
+          snap.docs.forEach((d) => {
+            const data = d.data();
+            const subject = (data.subject || 'Uncategorized').toString();
+            const chapter = (data.chapter || 'Uncategorized').toString();
+            sSet.add(subject);
+            if (!chMap[subject]) chMap[subject] = new Set();
+            chMap[subject].add(chapter);
+          });
+          subjectsArr = Array.from(sSet).sort();
+          Object.entries(chMap).forEach(([k, v]) => {
+            chaptersObj[k] = Array.from(v).sort();
+          });
         }
 
-        // [FALLBACK] If metadata missing, use old full-scan method
-        console.warn('Metadata not found, falling back to full scan (Limited to 500 for safety).');
-        const q = query(collection(db, 'mock-questions'), limit(500));
-        const snap = await getDocs(q);
+        if (mounted) {
+          setSubjects(subjectsArr);
+          setChaptersBySubject(chaptersObj);
 
-        const sSet = new Set<string>();
-        const chaptersMap: Record<string, Set<string>> = {};
+          // Initial distribution of subject analytics state
+          setSubjectAnalytics(prev => {
+            const next = { ...prev };
+            subjectsArr.forEach(s => {
+              if (!next[s]) {
+                next[s] = { usedQuestions: [], totalQuestions: initialTotals[s] || 0, usedQuestionsCount: 0, unusedQuestionsCount: initialTotals[s] || 0, updatedAt: null };
+              } else {
+                next[s].totalQuestions = initialTotals[s] || next[s].totalQuestions || 0;
+              }
+            });
+            return next;
+          });
 
-        snap.docs.forEach((d) => {
-          const data = d.data();
-          const subject = (data.subject || 'Uncategorized').toString();
-          const chapter = (data.chapter || 'Uncategorized').toString();
+          // Fetch Accurate Totals (even if config exists, ensures freshness)
+          const countsPromises = subjectsArr.map(async (s) => {
+            try {
+              const q = query(collection(db, 'mock-questions'), where('subject', '==', s), where('isDeleted', '!=', true));
+              const snap = await getCountFromServer(q);
+              return { subject: s, count: snap.data().count };
+            } catch (e) {
+              console.error(`Failed count for ${s}`, e);
+              return { subject: s, count: initialTotals[s] || 0 };
+            }
+          });
 
-          sSet.add(subject);
-          if (!chaptersMap[subject]) chaptersMap[subject] = new Set();
-          chaptersMap[subject].add(chapter);
-        });
+          const results = await Promise.all(countsPromises);
+          if (mounted) {
+            setSubjectAnalytics(prev => {
+              const next = { ...prev };
+              results.forEach(({ subject, count }) => {
+                if (!next[subject]) {
+                  next[subject] = { usedQuestions: [], totalQuestions: 0, usedQuestionsCount: 0, unusedQuestionsCount: 0, updatedAt: null };
+                }
+                next[subject].totalQuestions = count;
+                next[subject].unusedQuestionsCount = count - (next[subject].usedQuestionsCount || 0);
+              });
+              return next;
+            });
+          }
+        }
 
-        if (!mounted) return;
-
-        const sArr = Array.from(sSet).sort();
-        const chaptersObj: Record<string, string[]> = {};
-        Object.entries(chaptersMap).forEach(([k, v]) => {
-          chaptersObj[k] = Array.from(v).sort();
-        });
-
-        setSubjects(sArr);
-        setChaptersBySubject(chaptersObj);
-
+        // Sync Global Stats
+        if (user && mounted) {
+          try {
+            const totalSnap = await getCountFromServer(query(collection(db, 'mock-questions'), where('isDeleted', '!=', true)));
+            const total = totalSnap.data().count;
+            const userDocRef = doc(db, 'users', user.uid);
+            const userDocSnap = await getDoc(userDocRef);
+            const usedCount = userDocSnap.exists() ? (userDocSnap.data().usedMockQuestionIds?.length || 0) : 0;
+            setQuestionStats({ total, used: usedCount });
+          } catch (err) {
+            console.error("Failed to load global question stats", err);
+          }
+        }
       } catch (err) {
         console.error('Failed to load mock-questions meta', err);
-        setError('Failed to load subjects/chapters. Try again later.');
+        setError('Failed to load subjects/chapters.');
       } finally {
         if (mounted) setLoading(false);
       }
     };
     loadMeta();
     return () => { mounted = false; };
-  }, []);
+  }, [user, authChecked]);
 
   useEffect(() => {
     if (selectedSubjects.length > 0) {
@@ -202,20 +415,78 @@ function CreateUserQuizPageOriginal() {
         try {
           const snap = await getDoc(docRef);
           if (snap.exists()) {
-            analytics[subject] = snap.data() as SubjectUsageDoc;
-            if (!analytics[subject].usedQuestions) analytics[subject].usedQuestions = [];
+            const data = snap.data() as SubjectUsageDoc;
+            setSubjectAnalytics(prev => {
+              const current = prev[subject] || { totalQuestions: 0 };
+              const usedCount = data.usedQuestionsCount || data.usedQuestions?.length || 0;
+              return {
+                ...prev,
+                [subject]: {
+                  ...data,
+                  totalQuestions: current.totalQuestions || 0,
+                  usedQuestionsCount: usedCount,
+                  unusedQuestionsCount: (current.totalQuestions || 0) - usedCount
+                }
+              };
+            });
           } else {
-            // Defaults
-            analytics[subject] = { usedQuestions: [], totalQuestions: 0, usedQuestionsCount: 0, unusedQuestionsCount: 0, updatedAt: null };
+            setSubjectAnalytics(prev => ({
+              ...prev,
+              [subject]: { usedQuestions: [], totalQuestions: prev[subject]?.totalQuestions || 0, usedQuestionsCount: 0, unusedQuestionsCount: prev[subject]?.totalQuestions || 0, updatedAt: null }
+            }));
           }
         } catch {
-          analytics[subject] = { usedQuestions: [], totalQuestions: 0, usedQuestionsCount: 0, unusedQuestionsCount: 0, updatedAt: null };
+          setSubjectAnalytics(prev => ({
+            ...prev,
+            [subject]: { usedQuestions: [], totalQuestions: prev[subject]?.totalQuestions || 0, usedQuestionsCount: 0, unusedQuestionsCount: prev[subject]?.totalQuestions || 0, updatedAt: null }
+          }));
         }
       }));
-      setSubjectAnalytics(analytics);
     };
     fetchAnalytics();
+    fetchAnalytics();
   }, [subjects, user]);
+
+  // 3. Fetch Chapter Totals (Lazy Load when Subject Selected)
+  useEffect(() => {
+    let mounted = true;
+    const fetchChapterTotals = async () => {
+      if (selectedSubjects.length === 0) return;
+
+      // Only fetch if not already in cache
+      const needed = selectedSubjects.filter(s => !chapterTotals[s]);
+      if (needed.length === 0) return;
+
+      const results: Record<string, Record<string, number>> = {};
+
+      await Promise.all(needed.map(async (subj) => {
+        const chapters = chaptersBySubject[subj] || [];
+        if (chapters.length === 0) return;
+
+        results[subj] = {};
+        // Fetch Total Count for each chapter
+        // We can do parallel count queries. 
+        // If too many chapters (e.g. > 10), we might need to batch or accept slowness.
+        // Typically ~5-10 chapters.
+        await Promise.all(chapters.map(async (ch) => {
+          const q = query(
+            collection(db, 'mock-questions'),
+            where('subject', '==', subj),
+            where('chapter', '==', ch),
+            where('isDeleted', '!=', true)
+          );
+          const snap = await getCountFromServer(q);
+          results[subj][ch] = snap.data().count;
+        }));
+      }));
+
+      if (mounted) {
+        setChapterTotals(prev => ({ ...prev, ...results }));
+      }
+    };
+    fetchChapterTotals();
+    return () => { mounted = false; };
+  }, [selectedSubjects, chaptersBySubject, chapterTotals]);
 
   const toggleChapter = (c: string) => {
     setSelectedChapters((prev) => {
@@ -238,7 +509,33 @@ function CreateUserQuizPageOriginal() {
     setError(null);
 
     if (!user) {
-      toast.error('You must be logged in to create a test.');
+      toast.error('Please log in to start a test.');
+      return;
+    }
+
+    // Check Access Status
+    if (accessStatus === 'denied') {
+      setAlertConfig({
+        title: "Enrollment Required",
+        description: accessMessage || "You need an active test series enrollment to create your own mocks.",
+        type: 'enroll'
+      });
+      setShowAlert(true);
+      return;
+    }
+
+    if (accessStatus === 'limit_reached') {
+      setAlertConfig({
+        title: "Limit Reached",
+        description: accessMessage,
+        type: 'limit'
+      });
+      setShowAlert(true);
+      return;
+    }
+
+    if (accessStatus === 'loading') {
+      toast.error('Verifying your permissions, please wait...');
       return;
     }
     if (selectedSubjects.length === 0) {
@@ -296,23 +593,13 @@ function CreateUserQuizPageOriginal() {
   const totalQuestions = Object.values(questionsPerSubject).reduce((a, b) => a + b, 0);
 
   if (loading) {
-    return (
-      <div className="flex h-screen bg-background">
-        <Sidebar />
-        <main className="flex-1 p-8 flex items-center justify-center">
-          <div className="flex flex-col items-center gap-4">
-            <Loader2 className="h-12 w-12 text-primary animate-spin" />
-            <p className="text-muted-foreground animate-pulse">Loading your workspace...</p>
-          </div>
-        </main>
-      </div>
-    );
+    return <CreateQuizSkeleton />;
   }
 
   return (
-    <div className="flex min-h-screen bg-background text-foreground">
+    <div className="flex h-screen overflow-hidden bg-background text-foreground">
       <Sidebar />
-      <main className="flex-1 overflow-auto h-screen">
+      <main className="flex-1 overflow-y-auto h-full">
         <div className="w-full max-w-6xl mx-auto px-4 py-8 md:py-12 space-y-8">
 
           {/* Header */}
@@ -357,58 +644,134 @@ function CreateUserQuizPageOriginal() {
                   <CardDescription>Choose at least one subject to include in your mock.</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {subjects.map((s) => {
-                      const isSelected = selectedSubjects.includes(s);
-                      const analytics = subjectAnalytics[s];
-                      return (
-                        <div
-                          key={s}
-                          onClick={() => toggleSubject(s)}
-                          className={`
-                                                relative p-4 rounded-xl cursor-pointer border transition-all duration-200 group
-                                                ${isSelected
-                              ? 'bg-primary/5 border-primary shadow-md dark:shadow-primary/10'
-                              : 'bg-background hover:bg-muted border-border hover:border-primary/50'}
-                                            `}
-                        >
-                          <div className="flex justify-between items-start mb-2">
-                            <span className={`font-semibold ${isSelected ? 'text-primary' : 'text-foreground'}`}>{s}</span>
-                            {isSelected && <CheckCircle2 className="w-5 h-5 text-primary" />}
-                          </div>
+                  {subjects.length > 0 ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      {subjects.map((s) => {
+                        const isSelected = selectedSubjects.includes(s);
+                        const analytics = subjectAnalytics[s];
+                        const total = analytics?.totalQuestions || 0;
+                        const used = analytics?.usedQuestionsCount || 0;
+                        const pct = Math.min(100, (used / (total || 1)) * 100);
 
-                          {isSelected && (
-                            <div className="mt-2 pt-2 border-t border-primary/10 animate-in fade-in slide-in-from-top-1">
-                              <div className="flex items-center gap-2 mb-2">
-                                <span className="text-xs text-muted-foreground whitespace-nowrap">Questions:</span>
-                                <Input
-                                  type="number"
-                                  min={1}
-                                  className="h-7 text-xs w-20 bg-background/80"
-                                  value={questionsPerSubject[s] || ''}
-                                  onClick={(e) => e.stopPropagation()}
-                                  onChange={(e) => {
-                                    const val = parseInt(e.target.value);
-                                    setQuestionsPerSubject(prev => ({
-                                      ...prev,
-                                      [s]: isNaN(val) ? 0 : val
-                                    }));
-                                  }}
-                                />
-                              </div>
-                              {analytics && (
-                                <div className="flex gap-2 text-[10px] text-muted-foreground">
-                                  <span className="text-green-600 dark:text-green-400 font-medium">{analytics.unusedQuestionsCount || 0} New</span>
-                                  <span>•</span>
-                                  <span className="text-amber-600 dark:text-amber-400 font-medium">{analytics.usedQuestionsCount || 0} Used</span>
+                        return (
+                          <div
+                            key={s}
+                            onClick={() => toggleSubject(s)}
+                            className={`
+                                relative overflow-hidden p-5 rounded-2xl cursor-pointer border transition-all duration-300 group
+                                ${isSelected
+                                ? 'bg-primary/10 border-primary ring-2 ring-primary/20 shadow-xl'
+                                : 'bg-card hover:bg-accent border-border/50 hover:border-primary/40'}
+                              `}
+                          >
+                            {/* Progress Background */}
+                            {isSelected && (
+                              <div
+                                className="absolute bottom-0 left-0 h-1 bg-primary/20 transition-all duration-1000"
+                                style={{ width: `${pct}%` }}
+                              />
+                            )}
+
+                            <div className="flex justify-between items-center mb-3">
+                              <div className="flex items-center gap-3">
+                                <div className={`p-2 rounded-lg ${isSelected ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}>
+                                  <BookOpen className="w-4 h-4" />
                                 </div>
+                                <span className={`font-bold transition-colors ${isSelected ? 'text-primary' : 'text-foreground'}`}>{s}</span>
+                              </div>
+                              {isSelected ? (
+                                <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-primary-foreground animate-in zoom-in-50">
+                                  <CheckCircle2 className="w-4 h-4" />
+                                </div>
+                              ) : (
+                                <div className="h-6 w-6 rounded-full border-2 border-muted group-hover:border-primary/50 transition-colors" />
                               )}
                             </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
+
+                            {isSelected ? (
+                              <div className="space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                                <div className="flex items-center gap-3 bg-background/50 p-2 rounded-lg border border-primary/10">
+                                  <span className="text-[10px] font-bold uppercase text-muted-foreground tracking-wider">Target Qs:</span>
+                                  <Input
+                                    type="number"
+                                    min={1}
+                                    className="h-8 text-sm w-full bg-transparent border-0 focus-visible:ring-0 p-0 font-bold"
+                                    value={questionsPerSubject[s] || ''}
+                                    onClick={(e) => e.stopPropagation()}
+                                    onChange={(e) => {
+                                      const val = parseInt(e.target.value);
+                                      setQuestionsPerSubject(prev => ({
+                                        ...prev,
+                                        [s]: isNaN(val) ? 0 : val
+                                      }));
+                                    }}
+                                  />
+                                </div>
+
+                                <div className="space-y-1.5">
+                                  <div className="flex justify-between text-[10px] items-center">
+                                    <span className="text-muted-foreground font-medium">Topic Mastery</span>
+                                    <span className="font-bold">{Math.round(pct)}% Used</span>
+                                  </div>
+                                  <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
+                                    <div
+                                      className="h-full bg-primary transition-all duration-1000 ease-out"
+                                      style={{ width: `${pct}%` }}
+                                    />
+                                  </div>
+                                  <div className="grid grid-cols-3 gap-1 pt-1">
+                                    <div className="text-center p-1 rounded bg-muted/50">
+                                      <p className="text-[9px] text-muted-foreground uppercase">Total</p>
+                                      <p className="text-xs font-bold">{total}</p>
+                                    </div>
+                                    <div className="text-center p-1 rounded bg-emerald-500/10 border border-emerald-500/20">
+                                      <p className="text-[9px] text-emerald-600 dark:text-emerald-400 uppercase">New</p>
+                                      <p className="text-xs font-bold text-emerald-600 dark:text-emerald-400">{total - used}</p>
+                                    </div>
+                                    <div className="text-center p-1 rounded bg-amber-500/10 border border-amber-500/20">
+                                      <p className="text-[9px] text-amber-600 dark:text-amber-400 uppercase">Used</p>
+                                      <p className="text-xs font-bold text-amber-600 dark:text-amber-400">{used}</p>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="space-y-3">
+                                <div className="flex justify-between items-center text-[10px] text-muted-foreground font-medium">
+                                  <span>{total} Total Questions</span>
+                                  <span className="flex items-center gap-1 group-hover:text-primary transition-colors">Select <ChevronRight className="w-3 h-3" /></span>
+                                </div>
+                                <div className="grid grid-cols-3 gap-1 pt-1 opacity-70 group-hover:opacity-100 transition-opacity">
+                                  <div className="text-center p-1 rounded bg-muted/30">
+                                    <p className="text-[9px] text-muted-foreground uppercase">Total</p>
+                                    <p className="text-xs font-bold text-muted-foreground">{total}</p>
+                                  </div>
+                                  <div className="text-center p-1 rounded bg-emerald-500/5">
+                                    <p className="text-[9px] text-emerald-600/70 dark:text-emerald-400/70 uppercase">New</p>
+                                    <p className="text-xs font-bold text-emerald-600/70 dark:text-emerald-400/70">{total - used}</p>
+                                  </div>
+                                  <div className="text-center p-1 rounded bg-amber-500/5">
+                                    <p className="text-[9px] text-amber-600/70 dark:text-amber-400/70 uppercase">Used</p>
+                                    <p className="text-xs font-bold text-amber-600/70 dark:text-amber-400/70">{used}</p>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center p-12 text-center space-y-4 border-2 border-dashed border-muted rounded-3xl bg-muted/5">
+                      <div className="p-4 rounded-full bg-muted text-muted-foreground">
+                        <BookOpen className="w-8 h-8 opacity-20" />
+                      </div>
+                      <div>
+                        <p className="font-bold text-muted-foreground">No subjects available</p>
+                        <p className="text-sm text-muted-foreground/60">We couldn't find any questions in the bank yet.</p>
+                      </div>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
 
@@ -423,27 +786,54 @@ function CreateUserQuizPageOriginal() {
                     <CardDescription>Refine your test by selecting specific chapters.</CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <div className="flex flex-wrap gap-2 max-h-60 overflow-y-auto pr-2">
-                      {selectedSubjects.flatMap(subject =>
-                        (chaptersBySubject[subject] || []).map(chapter => {
-                          const isSelected = selectedChapters.includes(chapter);
-                          return (
-                            <Badge
-                              key={`${subject}-${chapter}`}
-                              variant={isSelected ? "default" : "outline"}
-                              className={`
-                                                        cursor-pointer px-3 py-1.5 text-sm transition-all
-                                                        ${isSelected
-                                  ? 'bg-gradient-to-r from-[#004AAD] to-[#0066FF] hover:from-[#004AAD] hover:to-[#004AAD] border-transparent'
-                                  : 'hover:bg-primary/5 hover:text-primary hover:border-primary/50'}
-                                                    `}
-                              onClick={() => toggleChapter(chapter)}
-                            >
-                              {chapter}
-                            </Badge>
-                          )
-                        })
-                      )}
+                    <div className="space-y-6">
+                      {selectedSubjects.map(subject => {
+                        const chapters = chaptersBySubject[subject] || [];
+                        if (chapters.length === 0) return null;
+
+                        return (
+                          <div key={subject} className="space-y-3">
+                            <div className="flex items-center gap-2">
+                              <div className="h-px w-4 bg-primary/20" />
+                              <span className="text-[10px] font-bold uppercase tracking-wider text-primary bg-primary/5 px-2 py-0.5 rounded">
+                                {subject}
+                              </span>
+                              <div className="h-px flex-1 bg-primary/10" />
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                              {chapters.map(chapter => {
+                                const isSelected = selectedChapters.includes(chapter);
+                                const total = chapterTotals[subject]?.[chapter] || 0;
+                                // Need to cast subjectAnalytics[subject] because we extended the type but maybe state initialized without it?
+                                // Actually interface update handles it.
+                                const used = subjectAnalytics[subject]?.chapterStats?.[chapter] || 0;
+                                const unused = total - used;
+
+                                return (
+                                  <Badge
+                                    key={`${subject}-${chapter}`}
+                                    variant={isSelected ? "default" : "outline"}
+                                    className={`
+                                      cursor-pointer px-3 py-1.5 text-xs transition-all duration-200 rounded-lg flex flex-col items-start gap-1
+                                      ${isSelected
+                                        ? 'bg-primary hover:bg-primary/90 shadow-md scale-[1.02]'
+                                        : 'hover:bg-primary/10 hover:text-primary hover:border-primary/40'}
+                                    `}
+                                    onClick={() => toggleChapter(chapter)}
+                                  >
+                                    <span className="font-bold">{chapter}</span>
+                                    {total > 0 && (
+                                      <span className="text-[10px] opacity-80 font-normal">
+                                        {used} Used / {unused} New
+                                      </span>
+                                    )}
+                                  </Badge>
+                                )
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   </CardContent>
                 </Card>
@@ -451,34 +841,42 @@ function CreateUserQuizPageOriginal() {
             </div>
 
             {/* Right Column: Summary & Actions */}
-            <div className="space-y-6">
-              <Card className={`${glassmorphism.medium} border-primary/20 shadow-xl sticky top-6`}>
-                <CardHeader className="pb-4 border-b border-primary/10">
-                  <CardTitle>Test Summary</CardTitle>
+            <div className="space-y-6 lg:sticky lg:top-8 lg:self-start">
+              <Card className={`${glassmorphism.medium} border-primary/20 shadow-xl overflow-hidden`}>
+                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-primary/50 via-primary to-primary/50" />
+                <CardHeader className="pb-4 border-b border-primary/10 bg-primary/5">
+                  <div className="flex justify-between items-center">
+                    <CardTitle className="text-lg">Control Center</CardTitle>
+                    <Badge variant="secondary" className="animate-pulse bg-primary/20 text-primary border-primary/20 text-[10px]">
+                      Ready
+                    </Badge>
+                  </div>
                 </CardHeader>
-                <CardContent className="space-y-6 pt-6">
+                <CardContent className="space-y-6 pt-6 bg-gradient-to-b from-transparent to-primary/5">
 
                   {/* Stats Grid */}
                   <div className="grid grid-cols-2 gap-4">
-                    <div className="p-3 rounded-xl bg-background/50 border border-primary/10 text-center">
-                      <p className="text-2xl font-bold text-primary">{totalQuestions}</p>
-                      <p className="text-xs text-muted-foreground uppercase tracking-wide">Questions</p>
+                    <div className="p-3 rounded-2xl bg-background/50 border border-primary/10 text-center shadow-inner">
+                      <p className="text-3xl font-black text-primary">{totalQuestions}</p>
+                      <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-widest">Questions</p>
                     </div>
-                    <div className="p-3 rounded-xl bg-background/50 border border-primary/10 text-center">
-                      <p className="text-2xl font-bold text-primary">{selectedSubjects.length}</p>
-                      <p className="text-xs text-muted-foreground uppercase tracking-wide">Subjects</p>
+                    <div className="p-3 rounded-2xl bg-background/50 border border-primary/10 text-center shadow-inner">
+                      <p className="text-3xl font-black text-primary">{selectedSubjects.length}</p>
+                      <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-widest">Subjects</p>
                     </div>
                   </div>
 
                   {/* Settings */}
-                  <div className="space-y-4">
-                    <div className="space-y-2">
+                  <div className="space-y-5 bg-background/40 p-4 rounded-2xl border border-primary/5">
+                    <div className="space-y-3">
                       <div className="flex justify-between items-center">
-                        <label className="text-sm font-medium flex items-center gap-2">
-                          <Clock className="w-4 h-4 text-muted-foreground" />
-                          Duration (min)
+                        <label className="text-sm font-semibold flex items-center gap-2">
+                          <Clock className="w-4 h-4 text-primary" />
+                          Duration
                         </label>
-                        <span className="text-sm font-bold text-primary">{duration}</span>
+                        <Badge variant="outline" className="font-bold text-primary border-primary/20">
+                          {duration} Minutes
+                        </Badge>
                       </div>
                       <input
                         type="range"
@@ -487,71 +885,173 @@ function CreateUserQuizPageOriginal() {
                         step="5"
                         value={duration}
                         onChange={(e) => setDuration(parseInt(e.target.value))}
-                        className="w-full h-2 bg-secondary rounded-lg appearance-none cursor-pointer accent-primary"
+                        className="w-full h-1.5 bg-secondary rounded-lg appearance-none cursor-pointer accent-primary"
                       />
                     </div>
 
+                    <div className="h-px bg-primary/5 mx-2" />
+
                     <div className="space-y-2">
-                      <div className="flex justify-between items-center">
-                        <label className="text-sm font-medium flex items-center gap-2">
-                          <FileText className="w-4 h-4 text-muted-foreground" />
+                      <div className="flex justify-between items-center group/item">
+                        <label className="text-sm font-semibold flex items-center gap-2">
+                          <Layers className="w-4 h-4 text-primary" />
                           Questions / Page
                         </label>
-                        <Input
-                          type="number"
-                          value={questionsPerPage}
-                          onChange={(e) => setQuestionsPerPage(parseInt(e.target.value))}
-                          className="w-20 h-8 text-right bg-background/50"
-                          min={1}
-                          max={totalQuestions}
-                        />
+                        <div className="relative">
+                          <Input
+                            type="number"
+                            value={questionsPerPage}
+                            onChange={(e) => setQuestionsPerPage(parseInt(e.target.value))}
+                            className="w-20 h-9 text-right bg-background border-primary/10 focus:ring-primary font-bold pr-2 rounded-xl"
+                            min={1}
+                            max={totalQuestions}
+                          />
+                          <div className="absolute right-0 top-0 h-full flex items-center pr-1 opacity-0 group-hover/item:opacity-100 transition-opacity">
+                            <Info className="w-3 h-3 text-primary/50" />
+                          </div>
+                        </div>
                       </div>
+                      <p className="text-[10px] text-muted-foreground italic px-1">How many questions per screen.</p>
                     </div>
                   </div>
 
+                  {/* Usage Indicator */}
+                  {usageInfo.limit > 0 && (
+                    <div className={`p-4 rounded-2xl border ${accessStatus === 'limit_reached' ? 'bg-red-500/10 border-red-500/20' : 'bg-primary/5 border-primary/10'}`}>
+                      <div className="flex justify-between items-center mb-2">
+                        <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-1.5">
+                          <Sparkles className="w-3 h-3 text-primary" /> {usageInfo.frequency} Limit
+                        </span>
+                        <span className={`text-xs font-black ${accessStatus === 'limit_reached' ? 'text-red-600' : 'text-primary'}`}>
+                          {usageInfo.count} / {usageInfo.limit} Used
+                        </span>
+                      </div>
+                      <div className="h-2 w-full bg-secondary rounded-full overflow-hidden shadow-inner">
+                        <div
+                          className={`h-full transition-all duration-1000 ease-out ${accessStatus === 'limit_reached' ? 'bg-red-500' : 'bg-primary'}`}
+                          style={{ width: `${Math.min(100, (usageInfo.count / usageInfo.limit) * 100)}%` }}
+                        />
+                      </div>
+                      <p className="text-[10px] text-muted-foreground mt-2 font-medium">
+                        {accessStatus === 'limit_reached'
+                          ? "Upgrade to Pro for unlimited tests."
+                          : `${usageInfo.limit - usageInfo.count} tests left this ${usageInfo.frequency.replace('ly', '')}.`
+                        }
+                      </p>
+                    </div>
+                  )}
+
                   {/* Action Button */}
-                  <Button
-                    className="w-full h-14 text-lg font-bold shadow-lg shadow-primary/25 bg-gradient-to-r from-[#004AAD] to-[#0066FF] hover:from-[#003380] hover:to-[#004AAD] transition-all hover:scale-[1.02] active:scale-[0.98]"
-                    onClick={handleCreate}
-                    disabled={isPending || totalQuestions === 0}
-                  >
-                    {isPending ? (
-                      <>
-                        <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                        Creating your test...
-                      </>
-                    ) : (
-                      <>
-                        Start Mock Test
-                        <ChevronRight className="w-5 h-5 ml-2" />
-                      </>
-                    )}
-                  </Button>
+                  <div className="pt-2">
+                    <Button
+                      className={`
+                          w-full h-14 text-lg font-black rounded-2xl shadow-xl transition-all duration-300
+                          ${isPending
+                          ? 'bg-muted text-muted-foreground'
+                          : 'bg-primary text-primary-foreground hover:shadow-primary/30 hover:-translate-y-1 active:translate-y-0'}
+                        `}
+                      onClick={handleCreate}
+                      disabled={isPending || totalQuestions === 0}
+                    >
+                      {isPending ? (
+                        <>
+                          <Loader2 className="w-5 h-5 mr-3 animate-spin" />
+                          Forging Your Test...
+                        </>
+                      ) : (
+                        <>
+                          Start Mock Test
+                          <ChevronRight className="w-5 h-5 ml-2 transition-transform group-hover:translate-x-1" />
+                        </>
+                      )}
+                    </Button>
+                    <p className="text-[10px] text-center text-muted-foreground mt-3 font-medium uppercase tracking-tighter">
+                      Safe & Secure Learning Environment
+                    </p>
+                  </div>
 
                   {error && (
-                    <div className="flex items-center gap-2 p-3 text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/30 rounded-lg border border-red-200 dark:border-red-900/50">
+                    <div className="flex items-center gap-3 p-4 text-xs text-red-600 bg-red-500/10 rounded-2xl border border-red-500/20 animate-in shake-1">
                       <AlertCircle className="w-4 h-4 flex-shrink-0" />
-                      <p>{error}</p>
+                      <p className="font-bold">{error}</p>
                     </div>
                   )}
 
                 </CardContent>
               </Card>
+
+              {/* Question Bank Stats Card */}
+              {questionStats.total > 0 && (
+                <Card className={`${glassmorphism.light} border-primary/10 shadow-lg`}>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <Layers className="w-4 h-4 text-primary" />
+                      Question Bank Status
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="flex justify-between items-end">
+                      <div>
+                        <p className="text-3xl font-bold text-foreground">{questionStats.total.toLocaleString()}</p>
+                        <p className="text-xs text-muted-foreground">Total Available Questions</p>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-sm font-medium text-emerald-600">
+                          {(questionStats.total - questionStats.used).toLocaleString()} Unused
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Usage Bar */}
+                    <div className="space-y-1">
+                      <div className="flex justify-between text-[10px] uppercase font-semibold text-muted-foreground">
+                        <span>Used</span>
+                        <span>{Math.round((questionStats.used / questionStats.total) * 100)}%</span>
+                      </div>
+                      <div className="h-2 w-full bg-secondary rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-amber-500 rounded-full"
+                          style={{ width: `${(questionStats.used / questionStats.total) * 100}%` }}
+                        ></div>
+                      </div>
+                      <p className="text-xs text-right text-amber-600 mt-1">
+                        {questionStats.used.toLocaleString()} questions attempted
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
             </div>
           </div>
-        </div>
-      </main>
-    </div>
+        </div >
+      </main >
+
+      <AlertDialog open={showAlert} onOpenChange={setShowAlert}>
+        <AlertDialogContent className="max-w-md">
+          <AlertDialogHeader>
+            <div className="w-12 h-12 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center mb-4">
+              <Lock className="w-6 h-6 text-red-600 dark:text-red-400" />
+            </div>
+            <AlertDialogTitle className="text-xl">{alertConfig.title}</AlertDialogTitle>
+            <AlertDialogDescription className="text-base">
+              {alertConfig.description}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="mt-4">
+            <AlertDialogCancel>Close</AlertDialogCancel>
+            {alertConfig.type === 'enroll' && (
+              <AlertDialogAction
+                onClick={() => router.push('/dashboard/student/how-to-register')}
+                className="bg-indigo-600 hover:bg-indigo-700 text-white"
+              >
+                Enroll Now
+              </AlertDialogAction>
+            )}
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div >
   );
 }
 
-export default function CreateUserQuizPage() {
-  return (
-    <div className="flex h-screen overflow-hidden bg-background flex-col md:flex-row">
-      <Sidebar />
-      <main className="flex-1 overflow-y-auto h-full md:pt-0">
-        <ComingSoon />
-      </main>
-    </div>
-  );
-}
+export default CreateUserQuizPageOriginal;

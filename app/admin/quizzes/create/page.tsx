@@ -36,9 +36,19 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { glassmorphism } from '@/lib/design-tokens';
+import { useUIStore } from '@/stores/useUIStore';
+import { Menu, ArrowRight, ArrowLeft } from 'lucide-react';
 
 function CreateQuizContent() {
   const router = useRouter();
+  const [activeTab, setActiveTab] = useState("basic");
+  const { setSidebarOpen, setSidebarTriggerHidden } = useUIStore();
+
+  useEffect(() => {
+    setSidebarTriggerHidden(true);
+    return () => setSidebarTriggerHidden(false);
+  }, [setSidebarTriggerHidden]);
+
   const [currentStep, setCurrentStep] = useState<number>(1);
   const [courses, setCourses] = useState<any[]>([]);
   const [subjects, setSubjects] = useState<any[]>([]);
@@ -884,7 +894,7 @@ function CreateQuizContent() {
             <span className="opacity-50">▼</span>
           </Button>
         </PopoverTrigger>
-        <PopoverContent className={`${glassmorphism.light} w-[300px] p-2 border-white/20 dark:border-white/10 max-h-[300px] overflow-y-auto custom-scrollbar`}>
+        <PopoverContent className={`${glassmorphism.light} w-[90vw] sm:w-[300px] p-2 border-white/20 dark:border-white/10 max-h-[300px] overflow-y-auto custom-scrollbar`}>
           <div className="space-y-1">
             {options.map((option) => (
               <div
@@ -984,7 +994,7 @@ function CreateQuizContent() {
             <span className="opacity-50">▼</span>
           </Button>
         </PopoverTrigger>
-        <PopoverContent className={`${glassmorphism.light} w-[350px] p-0 border-white/20 dark:border-white/10`} align="start">
+        <PopoverContent className={`${glassmorphism.light} w-[90vw] sm:w-[350px] p-0 border-white/20 dark:border-white/10`} align="start">
           {/* Search Input */}
           <div className="p-3 border-b border-white/10">
             <div className="relative">
@@ -1084,14 +1094,22 @@ function CreateQuizContent() {
   };
 
   return (
-    <div className="min-h-screen bg-background text-foreground bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-blue-50 via-background to-background dark:from-blue-950/20 dark:via-background dark:to-background">
+    <div className="min-h-screen bg-background text-foreground bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-blue-50 via-background to-background dark:from-blue-950/20 dark:via-background dark:to-background -mt-20 md:mt-0">
       <header className={`${glassmorphism.light} sticky top-0 z-50 border-b border-white/20 dark:border-white/10`}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 sm:py-4 flex items-center justify-between gap-2">
           <div className="flex items-center space-x-3 min-w-0">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="md:hidden mr-1 text-muted-foreground"
+              onClick={() => setSidebarOpen(true)}
+            >
+              <Menu className="h-6 w-6" />
+            </Button>
             <div className="h-8 w-8 sm:h-10 sm:w-10 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/20 flex-shrink-0">
               <BookOpen className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
             </div>
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <h1 className="text-lg sm:text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400 truncate">
                 {isEditMode ? 'Edit Quiz' : 'Create Quiz'}
               </h1>
@@ -1101,16 +1119,26 @@ function CreateQuizContent() {
             </div>
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
-            <Button variant="ghost" size="sm" onClick={() => router.back()} className="text-muted-foreground hover:text-foreground text-xs sm:text-sm">
-              Cancel
-            </Button>
+            <div className="hidden sm:flex items-center gap-2">
+              <Button variant="ghost" size="sm" onClick={() => router.back()} className="text-muted-foreground hover:text-foreground text-xs sm:text-sm">
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                onClick={handleCreateOrUpdateQuiz}
+                className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-md shadow-blue-500/20"
+              >
+                <SaveIcon className="h-4 w-4 mr-2" />
+                {isEditMode ? 'Update' : 'Create'}
+              </Button>
+            </div>
           </div>
         </div>
       </header>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <Tabs defaultValue="basic" className="space-y-8">
-          <TabsList className={`${glassmorphism.medium} p-1 rounded-2xl border border-white/20 dark:border-white/10 w-full grid grid-cols-2 sm:grid-cols-4 gap-1 mx-auto max-w-[600px]`}>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8 mb-20 md:mb-0">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6 sm:space-y-8">
+          <TabsList className={`${glassmorphism.medium} p-1 rounded-2xl border border-white/20 dark:border-white/10 w-full grid grid-cols-4 gap-1 mx-auto max-w-[600px]`}>
             <TabsTrigger value="basic" className="rounded-xl text-xs sm:text-sm data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-600 data-[state=active]:to-indigo-600 data-[state=active]:text-white transition-all duration-300">Basic</TabsTrigger>
             <TabsTrigger value="settings" className="rounded-xl text-xs sm:text-sm data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-600 data-[state=active]:to-indigo-600 data-[state=active]:text-white transition-all duration-300">Settings</TabsTrigger>
             <TabsTrigger value="questions" className="rounded-xl text-xs sm:text-sm data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-600 data-[state=active]:to-indigo-600 data-[state=active]:text-white transition-all duration-300">Questions</TabsTrigger>
@@ -1224,6 +1252,11 @@ function CreateQuizContent() {
                 </div>
               </CardContent>
             </Card>
+            <div className="flex justify-end pt-4">
+              <Button onClick={() => setActiveTab('settings')} className="w-full sm:w-auto">
+                Next <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
+            </div>
           </TabsContent>
 
           <TabsContent value="settings" className="space-y-8 focus-visible:outline-none">
@@ -1362,6 +1395,14 @@ function CreateQuizContent() {
                 </div>
               </CardContent>
             </Card>
+            <div className="flex justify-between pt-4 gap-4">
+              <Button variant="outline" onClick={() => setActiveTab('basic')} className="w-1/2 sm:w-auto">
+                <ArrowLeft className="mr-2 h-4 w-4" /> Back
+              </Button>
+              <Button onClick={() => setActiveTab('questions')} className="w-1/2 sm:w-auto">
+                Next <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
+            </div>
           </TabsContent>
 
           <TabsContent value="questions" className="space-y-8 focus-visible:outline-none">
@@ -1411,7 +1452,7 @@ function CreateQuizContent() {
               </CardHeader>
               <CardContent className="space-y-6 pt-6">
                 <div className="space-y-4">
-                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3 sm:gap-4">
                     <div className="col-span-2 sm:col-span-1 space-y-2">
                       <Label className="text-sm sm:text-base font-medium text-foreground">Search</Label>
                       <div className="relative">
@@ -1586,18 +1627,18 @@ function CreateQuizContent() {
                                 }`}
                               onClick={() => handleQuestionSelection(question)}
                             >
-                              <div className="flex items-start gap-4">
+                              <div className="flex flex-col sm:flex-row items-start gap-3 sm:gap-4">
                                 <Checkbox
                                   checked={isSelected}
                                   className={`mt-1 h-5 w-5 rounded-md border-2 ${isSelected ? 'border-blue-500 bg-blue-500 text-white' : 'border-gray-400 dark:border-gray-500'}`}
                                 />
-                                <div className="flex-1 space-y-2">
-                                  <div className="flex items-start justify-between gap-4">
+                                <div className="flex-1 space-y-2 w-full">
+                                  <div className="flex flex-col sm:flex-row items-start justify-between gap-2 sm:gap-4">
                                     <div
-                                      className="font-medium text-foreground text-base line-clamp-2"
+                                      className="font-medium text-foreground text-sm sm:text-base line-clamp-2"
                                       dangerouslySetInnerHTML={{ __html: question.questionText || 'Untitled Question' }}
                                     />
-                                    <div className="flex flex-col gap-2 shrink-0">
+                                    <div className="flex flex-row sm:flex-col gap-2 shrink-0 self-start sm:self-auto">
                                       {question.accessType === 'paid' ? (
                                         <Badge className="bg-gradient-to-r from-amber-500 to-yellow-500 text-white border-0">Premium</Badge>
                                       ) : question.seriesId ? (
@@ -1649,6 +1690,14 @@ function CreateQuizContent() {
                 </div>
               </CardContent>
             </Card>
+            <div className="flex justify-between pt-4 gap-4">
+              <Button variant="outline" onClick={() => setActiveTab('settings')} className="w-1/2 sm:w-auto">
+                <ArrowLeft className="mr-2 h-4 w-4" /> Back
+              </Button>
+              <Button onClick={() => setActiveTab('schedule')} className="w-1/2 sm:w-auto">
+                Next <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
+            </div>
           </TabsContent>
 
           <TabsContent value="schedule" className="space-y-8 focus-visible:outline-none">
@@ -1800,10 +1849,52 @@ function CreateQuizContent() {
                     {isEditMode ? 'Update Quiz' : 'Create Quiz'}
                   </Button>
                 </div>
+                <div className="flex justify-between gap-4 pt-4 md:hidden">
+                  <Button variant="outline" onClick={() => setActiveTab('questions')} className="w-full">
+                    <ArrowLeft className="mr-2 h-4 w-4" /> Back
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           </TabsContent>
         </Tabs>
+      </div>
+
+      {/* Sticky Mobile Footer Action Bar */}
+      <div className="fixed bottom-0 left-0 right-0 p-4 bg-background/80 backdrop-blur-lg border-t border-border md:hidden z-40 flex items-center justify-between gap-3">
+        {activeTab === 'basic' && (
+          <Button onClick={() => setActiveTab('settings')} className="w-full shadow-lg">
+            Next: Settings <ArrowRight className="ml-2 h-4 w-4" />
+          </Button>
+        )}
+        {activeTab === 'settings' && (
+          <div className="flex gap-2 w-full">
+            <Button variant="outline" onClick={() => setActiveTab('basic')} className="flex-1">
+              Back
+            </Button>
+            <Button onClick={() => setActiveTab('questions')} className="flex-[2] shadow-lg">
+              Next: Questions <ArrowRight className="ml-2 h-4 w-4" />
+            </Button>
+          </div>
+        )}
+        {activeTab === 'questions' && (
+          <div className="flex gap-2 w-full">
+            <Button variant="outline" onClick={() => setActiveTab('settings')} className="flex-1">
+              Back
+            </Button>
+            <Button onClick={() => setActiveTab('schedule')} className="flex-[2] shadow-lg">
+              Next: Schedule <ArrowRight className="ml-2 h-4 w-4" />
+            </Button>
+          </div>
+        )}
+        {activeTab === 'schedule' && (
+          <Button
+            onClick={handleCreateOrUpdateQuiz}
+            className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg"
+          >
+            <SaveIcon className="mr-2 h-4 w-4" /> {isEditMode ? 'Update Quiz' : 'Create Quiz'}
+          </Button>
+        )}
       </div>
     </div>
   );

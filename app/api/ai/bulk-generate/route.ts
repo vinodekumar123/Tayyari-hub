@@ -82,19 +82,22 @@ export async function POST(req: NextRequest) {
       `;
         }
 
-        if (strictMode) {
-            finalPrompt += `
-      6. STRICT METADATA CONTEXT:
+        // Unified Metadata Handling
+        finalPrompt += `
+      6. METADATA HANDLING:
          - Subject: "${metadata.subject}" (Set 'subject' field to this value for ALL questions).
-         - Chapter: "${metadata.chapter}" (If this is not "All Chapters", force this chapter for ALL questions, ignoring auto-detection).
-         - Difficulty: "${metadata.difficulty}" (Force this difficulty).
       `;
+
+        if (metadata.chapter && metadata.chapter !== 'All Chapters' && metadata.chapter !== 'All') {
+            finalPrompt += `   - Chapter: "${metadata.chapter}" (CRITICAL: Set 'chapter' field to EXACTLY this value for ALL questions. Do not auto-detect).\n`;
         } else {
-            finalPrompt += `
-      6. AUTO-DETECT METADATA:
-         - Subject: "${metadata.subject}" (Use this subject).
-         - Logic: Auto-detect the most appropriate 'difficulty' and 'chapter' (from the valid list) based on content.
-      `;
+            finalPrompt += `   - Chapter: Auto-detect the most appropriate 'chapter' based on the question content. Choose ONLY from the valid chapters list provided above.\n`;
+        }
+
+        if (strictMode) {
+            finalPrompt += `   - Difficulty: "${metadata.difficulty}" (Force this difficulty).\n`;
+        } else {
+            finalPrompt += `   - Difficulty: Auto-detect based on content.\n`;
         }
 
         if (correctGrammar && !strictPreservation) {

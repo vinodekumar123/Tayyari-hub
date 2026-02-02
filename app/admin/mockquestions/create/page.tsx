@@ -611,6 +611,21 @@ function CreateQuestionPageContent() {
     }
   };
 
+  const handleResetMetadata = () => {
+    setQuestionData(prev => ({
+      ...prev,
+      course: '',
+      courses: [], // Reset selected courses array
+      subject: '',
+      chapter: '',
+      topic: '',
+      difficulty: 'Medium',
+      year: '',
+      book: '',
+    }));
+    toast.info("Metadata reset to defaults");
+  };
+
   // Helpers for Selects
   const selectedCourse = firestoreCourses.find(c => c.name === questionData.course);
   const filteredSubjects = selectedCourse ? firestoreSubjects.filter(s => selectedCourse.subjectIds.includes(s.id)) : [];
@@ -1051,8 +1066,11 @@ function CreateQuestionPageContent() {
 
           {/* Metadata Settings */}
           <Card className="dark:bg-gray-900 dark:border-gray-800">
-            <CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-lg">Metadata</CardTitle>
+              <Button variant="ghost" size="sm" onClick={handleResetMetadata} className="h-8 text-xs text-muted-foreground hover:text-red-500">
+                <RotateCcw className="h-3.5 w-3.5 mr-1" /> Reset
+              </Button>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-4">

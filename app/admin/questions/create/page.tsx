@@ -440,7 +440,17 @@ const CreateQuestionPageContent = () => {
     }
   };
 
-
+  const handleResetMetadata = () => {
+    setSelectedCourse('');
+    setSubject('');
+    setTopic('');
+    setSubtopic('');
+    setChapter('');
+    setYear('');
+    setBook('');
+    setDifficulty('Medium');
+    toast.info("Metadata reset to defaults");
+  };
 
   // Memoized Available Subjects based on Course & Role
   const availableSubjects = useMemo(() => {
@@ -593,7 +603,7 @@ const CreateQuestionPageContent = () => {
               </p>
             </div>
 
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
               <Button
                 variant="outline"
                 disabled={isAiBulkLoading || isCsvLoading}
@@ -777,8 +787,11 @@ const CreateQuestionPageContent = () => {
         {/* Sidebar Settings */}
         <div className="space-y-6">
           <Card>
-            <CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle>Settings</CardTitle>
+              <Button variant="ghost" size="sm" onClick={handleResetMetadata} className="h-8 text-xs text-muted-foreground hover:text-red-500">
+                <RotateCcw className="h-3.5 w-3.5 mr-1" /> Reset
+              </Button>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">

@@ -38,7 +38,7 @@ import {
   Filler
 } from 'chart.js';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Calendar, Filter, Printer, Download, ChevronLeft, TrendingUp, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Calendar, Filter, Printer, Download, ChevronLeft, TrendingUp, AlertCircle, CheckCircle2, ClipboardList } from 'lucide-react';
 import { glassmorphism, brandColors } from '@/lib/design-tokens';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -799,6 +799,14 @@ function ForAdminStudentResultsContent() {
               >
                 <Printer className='w-4 h-4' /> Print Report
               </Button>
+
+              <Button
+                onClick={() => router.push(`/admin/students/user-results?studentId=${studentId}`)}
+                className="bg-gradient-to-r from-emerald-500 to-teal-600 text-white hover:opacity-90 transition-opacity"
+              >
+                <ClipboardList className="w-4 h-4 mr-2" />
+                View Mock Results
+              </Button>
             </div>
           </div>
 
@@ -1072,7 +1080,7 @@ function ForAdminStudentResultsContent() {
           </div>
         </CardContent>
       </Card>
-    </div>
+    </div >
   );
 }
 

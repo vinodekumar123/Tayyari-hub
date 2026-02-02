@@ -25,6 +25,7 @@ interface UseAutoSaveOptions {
     isAdmin: boolean;
     debounceMs?: number;
     timerSyncIntervalMs?: number;
+    collectionPath?: string; // Add this
 }
 
 // --- Hook ---
@@ -34,6 +35,7 @@ export function useAutoSave({
     isAdmin,
     debounceMs = 500,
     timerSyncIntervalMs = 30000,
+    collectionPath, // Add this
 }: UseAutoSaveOptions) {
     const [saveState, setSaveState] = useState<AutoSaveState>({
         status: 'idle',
@@ -73,8 +75,9 @@ export function useAutoSave({
                     updatedAt: serverTimestamp(),
                 };
 
+                const targetPath = collectionPath || 'quizAttempts';
                 await setDoc(
-                    doc(db, 'users', user.uid, 'quizAttempts', quizId),
+                    doc(db, 'users', user.uid, targetPath, quizId),
                     payload,
                     { merge: true }
                 );

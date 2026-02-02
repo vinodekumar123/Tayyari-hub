@@ -14,7 +14,9 @@ import {
   QueryDocumentSnapshot,
   DocumentData,
   writeBatch,
-  updateDoc
+  updateDoc,
+  orderBy,
+  getCountFromServer
 } from 'firebase/firestore';
 import { db } from '../../../firebase';
 import {
@@ -90,6 +92,7 @@ import {
   BarChart2,
   Info,
   CheckCircle,
+  Database
 } from 'lucide-react';
 import { toast } from 'sonner';
 import Papa from 'papaparse';
@@ -187,9 +190,10 @@ export default function MockQuestionBankPage() {
       }
 
       if (constraints.length > 0) {
-        q = query(collection(db, 'mock-questions'), ...constraints, limit(ITEMS_PER_PAGE));
+        // Note: usage of orderBy with where clauses may require composite indexes
+        q = query(collection(db, 'mock-questions'), ...constraints, orderBy('createdAt', 'desc'), limit(ITEMS_PER_PAGE));
       } else {
-        q = query(collection(db, 'mock-questions'), limit(ITEMS_PER_PAGE));
+        q = query(collection(db, 'mock-questions'), orderBy('createdAt', 'desc'), limit(ITEMS_PER_PAGE));
       }
 
       if (isLoadMore && currentLastDoc) {
@@ -233,7 +237,7 @@ export default function MockQuestionBankPage() {
       const years = new Set([...availableYears, ...fetched.map(q => q.year || '')].filter(Boolean));
       setAvailableYears(Array.from(years));
 
-      fetchStats(fetched.map(q => q.id));
+      fetchUsageStats(fetched.map(q => q.id));
 
     } catch (error) {
       console.error("Error fetching questions:", error);
@@ -252,7 +256,56 @@ export default function MockQuestionBankPage() {
     return () => clearTimeout(timer);
   }, [searchQuery, filterCourse, filterSubject, filterDifficulty, filterYear, filterStatus, showDeleted]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const fetchStats = async (ids: string[]) => {
+  const [globalStats, setGlobalStats] = useState({
+    total: 0,
+    active: 0,
+    deleted: 0
+  });
+  const [subjectStats, setSubjectStats] = useState<{ subject: string; count: number }[]>([]);
+
+  useEffect(() => {
+    fetchCollectionStats();
+  }, []);
+
+  const fetchCollectionStats = async () => {
+    try {
+      const coll = collection(db, 'mock-questions');
+
+      // Total & Deleted Stats
+      const allSnapshot = await getCountFromServer(query(coll));
+      const allCount = allSnapshot.data().count;
+
+      const deletedSnapshot = await getCountFromServer(query(coll, where('isDeleted', '==', true)));
+      const deletedCount = deletedSnapshot.data().count;
+
+      setGlobalStats({
+        total: allCount,
+        active: allCount - deletedCount,
+        deleted: deletedCount
+      });
+
+      // Subject Wise Stats
+      // First get all subjects
+      const subjectsSnap = await getDocs(collection(db, 'subjects'));
+      const subjects = subjectsSnap.docs.map(d => d.data().name);
+
+      const statsPromises = subjects.map(async (subject: string) => {
+        const snapshot = await getCountFromServer(query(coll, where('subject', '==', subject), where('isDeleted', '!=', true)));
+        return {
+          subject,
+          count: snapshot.data().count
+        };
+      });
+
+      const results = await Promise.all(statsPromises);
+      setSubjectStats(results.sort((a, b) => b.count - a.count));
+
+    } catch (e) {
+      console.error("Error fetching collection stats:", e);
+    }
+  };
+
+  const fetchUsageStats = async (ids: string[]) => {
     if (ids.length === 0) return;
     try {
       const qSnap = await getDocs(collection(db, 'quizzes'));
@@ -453,6 +506,75 @@ export default function MockQuestionBankPage() {
           </Button>
         </div>
       </div>
+
+      {/* Database Statistics */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 animate-in fade-in slide-in-from-top-4 duration-500">
+        <Card className="bg-white dark:bg-gray-900 border-gray-100 dark:border-gray-800 shadow-sm">
+          <CardContent className="p-4 flex items-center justify-between">
+            <div className="space-y-1">
+              <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Total Questions</p>
+              <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{globalStats.total}</h2>
+            </div>
+            <div className="bg-blue-50 dark:bg-blue-900/20 p-2.5 rounded-lg">
+              <Database className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-white dark:bg-gray-900 border-gray-100 dark:border-gray-800 shadow-sm">
+          <CardContent className="p-4 flex items-center justify-between">
+            <div className="space-y-1">
+              <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Active</p>
+              <h2 className="text-2xl font-bold text-green-600 dark:text-green-400">{globalStats.active}</h2>
+            </div>
+            <div className="bg-green-50 dark:bg-green-900/20 p-2.5 rounded-lg">
+              <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-white dark:bg-gray-900 border-gray-100 dark:border-gray-800 shadow-sm">
+          <CardContent className="p-4 flex items-center justify-between">
+            <div className="space-y-1">
+              <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Deleted</p>
+              <h2 className="text-2xl font-bold text-red-600 dark:text-red-400">{globalStats.deleted}</h2>
+            </div>
+            <div className="bg-red-50 dark:bg-red-900/20 p-2.5 rounded-lg">
+              <Trash2 className="h-5 w-5 text-red-600 dark:text-red-400" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-white dark:bg-gray-900 border-gray-100 dark:border-gray-800 shadow-sm md:col-span-1">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Top Subjects</p>
+              <PieChart className="h-4 w-4 text-gray-400" />
+            </div>
+            <div className="space-y-2 max-h-[60px] overflow-y-auto pr-1">
+              {subjectStats.slice(0, 3).map((s, i) => (
+                <div key={i} className="flex justify-between items-center text-sm">
+                  <span className="truncate max-w-[120px]" title={s.subject}>{s.subject}</span>
+                  <span className="font-semibold bg-gray-100 dark:bg-gray-800 px-1.5 rounded text-xs">{s.count}</span>
+                </div>
+              ))}
+              {subjectStats.length === 0 && <span className="text-xs text-gray-400">No data available</span>}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Subject Distribution Detail (Collapsible or just a separate row if needed) */}
+      {subjectStats.length > 0 && (
+        <div className="flex gap-2 overflow-x-auto pb-2 -mx-2 px-2 hidden sm:flex">
+          {subjectStats.map((s, i) => (
+            <Badge key={i} variant="outline" className="whitespace-nowrap flex gap-2 bg-white dark:bg-gray-900 py-1">
+              {s.subject}
+              <span className="bg-gray-100 dark:bg-gray-800 px-1 rounded text-[10px]">{s.count}</span>
+            </Badge>
+          ))}
+        </div>
+      )}
 
       {/* Toolbar */}
       <div className="sticky top-0 z-10 -mx-6 px-6 py-4 bg-gray-50/80 dark:bg-gray-950/80 backdrop-blur-md border-b border-gray-200 dark:border-gray-800 flex flex-col md:flex-row gap-4 items-center justify-between transition-all">

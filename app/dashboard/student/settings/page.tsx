@@ -78,7 +78,13 @@ export default function StudentSettingsPage() {
             const enrollRef = collection(db, 'enrollments');
             const q = query(enrollRef, where('studentId', '==', user.uid), where('status', 'in', ['active', 'paid', 'enrolled']));
             const snap = await getDocs(q);
-            const items = snap.docs.map(d => ({ seriesId: d.data().seriesId, seriesName: d.data().seriesName || d.data().series || 'Unknown', enrolledAt: d.data().enrolledAt || d.data().paymentDate || d.data().createdAt, status: d.data().status }));
+            const items = snap.docs.map(d => ({
+                id: d.id,
+                seriesId: d.data().seriesId,
+                seriesName: d.data().seriesName || d.data().series || 'Unknown',
+                enrolledAt: d.data().enrolledAt || d.data().paymentDate || d.data().createdAt,
+                status: d.data().status
+            }));
             setEnrolledSeries(items as any);
         } catch (err) {
             console.error('Failed to load enrollments', err);
@@ -317,8 +323,8 @@ export default function StudentSettingsPage() {
                                         <p className="text-sm text-slate-500">You are not enrolled in any series.</p>
                                     ) : (
                                         <div className="mt-3 space-y-2">
-                                            {enrolledSeries.map((s) => (
-                                                <div key={s.seriesId} className="flex items-center justify-between p-3 rounded-lg border bg-white/50 dark:bg-slate-900/50">
+                                            {enrolledSeries.map((s: any) => (
+                                                <div key={s.id} className="flex items-center justify-between p-3 rounded-lg border bg-white/50 dark:bg-slate-900/50">
                                                     <div>
                                                         <div className="font-semibold">{s.seriesName}</div>
                                                         <div className="text-xs text-muted-foreground">{s.enrolledAt ? format(new Date(s.enrolledAt?.seconds ? s.enrolledAt.seconds * 1000 : s.enrolledAt), 'MMM dd, yyyy') : ''}</div>

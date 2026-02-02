@@ -224,9 +224,21 @@ export default function SyncPage() {
             if (filterDifficulty !== 'all') constraints.push(where('difficulty', '==', filterDifficulty));
             if (filterStatus !== 'all') constraints.push(where('status', '==', filterStatus));
             // Removed: where('isSynced', '!=', true) - causes index issues, filtering client-side
+            // Firestore limitation: Inequalities (>=, <=, !=) can only be on ONE field.
+            // We prioritize Date filters if strictly one date is provided (which uses inequality).
+            // If both dates are provided, we filter dates client-side so we CAN use isSynced inequality on server.
+            // If no dates, we CAN use isSynced inequality on server.
 
-            // Date filters - only add if we have an orderBy or single inequality
-            // Firestore limitation: can only have inequality filters on one field
+            // const hasDateInequality = (fromDate && !toDate) || (!fromDate && toDate);
+
+            // Only add server-side isSynced filter if we don't have a date inequality
+            // REVERTED: Server-side check excludes documents where 'isSynced' field is missing (Legacy data).
+            // We must filter client-side until all data is migrated.
+            // if (onlyUnsynced && !hasDateInequality) {
+            //    constraints.push(where('isSynced', '!=', true));
+            // }
+
+            // Date filters
             if (fromDate && !toDate) {
                 constraints.push(where('createdAt', '>=', new Date(fromDate)));
             } else if (toDate && !fromDate) {
@@ -234,14 +246,15 @@ export default function SyncPage() {
                 endDate.setHours(23, 59, 59, 999);
                 constraints.push(where('createdAt', '<=', endDate));
             }
-            // If both dates provided, we'll filter client-side to avoid index issues
+            // If both dates provided, we filter client-side (no server inequality added here)
 
             // Query source questions
+            // INCREASED LIMIT: 10,000 to handle larger datasets
             let q;
             if (constraints.length > 0) {
-                q = query(collection(db, 'questions'), ...constraints, limit(1000));
+                q = query(collection(db, 'questions'), ...constraints, limit(10000));
             } else {
-                q = query(collection(db, 'questions'), limit(1000));
+                q = query(collection(db, 'questions'), limit(10000));
             }
 
             const sourceSnap = await getDocs(q);
@@ -255,6 +268,9 @@ export default function SyncPage() {
             sources = sources.filter(s => !s.isDeleted);
 
             // Filter by isSynced if option is enabled
+            // Filter by isSynced if option is enabled AND we couldn't do it server-side (due to date inequality)
+            // Filter by isSynced if option is enabled
+            // ALWAYS filter client-side for safety with legacy data
             if (onlyUnsynced) {
                 sources = sources.filter(s => s.isSynced !== true);
             }
@@ -754,7 +770,7 @@ export default function SyncPage() {
                             </CardHeader>
                             <CardContent>
                                 <div className="max-h-[400px] overflow-y-auto space-y-2 border rounded-lg p-4 bg-gray-50 dark:bg-slate-900">
-                                    {sourceQuestions.map(question => {
+                                    {sourceQuestions.slice(0, 100).map(question => {
                                         const result = duplicateResults.get(question.id);
                                         const isSelected = selectedQuestions.has(question.id);
 
@@ -809,6 +825,12 @@ export default function SyncPage() {
                                         );
                                     })}
                                 </div>
+
+                                {sourceQuestions.length > 100 && (
+                                    <div className="mt-2 text-center text-sm text-gray-500 italic">
+                                        Previewing 100 of {sourceQuestions.length} items. All items are available for selection.
+                                    </div>
+                                )}
 
                                 {/* Sync Button */}
                                 <div className="mt-6 flex justify-end">

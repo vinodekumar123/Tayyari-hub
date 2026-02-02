@@ -10,10 +10,18 @@ import { onAuthStateChanged, User } from 'firebase/auth';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
+import { Badge } from '@/components/ui/badge';
 import {
   Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
-import { ArrowLeft, ArrowRight, BookOpen, Clock, Send, CheckCircle, Flag } from 'lucide-react';
+import {
+  ArrowLeft, ArrowRight, BookOpen, Clock, Send, CheckCircle, Flag,
+  WifiOff, Save, Loader2, Info, Layout, ChevronRight, AlertCircle,
+  BookMarked, Sparkles
+} from 'lucide-react';
+import { useAutoSave, QuizProgress } from '../start/hooks/useAutoSave';
+import { toast } from 'sonner';
+import { ModeToggle } from '@/components/mode-toggle';
 
 interface Question {
   id: string;
@@ -74,6 +82,7 @@ const StartUserQuizPageContent: React.FC = () => {
   const [flags, setFlags] = useState<Record<string, boolean>>({});
   const [currentPage, setCurrentPage] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSummaryModal, setShowSummaryModal] = useState(false);
   const [showSubmissionModal, setShowSubmissionModal] = useState(false);
   const [timeLeft, setTimeLeft] = useState(0);
@@ -83,42 +92,90 @@ const StartUserQuizPageContent: React.FC = () => {
 
   const [attemptCount, setAttemptCount] = useState(0);
   const [error, setError] = useState<string | null>(null);
-
-  // Block reattempts
   const [alreadyCompleted, setAlreadyCompleted] = useState(false);
-
-  // Dynamic questionsPerPage
   const [questionsPerPage, setQuestionsPerPage] = useState(1);
 
+  // Premium UI States
+  const [loadingStep, setLoadingStep] = useState(0);
+  const loadingSteps = [
+    { label: 'Authenticating', icon: '🔐' },
+    { label: 'Loading mock data', icon: '📋' },
+    { label: 'Restoring progress', icon: '📊' },
+    { label: 'Ready', icon: '✅' },
+  ];
+  const [isOnline, setIsOnline] = useState(true);
+
+  // --- Auto-save Hook ---
+  const { saveState, debouncedSave, saveImmediately, startTimerSync, stopTimerSync } = useAutoSave({
+    user,
+    quizId,
+    isAdmin: false, // For mock quizzes, we usually track even for teachers if they use the student view
+    debounceMs: 500,
+    timerSyncIntervalMs: 30000,
+    collectionPath: 'user-quizattempts'
+  });
+
+  const getProgressRef = useRef<() => QuizProgress>(() => ({
+    answers,
+    flags,
+    currentIndex: currentPage * questionsPerPage,
+    remainingTime: timeLeft,
+  }));
+
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, async (u) => {
+    getProgressRef.current = () => ({
+      answers,
+      flags,
+      currentIndex: currentPage * questionsPerPage,
+      remainingTime: timeLeft,
+    });
+  }, [answers, flags, currentPage, timeLeft, questionsPerPage]);
+
+  // Online status
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    setIsOnline(navigator.onLine);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
+  // Auth listener
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (u) => {
       setUser(u);
+      setLoadingStep(1);
       if (!u) {
+        toast.error('Please login to access the quiz');
         router.push('/login');
       }
     });
-    return () => unsub();
+    return () => unsubscribe();
   }, [router]);
 
+  // Load quiz and restore progress
   useEffect(() => {
     if (!quizId || !user) return;
+
     const load = async () => {
       try {
+        setLoadingStep(1); // Loading quiz data
         const quizSnap = await getDoc(doc(db, 'user-quizzes', quizId));
         if (!quizSnap.exists()) {
-          setError('Quiz not found.');
-          router.push('/admin/quizzes/user-created-quizzes');
+          toast.error('Quiz not found');
+          router.push('/dashboard/student');
           return;
         }
+
         const quizData = quizSnap.data() as UserQuizDoc;
         setQuiz(quizData);
-
         setQuestionsPerPage(quizData.questionsPerPage || 1);
 
-        const selectedQuestions = quizData.selectedQuestions || [];
-        let loadedQuestions: Question[] = [];
-
-        loadedQuestions = selectedQuestions.map((q: any) => ({
+        const loadedQuestions: Question[] = (quizData.selectedQuestions || []).map((q: any) => ({
           id: q.id,
           questionText: q.questionText,
           options: q.options,
@@ -128,21 +185,17 @@ const StartUserQuizPageContent: React.FC = () => {
           subject: q.subject,
           difficulty: q.difficulty,
         }));
-
         setQuestions(loadedQuestions);
 
+        setLoadingStep(2); // Restoring progress
         const attemptDocRef = doc(db, 'users', user.uid, 'user-quizattempts', quizId);
         const attemptSnap = await getDoc(attemptDocRef);
-        let currentAttempt = 0;
+
         if (attemptSnap.exists() && attemptSnap.data().completed) {
           setAlreadyCompleted(true);
           setLoading(false);
           return;
         }
-        if (attemptSnap.exists() && attemptSnap.data().attemptNumber) {
-          currentAttempt = attemptSnap.data().attemptNumber || 1;
-        }
-        setAttemptCount(currentAttempt);
 
         if (attemptSnap.exists() && !attemptSnap.data().completed) {
           const at = attemptSnap.data();
@@ -150,6 +203,7 @@ const StartUserQuizPageContent: React.FC = () => {
           setFlags(at.flags || {});
           setCurrentPage(at.currentIndex ? Math.floor(at.currentIndex / (quizData.questionsPerPage || 1)) : 0);
           setTimeLeft(at.remainingTime ?? quizData.duration * 60);
+          setAttemptCount(at.attemptNumber || 0);
         } else {
           setTimeLeft(quizData.duration * 60);
           setAnswers({});
@@ -165,139 +219,97 @@ const StartUserQuizPageContent: React.FC = () => {
             quizType: 'user',
           }, { merge: true });
         }
-        setHasLoadedTime(true);
-        setLoading(false);
+
+        setLoadingStep(3); // Ready
+        setTimeout(() => {
+          setHasLoadedTime(true);
+          setLoading(false);
+        }, 500);
       } catch (err: any) {
+        console.error('Failed to load quiz:', err);
         setError('Error loading quiz: ' + (err?.message || String(err)));
         setLoading(false);
       }
     };
+
     load();
   }, [quizId, user, router]);
 
+  // Timer sync
+  const isAdmin = false;
   useEffect(() => {
-    if (loading || !quiz || showSubmissionModal || !hasLoadedTime) return;
-    if (timeLeft <= 0) {
-      handleSubmit();
-      return;
-    }
-    if (timerRef.current) clearInterval(timerRef.current);
-    timerRef.current = setInterval(() => {
-      setTimeLeft(prev => {
-        if (prev <= 1) {
-          clearInterval(timerRef.current!);
-          handleSubmit();
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-      timerRef.current = null;
-    };
-    // eslint-disable-next-line
-  }, [loading, quiz, showSubmissionModal, hasLoadedTime]);
+    if (loading || !quiz || isAdmin) return;
+    startTimerSync(() => getProgressRef.current());
+    return () => stopTimerSync();
+  }, [loading, quiz, startTimerSync, stopTimerSync]);
 
-  useEffect(() => {
-    if (!user || !quiz) return;
-    const timeout = setTimeout(() => {
-      setDoc(doc(db, 'users', user.uid, 'user-quizattempts', quizId), {
-        answers,
-        flags,
-        currentIndex: currentPage * questionsPerPage,
-        remainingTime: timeLeft,
-      }, { merge: true });
-    }, 800);
-    return () => clearTimeout(timeout);
-    // eslint-disable-next-line
-  }, [answers, flags, currentPage, timeLeft, quiz, user, quizId, questionsPerPage]);
-
+  // Cleanup on unload
   useEffect(() => {
     const handleUnload = () => {
       if (user && quiz && !hasSubmittedRef.current) {
-        setDoc(doc(db, 'users', user.uid, 'user-quizattempts', quizId), {
-          answers,
-          flags,
-          currentIndex: currentPage * questionsPerPage,
-          remainingTime: timeLeft,
-        }, { merge: true });
+        saveImmediately(getProgressRef.current());
       }
     };
     window.addEventListener('beforeunload', handleUnload);
     return () => window.removeEventListener('beforeunload', handleUnload);
-    // eslint-disable-next-line
-  }, [answers, flags, currentPage, timeLeft, quiz, user, quizId, questionsPerPage]);
+  }, [user, quiz, saveImmediately]);
 
+  // Handlers
   const handleAnswer = (qid: string, val: string) => {
     const updatedAnswers = { ...answers, [qid]: val };
     setAnswers(updatedAnswers);
-    if (user && quiz) {
-      setDoc(doc(db, 'users', user.uid, 'user-quizattempts', quizId), {
-        answers: updatedAnswers,
-        flags,
-        currentIndex: currentPage * questionsPerPage,
-        remainingTime: timeLeft,
-      }, { merge: true });
-    }
+    debouncedSave({
+      ...getProgressRef.current(),
+      answers: updatedAnswers
+    });
   };
+
   const toggleFlag = (qid: string) => {
     const updatedFlags = { ...flags, [qid]: !flags[qid] };
     if (!updatedFlags[qid]) delete updatedFlags[qid];
     setFlags(updatedFlags);
-    if (user && quiz) {
-      setDoc(doc(db, 'users', user.uid, 'user-quizattempts', quizId), {
-        answers,
-        flags: updatedFlags,
-        currentIndex: currentPage * questionsPerPage,
-        remainingTime: timeLeft,
-      }, { merge: true });
-    }
+    debouncedSave({
+      ...getProgressRef.current(),
+      flags: updatedFlags
+    });
   };
 
   const handleSubmit = async () => {
-    if (hasSubmittedRef.current) return;
-    hasSubmittedRef.current = true;
+    if (hasSubmittedRef.current || isSubmitting) return;
     if (!user || !quiz) {
-      setError('User or quiz not loaded. Please wait and try again.');
-      hasSubmittedRef.current = false;
+      toast.error('Quiz not fully loaded');
       return;
     }
 
+    // Show summary modal if not already shown (optional, usually handled by UI button)
+    // Here we assume it's called from Confirm button in modal
+
+    hasSubmittedRef.current = true;
+    setIsSubmitting(true);
+
     try {
+      if (!navigator.onLine) throw new Error('No Internet Connection');
+
       let score = 0;
-      const detailed: Array<{
-        questionId: string;
-        questionText: string;
-        selected: string | null;
-        correct: string | null;
-        isCorrect: boolean;
-        explanation?: string | null;
-        options: string[];
-        chapter?: string | null;
-        subject?: string | null;
-        difficulty?: string | null;
-      }> = [];
-      for (const q of questions) {
-        const selected = answers[q.id] === undefined ? null : answers[q.id];
-        const correct = q.correctAnswer === undefined ? null : q.correctAnswer;
-        const isCorrect = (selected && correct && selected === correct) ? true : false;
-        detailed.push({
+      const detailed = questions.map(q => {
+        const selected = answers[q.id] || null;
+        const correct = q.correctAnswer || null;
+        const isCorrect = (selected && correct && selected === correct) || false;
+        if (isCorrect) score += 1;
+
+        return {
           questionId: q.id,
-          questionText: stripHtml(q.questionText),
+          questionText: q.questionText,
           selected,
           correct,
           isCorrect,
-          explanation: q.explanation === undefined ? null : q.explanation,
+          explanation: q.explanation || null,
           options: q.options,
-          chapter: q.chapter === undefined ? null : q.chapter,
-          subject: q.subject === undefined ? null : q.subject,
-          difficulty: q.difficulty === undefined ? null : q.difficulty,
-        });
-        if (isCorrect) score += 1;
-      }
-
-      const cleanedDetailed = cleanObject(detailed);
+          chapter: q.chapter || null,
+          subject: q.subject || null,
+          difficulty: q.difficulty || null,
+        };
+      });
 
       const attemptPath = doc(db, 'users', user.uid, 'user-quizattempts', quizId);
       await setDoc(attemptPath, {
@@ -308,7 +320,7 @@ const StartUserQuizPageContent: React.FC = () => {
         remainingTime: 0,
         attemptNumber: attemptCount + 1,
         quizType: 'user',
-        detailed: cleanedDetailed,
+        detailed: cleanObject(detailed),
         score,
         total: questions.length,
       }, { merge: true });
@@ -329,29 +341,114 @@ const StartUserQuizPageContent: React.FC = () => {
           subject: quiz.subject,
           timestamp: serverTimestamp() as any
         }, 'user');
-      } catch (error) {
-        console.error("Stats update failed", error);
+      } catch (e) {
+        console.warn("Stats update failed", e);
       }
 
       setShowSubmissionModal(true);
       setShowSummaryModal(false);
       setTimeout(() => {
-        setShowSubmissionModal(false);
-        router.push(`/admin/students/user-responses?id=${quizId}`);
+        router.push(`/dashboard/student/user-responses?id=${quizId}`);
       }, 2500);
+
     } catch (err: any) {
-      setError('Submission failed: ' + (err?.message || String(err)));
-      setShowSubmissionModal(false);
+      console.error('Submission failed:', err);
+      toast.error('Submission failed: ' + err.message);
+      setIsSubmitting(false);
       hasSubmittedRef.current = false;
-      console.error('Quiz submission error:', err);
     }
   };
 
-  const formatTime = (sec: number) => {
-    const m = Math.floor(sec / 60).toString().padStart(2, '0');
-    const s = (sec % 60).toString().padStart(2, '0');
-    return `${m}:${s}`;
-  };
+  if (alreadyCompleted) {
+    return (
+      <div className="flex justify-center items-center min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 p-4">
+        <Card className="max-w-md w-full shadow-2xl overflow-hidden border-0 group">
+          <div className="h-2 w-full bg-red-500" />
+          <CardHeader className="text-center pt-8">
+            <div className="mx-auto w-16 h-16 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mb-4 transition-transform group-hover:scale-110 duration-500">
+              <AlertCircle className="h-8 w-8 text-red-600" />
+            </div>
+            <CardTitle className="text-2xl font-black text-gray-800 dark:text-gray-100">Attempt Blocked</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-6 pb-8 text-center">
+            <p className="text-muted-foreground font-medium">
+              You have already completed this mock quiz. Standard practice allows only one attempt per mock to ensure data integrity.
+            </p>
+            <div className="flex flex-col gap-3">
+              <Button
+                size="lg"
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold h-12 shadow-lg shadow-blue-600/20"
+                onClick={() => router.push(`/admin/students/user-responses?id=${quizId}`)}
+              >
+                <Layout className="w-4 h-4 mr-2" /> View Detailed Results
+              </Button>
+              <Button
+                variant="ghost"
+                className="w-full text-muted-foreground hover:text-foreground"
+                onClick={() => router.push('/dashboard/student')}
+              >
+                Return to Dashboard
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // --- Loading State ---
+  if (loading || !quiz) {
+    const currentStep = loadingStep;
+    const progressPercent = ((currentStep + 1) / loadingSteps.length) * 100;
+
+    return (
+      <div className="flex justify-center items-center min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800">
+        <div className="flex flex-col items-center gap-6 p-8 bg-white dark:bg-gray-900 rounded-2xl shadow-xl max-w-md w-full mx-4">
+          <div className="w-16 h-16 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-3xl animate-pulse">
+            {loadingSteps[currentStep].icon}
+          </div>
+          <h2 className="text-xl font-bold text-gray-800 dark:text-gray-100">Preparing Your Mock</h2>
+          <div className="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-gradient-to-r from-blue-500 to-indigo-600 transition-all duration-500 ease-out"
+              style={{ width: `${progressPercent}%` }}
+            />
+          </div>
+          <div className="w-full space-y-2">
+            {loadingSteps.map((step, i) => (
+              <div
+                key={i}
+                className={`flex items-center gap-3 p-2 rounded-lg transition-all ${i === currentStep
+                  ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300'
+                  : i < currentStep
+                    ? 'text-green-600 dark:text-green-400'
+                    : 'text-gray-400 dark:text-gray-600'
+                  }`}
+              >
+                <div className={`w-6 h-6 rounded-full flex items-center justify-center text-sm ${i < currentStep
+                  ? 'bg-green-500 text-white'
+                  : i === currentStep
+                    ? 'bg-blue-500 text-white animate-pulse'
+                    : 'bg-gray-200 dark:bg-gray-700 text-gray-500'
+                  }`}>
+                  {i < currentStep ? '✓' : i + 1}
+                </div>
+                <span className="text-sm font-medium">{step.label}</span>
+                {i === currentStep && (
+                  <div className="ml-auto">
+                    <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+          <p className="text-sm text-gray-500 dark:text-gray-400 animate-pulse">
+            {loadingSteps[currentStep].label}...
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   // PAGINATION LOGIC
   const totalPages = Math.ceil(questions.length / questionsPerPage);
@@ -382,219 +479,263 @@ const StartUserQuizPageContent: React.FC = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // BLOCK if already completed
-  if (alreadyCompleted) {
-    return (
-      <div className="flex flex-col items-center justify-center h-screen">
-        <Card className="max-w-md w-full shadow-lg p-8">
-          <CardHeader>
-            <CardTitle className="text-red-600">Quiz Already Completed</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-gray-700 mb-4">
-              You have already completed this quiz. Reattempt is not allowed.
-            </p>
-            <Button onClick={() => router.push('/admin/students/user-responses?id=' + quizId)}>
-              View Your Results
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
-  if (error) return <div className="text-red-600 text-center py-10">{error}</div>;
-  if (loading || !quiz || questions.length === 0) return <p className="text-center py-10">Loading...</p>;
+  const formatTime = (sec: number) => {
+    const m = Math.floor(sec / 60).toString().padStart(2, '0');
+    const s = (sec % 60).toString().padStart(2, '0');
+    return `${m}:${s}`;
+  };
 
   return (
-    <div className="min-h-screen bg-gray-50 px-4">
-      {showSubmissionModal && (
-        <Dialog open={showSubmissionModal}>
-          <DialogContent className="w-[90vw] max-w-md sm:max-w-lg bg-white rounded-xl shadow-2xl animate-fade-in">
-            <DialogHeader className="text-center">
-              <DialogTitle className="flex flex-col items-center gap-2">
-                <CheckCircle className="h-12 w-12 text-green-600 animate-bounce" />
-                <span className="text-2xl font-bold text-gray-900">Quiz Submitted!</span>
-              </DialogTitle>
-              <DialogDescription className="text-gray-600 text-lg">
-                Your quiz has been successfully submitted. Redirecting to results...
-              </DialogDescription>
-            </DialogHeader>
-          </DialogContent>
-        </Dialog>
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 transition-colors duration-300 select-none pb-20">
+      {/* Offline Banner */}
+      {!isOnline && (
+        <div className="bg-red-500 text-white px-4 py-2 text-center text-sm font-medium flex items-center justify-center gap-2 sticky top-0 z-50">
+          <WifiOff className="w-4 h-4" />
+          You are offline. Progress is being saved locally.
+        </div>
       )}
 
-      {showSummaryModal && (
-        <Dialog open={showSummaryModal} onOpenChange={setShowSummaryModal}>
-          <DialogContent className="w-[90vw] max-w-md sm:max-w-lg max-h-[80vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>Summary before Submission</DialogTitle>
-              <DialogDescription>Review skipped and flagged questions before final submission.</DialogDescription>
-            </DialogHeader>
-            <div className="mt-4 space-y-4">
-              <div className="bg-gray-50 p-3 rounded">
-                <p className="font-semibold">Answered: {attemptedCount} / {questions.length}</p>
-                <p className="font-semibold">Flagged: {flaggedCount}</p>
-              </div>
-              <div>
-                <h3 className="font-semibold">Skipped Questions ({skippedQuestionIndexes.length})</h3>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {skippedQuestionIndexes.length === 0 ? (
-                    <span className="text-sm text-gray-600">None</span>
-                  ) : (
-                    skippedQuestionIndexes.map((n) => (
-                      <Button key={n} variant="outline" onClick={() => jumpToQuestion(n)} className="text-sm">
-                        {n}
-                      </Button>
-                    ))
-                  )}
-                </div>
-              </div>
-              <div>
-                <h3 className="font-semibold">Flagged Questions ({flaggedQuestionIndexes.length})</h3>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {flaggedQuestionIndexes.length === 0 ? (
-                    <span className="text-sm text-gray-600">None</span>
-                  ) : (
-                    flaggedQuestionIndexes.map((n) => (
-                      <Button key={n} variant="ghost" onClick={() => jumpToQuestion(n)} className="text-sm">
-                        <Flag className="mr-2 h-4 w-4 text-yellow-600" /> {n}
-                      </Button>
-                    ))
-                  )}
-                </div>
-              </div>
-              <div className="flex justify-end gap-2 pt-4">
-                <Button variant="outline" onClick={() => setShowSummaryModal(false)}>Review</Button>
-                <Button
-                  onClick={() => handleSubmit()}
-                  className="bg-red-600 text-white hover:bg-red-700"
-                  disabled={loading || !user || !quiz || showSubmissionModal}
-                >
-                  Confirm Submit
-                </Button>
-              </div>
-              {error &&
-                <div className="text-red-600 text-center mt-2">{error}</div>
-              }
+      {/* Modals */}
+      <Dialog open={showSubmissionModal} onOpenChange={setShowSubmissionModal}>
+        <DialogContent className="max-w-md">
+          <DialogHeader className="text-center">
+            <div className="mx-auto w-16 h-16 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mb-4">
+              <CheckCircle className="h-10 w-10 text-green-600" />
             </div>
-          </DialogContent>
-        </Dialog>
-      )}
+            <DialogTitle className="text-2xl font-bold">Mock Submitted!</DialogTitle>
+            <DialogDescription className="text-lg">
+              Analyzing your performance. Redirecting to results...
+            </DialogDescription>
+          </DialogHeader>
+        </DialogContent>
+      </Dialog>
 
-      <header className="bg-white border-b sticky top-0 z-40 shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
-          <div className="flex items-center gap-3">
-            <BookOpen className="h-6 w-6 text-blue-600" />
-            <div>
-              <h1 className="text-lg font-semibold">{quiz.name}</h1>
-              {quiz.subject && (
-                <p className="text-sm text-gray-600">{quiz.subject}</p>
-              )}
+      <Dialog open={showSummaryModal} onOpenChange={setShowSummaryModal}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold flex items-center gap-2">
+              <Info className="w-5 h-5 text-blue-600" />
+              Review Your Progress
+            </DialogTitle>
+            <DialogDescription>
+              Check skipped or flagged questions before final submission.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-6 py-4">
+            <div className="grid grid-cols-3 gap-4">
+              <div className="p-4 bg-blue-50 dark:bg-blue-900/10 rounded-xl text-center border border-blue-100 dark:border-blue-900/30">
+                <p className="text-2xl font-bold text-blue-700 dark:text-blue-400">{attemptedCount}</p>
+                <p className="text-[10px] uppercase font-bold text-blue-600/70">Answered</p>
+              </div>
+              <div className="p-4 bg-orange-50 dark:bg-orange-900/10 rounded-xl text-center border border-orange-100 dark:border-orange-900/30">
+                <p className="text-2xl font-bold text-orange-600 dark:text-orange-400">{skippedQuestionIndexes.length}</p>
+                <p className="text-[10px] uppercase font-bold text-orange-600/70">Skipped</p>
+              </div>
+              <div className="p-4 bg-yellow-50 dark:bg-yellow-900/10 rounded-xl text-center border border-yellow-100 dark:border-yellow-900/30">
+                <p className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">{flaggedCount}</p>
+                <p className="text-[10px] uppercase font-bold text-yellow-600/70">Flagged</p>
+              </div>
+            </div>
+
+            {skippedQuestionIndexes.length > 0 && (
+              <div>
+                <h3 className="text-sm font-bold mb-3 flex items-center gap-2 uppercase tracking-wider text-muted-foreground">
+                  <AlertCircle className="w-4 h-4" /> Skipped Questions
+                </h3>
+                <div className="flex flex-wrap gap-2">
+                  {skippedQuestionIndexes.map(n => (
+                    <Button key={n} variant="outline" size="sm" onClick={() => jumpToQuestion(n)} className="w-10 h-10 p-0 rounded-lg hover:border-blue-500 hover:text-blue-600">
+                      {n}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="flex justify-end gap-3 pt-6 border-t mt-4">
+              <Button variant="ghost" onClick={() => setShowSummaryModal(false)}>Continue Mock</Button>
+              <Button onClick={() => handleSubmit()} disabled={isSubmitting} className="bg-red-600 hover:bg-red-700 text-white min-w-[140px] shadow-lg shadow-red-600/20">
+                {isSubmitting ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Submitting...</> : <><Send className="w-4 h-4 mr-2" /> Finish & Submit</>}
+              </Button>
             </div>
           </div>
-          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4">
-            <div className="flex items-center gap-2">
-              <Clock className="h-5 w-5 text-red-600" />
-              <span className="font-mono font-semibold text-red-600">{formatTime(timeLeft)}</span>
+        </DialogContent>
+      </Dialog>
+
+      <header className="bg-white/80 dark:bg-gray-900/80 backdrop-blur-md border-b sticky top-0 z-40 transition-colors">
+        <div className="max-w-5xl mx-auto px-4 py-3 flex justify-between items-center">
+          <div className="flex items-center gap-4">
+            <div className="hidden sm:flex p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
+              <BookMarked className="h-5 w-5 text-blue-600" />
             </div>
-            <div className="w-full sm:w-48">
-              <div className="text-xs text-gray-600">Progress: {attemptedCount}/{questions.length}</div>
-              <Progress value={attemptedPercent} className="mt-1" />
+            <div>
+              <h1 className="text-sm sm:text-base font-bold truncate max-w-[150px] sm:max-w-xs">{quiz.name}</h1>
+              <div className="flex items-center gap-2 text-[10px] sm:text-xs text-muted-foreground">
+                <Badge variant="outline" className="text-[10px] h-4 py-0 bg-blue-50 dark:bg-blue-900/10 border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-400">Mock</Badge>
+                <span className="hidden sm:inline">•</span>
+                <span className="hidden sm:inline">{quiz.subject}</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-4 sm:gap-8">
+            <div className="flex flex-col items-end">
+              <div className="flex items-center gap-2">
+                <Clock className={`h-4 w-4 ${timeLeft < 300 ? 'text-red-500 animate-pulse' : 'text-blue-500'}`} />
+                <span className={`font-mono text-lg font-bold leading-none ${timeLeft < 300 ? 'text-red-600' : 'text-foreground'}`}>
+                  {formatTime(timeLeft)}
+                </span>
+              </div>
+              <span className="text-[9px] font-bold uppercase tracking-tighter text-muted-foreground">Time Remaining</span>
+            </div>
+
+            <div className="hidden md:block w-32 border-l pl-8">
+              <div className="flex justify-between text-[10px] font-bold uppercase mb-1">
+                <span>Progress</span>
+                <span className="text-blue-600">{attemptedPercent}%</span>
+              </div>
+              <div className="h-1.5 w-full bg-secondary rounded-full overflow-hidden">
+                <div className="h-full bg-blue-600 transition-all duration-1000" style={{ width: `${attemptedPercent}%` }} />
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <ModeToggle />
             </div>
           </div>
         </div>
       </header>
 
-      <main className="max-w-3xl w-full mx-auto p-4">
-        <Card className="shadow-md w-full">
-          <CardHeader>
-            <div className="flex flex-col w-full">
-              <CardTitle className="text-lg font-semibold">
-                Questions {startIdx + 1}–{endIdx} / {questions.length}
-              </CardTitle>
-              <div className="mt-2 flex items-center justify-between gap-4">
-                <div className="flex items-center gap-4">
-                  <div className="text-sm text-gray-600">Attempted: {attemptedCount}/{questions.length}</div>
-                  <div className="text-sm text-gray-600">Flagged: {flaggedCount}</div>
-                </div>
-                <div className="w-1/3">
-                  <Progress value={attemptedPercent} className="mt-2" />
-                </div>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-10">
-            {qSlice.map((q, idx) => (
-              <div key={q.id} className="space-y-4">
-                <div className="flex flex-col sm:flex-row justify-between items-start gap-2">
-                  <div className="text-lg font-medium prose max-w-none">
-                    <span className="font-semibold">Q{startIdx + idx + 1}. </span>
-                    <span dangerouslySetInnerHTML={{ __html: q.questionText }} />
+      <main className="max-w-3xl mx-auto p-4 sm:p-8 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+        <div className="flex flex-col gap-6">
+          {qSlice.map((q, idx) => (
+            <Card key={q.id} className="border-primary/10 shadow-lg overflow-hidden transition-all group hover:border-primary/30">
+              <div className="h-1 w-full bg-gradient-to-r from-transparent via-blue-500/20 to-transparent" />
+              <CardHeader className="pb-4">
+                <div className="flex justify-between items-start">
+                  <div className="space-y-1">
+                    <span className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-600 bg-blue-50 dark:bg-blue-900/20 px-2 py-0.5 rounded">
+                      Question {startIdx + idx + 1}
+                    </span>
+                    <div className="text-lg font-bold leading-relaxed prose dark:prose-invert max-w-none pt-2"
+                      dangerouslySetInnerHTML={{ __html: q.questionText }} />
                   </div>
-                  <div className="flex items-center">
-                    <button
-                      onClick={() => toggleFlag(q.id)}
-                      className={`flex items-center gap-2 px-3 py-1 rounded text-sm transition ${flags[q.id] ? 'bg-yellow-100 text-yellow-800 border border-yellow-300' : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'
-                        }`}
-                      title={flags[q.id] ? 'Unflag question' : 'Flag question'}
-                    >
-                      <Flag className={`h-4 w-4 ${flags[q.id] ? 'text-yellow-600' : 'text-gray-400'}`} />
-                      {flags[q.id] ? 'Flagged' : 'Flag'}
-                    </button>
-                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => toggleFlag(q.id)}
+                    className={`rounded-full h-10 w-10 p-0 transition-all ${flags[q.id] ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-600 shadow-inner ring-2 ring-yellow-500/20' : 'bg-secondary/50 text-muted-foreground hover:bg-yellow-50 hover:text-yellow-600'}`}
+                  >
+                    <Flag className={`h-4 w-4 ${flags[q.id] ? 'fill-yellow-600' : ''}`} />
+                  </Button>
                 </div>
+              </CardHeader>
+              <CardContent className="space-y-3 pb-8">
                 <div className="grid gap-3">
-                  {q.options.map((opt, i) => (
-                    <label
-                      key={i}
-                      htmlFor={`opt-${q.id}-${i}`}
-                      className={`flex items-center p-3 border rounded-lg cursor-pointer transition hover:bg-gray-100 ${answers[q.id] === opt ? 'border-blue-500 bg-blue-50' : ''
-                        }`}
-                    >
-                      <input
-                        type="radio"
-                        id={`opt-${q.id}-${i}`}
-                        name={q.id}
-                        value={opt}
-                        checked={answers[q.id] === opt}
-                        onChange={() => handleAnswer(q.id, opt)}
-                        className="h-5 w-5 text-blue-600 mr-3"
-                      />
-                      <span className="font-semibold mr-2">{String.fromCharCode(65 + i)}.</span>
-                      <span className="prose max-w-none" dangerouslySetInnerHTML={{ __html: opt }} />
-                    </label>
-                  ))}
+                  {q.options.map((opt, i) => {
+                    const isSelected = answers[q.id] === opt;
+                    return (
+                      <label
+                        key={i}
+                        className={`
+                            relative flex items-center p-4 rounded-xl border-2 cursor-pointer transition-all duration-200 group/opt
+                            ${isSelected
+                            ? 'border-blue-500 bg-blue-50/50 dark:bg-blue-900/20 shadow-[0_0_15px_rgba(59,130,246,0.1)]'
+                            : 'border-border/50 bg-background hover:bg-accent/50 hover:border-blue-500/30'}
+                          `}
+                      >
+                        <input
+                          type="radio"
+                          name={`q-${q.id}`}
+                          className="w-4 h-4 text-blue-600 transition-all border-2 border-muted"
+                          checked={isSelected}
+                          onChange={() => handleAnswer(q.id, opt)}
+                        />
+                        <div className={`ml-4 flex items-center gap-3 w-full`}>
+                          <span className={`
+                                flex items-center justify-center w-6 h-6 rounded-md text-xs font-black transition-colors
+                                ${isSelected ? 'bg-blue-600 text-white' : 'bg-secondary text-muted-foreground group-hover/opt:bg-blue-100 dark:group-hover/opt:bg-blue-900/30 group-hover/opt:text-blue-600'}
+                             `}>
+                            {String.fromCharCode(65 + i)}
+                          </span>
+                          <div className={`text-sm sm:text-base prose dark:prose-invert max-w-none ${isSelected ? 'font-semibold text-blue-900 dark:text-blue-300' : 'text-foreground'}`}
+                            dangerouslySetInnerHTML={{ __html: opt }} />
+                        </div>
+                      </label>
+                    );
+                  })}
                 </div>
-              </div>
-            ))}
-            <div className="flex justify-between pt-6">
-              <Button
-                variant="outline"
-                onClick={() => setCurrentPage((i) => Math.max(0, i - 1))}
-                disabled={currentPage === 0 || showSubmissionModal}
-              >
-                <ArrowLeft className="mr-2" /> Previous
-              </Button>
-              <Button
-                onClick={isLastPage ? () => setShowSummaryModal(true) : () => setCurrentPage((i) => i + 1)}
-                disabled={showSubmissionModal}
-                className={isLastPage ? 'bg-red-600 text-white hover:bg-red-700' : ''}
-              >
-                {isLastPage ? (
-                  <>
-                    <Send className="mr-2" /> Submit
-                  </>
-                ) : (
-                  <>
-                    Next <ArrowRight className="ml-2" />
-                  </>
-                )}
-              </Button>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+
+        {/* Floating Navigation Controls */}
+        <div className="fixed bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-background via-background/95 to-transparent z-40 sm:relative sm:bg-none sm:p-0">
+          <div className="max-w-3xl mx-auto flex items-center justify-between gap-4 bg-card sm:bg-transparent border border-primary/10 sm:border-0 p-3 sm:p-0 rounded-2xl shadow-2xl sm:shadow-none backdrop-blur-sm sm:backdrop-blur-none transition-all">
+            <Button
+              variant="outline"
+              size="lg"
+              className="h-12 sm:h-14 rounded-xl px-4 sm:px-8 border-primary/20 hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:border-primary transition-all font-bold disabled:opacity-30"
+              onClick={() => {
+                setCurrentPage(prev => Math.max(0, prev - 1));
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
+              disabled={currentPage === 0 || isSubmitting}
+            >
+              <ArrowLeft className="mr-0 sm:mr-3 h-5 w-5" />
+              <span className="hidden sm:inline">Previous Section</span>
+            </Button>
+
+            <div className="flex items-center gap-2">
+              {Array.from({ length: totalPages }).map((_, i) => (
+                <div
+                  key={i}
+                  className={`h-1.5 w-1.5 rounded-full transition-all duration-300 ${i === currentPage ? 'w-4 bg-blue-600' : 'bg-muted'}`}
+                />
+              ))}
             </div>
-          </CardContent>
-        </Card>
+
+            <Button
+              size="lg"
+              className={`
+                  h-12 sm:h-14 rounded-xl px-4 sm:px-8 font-black shadow-xl transition-all duration-300 group
+                  ${isLastPage
+                  ? 'bg-red-600 hover:bg-red-700 text-white shadow-red-600/30'
+                  : 'bg-primary text-primary-foreground hover:shadow-primary/30'}
+                `}
+              onClick={isLastPage ? () => setShowSummaryModal(true) : () => {
+                setCurrentPage(prev => Math.min(totalPages - 1, prev + 1));
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
+              disabled={isSubmitting}
+            >
+              <span className="hidden sm:inline">{isLastPage ? 'Finish Mock' : 'Next Questions'}</span>
+              <span className="sm:hidden">{isLastPage ? 'Finish' : 'Next'}</span>
+              {isLastPage ? <Send className="ml-0 sm:ml-3 h-5 w-5" /> : <ArrowRight className="ml-0 sm:ml-3 h-5 w-5 transition-transform group-hover:translate-x-1" />}
+            </Button>
+          </div>
+        </div>
       </main>
+
+      {/* Auto-save Status Indicator (Floating Mini) */}
+      <div className="fixed bottom-20 sm:bottom-6 right-6 z-50">
+        <div className={`
+             flex items-center gap-2 px-3 py-1.5 rounded-full border bg-card/80 backdrop-blur-sm shadow-xl transition-all duration-500
+             ${saveState.status === 'saving' ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0 pointer-events-none'}
+          `}>
+          <Loader2 className="w-3 h-3 animate-spin text-blue-600" />
+          <span className="text-[10px] font-bold text-blue-600 uppercase tracking-wider">Syncing Progress</span>
+        </div>
+        <div className={`
+             flex items-center gap-2 px-3 py-1.5 rounded-full border bg-green-500/10 border-green-500/20 backdrop-blur-sm shadow-xl transition-all duration-500
+             ${saveState.status === 'saved' ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0 pointer-events-none'}
+          `}>
+          <CheckCircle className="w-3 h-3 text-green-600" />
+          <span className="text-[10px] font-bold text-green-600 uppercase tracking-wider">Cloud Saved</span>
+        </div>
+      </div>
     </div>
   );
 };

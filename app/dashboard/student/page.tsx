@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useMemo } from 'react';
 import { db } from '@/app/firebase';
-import { doc, getDoc, collection, query, limit, getDocs, orderBy, where } from 'firebase/firestore';
+import { doc, getDoc, collection, query, limit, getDocs, orderBy, where, getCountFromServer } from 'firebase/firestore';
 import { getAuth, onAuthStateChanged } from 'firebase/auth';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { DashboardSkeleton } from '@/components/ui/skeleton-cards';
@@ -12,7 +12,7 @@ import {
 import {
   Trophy, RefreshCw, ClipboardList, Clock,
   CheckCircle, Zap, BrainCircuit, GraduationCap, AlertTriangle,
-  ArrowUpRight, Sparkles
+  ArrowUpRight, Sparkles, Layers
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { Button } from '@/components/ui/button';
@@ -29,6 +29,7 @@ export default function StudentDashboard() {
   const [loading, setLoading] = useState(true);
   const [recentQuizzes, setRecentQuizzes] = useState<any[]>([]);
   const [unfinishedQuizzes, setUnfinishedQuizzes] = useState<any[]>([]);
+  const [questionStats, setQuestionStats] = useState({ total: 0, used: 0 });
 
   // Split Analytics State - REMOVED client-side calcs
   // const [adminStats, setAdminStats] = useState({ total: 0, attempted: 0, accuracy: 0, correct: 0, wrong: 0 });
@@ -55,23 +56,63 @@ export default function StudentDashboard() {
         const data = userDoc.exists() ? userDoc.data() : null;
         setStudentData(data);
 
-        // Fetch recent quizzes
+        // Fetch recent OFFICIAL quizzes
         const recentSnap = await getDocs(query(
           collection(db, 'users', uid, 'quizAttempts'),
           orderBy('submittedAt', 'desc'),
-          limit(10) // OPTIMIZED: Reduced from 500 to 10
+          limit(10)
         ));
-        const allAttempts = recentSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+        const officialAttempts = recentSnap.docs.map(d => ({ id: d.id, ...d.data(), quizType: 'admin' }));
+
+        // Fetch recent USER quizzes (Separated Collection)
+        const userRecentSnap = await getDocs(query(
+          collection(db, 'users', uid, 'user-quizattempts'),
+          orderBy('submittedAt', 'desc'),
+          limit(10)
+        ));
+        const userAttempts = userRecentSnap.docs.map(d => ({ id: d.id, ...d.data(), quizType: 'user' }));
+
+        // Fetch User Quiz Titles Helper
+        const enrichUserQuizzes = async (attempts: any[]) => {
+          return Promise.all(attempts.map(async (a) => {
+            if (a.quizType === 'user' && !a.title) {
+              try {
+                const qDoc = await getDoc(doc(db, 'user-quizzes', a.id));
+                if (qDoc.exists()) return { ...a, title: qDoc.data().name || 'Custom Quiz' };
+              } catch (e) { }
+            }
+            return a;
+          }));
+        };
+
+        const enrichedUserAttempts = await enrichUserQuizzes(userAttempts);
+
+        // Merge and Sort
+        const allAttempts = [...officialAttempts, ...enrichedUserAttempts]
+          .sort((a, b) => {
+            const dateA = a.submittedAt?.toMillis ? a.submittedAt.toMillis() : 0;
+            const dateB = b.submittedAt?.toMillis ? b.submittedAt.toMillis() : 0;
+            return dateB - dateA;
+          })
+          .slice(0, 10);
+
         setRecentQuizzes(allAttempts);
 
-        // Fetch Unfinished
+        // Fetch Unfinished OFFICIAL
         const unfinishedSnap = await getDocs(query(
           collection(db, 'users', uid, 'quizAttempts'),
           where('completed', '==', false),
           limit(5)
         ));
 
-        const unfinished = await Promise.all(unfinishedSnap.docs.map(async (d) => {
+        // Fetch Unfinished USER
+        const unfinishedUserSnap = await getDocs(query(
+          collection(db, 'users', uid, 'user-quizattempts'),
+          where('completed', '==', false),
+          limit(5)
+        ));
+
+        const unfinishedOfficial = await Promise.all(unfinishedSnap.docs.map(async (d) => {
           const data = d.data();
           let title = data.title;
           if (!title) {
@@ -80,9 +121,32 @@ export default function StudentDashboard() {
               if (qDoc.exists()) title = qDoc.data().title;
             } catch (e) { console.error("Failed to fetch quiz title", e); }
           }
-          return { id: d.id, ...data, title: title || 'Untitled Quiz' };
+          return { id: d.id, ...data, title: title || 'Untitled Quiz', quizType: 'admin' };
         }));
-        setUnfinishedQuizzes(unfinished);
+
+        const unfinishedUser = await Promise.all(unfinishedUserSnap.docs.map(async (d) => {
+          const data = d.data();
+          let title = data.title; // Usually missing on attempt doc
+          if (!title) {
+            try {
+              const qDoc = await getDoc(doc(db, 'user-quizzes', d.id));
+              if (qDoc.exists()) title = qDoc.data().name;
+            } catch (e) { }
+          }
+          return { id: d.id, ...data, title: title || 'Custom Quiz', quizType: 'user' };
+        }));
+
+        setUnfinishedQuizzes([...unfinishedOfficial, ...unfinishedUser]);
+
+        // Fetch Question Bank Stats
+        try {
+          const totalSnap = await getCountFromServer(collection(db, 'mock-questions'));
+          const total = totalSnap.data().count;
+          const usedCount = data?.usedMockQuestionIds?.length || 0;
+          setQuestionStats({ total, used: usedCount });
+        } catch (e) {
+          console.error("Failed to fetch question stats", e);
+        }
 
         // --- Client-side Calc Removed for Performance ---
         // Relying on server-aggregated stats in studentData.stats
@@ -124,9 +188,21 @@ export default function StudentDashboard() {
       });
   }, [recentQuizzes]);
 
-  // Subject Stats Data
-  const subjectBreakdown = useMemo(() => {
+  // Subject Stats Data (Admin)
+  const subjectBreakdownAdmin = useMemo(() => {
     const sStats = studentData?.stats?.subjectStats || {};
+    return Object.entries(sStats).map(([subject, data]: [string, any]) => ({
+      subject,
+      accuracy: data.accuracy || 0,
+      attempted: data.attempted || 0,
+      correct: data.correct || 0,
+      wrong: (data.attempted || 0) - (data.correct || 0)
+    })).sort((a, b) => b.attempted - a.attempted);
+  }, [studentData]);
+
+  // Subject Stats Data (User/Custom)
+  const subjectBreakdownUser = useMemo(() => {
+    const sStats = studentData?.stats?.userSubjectStats || {};
     return Object.entries(sStats).map(([subject, data]: [string, any]) => ({
       subject,
       accuracy: data.accuracy || 0,
@@ -207,7 +283,7 @@ export default function StudentDashboard() {
         )}
 
         {/* Main Stats Overview Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           <Card className="border border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-md transition-all duration-300 group">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium text-slate-500 dark:text-slate-400">Total Quizzes</CardTitle>
@@ -222,6 +298,31 @@ export default function StudentDashboard() {
               </p>
             </CardContent>
           </Card>
+
+          {/* New Question Bank Stats Card */}
+          <Card className="border border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-md transition-all duration-300 group">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium text-slate-500 dark:text-slate-400">Question Bank</CardTitle>
+              <div className="p-2 bg-amber-50 dark:bg-amber-900/20 rounded-lg group-hover:bg-amber-100 dark:group-hover:bg-amber-900/30 transition-colors">
+                <Layers className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold text-slate-900 dark:text-white">
+                {questionStats.total > 0
+                  ? `${Math.round((questionStats.used / questionStats.total) * 100)}%`
+                  : '0%'}
+              </div>
+              <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-1.5 mt-2 overflow-hidden">
+                <div className="bg-amber-500 h-full" style={{ width: `${(questionStats.used / questionStats.total) * 100}%` }}></div>
+              </div>
+              <p className="text-xs text-slate-500 mt-2 flex justify-between">
+                <span>{questionStats.used.toLocaleString()} Used</span>
+                <span className="text-emerald-600">{(questionStats.total - questionStats.used).toLocaleString()} Left</span>
+              </p>
+            </CardContent>
+          </Card>
+
           <Card className="border border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-md transition-all duration-300 group">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium text-slate-500 dark:text-slate-400">Questions Solved</CardTitle>
@@ -270,27 +371,27 @@ export default function StudentDashboard() {
               <div className="grid grid-cols-2 gap-4">
                 <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800">
                   <p className="text-slate-500 text-xs font-semibold uppercase tracking-wider mb-1">Attempts</p>
-                  <p className="text-2xl font-bold text-slate-900 dark:text-white">{stats.adminAttempts || 0}</p>
+                  <p className="text-2xl font-bold text-slate-900 dark:text-white">{stats.adminAttempts ?? stats.totalQuizzes ?? 0}</p>
                 </div>
                 <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800">
                   <p className="text-slate-500 text-xs font-semibold uppercase tracking-wider mb-1">Accuracy</p>
-                  <p className={`text-2xl font-bold ${(stats.adminAccuracy || 0) >= 70 ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'}`}>
-                    {stats.adminAccuracy || 0}%
+                  <p className={`text-2xl font-bold ${(stats.adminAccuracy ?? stats.overallAccuracy ?? 0) >= 70 ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'}`}>
+                    {stats.adminAccuracy ?? stats.overallAccuracy ?? 0}%
                   </p>
                 </div>
               </div>
               <div className="space-y-3 pt-2">
                 <div className="flex justify-between text-sm">
                   <span className="text-slate-600 dark:text-slate-400 font-medium">Correct</span>
-                  <span className="font-bold text-emerald-600 dark:text-emerald-500">{stats.adminCorrect || 0}</span>
+                  <span className="font-bold text-emerald-600 dark:text-emerald-500">{stats.adminCorrect ?? stats.totalCorrect ?? 0}</span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-slate-600 dark:text-slate-400 font-medium">Wrong</span>
-                  <span className="font-bold text-red-500 dark:text-red-400">{stats.adminWrong || 0}</span>
+                  <span className="font-bold text-red-500 dark:text-red-400">{stats.adminWrong ?? stats.totalWrong ?? 0}</span>
                 </div>
                 <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-2 overflow-hidden flex">
-                  <div className="bg-emerald-500 h-full transition-all duration-700" style={{ width: `${stats.adminAccuracy || 0}%` }}></div>
-                  <div className="bg-red-500 h-full transition-all duration-700" style={{ width: `${100 - (stats.adminAccuracy || 0)}%` }}></div>
+                  <div className="bg-emerald-500 h-full transition-all duration-700" style={{ width: `${stats.adminAccuracy ?? stats.overallAccuracy ?? 0}%` }}></div>
+                  <div className="bg-red-500 h-full transition-all duration-700" style={{ width: `${100 - (stats.adminAccuracy ?? stats.overallAccuracy ?? 0)}%` }}></div>
                 </div>
               </div>
             </CardContent>
@@ -312,27 +413,29 @@ export default function StudentDashboard() {
               <div className="grid grid-cols-2 gap-4">
                 <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800">
                   <p className="text-slate-500 text-xs font-semibold uppercase tracking-wider mb-1">Attempts</p>
-                  <p className="text-2xl font-bold text-slate-900 dark:text-white">{stats.userAttempts || 0}</p>
+                  <p className="text-2xl font-bold text-slate-900 dark:text-white">{stats.userAttempts ?? stats.totalMockQuizzes ?? 0}</p>
                 </div>
                 <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800">
                   <p className="text-slate-500 text-xs font-semibold uppercase tracking-wider mb-1">Accuracy</p>
-                  <p className={`text-2xl font-bold ${(stats.userAccuracy || 0) >= 70 ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'}`}>
-                    {stats.userAccuracy || 0}%
+                  <p className={`text-2xl font-bold ${(stats.userAccuracy ?? stats.mockAccuracy ?? 0) >= 70 ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'}`}>
+                    {stats.userAccuracy ?? stats.mockAccuracy ?? 0}%
                   </p>
                 </div>
               </div>
               <div className="space-y-3 pt-2">
                 <div className="flex justify-between text-sm">
                   <span className="text-slate-600 dark:text-slate-400 font-medium">Correct</span>
-                  <span className="font-bold text-emerald-600 dark:text-emerald-500">{stats.userCorrect || 0}</span>
+                  <span className="font-bold text-emerald-600 dark:text-emerald-500">{stats.userCorrect ?? stats.totalMockCorrect ?? 0}</span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-slate-600 dark:text-slate-400 font-medium">Wrong</span>
-                  <span className="font-bold text-red-500 dark:text-red-400">{stats.userWrong || 0}</span>
+                  <span className="font-bold text-red-500 dark:text-red-400">
+                    {stats.userWrong ?? (stats.totalMockQuestions && stats.totalMockCorrect ? stats.totalMockQuestions - stats.totalMockCorrect : 0)}
+                  </span>
                 </div>
                 <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-2 overflow-hidden flex">
-                  <div className="bg-emerald-500 h-full transition-all duration-700" style={{ width: `${stats.userAccuracy || 0}%` }}></div>
-                  <div className="bg-red-500 h-full transition-all duration-700" style={{ width: `${100 - (stats.userAccuracy || 0)}%` }}></div>
+                  <div className="bg-emerald-500 h-full transition-all duration-700" style={{ width: `${stats.userAccuracy ?? stats.mockAccuracy ?? 0}%` }}></div>
+                  <div className="bg-red-500 h-full transition-all duration-700" style={{ width: `${100 - (stats.userAccuracy ?? stats.mockAccuracy ?? 0)}%` }}></div>
                 </div>
               </div>
             </CardContent>
@@ -342,10 +445,18 @@ export default function StudentDashboard() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
           {/* Subject Wise Breakdown */}
           <div className="lg:col-span-2">
-            <Card className="border border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-md transition-all duration-300 h-full">
+            {/* Subject Breakdown: Official */}
+            <Card className="border border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-md transition-all duration-300 mb-6">
               <CardHeader>
-                <CardTitle className="text-lg">Subject Breakdown</CardTitle>
-                <CardDescription>Detailed statistics per subject</CardDescription>
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 bg-indigo-100 dark:bg-indigo-900/30 rounded-lg">
+                    <GraduationCap className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-lg">Official Subject Performance</CardTitle>
+                    <CardDescription>Breakdown by subject for official exams</CardDescription>
+                  </div>
+                </div>
               </CardHeader>
               <CardContent>
                 <div className="overflow-x-auto rounded-lg border border-slate-100 dark:border-slate-800">
@@ -360,8 +471,8 @@ export default function StudentDashboard() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                      {subjectBreakdown.length > 0 ? (
-                        subjectBreakdown.map((sub, i) => (
+                      {subjectBreakdownAdmin.length > 0 ? (
+                        subjectBreakdownAdmin.map((sub, i) => (
                           <tr key={i} className="hover:bg-slate-50/80 dark:hover:bg-slate-900/30 transition-colors">
                             <td className="py-3 px-4 font-medium text-slate-900 dark:text-slate-200">{sub.subject}</td>
                             <td className="py-3 px-4 text-center text-slate-500 dark:text-slate-400">{sub.attempted}</td>
@@ -381,7 +492,64 @@ export default function StudentDashboard() {
                       ) : (
                         <tr>
                           <td colSpan={5} className="py-12 text-center text-slate-400">
-                            No subject data available yet.
+                            No official exam data available.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Subject Breakdown: Custom */}
+            <Card className="border border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-md transition-all duration-300">
+              <CardHeader>
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 bg-pink-100 dark:bg-pink-900/30 rounded-lg">
+                    <BrainCircuit className="w-4 h-4 text-pink-600 dark:text-pink-400" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-lg">Custom Practice Performance</CardTitle>
+                    <CardDescription>Breakdown by subject for self-created quizzes</CardDescription>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="overflow-x-auto rounded-lg border border-slate-100 dark:border-slate-800">
+                  <table className="w-full text-sm text-left">
+                    <thead className="bg-slate-50 dark:bg-slate-900/50 text-slate-500 dark:text-slate-400 font-medium">
+                      <tr>
+                        <th className="py-3 px-4">Subject</th>
+                        <th className="py-3 px-4 text-center">Attempted</th>
+                        <th className="py-3 px-4 text-center">Correct</th>
+                        <th className="py-3 px-4 text-center">Wrong</th>
+                        <th className="py-3 px-4 text-right">Accuracy</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                      {subjectBreakdownUser.length > 0 ? (
+                        subjectBreakdownUser.map((sub, i) => (
+                          <tr key={i} className="hover:bg-slate-50/80 dark:hover:bg-slate-900/30 transition-colors">
+                            <td className="py-3 px-4 font-medium text-slate-900 dark:text-slate-200">{sub.subject}</td>
+                            <td className="py-3 px-4 text-center text-slate-500 dark:text-slate-400">{sub.attempted}</td>
+                            <td className="py-3 px-4 text-center text-emerald-600 dark:text-emerald-500 font-medium">{sub.correct}</td>
+                            <td className="py-3 px-4 text-center text-red-500 dark:text-red-400">{sub.wrong}</td>
+                            <td className="py-3 px-4 text-right">
+                              <Badge className={
+                                sub.accuracy >= 80 ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-800" :
+                                  sub.accuracy >= 50 ? "bg-blue-100 text-blue-700 hover:bg-blue-200 border-blue-200 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-800" :
+                                    "bg-red-100 text-red-700 hover:bg-red-200 border-red-200 dark:bg-red-900/30 dark:text-red-400 dark:border-red-800"
+                              } variant="outline">
+                                {sub.accuracy}%
+                              </Badge>
+                            </td>
+                          </tr>
+                        ))
+                      ) : (
+                        <tr>
+                          <td colSpan={5} className="py-12 text-center text-slate-400">
+                            No custom practice data available.
                           </td>
                         </tr>
                       )}

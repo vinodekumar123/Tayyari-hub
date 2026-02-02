@@ -16,7 +16,8 @@ import {
   QueryDocumentSnapshot,
   DocumentData,
   writeBatch,
-  updateDoc
+  updateDoc,
+  getCountFromServer
 } from 'firebase/firestore';
 import { db } from '../../../firebase';
 import {
@@ -104,9 +105,12 @@ import {
   CheckCircle,
   ArrowRight,
   ArrowUp,
+  Database,
+  Menu, // Added Menu icon
 } from 'lucide-react';
 import { toast } from 'sonner';
 import Papa from 'papaparse';
+import { useUIStore } from '@/stores/useUIStore'; // Imported store
 import { generateSearchTokens } from '@/lib/searchUtils';
 
 // --- Types ---
@@ -159,6 +163,13 @@ import { auth } from '../../../firebase';
 
 export default function QuestionBankPage() {
   const router = useRouter();
+  const { setSidebarOpen, setSidebarTriggerHidden } = useUIStore(); // Use UI Store
+
+  // Hide default sidebar trigger on mount
+  useEffect(() => {
+    setSidebarTriggerHidden(true);
+    return () => setSidebarTriggerHidden(false);
+  }, [setSidebarTriggerHidden]);
 
   // User Role State
   const [userRole, setUserRole] = useState<'admin' | 'superadmin' | 'teacher' | 'student' | null>(null);
@@ -228,6 +239,63 @@ export default function QuestionBankPage() {
     difficulty?: string;
     status?: 'draft' | 'published' | 'review';
   }>({});
+
+  // Stats State
+  const [stats, setStats] = useState({
+    total: 0,
+    published: 0,
+    draft: 0,
+    review: 0,
+    deleted: 0
+  });
+
+  const fetchGlobalStats = useCallback(async () => {
+    try {
+      const coll = collection(db, 'questions');
+
+      // We calculate Total Active by getting All and subtracting Deleted
+      // This handles the case where legacy docs might miss 'isDeleted' field (so != true query would miss them)
+
+      const allSnapshot = await getCountFromServer(query(coll));
+      const allCount = allSnapshot.data().count;
+
+      const deletedSnapshot = await getCountFromServer(query(coll, where('isDeleted', '==', true)));
+      const deletedCount = deletedSnapshot.data().count;
+
+      const totalActive = allCount - deletedCount;
+
+      // For statuses, we ideally want to exclude deleted. 
+      // If we assume most questions have isDeleted set properly or we just show rough numbers:
+      // A safer bet without composite indexes on every status+isDeleted combo (which requires index creation):
+      // Just fetch status counts. They might slightly overcount if we have deleted published questions, 
+      // but usually deleted items shouldn't be 'published'.
+      // However, to be precise, let's try to exclude deleted if possible, or accept the slight inaccuracy to avoid index hell for the user.
+      // Let's stick to status counts for now.
+
+      const publishedSnapshot = await getCountFromServer(query(coll, where('status', '==', 'published')));
+      const publishedCount = publishedSnapshot.data().count;
+
+      const draftSnapshot = await getCountFromServer(query(coll, where('status', '==', 'draft')));
+      const draftCount = draftSnapshot.data().count;
+
+      const reviewSnapshot = await getCountFromServer(query(coll, where('status', '==', 'review')));
+      const reviewCount = reviewSnapshot.data().count;
+
+      setStats({
+        total: totalActive,
+        published: publishedCount,
+        draft: draftCount,
+        review: reviewCount,
+        deleted: deletedCount
+      });
+    } catch (e) {
+      console.error("Error fetching stats:", e);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchGlobalStats();
+  }, [fetchGlobalStats]);
 
   // Filters
   // Filters
@@ -713,30 +781,171 @@ export default function QuestionBankPage() {
     }
   };
 
+  const handlePublishAll = async () => {
+    if (!confirm("Are you sure you want to PUBLISH ALL questions (including old ones)? This will:\n1. Scan ALL questions.\n2. Find any that are Draft, Review, or have NO status.\n3. Mark them as Published.\n4. Ensure 'isDeleted' is false.")) return;
+
+    setLoading(true);
+    try {
+      toast.info("Scanning all questions... This may take a moment.");
+
+      // FETCH STRATEGY FOR LEGACY DATA:
+      // Legacy docs might miss 'status' or 'isDeleted'.
+      // Firestore queries on a field EXCLUDE documents where that field is missing.
+      // So we cannot easily query for "status is missing".
+      // We must fetch ALL questions and filter client-side.
+
+      // Note: For very large datasets (10k+), this should be a server-side Admin SDK script.
+      // For this client-side admin panel, we'll try to handle it in batches if needed, 
+      // but here we fetch all at once which is acceptable for <5k docs.
+
+      const allDocsSnapshot = await getDocs(collection(db, 'questions'));
+
+      const candidates = allDocsSnapshot.docs.filter(doc => {
+        const data = doc.data();
+        // Criteria: 
+        // 1. Not already published
+        // 2. Not explicitly deleted (treat missing isDeleted as false, i.e., active)
+        const isPublished = data.status === 'published';
+        const isDeleted = data.isDeleted === true; // Strict check: only exclude if explicitly true
+
+        return !isPublished && !isDeleted;
+      });
+
+      if (candidates.length === 0) {
+        toast.info("All questions are already published!");
+        setLoading(false);
+        return;
+      }
+
+      const confirmed = confirm(`Found ${candidates.length} unpublished questions (including legacy ones). Publish them now?`);
+      if (!confirmed) {
+        setLoading(false);
+        return;
+      }
+
+      // 2. Batch Update
+      const total = candidates.length;
+      let processed = 0;
+      const chunkSize = 450;
+
+      for (let i = 0; i < total; i += chunkSize) {
+        const batch = writeBatch(db);
+        const chunk = candidates.slice(i, i + chunkSize);
+
+        chunk.forEach(docSnap => {
+          // normalizing: set status to published, and ensure isDeleted is false (legacy fix)
+          batch.update(doc(db, 'questions', docSnap.id), {
+            status: 'published',
+            isDeleted: false,
+            updatedAt: new Date()
+          });
+        });
+
+        await batch.commit();
+        processed += chunk.length;
+
+        // Optional: Toast progress for large sets
+        if (processed % 1000 === 0) toast.loading(`Published ${processed}/${total}...`);
+      }
+
+      toast.dismiss(); // dismiss loading toasts
+      toast.success(`Broadcasting complete! Successfully published ${processed} questions.`);
+
+      // Refresh
+      fetchGlobalStats();
+      fetchQuestions(false);
+
+    } catch (err) {
+      console.error("Error publishing all:", err);
+      toast.error("Failed to publish all questions. See console.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
-    <div className="min-h-screen bg-gray-50/50 dark:bg-gray-950 p-6 space-y-6">
+    <div className="min-h-screen bg-gray-50/50 dark:bg-gray-950 p-4 md:p-6 space-y-6 -mt-20 md:mt-0 transition-all duration-300">
 
       {/* Header Statistics & Title */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
-          <h1 className="text-3xl font-extrabold tracking-tight text-gray-900 dark:text-gray-100">Question Bank</h1>
-          <p className="text-gray-500 dark:text-gray-400 mt-1">Manage and organize your examination content.</p>
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 sticky top-0 z-20 bg-gray-50/80 dark:bg-gray-950/80 backdrop-blur-md py-4 -mx-4 px-4 md:-mx-6 md:px-6 border-b border-border/40">
+        <div className="flex items-center gap-2">
+          {/* Mobile Hamburger */}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="md:hidden mr-2 -ml-2 text-muted-foreground"
+            onClick={() => setSidebarOpen(true)}
+          >
+            <Menu className="h-6 w-6" />
+          </Button>
+          <div>
+            <h1 className="text-3xl font-extrabold tracking-tight text-gray-900 dark:text-gray-100">Question Bank</h1>
+            <p className="text-gray-500 dark:text-gray-400 mt-1 hidden md:block">Manage and organize your examination content.</p>
+          </div>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={() => router.push('/admin/questions/create')} className="bg-white dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700">
-            <Plus className="mr-2 h-4 w-4" /> New Question
+
+        <div className="flex gap-2 flex-wrap w-full md:w-auto">
+          <Button variant="outline" onClick={() => router.push('/admin/questions/create')} className="bg-white dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 flex-1 md:flex-none">
+            <Plus className="mr-2 h-4 w-4" /> <span className="hidden sm:inline">New Question</span><span className="sm:hidden">New</span>
           </Button>
           <Button variant="secondary" className="gap-2" onClick={() => fetchQuestions(false)}>
             <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
           </Button>
+          <Button variant="default" className="bg-green-600 hover:bg-green-700 text-white gap-2 flex-1 md:flex-none" onClick={handlePublishAll}>
+            <CheckCircle className="h-4 w-4" /> <span className="hidden sm:inline">Publish All</span><span className="sm:hidden">Publish</span>
+          </Button>
           <Button
             variant={showDeleted ? "destructive" : "outline"}
-            className="gap-2"
+            className="gap-2 flex-1 md:flex-none"
             onClick={() => setShowDeleted(!showDeleted)}
           >
-            <Archive className="h-4 w-4" /> {showDeleted ? 'Exit Bin' : 'Delete Bin'}
+            <Archive className="h-4 w-4" /> <span className="hidden sm:inline">{showDeleted ? 'Exit Bin' : 'Delete Bin'}</span><span className="sm:hidden">{showDeleted ? 'Exit' : 'Bin'}</span>
           </Button>
         </div>
+      </div>
+
+      {/* Statistics Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+        <Card className="bg-white/50 dark:bg-gray-900/50 backdrop-blur-sm border-l-4 border-l-blue-500 shadow-sm">
+          <CardContent className="p-4 flex flex-col gap-1">
+            <span className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+              <Database className="h-4 w-4" /> Total Questions
+            </span>
+            <span className="text-2xl font-bold">{stats.total}</span>
+          </CardContent>
+        </Card>
+        <Card className="bg-white/50 dark:bg-gray-900/50 backdrop-blur-sm border-l-4 border-l-green-500 shadow-sm">
+          <CardContent className="p-4 flex flex-col gap-1">
+            <span className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+              <CheckCircle className="h-4 w-4" /> Published
+            </span>
+            <span className="text-2xl font-bold text-green-600 dark:text-green-500">{stats.published}</span>
+          </CardContent>
+        </Card>
+        <Card className="bg-white/50 dark:bg-gray-900/50 backdrop-blur-sm border-l-4 border-l-amber-500 shadow-sm">
+          <CardContent className="p-4 flex flex-col gap-1">
+            <span className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+              <Edit className="h-4 w-4" /> Drafts
+            </span>
+            <span className="text-2xl font-bold text-amber-600 dark:text-amber-500">{stats.draft}</span>
+          </CardContent>
+        </Card>
+        <Card className="bg-white/50 dark:bg-gray-900/50 backdrop-blur-sm border-l-4 border-l-purple-500 shadow-sm">
+          <CardContent className="p-4 flex flex-col gap-1">
+            <span className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+              <div className="flex items-center gap-1"><Eye className="h-4 w-4" /> Review</div>
+            </span>
+            <span className="text-2xl font-bold text-purple-600 dark:text-purple-500">{stats.review}</span>
+          </CardContent>
+        </Card>
+        <Card className="bg-white/50 dark:bg-gray-900/50 backdrop-blur-sm border-l-4 border-l-red-500 shadow-sm">
+          <CardContent className="p-4 flex flex-col gap-1">
+            <span className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+              <Trash2 className="h-4 w-4" /> Bin
+            </span>
+            <span className="text-2xl font-bold text-red-600 dark:text-red-500">{stats.deleted}</span>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Toolbar */}
@@ -965,11 +1174,11 @@ export default function QuestionBankPage() {
                   onCheckedChange={(checked) => handleSelectAll(!!checked)}
                 />
               </TableHead>
-              <TableHead className="w-[40%] text-gray-700 dark:text-gray-300">Question</TableHead>
-              <TableHead className="text-gray-700 dark:text-gray-300">Metadata</TableHead>
-              <TableHead className="text-gray-700 dark:text-gray-300">Added By</TableHead>
-              <TableHead className="text-gray-700 dark:text-gray-300">Stats</TableHead>
-              <TableHead className="text-gray-700 dark:text-gray-300">Details</TableHead>
+              <TableHead className="w-full md:w-[40%] text-gray-700 dark:text-gray-300">Question</TableHead>
+              <TableHead className="hidden md:table-cell text-gray-700 dark:text-gray-300">Metadata</TableHead>
+              <TableHead className="hidden md:table-cell text-gray-700 dark:text-gray-300">Added By</TableHead>
+              <TableHead className="hidden md:table-cell text-gray-700 dark:text-gray-300">Stats</TableHead>
+              <TableHead className="hidden md:table-cell text-gray-700 dark:text-gray-300">Details</TableHead>
               <TableHead className="text-right text-gray-700 dark:text-gray-300">Actions</TableHead>
             </TableRow>
           </TableHeader>
@@ -994,13 +1203,19 @@ export default function QuestionBankPage() {
                       <div className="font-medium text-gray-900 dark:text-gray-100 group-hover:text-blue-700 dark:group-hover:text-blue-400 transition-colors whitespace-normal break-words prose prose-sm dark:prose-invert">
                         <div dangerouslySetInnerHTML={{ __html: question.questionText }} />
                       </div>
-                      <div className="flex gap-2 text-xs text-gray-500 dark:text-gray-400">
+                      <div className="flex flex-wrap gap-2 text-xs text-gray-500 dark:text-gray-400 mt-1">
                         <span className="font-mono bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded">ID: {question.id.slice(0, 6)}</span>
                         <span>{question.options.length} Options</span>
+
+                        {/* Mobile Only Metadata */}
+                        <div className="flex md:hidden gap-2 items-center">
+                          <Badge variant="outline" className="text-[10px] h-5">{question.subject}</Badge>
+                          <Badge className={`h-5 text-[10px] ${question.difficulty === 'Easy' ? 'bg-green-100 text-green-700' : question.difficulty === 'Medium' ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'}`}>{question.difficulty || 'N/A'}</Badge>
+                        </div>
                       </div>
                     </div>
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="hidden md:table-cell">
                     <div className="flex flex-col gap-1.5">
                       <div className="flex gap-2">
                         <Badge variant="outline" className="text-xs bg-white dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700">{question.course}</Badge>
@@ -1009,7 +1224,7 @@ export default function QuestionBankPage() {
                       {question.topic && <span className="text-xs text-gray-500 dark:text-gray-400 truncate max-w-[150px]">{question.topic}</span>}
                     </div>
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="hidden md:table-cell">
                     <div className="flex flex-col gap-1 text-[10px] text-gray-500">
                       <div className="flex items-center gap-1.5" title="Used in X Quizzes">
                         <PieChart className="h-3 w-3" />
@@ -1021,7 +1236,7 @@ export default function QuestionBankPage() {
                       </div>
                     </div>
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="hidden md:table-cell">
                     <div className="flex flex-col gap-1.5">
                       <Badge className={`w-fit text-[10px] uppercase
                                     ${question.difficulty === 'Easy' ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 border-green-200' : ''}
@@ -1038,7 +1253,7 @@ export default function QuestionBankPage() {
                     </div>
 
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="hidden md:table-cell">
                     <div className="flex flex-col gap-1 text-[10px]">
                       <span className="font-medium text-gray-700 dark:text-gray-300">
                         {teacherNamesCache[question.createdBy as string] || question.teacher || 'System'}

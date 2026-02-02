@@ -1,5 +1,5 @@
 'use client';
-import ComingSoon from '@/components/ui/coming-soon';
+
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -56,7 +56,7 @@ const getQuizAttemptStatus = (attempt?: { startedAt?: any, completed?: boolean }
   };
 };
 
-const UserCreatedQuizzesPageOriginal = () => {
+const UserCreatedQuizzesPage = () => {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [quizzes, setQuizzes] = useState<UserCreatedQuiz[]>([]);
@@ -84,7 +84,7 @@ const UserCreatedQuizzesPageOriginal = () => {
           const d = docSnap.data();
           list.push({
             id: docSnap.id,
-            name: d.name,
+            name: d.title || d.name || 'Untitled Quiz',
             subject: d.subject,
             chapters: d.chapters || [],
             createdBy: d.createdBy,
@@ -221,7 +221,7 @@ const UserCreatedQuizzesPageOriginal = () => {
                 Start your learning journey by creating your first custom quiz
               </p>
               <Button
-                onClick={() => router.push('/create-your-own-test')}
+                onClick={() => router.push('/quiz/create-mock')}
                 className="group relative bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white px-10 py-6 rounded-2xl shadow-xl shadow-blue-500/30 transition-all duration-300 hover:scale-105 border-0"
               >
                 <div className="relative flex items-center gap-2 font-semibold text-lg">
@@ -293,8 +293,8 @@ const UserCreatedQuizzesPageOriginal = () => {
                         onClick={() =>
                           router.push(
                             status.action === 'resume'
-                              ? `/user-quizzes/${q.id}/resume?id=${q.id}`
-                              : `/user-quizzes/${q.id}/start?id=${q.id}`
+                              ? `/quiz/start-user-quiz?id=${q.id}`
+                              : `/quiz/start-user-quiz?id=${q.id}`
                           )
                         }
                         className={`w-full bg-gradient-to-r ${status.bgGradient} hover:opacity-90 text-white py-6 rounded-2xl shadow-xl transition-all duration-300 hover:scale-105 border-0 font-bold text-base`}
@@ -328,4 +328,4 @@ const UserCreatedQuizzesPageOriginal = () => {
   );
 };
 
-export default function UserCreatedQuizzesPage() { return <ComingSoon />; }
+export default UserCreatedQuizzesPage;
