@@ -296,7 +296,11 @@ const UserResponsesPageContent: React.FC = () => {
     const subStats: Record<string, { subject: string; correct: number; wrong: number; skipped: number; total: number; percentage: number }> = {};
 
     attempt.detailed.forEach((q) => {
-        const subject = q.subject || 'General';
+        let subject = q.subject || 'General';
+        // Fallback: If subject is Uncategorized/General but quiz has only 1 subject defined, use that.
+        if ((subject === 'Uncategorized' || subject === 'General') && quiz?.subjects?.length === 1) {
+            subject = quiz.subjects[0];
+        }
         if (!groupedBySubject[subject]) groupedBySubject[subject] = [];
         groupedBySubject[subject].push(q);
 
