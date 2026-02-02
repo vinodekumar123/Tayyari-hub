@@ -1,18 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getFirestore, collection, addDoc, getDocs, query, where, serverTimestamp } from 'firebase/firestore';
-import { initializeApp, getApps, cert } from 'firebase-admin/app';
-import { getFirestore as getAdminFirestore } from 'firebase-admin/firestore';
-
-// Initialize Firebase Admin if not already initialized
-function getAdminDb() {
-    if (getApps().length === 0) {
-        const serviceAccount = require('@/serviceAccountKey.json');
-        initializeApp({
-            credential: cert(serviceAccount)
-        });
-    }
-    return getAdminFirestore();
-}
+import { adminDb, isAdminInitialized, getInitializationError } from '@/lib/firebase-admin';
 
 export async function POST(req: Request) {
     try {
@@ -32,7 +19,14 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
         }
 
-        const db = getAdminDb();
+        if (!isAdminInitialized()) {
+            return NextResponse.json({
+                error: 'Firebase Admin not initialized',
+                details: getInitializationError()?.message
+            }, { status: 500 });
+        }
+
+        const db = adminDb;
 
         // Check for existing running job for this subject
         const existingJobsSnapshot = await db.collection('tagging_jobs')
