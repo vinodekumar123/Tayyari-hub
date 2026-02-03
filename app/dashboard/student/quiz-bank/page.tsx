@@ -51,37 +51,61 @@ import {
 import { UnifiedHeader } from '@/components/unified-header';
 
 // Quiz status helper
+// Quiz status helper
 function getQuizStatus(startDate: string, endDate: string, startTime?: string, endTime?: string) {
-    const now = new Date();
-    let start: Date;
-    let end: Date;
-
     try {
         if (!startDate || !endDate) return 'ended';
 
+        // Get current time in Pakistan
+        const nowString = new Date().toLocaleString("en-US", { timeZone: "Asia/Karachi" });
+        const now = new Date(nowString);
+
+        // Helper to construct Date object in PST
+        const createPSTDate = (dateStr: string, timeStr: string) => {
+            const [y, m, d] = dateStr.split('-').map(Number);
+            const [h, min] = timeStr.split(':').map(Number);
+            // Create a date string that effectively represents the target time in "local" perception
+            // We do this by constructing a string and treating it as if it were in the same zone as 'now'
+            // However, since we already converted 'now' to match PST wall-clock time, we can compare directly 
+            // if we construct the target date similarly.
+
+            // Better approach: Construct ISO string with offset if know, but simplified:
+            // Let's rely on string parsing relative to the 'now' object which is already shifted.
+            // Actually, simpler: construct the date, then converting it to a comparable numeric value or object 
+            // that aligns with 'now'.
+
+            // Alignment Strategy: 
+            // 1. 'now' is a Date object where .getHours() returns Pakistan time (because we shifted it).
+            // 2. We construct 'start' and 'end' as Date objects where .getHours() matches the input string.
+            // 3. We compare them.
+
+            return new Date(y, m - 1, d, h, min);
+        };
+
+        let start: Date;
         if (startTime && /^\d{2}:\d{2}$/.test(startTime)) {
-            const [y, m, d] = startDate.split('-').map(Number);
-            const [h, min] = startTime.split(':').map(Number);
-            start = new Date(y, m - 1, d, h, min);
+            start = createPSTDate(startDate, startTime);
         } else {
-            start = new Date(startDate);
-            start.setHours(0, 0, 0, 0);
+            // Default start of day
+            start = createPSTDate(startDate, "00:00");
         }
 
+        let end: Date;
         if (endTime && /^\d{2}:\d{2}$/.test(endTime)) {
-            const [y, m, d] = endDate.split('-').map(Number);
-            const [h, min] = endTime.split(':').map(Number);
-            end = new Date(y, m - 1, d, h, min);
+            end = createPSTDate(endDate, endTime);
         } else {
-            end = new Date(endDate);
-            end.setHours(23, 59, 59, 999);
+            // Default end of day
+            const [y, m, d] = endDate.split('-').map(Number);
+            end = new Date(y, m - 1, d, 23, 59, 59, 999);
         }
 
         if (isNaN(start.getTime()) || isNaN(end.getTime())) return 'ended';
+
         if (now < start) return 'upcoming';
         if (now >= start && now <= end) return 'active';
         return 'ended';
     } catch (error) {
+        console.error("Error in getQuizStatus", error);
         return 'ended';
     }
 }
@@ -518,48 +542,7 @@ export default function StudentQuizBankPage() {
                     </div>
                 )}
 
-                {/* Series Analytics Section */}
-                {seriesStats.length > 0 && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
-                        {seriesStats.map((stat, i) => (
-                            <Card key={i} className={`${glassmorphism.light} border border-[#004AAD]/10 dark:border-[#0066FF]/20 shadow-md`}>
-                                <CardHeader className="pb-2">
-                                    <CardTitle className="text-lg font-bold truncate" title={stat.name}>{stat.name}</CardTitle>
-                                </CardHeader>
-                                <CardContent>
-                                    <div className="space-y-4">
-                                        <div className="flex justify-between items-end">
-                                            <div>
-                                                <p className="text-sm text-muted-foreground">Recent Progress</p>
-                                                <p className="text-2xl font-bold text-[#004AAD] dark:text-[#00B4D8]">{stat.attemptedCount}/{stat.totalQuizzes}</p>
-                                            </div>
-                                            <div className="text-right">
-                                                <p className="text-sm text-muted-foreground">Accuracy</p>
-                                                <p className={`text-xl font-bold ${stat.avgAccuracy >= 80 ? 'text-green-500' : stat.avgAccuracy >= 50 ? 'text-amber-500' : 'text-red-500'}`}>
-                                                    {stat.avgAccuracy}%
-                                                </p>
-                                            </div>
-                                        </div>
-                                        <div className="w-full bg-secondary/50 rounded-full h-2 overflow-hidden">
-                                            <div
-                                                className="bg-gradient-to-r from-[#004AAD] to-[#00B4D8] h-full transition-all duration-1000"
-                                                style={{ width: `${stat.progress}%` }}
-                                            />
-                                        </div>
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            className="w-full text-xs"
-                                            onClick={() => setFilters({ ...filters, series: stat.id })}
-                                        >
-                                            View Quizzes <ArrowRight className="w-3 h-3 ml-1" />
-                                        </Button>
-                                    </div>
-                                </CardContent>
-                            </Card>
-                        ))}
-                    </div>
-                )}
+                {/* Series Analytics Section Removed as per request */}
 
                 {/* Filters */}
                 <Card className={`${glassmorphism.light} border border-[#004AAD]/10 dark:border-[#0066FF]/20 shadow-xl`}>

@@ -39,12 +39,18 @@ export async function createMockQuiz(config: CreateQuizConfig) {
             throw new Error(`You have reached your limit of ${limitCount} mock tests for this ${limitFrequency.replace('ly', '')}.`);
         }
 
-        const MAX_QUESTIONS = 100;
+        const MAX_QUESTIONS = 180;
+        const MAX_DURATION = 180;
+
         let totalRequested = 0;
         Object.values(questionsPerSubject).forEach(c => totalRequested += c);
 
         if (totalRequested > MAX_QUESTIONS) {
             throw new Error(`Total questions cannot exceed ${MAX_QUESTIONS}`);
+        }
+
+        if (duration > MAX_DURATION) {
+            throw new Error(`Duration cannot exceed ${MAX_DURATION} minutes`);
         }
 
 

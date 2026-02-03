@@ -1038,9 +1038,12 @@ export default function StudentsPage() {
                 {receiptItems.map((item, idx) => (
                   <tr key={idx} className="border-b border-slate-50 last:border-0">
                     <td className="py-4 text-slate-800 font-medium text-lg">
-                      {item.seriesName || 'Series Enrollment'} <span className="text-sm text-slate-400 block font-normal">{item.transactionId}</span>
+                      <div className="flex flex-col">
+                        <span>{item.seriesName || 'Series Enrollment'}</span>
+                        <span className="text-sm text-slate-400 font-normal mt-1">{item.transactionId}</span>
+                      </div>
                     </td>
-                    <td className="py-4 text-slate-800 font-bold text-lg text-right">
+                    <td className="py-4 text-slate-800 font-bold text-lg text-right align-top">
                       PKR {item.price}
                     </td>
                   </tr>
@@ -1057,7 +1060,12 @@ export default function StudentsPage() {
 
           {/* Footer */}
           <div className="text-center relative z-10 mt-auto">
+            <div className="mb-4 space-y-1">
+              <p className="text-xs text-emerald-600 font-bold">Valid upto MDCAT 2026 Test</p>
+              <p className="text-[10px] text-amber-600 italic">Note: Keep in mind This is only online Self assessment session , no classes or online lectures will be provided</p>
+            </div>
             <p className="text-slate-400 text-sm font-medium">Thank you for learning with Tayyari Hub!</p>
+            <p className="text-slate-500 text-xs font-semibold mt-1">for More information Always refer to Tayyari Hub Official Whatsapp : 03237507673</p>
             <p className="text-slate-300 text-xs mt-2">Computer Generated Receipt &bull; {new Date().toLocaleTimeString()}</p>
           </div>
         </div>

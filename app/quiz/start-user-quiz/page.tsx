@@ -551,17 +551,17 @@ const StartUserQuizPageContent: React.FC = () => {
           </DialogHeader>
 
           <div className="space-y-6 py-4">
-            <div className="grid grid-cols-3 gap-4">
-              <div className="p-4 bg-blue-50 dark:bg-blue-900/10 rounded-xl text-center border border-blue-100 dark:border-blue-900/30">
-                <p className="text-2xl font-bold text-blue-700 dark:text-blue-400">{attemptedCount}</p>
+            <div className="grid grid-cols-1 xs:grid-cols-3 gap-3 sm:gap-4">
+              <div className="p-3 sm:p-4 bg-blue-50 dark:bg-blue-900/10 rounded-xl text-center border border-blue-100 dark:border-blue-900/30">
+                <p className="text-xl sm:text-2xl font-bold text-blue-700 dark:text-blue-400">{attemptedCount}</p>
                 <p className="text-[10px] uppercase font-bold text-blue-600/70">Answered</p>
               </div>
-              <div className="p-4 bg-orange-50 dark:bg-orange-900/10 rounded-xl text-center border border-orange-100 dark:border-orange-900/30">
-                <p className="text-2xl font-bold text-orange-600 dark:text-orange-400">{skippedQuestionIndexes.length}</p>
+              <div className="p-3 sm:p-4 bg-orange-50 dark:bg-orange-900/10 rounded-xl text-center border border-orange-100 dark:border-orange-900/30">
+                <p className="text-xl sm:text-2xl font-bold text-orange-600 dark:text-orange-400">{skippedQuestionIndexes.length}</p>
                 <p className="text-[10px] uppercase font-bold text-orange-600/70">Skipped</p>
               </div>
-              <div className="p-4 bg-yellow-50 dark:bg-yellow-900/10 rounded-xl text-center border border-yellow-100 dark:border-yellow-900/30">
-                <p className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">{flaggedCount}</p>
+              <div className="p-3 sm:p-4 bg-yellow-50 dark:bg-yellow-900/10 rounded-xl text-center border border-yellow-100 dark:border-yellow-900/30">
+                <p className="text-xl sm:text-2xl font-bold text-yellow-600 dark:text-yellow-400">{flaggedCount}</p>
                 <p className="text-[10px] uppercase font-bold text-yellow-600/70">Flagged</p>
               </div>
             </div>
@@ -592,30 +592,30 @@ const StartUserQuizPageContent: React.FC = () => {
       </Dialog>
 
       <header className="bg-white/80 dark:bg-gray-900/80 backdrop-blur-md border-b sticky top-0 z-40 transition-colors">
-        <div className="max-w-5xl mx-auto px-4 py-3 flex justify-between items-center">
-          <div className="flex items-center gap-4">
-            <div className="hidden sm:flex p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
+        <div className="max-w-5xl mx-auto px-4 py-3 flex justify-between items-center relative">
+          <div className="flex items-center gap-3 sm:gap-4 overflow-hidden">
+            <div className="hidden sm:flex p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg shrink-0">
               <BookMarked className="h-5 w-5 text-blue-600" />
             </div>
-            <div>
-              <h1 className="text-sm sm:text-base font-bold truncate max-w-[150px] sm:max-w-xs">{quiz.name}</h1>
-              <div className="flex items-center gap-2 text-[10px] sm:text-xs text-muted-foreground">
-                <Badge variant="outline" className="text-[10px] h-4 py-0 bg-blue-50 dark:bg-blue-900/10 border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-400">Mock</Badge>
-                <span className="hidden sm:inline">•</span>
-                <span className="hidden sm:inline">{quiz.subject}</span>
+            <div className="min-w-0">
+              <h1 className="text-sm sm:text-base font-bold truncate max-w-[120px] xs:max-w-[180px] sm:max-w-xs">{quiz.name}</h1>
+              <div className="flex items-center gap-2 text-[10px] sm:text-xs text-muted-foreground whitespace-nowrap">
+                <Badge variant="outline" className="text-[9px] sm:text-[10px] h-3.5 sm:h-4 py-0 bg-blue-50 dark:bg-blue-900/10 border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-400 px-1">Mock</Badge>
+                <span className="hidden xs:inline">•</span>
+                <span className="hidden xs:inline truncate max-w-[80px] sm:max-w-none">{quiz.subject}</span>
               </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-4 sm:gap-8">
+          <div className="flex items-center gap-3 sm:gap-8 shrink-0">
             <div className="flex flex-col items-end">
-              <div className="flex items-center gap-2">
-                <Clock className={`h-4 w-4 ${timeLeft < 300 ? 'text-red-500 animate-pulse' : 'text-blue-500'}`} />
-                <span className={`font-mono text-lg font-bold leading-none ${timeLeft < 300 ? 'text-red-600' : 'text-foreground'}`}>
+              <div className="flex items-center gap-1.5 sm:gap-2">
+                <Clock className={`h-3.5 w-3.5 sm:h-4 sm:w-4 ${timeLeft < 300 ? 'text-red-500 animate-pulse' : 'text-blue-500'}`} />
+                <span className={`font-mono text-base sm:text-lg font-bold leading-none ${timeLeft < 300 ? 'text-red-600' : 'text-foreground'}`}>
                   {formatTime(timeLeft)}
                 </span>
               </div>
-              <span className="text-[9px] font-bold uppercase tracking-tighter text-muted-foreground">Time Remaining</span>
+              <span className="text-[8px] sm:text-[9px] font-bold uppercase tracking-tighter text-muted-foreground">Remaining</span>
             </div>
 
             <div className="hidden md:block w-32 border-l pl-8">
@@ -628,14 +628,19 @@ const StartUserQuizPageContent: React.FC = () => {
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center">
               <ModeToggle />
             </div>
+          </div>
+
+          {/* Mobile Progress Bar (Absolute Bottom) */}
+          <div className="absolute bottom-0 left-0 w-full h-0.5 bg-gray-200 dark:bg-gray-800 md:hidden">
+            <div className="h-full bg-blue-600 transition-all duration-500" style={{ width: `${attemptedPercent}%` }} />
           </div>
         </div>
       </header>
 
-      <main className="max-w-3xl mx-auto p-4 sm:p-8 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+      <main className="max-w-3xl mx-auto px-4 py-6 sm:p-8 space-y-6 sm:space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-32 sm:pb-8">
         <div className="flex flex-col gap-6">
           {qSlice.map((q, idx) => (
             <Card key={q.id} className="border-primary/10 shadow-lg overflow-hidden transition-all group hover:border-primary/30">

@@ -56,7 +56,8 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
-const MAX_QUESTIONS = 100;
+const MAX_QUESTIONS = 180;
+const MAX_DURATION = 180;
 
 function CreateQuizSkeleton() {
   return (
@@ -881,7 +882,7 @@ function CreateUserQuizPageOriginal() {
                       <input
                         type="range"
                         min="5"
-                        max="180"
+                        max={MAX_DURATION}
                         step="5"
                         value={duration}
                         onChange={(e) => setDuration(parseInt(e.target.value))}

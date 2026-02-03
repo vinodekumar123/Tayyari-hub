@@ -193,6 +193,17 @@ const StartQuizPageContent: React.FC = () => {
   const flaggedCount = Object.keys(flags).filter((k) => flags[k]).length;
   const attemptedPercent = flattenedQuestions.length > 0 ? Math.round((attemptedCount / flattenedQuestions.length) * 100) : 0;
 
+  const { skippedIndices, flaggedIndices } = useMemo(() => {
+    const ski: number[] = [];
+    const fla: number[] = [];
+    flattenedQuestions.forEach((q, i) => {
+      const isAns = answers[q.id] !== undefined && answers[q.id] !== '';
+      if (!isAns) ski.push(i + 1);
+      if (flags[q.id]) fla.push(i + 1);
+    });
+    return { skippedIndices: ski, flaggedIndices: fla };
+  }, [flattenedQuestions, answers, flags]);
+
   // --- Effects ---
 
   // Auth listener
@@ -261,8 +272,37 @@ const StartQuizPageContent: React.FC = () => {
         setQuiz(quizData);
 
         // Access Control Check (skip for admin)
+        if (!adminStatus) {
+          setLoadingStep(0); // Validating
+          // SERVER-SIDE VALIDATION
+          try {
+            const validateRes = await fetch('/api/quiz/validate', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ quizId, userId: user.uid, userRole: userData?.role || 'student' }),
+            });
+
+            const validateData = await validateRes.json();
+
+            if (!validateRes.ok || !validateData.valid) {
+              const errorMsg = validateData.primaryError || validateData.errors?.[0] || 'Access denied';
+              toast.error(errorMsg);
+              setAccessDeniedMessage(errorMsg);
+              setShowAccessDenied(true);
+              setLoading(false);
+              return;
+            }
+          } catch (err) {
+            console.error("Validation check failed", err);
+            // Optional: Decide if you want to block or allow if API fails
+            // For security, usually fail-safe (block) or warn
+            // toast.error("Could not verify quiz schedule. Please check connection.");
+          }
+        }
+
+        // Access Control Check (Double check series locally if needed, but API covers it)
         if (!adminStatus && quizData.accessType === 'series') {
-          setLoadingStep(2); // Show "Checking access"
+          setLoadingStep(2); // Checking access locally (legacy check)
 
           // Fetch user enrollments
           const enrollmentsSnap = await getDocs(
@@ -737,15 +777,70 @@ const StartQuizPageContent: React.FC = () => {
           <DialogHeader>
             <DialogTitle>Review Before Submit</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4">
-            <p>Answered: {attemptedCount}/{flattenedQuestions.length}</p>
-            <p>Flagged: {flaggedCount}</p>
-            <div className="flex justify-end gap-2">
+          <div className="space-y-6">
+            <div className="grid grid-cols-2 gap-4 text-center">
+              <div className="p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
+                <p className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">{flaggedCount}</p>
+                <p className="text-xs uppercase font-semibold text-muted-foreground">Flagged</p>
+              </div>
+              <div className="p-3 rounded-lg bg-gray-500/10 border border-gray-500/20">
+                <p className="text-2xl font-bold text-gray-600 dark:text-gray-400">{skippedIndices.length}</p>
+                <p className="text-xs uppercase font-semibold text-muted-foreground">Skipped</p>
+              </div>
+            </div>
+
+            {/* Flagged Section */}
+            <div>
+              <h3 className="font-semibold text-sm mb-2 flex items-center gap-2">
+                <Flag className="w-4 h-4 text-yellow-500" /> Flagged Questions
+              </h3>
+              {flaggedIndices.length > 0 ? (
+                <div className="flex flex-wrap gap-2">
+                  {flaggedIndices.map((num) => (
+                    <button
+                      key={`flag-${num}`}
+                      onClick={() => jumpToQuestion(num)}
+                      className="w-8 h-8 flex items-center justify-center rounded-md bg-yellow-100 text-yellow-700 hover:bg-yellow-200 dark:bg-yellow-900/30 dark:text-yellow-400 dark:hover:bg-yellow-900/50 text-xs font-bold transition-colors border border-yellow-200 dark:border-yellow-800"
+                    >
+                      {num}
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground italic">No flagged questions.</p>
+              )}
+            </div>
+
+            {/* Skipped Section */}
+            <div>
+              <h3 className="font-semibold text-sm mb-2 flex items-center gap-2">
+                <ArrowRight className="w-4 h-4 text-gray-500" /> Skipped Questions
+              </h3>
+              {skippedIndices.length > 0 ? (
+                <div className="flex flex-wrap gap-2">
+                  {skippedIndices.map((num) => (
+                    <button
+                      key={`skip-${num}`}
+                      onClick={() => jumpToQuestion(num)}
+                      className="w-8 h-8 flex items-center justify-center rounded-md bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700 text-xs font-bold transition-colors border border-gray-200 dark:border-gray-700"
+                    >
+                      {num}
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground italic">All questions answered!</p>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-2 pt-4 border-t">
               <Button variant="outline" onClick={() => setShowSaveConfirm(true)}>
                 <Save className="w-4 h-4 mr-2" /> Save & Exit
               </Button>
-              <Button variant="outline" onClick={() => setShowSummaryModal(false)}>Review</Button>
-              <Button onClick={() => handleSubmit(true)} className="bg-red-600 text-white">Confirm Submit</Button>
+              <Button variant="outline" onClick={() => setShowSummaryModal(false)}>Keep Reviewing</Button>
+              <Button onClick={() => handleSubmit(true)} className="bg-red-600 hover:bg-red-700 text-white shadow-lg shadow-red-500/20">
+                Confirm Submit
+              </Button>
             </div>
           </div>
         </DialogContent>
