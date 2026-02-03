@@ -370,10 +370,9 @@ function CreateUserQuizPageOriginal() {
         selectedSubjects.forEach((s) => {
           const chs = chaptersBySubject[s] || [];
           if (chs.length > 0 && !chapters.some((c) => chs.includes(c))) {
-            // Auto-select first chapter ONLY if no chapters selected for this subject yet
-            // Logic kept from original but slightly refined to avoid aggressive auto-select
+            // Auto-select ALL chapters if no chapters selected for this subject yet
             if (!chapters.filter(c => chs.includes(c)).length) {
-              chapters.push(chs[0]);
+              chapters.push(...chs);
             }
           }
         });
@@ -696,7 +695,7 @@ function CreateUserQuizPageOriginal() {
                                   <Input
                                     type="number"
                                     min={1}
-                                    className="h-8 text-sm w-full bg-transparent border-0 focus-visible:ring-0 p-0 font-bold"
+                                    className="h-8 text-sm w-full bg-transparent border-0 focus-visible:ring-0 p-0 font-bold [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                     value={questionsPerSubject[s] || ''}
                                     onClick={(e) => e.stopPropagation()}
                                     onChange={(e) => {
@@ -800,6 +799,21 @@ function CreateUserQuizPageOriginal() {
                                 {subject}
                               </span>
                               <div className="h-px flex-1 bg-primary/10" />
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-6 px-2 text-[10px] font-bold text-primary hover:bg-primary/10"
+                                onClick={() => {
+                                  const allInSubjectSelected = chapters.every(ch => selectedChapters.includes(ch));
+                                  if (allInSubjectSelected) {
+                                    setSelectedChapters(prev => prev.filter(ch => !chapters.includes(ch)));
+                                  } else {
+                                    setSelectedChapters(prev => [...new Set([...prev, ...chapters])]);
+                                  }
+                                }}
+                              >
+                                {chapters.every(ch => selectedChapters.includes(ch)) ? 'Deselect All' : 'Select All Chapters'}
+                              </Button>
                             </div>
                             <div className="flex flex-wrap gap-2">
                               {chapters.map(chapter => {
@@ -903,7 +917,7 @@ function CreateUserQuizPageOriginal() {
                             type="number"
                             value={questionsPerPage}
                             onChange={(e) => setQuestionsPerPage(parseInt(e.target.value))}
-                            className="w-20 h-9 text-right bg-background border-primary/10 focus:ring-primary font-bold pr-2 rounded-xl"
+                            className="w-20 h-9 text-right bg-background border-primary/10 focus:ring-primary font-bold pr-2 rounded-xl [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                             min={1}
                             max={totalQuestions}
                           />
