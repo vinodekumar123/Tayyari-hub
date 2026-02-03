@@ -361,56 +361,58 @@ const UserResponsesPageContent: React.FC = () => {
             <Card key={q.questionId} className="mb-6 shadow-lg border border-border/50 bg-card/50 backdrop-blur-sm hover:shadow-xl transition-all duration-300">
                 <CardHeader className="dir-ltr rounded-t-lg bg-muted/30 border-b border-border/50 pb-4">
                     <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
-                        <CardTitle className="text-lg font-semibold text-foreground flex gap-2 items-start leading-relaxed w-full min-w-0">
-                            <span className="text-primary font-bold min-w-[2.5rem] shrink-0">Q{idx + 1}.</span>
-                            <div className="flex-1 min-w-0 overflow-hidden">
-                                <div className="break-words" dangerouslySetInnerHTML={{ __html: q.questionText }} />
+                        <CardTitle className="text-base md:text-lg font-semibold text-foreground flex gap-2 items-start leading-relaxed w-full min-w-0">
+                            <span className="text-primary font-bold min-w-[2rem] md:min-w-[2.5rem] shrink-0">Q{idx + 1}.</span>
+                            <div className="flex-1 min-w-0 overflow-hidden break-words">
+                                <div className="break-words overflow-x-auto no-scrollbar" dangerouslySetInnerHTML={{ __html: q.questionText }} />
                             </div>
                         </CardTitle>
-                        <div className="flex items-center gap-2 self-end md:self-auto shrink-0">
+                        <div className="flex flex-wrap items-center gap-2 mt-3 md:mt-0 w-full md:w-auto md:self-auto shrink-0">
                             {isSkipped && (
-                                <Badge variant="secondary" className="bg-yellow-100/50 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-400 border-yellow-200 dark:border-yellow-800">
+                                <Badge variant="secondary" className="bg-yellow-100/50 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-400 border-yellow-200 dark:border-yellow-800 text-[10px] md:text-xs">
                                     <Clock className="w-3 h-3 mr-1" />
                                     Skipped
                                 </Badge>
                             )}
                             {showSubject && q.subject && (
-                                <Badge variant="outline" className="text-xs">
+                                <Badge variant="outline" className="text-[10px] md:text-xs">
                                     {q.subject}
                                 </Badge>
                             )}
-                            <Button
-                                variant="ghost"
-                                size="sm"
-                                className="bg-red-50 hover:bg-red-100 text-red-600 hover:text-red-700 dark:bg-red-900/10 dark:hover:bg-red-900/30 dark:text-red-400 h-8 px-2"
-                                onClick={() => openReportModal(q)}
-                                title="Report Mistake"
-                            >
-                                <Flag className="w-4 h-4 mr-1.5" />
-                                Report
-                            </Button>
-                            {savedQuestions.has(q.questionId) ? (
+                            <div className="flex items-center gap-2 ml-auto md:ml-0">
                                 <Button
                                     variant="ghost"
                                     size="sm"
-                                    disabled
-                                    className="bg-green-50 text-green-600 dark:bg-green-900/20 dark:text-green-400 h-8 px-2 ml-2"
+                                    className="bg-red-50 hover:bg-red-100 text-red-600 hover:text-red-700 dark:bg-red-900/10 dark:hover:bg-red-900/30 dark:text-red-400 h-8 px-2 text-xs md:text-sm"
+                                    onClick={() => openReportModal(q)}
+                                    title="Report Mistake"
                                 >
-                                    <CheckCircle className="w-4 h-4 mr-1.5" />
-                                    Saved
+                                    <Flag className="w-3.5 h-3.5 mr-1" />
+                                    <span className="hidden xs:inline">Report</span>
                                 </Button>
-                            ) : (
-                                <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="bg-indigo-50 hover:bg-indigo-100 text-indigo-600 hover:text-indigo-700 dark:bg-indigo-900/10 dark:hover:bg-indigo-900/30 dark:text-indigo-400 h-8 px-2 ml-2"
-                                    onClick={() => handleSaveToFlashcards(q, idx)}
-                                    title="Save to Flashcards"
-                                >
-                                    <Bookmark className="w-4 h-4 mr-1.5" />
-                                    Save
-                                </Button>
-                            )}
+                                {savedQuestions.has(q.questionId) ? (
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        disabled
+                                        className="bg-green-50 text-green-600 dark:bg-green-900/20 dark:text-green-400 h-8 px-2 text-xs md:text-sm"
+                                    >
+                                        <CheckCircle className="w-3.5 h-3.5 mr-1" />
+                                        <span className="hidden xs:inline">Saved</span>
+                                    </Button>
+                                ) : (
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="bg-indigo-50 hover:bg-indigo-100 text-indigo-600 hover:text-indigo-700 dark:bg-indigo-900/10 dark:hover:bg-indigo-900/30 dark:text-indigo-400 h-8 px-2 text-xs md:text-sm"
+                                        onClick={() => handleSaveToFlashcards(q, idx)}
+                                        title="Save to Flashcards"
+                                    >
+                                        <Bookmark className="w-3.5 h-3.5 mr-1" />
+                                        <span className="hidden xs:inline">Save</span>
+                                    </Button>
+                                )}
+                            </div>
                         </div>
                     </div>
                 </CardHeader>
@@ -434,12 +436,12 @@ const UserResponsesPageContent: React.FC = () => {
                             return (
                                 <div
                                     key={i}
-                                    className={`flex items-center p-4 rounded-xl border text-base font-medium transition-colors duration-200 ${style}`}
+                                    className={`flex items-start p-3 md:p-4 rounded-xl border text-sm md:text-base font-medium transition-colors duration-200 ${style}`}
                                 >
-                                    {icon}
-                                    <div className="flex-1">
-                                        <span className="mr-1">{String.fromCharCode(65 + i)}.</span>
-                                        <span dangerouslySetInnerHTML={{ __html: opt }} />
+                                    <div className="shrink-0">{icon}</div>
+                                    <div className="flex-1 min-w-0 break-words overflow-x-auto no-scrollbar">
+                                        <span className="mr-1 inline-block shrink-0">{String.fromCharCode(65 + i)}.</span>
+                                        <span className="inline" dangerouslySetInnerHTML={{ __html: opt }} />
                                     </div>
                                 </div>
                             );
@@ -449,7 +451,7 @@ const UserResponsesPageContent: React.FC = () => {
                     {q.explanation && (
                         <div className="mt-4 bg-blue-50/50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-800 p-4 rounded-xl flex items-start gap-3 text-sm text-blue-800 dark:text-blue-300">
                             <Info className="h-5 w-5 mt-0.5 shrink-0 text-blue-600 dark:text-blue-400" />
-                            <div className="leading-relaxed min-w-0 flex-1">
+                            <div className="leading-relaxed min-w-0 flex-1 break-words overflow-x-auto no-scrollbar">
                                 <span className="font-semibold block mb-1">Explanation:</span>
                                 <div dangerouslySetInnerHTML={{ __html: q.explanation }} />
                             </div>
@@ -477,29 +479,29 @@ const UserResponsesPageContent: React.FC = () => {
 
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 relative z-10">
                 {/* Enhanced Hero Section */}
-                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
                     <div>
                         {studentProfile && (
-                            <div className="mb-4 p-4 bg-muted/30 border border-primary/10 rounded-xl flex flex-col sm:flex-row gap-4 sm:items-center animate-in fade-in slide-in-from-top-4">
-                                <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                                    <UserIcon className="w-6 h-6 text-primary" />
+                            <div className="mb-4 p-3 md:p-4 bg-muted/30 border border-primary/10 rounded-xl flex flex-row gap-3 md:gap-4 items-center animate-in fade-in slide-in-from-top-4 overflow-hidden">
+                                <div className="h-10 w-10 md:h-12 md:w-12 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                                    <UserIcon className="w-5 h-5 md:w-6 md:h-6 text-primary" />
                                 </div>
-                                <div className="space-y-1">
-                                    <div className="flex items-center gap-2">
-                                        <h2 className="text-lg font-bold">
+                                <div className="space-y-0.5 md:space-y-1 min-w-0">
+                                    <div className="flex items-center gap-2 overflow-hidden">
+                                        <h2 className="text-base md:text-lg font-bold truncate">
                                             {studentProfile.displayName || studentProfile.fullName || studentProfile.name || studentProfile.email || 'Unknown Student'}
                                         </h2>
-                                        <Badge variant="outline" className="text-[10px] h-5">Student</Badge>
+                                        <Badge variant="outline" className="text-[10px] h-4 md:h-5 px-1 shrink-0">Student</Badge>
                                     </div>
-                                    <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
+                                    <div className="flex flex-col xs:flex-row xs:flex-wrap gap-x-3 gap-y-0.5 text-[10px] md:text-sm text-muted-foreground truncate">
                                         {studentProfile.email && (
-                                            <div className="flex items-center gap-1">
-                                                <Mail className="w-3.5 h-3.5" /> {studentProfile.email}
+                                            <div className="flex items-center gap-1 truncate">
+                                                <Mail className="w-3 md:w-3.5 h-3 md:h-3.5 shrink-0" /> <span className="truncate">{studentProfile.email}</span>
                                             </div>
                                         )}
                                         {studentProfile.phoneNumber && (
-                                            <div className="flex items-center gap-1">
-                                                <Phone className="w-3.5 h-3.5" /> {studentProfile.phoneNumber}
+                                            <div className="flex items-center gap-1 shrink-0">
+                                                <Phone className="w-3 md:w-3.5 h-3 md:h-3.5 shrink-0" /> {studentProfile.phoneNumber}
                                             </div>
                                         )}
                                     </div>
@@ -511,20 +513,23 @@ const UserResponsesPageContent: React.FC = () => {
                             {(quiz.subjects && quiz.subjects[0]) || quiz.subject || 'General'} &bull; Result Analysis
                         </p>
                     </div>
-                    <Badge className={`text-sm font-semibold px-4 py-1.5 rounded-full shadow-lg ${remarkColor} text-white hover:${remarkColor}`}>
+                </div>
+
+                {/* Action Row */}
+                <div className="flex flex-wrap items-center gap-3 mb-8">
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        className="hover:bg-muted group text-muted-foreground hover:text-foreground transition-all"
+                        onClick={() => router.push(isAdmin && studentIdParam ? `/admin/students/foradmin?id=${studentIdParam}` : '/dashboard/student/results')}
+                    >
+                        <ArrowLeft className="w-4 h-4 mr-2 transition-transform group-hover:-translate-x-1" />
+                        <span className="inline">Back to History</span>
+                    </Button>
+                    <Badge className={`text-sm font-semibold px-4 py-1.5 rounded-full shadow-lg ${remarkColor} text-white ml-auto`}>
                         {remark}
                     </Badge>
                 </div>
-
-                <Button
-                    variant="ghost"
-                    size="sm"
-                    className="mb-8 hover:bg-muted group text-muted-foreground hover:text-foreground transition-all"
-                    onClick={() => router.push(isAdmin && studentIdParam ? `/admin/students/foradmin?id=${studentIdParam}` : '/dashboard/student/results')}
-                >
-                    <ArrowLeft className="w-4 h-4 mr-2 transition-transform group-hover:-translate-x-1" />
-                    Back to History
-                </Button>
 
                 {/* 6-Column Stats Grid */}
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-10">
@@ -545,37 +550,39 @@ const UserResponsesPageContent: React.FC = () => {
                         { label: 'Skipped', value: skippedQuestions, icon: Circle, color: 'text-yellow-600 dark:text-yellow-400', bg: 'bg-yellow-50 dark:bg-yellow-900/20' },
                     ].map((stat, i) => (
                         <Card key={i} className="border-none shadow-sm hover:shadow-md transition-shadow">
-                            <CardContent className="p-6">
-                                <div className={`w-12 h-12 rounded-2xl ${stat.bg} ${stat.color} flex items-center justify-center mb-4 ring-1 ring-inset ring-white/10`}>
-                                    <stat.icon className="w-6 h-6" />
+                            <CardContent className="p-4 md:p-6">
+                                <div className={`w-10 h-10 md:w-12 md:h-12 rounded-xl md:rounded-2xl ${stat.bg} ${stat.color} flex items-center justify-center mb-2 md:mb-4 ring-1 ring-inset ring-white/10`}>
+                                    <stat.icon className="w-5 h-5 md:w-6 md:h-6" />
                                 </div>
-                                <p className="text-2xl font-bold text-foreground">{stat.value}</p>
-                                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mt-1">{stat.label}</p>
+                                <p className="text-xl md:text-2xl font-bold text-foreground truncate">{stat.value}</p>
+                                <p className="text-[10px] md:text-xs font-semibold text-muted-foreground uppercase tracking-wider mt-0.5 md:mt-1 truncate">{stat.label}</p>
                             </CardContent>
                         </Card>
                     ))}
                 </div>
 
-                {/* Main Tabs Navigation */}
-                <div className="flex items-center gap-1 bg-muted/50 p-1 rounded-2xl w-fit mb-8 border border-border/50 backdrop-blur-sm">
-                    {[
-                        { id: 'overview', label: 'All Questions', icon: BookOpen },
-                        { id: 'subjects', label: 'Subject Analysis', icon: BarChart3 },
-                        { id: 'wrong', label: 'Wrong', icon: XCircle },
-                        { id: 'skipped', label: 'Skipped', icon: Clock },
-                    ].map((tab) => (
-                        <button
-                            key={tab.id}
-                            onClick={() => setActiveTab(tab.id as any)}
-                            className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-medium transition-all duration-200 ${activeTab === tab.id
-                                ? 'bg-background text-primary shadow-sm'
-                                : 'text-muted-foreground hover:text-foreground hover:bg-muted/80'
-                                }`}
-                        >
-                            <tab.icon className={`w-4 h-4 ${activeTab === tab.id ? 'text-primary' : ''}`} />
-                            {tab.label}
-                        </button>
-                    ))}
+                {/* Main Tabs Navigation - Scrollable on mobile */}
+                <div className="w-full overflow-x-auto no-scrollbar mb-8">
+                    <div className="flex items-center gap-1 bg-muted/50 p-1 rounded-2xl w-max border border-border/50 backdrop-blur-sm min-w-full md:min-w-0">
+                        {[
+                            { id: 'overview', label: 'All Questions', icon: BookOpen },
+                            { id: 'subjects', label: 'Subject Analysis', icon: BarChart3 },
+                            { id: 'wrong', label: 'Wrong', icon: XCircle },
+                            { id: 'skipped', label: 'Skipped', icon: Clock },
+                        ].map((tab) => (
+                            <button
+                                key={tab.id}
+                                onClick={() => setActiveTab(tab.id as any)}
+                                className={`flex items-center gap-2 px-4 md:px-5 py-2 md:py-2.5 rounded-xl font-medium transition-all duration-200 whitespace-nowrap text-sm md:text-base ${activeTab === tab.id
+                                    ? 'bg-background text-primary shadow-sm'
+                                    : 'text-muted-foreground hover:text-foreground hover:bg-muted/80'
+                                    }`}
+                            >
+                                <tab.icon className={`w-4 h-4 ${activeTab === tab.id ? 'text-primary' : ''}`} />
+                                {tab.label}
+                            </button>
+                        ))}
+                    </div>
                 </div>
 
                 {/* Tab Content */}

@@ -23,16 +23,23 @@ export function StatsMigrationButton() {
 
             toast.info("Starting stats migration...");
 
-            // 1. Fetch all students
+            // 1. Fetch all users
             const usersRef = collection(db, 'users');
-            const q = query(usersRef, where('role', '==', 'student'));
-            const snap = await getDocs(q);
+            const snap = await getDocs(usersRef);
 
-            const totalUsers = snap.docs.length;
+            // Filter for students: Not admin, not superadmin, and not teacher
+            const studentDocs = snap.docs.filter(docSnap => {
+                const data = docSnap.data();
+                const isAdmin = data.role === 'admin' || data.role === 'superadmin' || data.admin === true || data.superadmin === true;
+                const isTeacher = data.role === 'teacher';
+                return !isAdmin && !isTeacher;
+            });
+
+            const totalUsers = studentDocs.length;
             setTotal(totalUsers);
 
             if (totalUsers === 0) {
-                toast.warning("No students found to migrate.");
+                toast.warning("No students found to recalculate.");
                 setLoading(false);
                 return;
             }
@@ -43,7 +50,7 @@ export function StatsMigrationButton() {
             let count = 0;
             let totalProcessed = 0;
 
-            for (const userDoc of snap.docs) {
+            for (const userDoc of studentDocs) {
                 const data = userDoc.data();
                 const stats = data.stats || {};
 

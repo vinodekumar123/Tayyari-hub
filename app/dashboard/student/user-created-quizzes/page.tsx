@@ -101,6 +101,13 @@ const UserCreatedQuizzesPage = () => {
           }
         });
 
+        // Sort quizzes by createdAt descending (most recent first)
+        list.sort((a, b) => {
+          const dateA = a.createdAt?.seconds ? a.createdAt.seconds : (a.createdAt instanceof Date ? a.createdAt.getTime() / 1000 : 0);
+          const dateB = b.createdAt?.seconds ? b.createdAt.seconds : (b.createdAt instanceof Date ? b.createdAt.getTime() / 1000 : 0);
+          return dateB - dateA;
+        });
+
         setQuizzes(list);
 
         const attemptResults = await Promise.all(quizAttemptPromises);
