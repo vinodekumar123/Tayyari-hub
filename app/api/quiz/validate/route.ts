@@ -97,12 +97,45 @@ export async function POST(request: NextRequest) {
         }
 
         // 2. Time Window Validation
-        const now = new Date();
+        // Use Pakistan Time (Asia/Karachi)
+        const getPKTDate = (dateStr?: string, timeStr: string = '00:00') => {
+            if (!dateStr) return null;
+            // Construct ISO string assuming the input is effectively in PKT offset
+            // But simplified: We construct a Date object, shift it to match PKT
+            // Easier approach: Get "Now" in PKT, and parse the stored date as if it is in the same zone.
+            // Let's stick to comparing simple timestamps if we can.
 
-        if (quizData && quizData.startDate && quizData.startTime) {
+            // Standard approach: Treat the stored string as "Local to PKT".
+            // So "2023-10-27 10:00" means 10:00 AM in Pakistan.
+            const [y, m, d] = dateStr.split('-').map(Number);
+            const [h, min] = timeStr.split(':').map(Number);
+
+            // Create a Date object that represents this specific time in the current environment's time, 
+            // then we will shift 'now' to match, OR better:
+            // Use date-fns-tz or just shift the 'now' comparison.
+
+            // Let's treat everything as UTC for comparison to avoid offset mess:
+            // "2023-10-27T10:00" -> This is the intended time.
+            // We want to know if "Now in PKT" is < "2023-10-27T10:00".
+
+            // 1. Get Now in PKT string
+            const nowPKTStr = new Date().toLocaleString("en-US", { timeZone: "Asia/Karachi", hour12: false });
+            // nowPKTStr format: "10/27/2023, 10:00:00" (MDY usually for en-US)
+            const nowPKT = new Date(nowPKTStr);
+
+            // 2. Create Target Date (treating input as local to the machine running this, which effectively aligns if we compare apples to apples)
+            // But we created `nowPKT` which is a Date object where .getHours() is the time in Pakistan.
+            // So we should construct `target` such that .getHours() is the stored time.
+            const target = new Date(y, m - 1, d, h, min);
+
+            return { nowPKT, target };
+        };
+
+        if (quizData && quizData.startDate) {
             try {
-                const startDateTime = new Date(`${quizData.startDate}T${quizData.startTime}`);
-                if (!isNaN(startDateTime.getTime()) && now < startDateTime) {
+                const { nowPKT, target } = getPKTDate(quizData.startDate, quizData.startTime) || {};
+
+                if (nowPKT && target && nowPKT < target) {
                     validationErrors.push('This quiz has not started yet. Please check back later.');
                 }
             } catch (e) {
@@ -110,10 +143,13 @@ export async function POST(request: NextRequest) {
             }
         }
 
-        if (quizData && quizData.endDate && quizData.endTime) {
+        if (quizData && quizData.endDate) {
             try {
-                const endDateTime = new Date(`${quizData.endDate}T${quizData.endTime}`);
-                if (!isNaN(endDateTime.getTime()) && now > endDateTime) {
+                // If no endTime, assume end of day
+                const endTime = quizData.endTime || '23:59';
+                const { nowPKT, target: endTarget } = getPKTDate(quizData.endDate, endTime) || {};
+
+                if (nowPKT && endTarget && nowPKT > endTarget) {
                     validationErrors.push('This quiz has ended and is no longer available.');
                 }
             } catch (e) {

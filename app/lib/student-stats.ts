@@ -169,6 +169,24 @@ export async function updateStudentStats(userId: string, result: QuizResult, typ
                 // This is handled by 'usedMockQuestionIds' array update which is already done in the caller.
             }
 
+            // --- GRAND TOTAL STATS (Admin + User) ---
+            // Ensure fields exist before adding
+            const adminCorrect = stats.totalCorrect || 0;
+            const mockCorrect = stats.totalMockCorrect || 0;
+            const adminQuestions = stats.totalQuestions || 0;
+            const mockQuestions = stats.totalMockQuestions || 0;
+
+            stats.grandTotalCorrect = adminCorrect + mockCorrect;
+            stats.grandTotalQuestions = adminQuestions + mockQuestions;
+
+            // Grand Total Score for Leaderboard (Total Correct Answers)
+            stats.grandTotalScore = stats.grandTotalCorrect;
+
+            // Grand Accuracy
+            stats.grandAccuracy = stats.grandTotalQuestions > 0
+                ? Math.round((stats.grandTotalCorrect / stats.grandTotalQuestions) * 100)
+                : 0;
+
             transaction.update(userRef, { stats });
         });
     } catch (e) {

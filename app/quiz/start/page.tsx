@@ -875,16 +875,19 @@ const StartQuizPageContent: React.FC = () => {
               {accessDeniedMessage}
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <div className="py-4 flex flex-col gap-3">
-            <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800 rounded-lg text-sm text-blue-800 dark:text-blue-300">
-              <p className="font-medium">💡 How to get access:</p>
-              <ul className="list-disc list-inside mt-2 space-y-1">
-                <li>Go to your Dashboard</li>
-                <li>Browse available Series</li>
-                <li>Enroll in the required series</li>
-              </ul>
+          {/* Conditionally show help only if it's an enrollment error */}
+          {(accessDeniedMessage.toLowerCase().includes('enrolled') || accessDeniedMessage.toLowerCase().includes('series')) && (
+            <div className="py-4 flex flex-col gap-3">
+              <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800 rounded-lg text-sm text-blue-800 dark:text-blue-300">
+                <p className="font-medium">💡 How to get access:</p>
+                <ul className="list-disc list-inside mt-2 space-y-1">
+                  <li>Go to your Dashboard</li>
+                  <li>Browse available Series</li>
+                  <li>Enroll in the required series</li>
+                </ul>
+              </div>
             </div>
-          </div>
+          )}
           <AlertDialogFooter>
             <AlertDialogAction
               onClick={() => router.push('/dashboard/student')}
@@ -897,14 +900,16 @@ const StartQuizPageContent: React.FC = () => {
       </AlertDialog>
 
       {/* Loading Overlay */}
-      {isSubmitting && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-white/50 dark:bg-black/50 backdrop-blur-sm">
-          <div className="flex flex-col items-center gap-4 p-8 bg-white dark:bg-gray-900 shadow-2xl rounded-2xl">
-            <Loader2 className="w-12 h-12 text-blue-600 animate-spin" />
-            <p className="text-gray-800 dark:text-gray-200 font-medium">Submitting...</p>
+      {
+        isSubmitting && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-white/50 dark:bg-black/50 backdrop-blur-sm">
+            <div className="flex flex-col items-center gap-4 p-8 bg-white dark:bg-gray-900 shadow-2xl rounded-2xl">
+              <Loader2 className="w-12 h-12 text-blue-600 animate-spin" />
+              <p className="text-gray-800 dark:text-gray-200 font-medium">Submitting...</p>
+            </div>
           </div>
-        </div>
-      )}
+        )
+      }
 
       {/* Header */}
       <header className="bg-white dark:bg-gray-900 border-b dark:border-gray-800 sticky top-0 z-40 shadow-sm">
@@ -967,33 +972,35 @@ const StartQuizPageContent: React.FC = () => {
       </header>
 
       {/* Admin Controls */}
-      {isAdmin && (
-        <div className="max-w-6xl mx-auto px-4 mt-4">
-          <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-xl p-4 flex flex-col md:flex-row items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <Info className="w-5 h-5 text-yellow-700 dark:text-yellow-400" />
-              <div>
-                <p className="font-semibold text-yellow-900 dark:text-yellow-200">Admin Mode</p>
-                <p className="text-sm text-yellow-700 dark:text-yellow-400">Timer disabled. Unlimited attempts.</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <div className="flex items-center gap-2 bg-white dark:bg-gray-800 px-3 py-1.5 rounded-lg border border-yellow-200 dark:border-yellow-700">
-                <span className="text-sm font-medium">Show Answers</span>
-                <div
-                  onClick={() => setShowAnswers(!showAnswers)}
-                  className={`w-10 h-5 rounded-full relative cursor-pointer transition-colors ${showAnswers ? 'bg-green-500' : 'bg-gray-300 dark:bg-gray-600'}`}
-                >
-                  <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow-sm transition-transform ${showAnswers ? 'left-5' : 'left-0.5'}`} />
+      {
+        isAdmin && (
+          <div className="max-w-6xl mx-auto px-4 mt-4">
+            <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-xl p-4 flex flex-col md:flex-row items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <Info className="w-5 h-5 text-yellow-700 dark:text-yellow-400" />
+                <div>
+                  <p className="font-semibold text-yellow-900 dark:text-yellow-200">Admin Mode</p>
+                  <p className="text-sm text-yellow-700 dark:text-yellow-400">Timer disabled. Unlimited attempts.</p>
                 </div>
               </div>
-              <Button variant="outline" onClick={() => setShowDownloadModal(true)} className="bg-white dark:bg-gray-800">
-                <Download className="h-4 w-4 mr-2" /> Export
-              </Button>
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2 bg-white dark:bg-gray-800 px-3 py-1.5 rounded-lg border border-yellow-200 dark:border-yellow-700">
+                  <span className="text-sm font-medium">Show Answers</span>
+                  <div
+                    onClick={() => setShowAnswers(!showAnswers)}
+                    className={`w-10 h-5 rounded-full relative cursor-pointer transition-colors ${showAnswers ? 'bg-green-500' : 'bg-gray-300 dark:bg-gray-600'}`}
+                  >
+                    <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow-sm transition-transform ${showAnswers ? 'left-5' : 'left-0.5'}`} />
+                  </div>
+                </div>
+                <Button variant="outline" onClick={() => setShowDownloadModal(true)} className="bg-white dark:bg-gray-800">
+                  <Download className="h-4 w-4 mr-2" /> Export
+                </Button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )
+      }
 
       {/* Main Content */}
       <main className="max-w-6xl mx-auto p-4">
@@ -1130,7 +1137,7 @@ const StartQuizPageContent: React.FC = () => {
           </button>
         )}
       </div>
-    </div>
+    </div >
   );
 };
 

@@ -20,6 +20,8 @@ interface LeaderboardEntry extends Student {
     totalScore: number;
     accuracy: number;
     quizzesTaken: number;
+    grandTotalScore?: number;
+    grandAccuracy?: number;
 }
 
 export default function LeaderboardPage() {
@@ -32,13 +34,12 @@ export default function LeaderboardPage() {
     const fetchLeaderboard = useCallback(async () => {
         try {
             setLoading(true);
-            // OPTIMIZATION: Server-side sorting and limiting
-            // This requires a composite index on [role, stats.totalScore].
+            // OPTIMIZATION: Sorting by grandTotalScore
             const usersRef = collection(db, 'users');
             const q = query(
                 usersRef,
                 where('role', '==', 'student'),
-                orderBy('stats.totalScore', 'desc'),
+                orderBy('stats.grandTotalScore', 'desc'),
                 limit(50)
             );
 
@@ -49,9 +50,9 @@ export default function LeaderboardPage() {
                 return {
                     id: d.id,
                     ...data,
-                    totalScore: data.stats?.totalScore || 0,
-                    accuracy: data.stats?.overallAccuracy || 0,
-                    quizzesTaken: data.stats?.totalQuizzes || 0,
+                    totalScore: data.stats?.grandTotalScore || data.stats?.totalScore || 0,
+                    accuracy: data.stats?.grandAccuracy || data.stats?.overallAccuracy || 0,
+                    quizzesTaken: (data.stats?.totalQuizzes || 0) + (data.stats?.totalMockQuizzes || 0),
                     rank: idx + 1
                 } as LeaderboardEntry;
             });
@@ -131,7 +132,7 @@ export default function LeaderboardPage() {
                 <Card className="overflow-hidden border-none shadow-xl bg-white/50 dark:bg-gray-900/50 backdrop-blur-xl">
                     <CardHeader className="bg-muted/30 pb-4">
                         <CardTitle>Top 50 Students</CardTitle>
-                        <CardDescription>Rankings are updated in real-time based on total quiz scores.</CardDescription>
+                        <CardDescription>Rankings based on performance across ALL quizzes (Official + User Generated).</CardDescription>
                     </CardHeader>
                     <CardContent className="p-0">
                         <Table>

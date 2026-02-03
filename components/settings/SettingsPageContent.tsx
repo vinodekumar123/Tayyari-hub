@@ -25,6 +25,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Loader2, Save, User, Mail, Phone, Book, GraduationCap, School, BookOpen, Layers, BarChart, Calendar } from 'lucide-react';
 import { glassmorphism } from '@/lib/design-tokens';
+import { StatsMigrationButton } from '@/components/admin/StatsMigrationButton';
 
 interface SettingsPageContentProps {
     title?: string;
@@ -408,6 +409,21 @@ export function SettingsPageContent({ title = "Profile Settings", role = 'admin'
                 </div>
 
             </div>
+
+            {/* Admin Tools Card */}
+            {role === 'admin' && (
+                <div className="w-full">
+                    <div className="bg-white/80 dark:bg-black/40 backdrop-blur-xl rounded-xl shadow-lg border-0 p-6 space-y-4">
+                        <h2 className="text-xl font-bold flex items-center gap-2">
+                            <span className="text-orange-500">⚡</span> Admin Actions
+                        </h2>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <StatsMigrationButton />
+                        </div>
+                    </div>
+                </div>
+            )}
+
         </div>
     );
 }
