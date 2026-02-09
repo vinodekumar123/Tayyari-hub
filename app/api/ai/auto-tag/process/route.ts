@@ -55,13 +55,20 @@ function stripHtml(html: string): string {
 
 function getAdminDb() {
     if (getApps().length === 0) {
-        try {
-            const serviceAccount = require('@/serviceAccountKey.json');
+        if (process.env.FIREBASE_PRIVATE_KEY) {
+            // Production / Vercel Environment using Env Vars
             initializeApp({
-                credential: cert(serviceAccount)
+                credential: cert({
+                    projectId: process.env.FIREBASE_PROJECT_ID,
+                    clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+                    privateKey: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n'),
+                })
             });
-        } catch (e) {
-            if (process.env.FIREBASE_PRIVATE_KEY) initializeApp();
+        } else {
+            // Local fallback: Try to initialize without params (relies on GOOGLE_APPLICATION_CREDENTIALS or emulator)
+            // If you have a local serviceAccountKey.json, ensure you set GOOGLE_APPLICATION_CREDENTIALS to point to it
+            // or rely on default credentials.
+            initializeApp();
         }
     }
     return getFirestore();

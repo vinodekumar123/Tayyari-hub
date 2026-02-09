@@ -3,22 +3,24 @@ import { initializeApp, getApps, cert } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 
 // Initialize Firebase Admin if not already initialized
+// Initialize Firebase Admin if not already initialized
 function getAdminDb() {
     if (getApps().length === 0) {
-        // We need to ensure we have credentials. 
-        // In a real app, strict checks are good. Here we assume serviceAccountKey exists or env vars are set.
-        try {
-            const serviceAccount = require('@/serviceAccountKey.json');
+        if (process.env.FIREBASE_PRIVATE_KEY) {
+            // Production / Vercel Environment using Env Vars
             initializeApp({
-                credential: cert(serviceAccount)
+                credential: cert({
+                    projectId: process.env.FIREBASE_PROJECT_ID,
+                    clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+                    privateKey: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n'),
+                })
             });
-        } catch (e) {
-            // Fallback for Vercel env vars where file might not exist but env vars do
-            // Or just rely on default google creds if deployed on GCP/Vercel
-            if (process.env.FIREBASE_PRIVATE_KEY) {
+        } else {
+            // Local fallback
+            try {
                 initializeApp();
-            } else {
-                console.error("Firebase Admin Init Failed", e);
+            } catch (error) {
+                console.error("Firebase Admin Init Failed", error);
             }
         }
     }
