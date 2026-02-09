@@ -4,7 +4,10 @@ import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Loader2, Send, ThumbsUp, ThumbsDown, Sparkles, BookOpen, ListChecks, GitCompare, HelpCircle, RotateCcw } from 'lucide-react';
+import { Loader2, Send, ThumbsUp, ThumbsDown, Sparkles, BookOpen, ListChecks, GitCompare, HelpCircle, RotateCcw, User, UserCog } from 'lucide-react';
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
+import { toast } from 'sonner';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
@@ -15,6 +18,7 @@ interface Message {
     role: 'user' | 'assistant';
     content: string;
     feedback?: 'helpful' | 'not_helpful';
+    logId?: string; // Added logId for feedback
     metadata?: {
         confidence?: string;
         subject?: string;
@@ -30,19 +34,20 @@ interface StreamStatus {
 
 const QUICK_ACTIONS = [
     { label: 'Explain', icon: BookOpen, prompt: 'Explain in detail: ' },
-    { label: 'Steps', icon: ListChecks, prompt: 'Give me step-by-step process for: ' },
+    { label: 'Short Answer', icon: ListChecks, prompt: 'Briefly define: ' },
     { label: 'Compare', icon: GitCompare, prompt: 'Compare and contrast: ' },
-    { label: 'MCQs', icon: HelpCircle, prompt: 'Give me 3 MCQs on: ' },
+    { label: 'MCQs (Try)', icon: HelpCircle, prompt: 'Give me 3 MCQs on: ' },
 ];
 
 const SUGGESTED_TOPICS = [
     "What is the process of DNA replication?",
     "Explain the difference between mitosis and meiosis",
-    "What are the key concepts in organic chemistry?",
-    "How does the human heart function?",
+    "Briefly define mitochondria",
+    "Detailed explanation of photosynthesis",
 ];
 
 export default function AdminAiTutorTestPage() {
+    const [isStudentMode, setIsStudentMode] = useState(false);
     const [messages, setMessages] = useState<Message[]>([
         { role: 'assistant', content: 'Hello! I am your AI Tutor. I support **Markdown**, $LaTeX$, tables, and can help you with MDCAT topics. Try asking me anything or use the quick actions below! 🎯' }
     ]);
@@ -57,12 +62,16 @@ export default function AdminAiTutorTestPage() {
         }
     }, [messages, streamStatus]);
 
-    const parseStreamStatus = (text: string): { status: StreamStatus | null; content: string } => {
+    const parseStreamStatus = (text: string): { status: StreamStatus | null; logId?: string; content: string } => {
+        // Match status updates
         const statusMatch = text.match(/^data: ({.*?})\n\n/);
         if (statusMatch) {
             try {
-                const status = JSON.parse(statusMatch[1]);
-                return { status, content: text.replace(statusMatch[0], '') };
+                const data = JSON.parse(statusMatch[1]);
+                if (data.status === 'log_id') {
+                    return { status: null, logId: data.id, content: text.replace(statusMatch[0], '') };
+                }
+                return { status: data, content: text.replace(statusMatch[0], '') };
             } catch {
                 return { status: null, content: text };
             }
@@ -79,11 +88,20 @@ export default function AdminAiTutorTestPage() {
         setMessages(prev => [...prev, { role: 'user', content: messageToSend }]);
         setInput('');
 
+        const endpoint = isStudentMode ? '/api/tutor' : '/api/admin/chat-tutor';
+        const body = isStudentMode ? {
+            message: messageToSend,
+            streamStatus: true,
+            userId: 'simulated-student',
+            userName: 'Simulated Student',
+            userRole: 'student'
+        } : { message: messageToSend, streamStatus: true };
+
         try {
-            const res = await fetch('/api/admin/chat-tutor', {
+            const res = await fetch(endpoint, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ message: messageToSend, streamStatus: true })
+                body: JSON.stringify(body)
             });
 
             if (!res.body) throw new Error("No response body");
@@ -99,6 +117,7 @@ export default function AdminAiTutorTestPage() {
             const reader = res.body.getReader();
             const decoder = new TextDecoder();
             let assistantMsg = '';
+            let currentLogId: string | undefined;
             let statusProcessed = false;
 
             setMessages(prev => [...prev, { role: 'assistant', content: '', metadata }]);
@@ -109,10 +128,15 @@ export default function AdminAiTutorTestPage() {
                 const chunk = decoder.decode(value);
 
                 // Check for status updates in stream
-                const { status, content } = parseStreamStatus(chunk);
+                const { status, logId, content } = parseStreamStatus(chunk);
+
+                if (logId) {
+                    currentLogId = logId;
+                }
+
                 if (status && !statusProcessed) {
                     setStreamStatus(status);
-                    if (status.status === 'writing') {
+                    if (status.status === 'writing' || status.status === 'error') {
                         statusProcessed = true;
                     }
                 }
@@ -121,7 +145,9 @@ export default function AdminAiTutorTestPage() {
 
                 setMessages(prev => {
                     const newArr = [...prev];
-                    newArr[newArr.length - 1].content = assistantMsg;
+                    const lastMsg = newArr[newArr.length - 1];
+                    lastMsg.content = assistantMsg;
+                    if (currentLogId) lastMsg.logId = currentLogId;
                     return newArr;
                 });
             }
@@ -137,13 +163,31 @@ export default function AdminAiTutorTestPage() {
         }
     };
 
-    const handleFeedback = (index: number, feedback: 'helpful' | 'not_helpful') => {
+    const handleFeedback = async (index: number, feedback: 'helpful' | 'not_helpful') => {
+        const msg = messages[index];
+        if (!msg.logId) {
+            toast.error("Cannot submit feedback: No Log ID found.");
+            return;
+        }
+
+        // Optimistic update
         setMessages(prev => {
             const newArr = [...prev];
             newArr[index].feedback = feedback;
             return newArr;
         });
-        // TODO: Send feedback to analytics
+
+        try {
+            await fetch('/api/tutor/feedback', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ logId: msg.logId, feedback })
+            });
+            toast.success("Feedback submitted!");
+        } catch (error) {
+            console.error("Feedback failed:", error);
+            toast.error("Failed to submit feedback");
+        }
     };
 
     const handleQuickAction = (prompt: string) => {
@@ -152,21 +196,34 @@ export default function AdminAiTutorTestPage() {
 
     const clearChat = () => {
         setMessages([
-            { role: 'assistant', content: 'Chat cleared! How can I help you today? 🎯' }
+            { role: 'assistant', content: isStudentMode ? 'Student Mode Enabled! Try asking for MCQs to test restrictions. 🎓' : 'Chat cleared! How can I help you today? 🎯' }
+        ]);
+        setStreamStatus(null);
+    };
+
+    // Reset when mode changes
+    const toggleMode = (checked: boolean) => {
+        setIsStudentMode(checked);
+        setMessages([
+            { role: 'assistant', content: checked ? '🎓 **Student Simulation Mode Enabled**\n- Calls `/api/tutor`\n- Blocks MCQs\n- Tests Feedback System' : '🛠️ **Admin Console Mode**\n- Calls `/api/admin/chat-tutor`\n- No restrictions\n- Full debug info' }
         ]);
     };
 
     return (
         <div className="p-6 h-[calc(100vh-2rem)] flex flex-col">
             <Card className="flex flex-col flex-1 overflow-hidden">
-                <CardHeader className="border-b">
-                    <div className="flex justify-between items-start">
-                        <div>
-                            <CardTitle className="flex items-center gap-2">
-                                <Sparkles className="w-5 h-5 text-amber-500" />
-                                AI Tutor Test Console
-                            </CardTitle>
-                            <CardDescription>Test the RAG retrieval with caching, subject detection, and confidence scoring.</CardDescription>
+                <CardHeader className="border-b bg-slate-50/50">
+                    <div className="flex justify-between items-center">
+                        <div className="flex items-center gap-4">
+                            <div className="flex items-center space-x-2">
+                                <Switch id="student-mode" checked={isStudentMode} onCheckedChange={toggleMode} />
+                                <Label htmlFor="student-mode" className="flex items-center gap-2 cursor-pointer">
+                                    {isStudentMode ? <User className="w-4 h-4 text-blue-600" /> : <UserCog className="w-4 h-4 text-slate-600" />}
+                                    <span className={isStudentMode ? "font-bold text-blue-700" : "font-medium text-slate-700"}>
+                                        {isStudentMode ? "Student Simulation" : "Admin Console"}
+                                    </span>
+                                </Label>
+                            </div>
                         </div>
                         <Button variant="outline" size="sm" onClick={clearChat}>
                             <RotateCcw className="w-4 h-4 mr-2" />
@@ -185,12 +242,12 @@ export default function AdminAiTutorTestPage() {
                                         }`}>
 
                                         {/* Metadata badges for assistant messages */}
-                                        {m.role === 'assistant' && m.metadata && (
+                                        {m.role === 'assistant' && m.metadata && !isStudentMode && (
                                             <div className="flex flex-wrap gap-2 mb-3">
                                                 {m.metadata.confidence && (
                                                     <span className={`text-xs px-2 py-1 rounded-full ${m.metadata.confidence === 'high' ? 'bg-green-100 text-green-700' :
-                                                            m.metadata.confidence === 'medium' ? 'bg-amber-100 text-amber-700' :
-                                                                'bg-red-100 text-red-700'
+                                                        m.metadata.confidence === 'medium' ? 'bg-amber-100 text-amber-700' :
+                                                            'bg-red-100 text-red-700'
                                                         }`}>
                                                         {m.metadata.confidence === 'high' ? '✅ High Confidence' :
                                                             m.metadata.confidence === 'medium' ? '⚠️ Medium Confidence' :
@@ -202,9 +259,9 @@ export default function AdminAiTutorTestPage() {
                                                         📚 {m.metadata.subject}
                                                     </span>
                                                 )}
-                                                {m.metadata.sourcesCount !== undefined && m.metadata.sourcesCount > 0 && (
-                                                    <span className="text-xs px-2 py-1 rounded-full bg-slate-100 text-slate-600">
-                                                        📖 {m.metadata.sourcesCount} sources
+                                                {m.metadata.intent && (
+                                                    <span className="text-xs px-2 py-1 rounded-full bg-purple-100 text-purple-700 capitalize">
+                                                        🎯 {m.metadata.intent}
                                                     </span>
                                                 )}
                                             </div>
@@ -240,8 +297,8 @@ export default function AdminAiTutorTestPage() {
                                             {m.content}
                                         </ReactMarkdown>
 
-                                        {/* Feedback buttons for assistant messages */}
-                                        {m.role === 'assistant' && m.content && !loading && (
+                                        {/* Feedback buttons - Only in Student Mode */}
+                                        {m.role === 'assistant' && m.content && !loading && isStudentMode && (
                                             <div className="flex items-center gap-2 mt-4 pt-4 border-t border-slate-100">
                                                 <span className="text-xs text-slate-400 mr-2">Was this helpful?</span>
                                                 <Button
@@ -269,10 +326,14 @@ export default function AdminAiTutorTestPage() {
                             {/* Stream status indicator */}
                             {streamStatus && (
                                 <div className="flex justify-start">
-                                    <div className="bg-gradient-to-r from-blue-50 to-cyan-50 rounded-lg p-4 border border-blue-100 animate-pulse">
+                                    <div className={`rounded-lg p-4 border animate-pulse ${streamStatus.status === 'error'
+                                            ? 'bg-red-50 border-red-100'
+                                            : 'bg-gradient-to-r from-blue-50 to-cyan-50 border-blue-100'
+                                        }`}>
                                         <div className="flex items-center gap-2">
-                                            <Loader2 className="h-5 w-5 animate-spin text-blue-500" />
-                                            <span className="text-sm font-medium text-blue-700">{streamStatus.message}</span>
+                                            {streamStatus.status !== 'error' && <Loader2 className="h-5 w-5 animate-spin text-blue-500" />}
+                                            <span className={`text-sm font-medium ${streamStatus.status === 'error' ? 'text-red-700' : 'text-blue-700'
+                                                }`}>{streamStatus.message}</span>
                                         </div>
                                     </div>
                                 </div>
@@ -326,7 +387,7 @@ export default function AdminAiTutorTestPage() {
                             className="flex gap-2"
                         >
                             <Input
-                                placeholder="Ask a question from your books..."
+                                placeholder={isStudentMode ? "Ask as a student (try extracting MCQs...)" : "Ask a question from your books..."}
                                 value={input}
                                 onChange={e => setInput(e.target.value)}
                                 disabled={loading}

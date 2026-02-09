@@ -97,10 +97,25 @@ export function detectSubject(query: string): string | null {
 /**
  * Classify query intent
  */
-export type QueryIntent = 'factual' | 'procedural' | 'comparative' | 'practice' | 'general';
+export type QueryIntent = 'factual' | 'procedural' | 'comparative' | 'practice' | 'concise' | 'detailed' | 'general';
 
 export function classifyQueryIntent(query: string): QueryIntent {
     const lowerQuery = query.toLowerCase();
+
+    // Practice: MCQ, quiz, question, test, practice
+    if (/mcq|quiz|question|test|practice|example problem/i.test(lowerQuery)) {
+        return 'practice';
+    }
+
+    // Concise: short, brief, summary, quickly, definition
+    if (/short|brief|summary|quickly|define|definition|in one line|simply/i.test(lowerQuery)) {
+        return 'concise';
+    }
+
+    // Detailed: explain in detail, elaborate, deep dive, comprehensive, full explanation
+    if (/detail|elaborate|comprehensive|full explanation|deep dive|explain fully/i.test(lowerQuery)) {
+        return 'detailed';
+    }
 
     // Procedural: How to, steps, process
     if (/how (to|do|does|can|should)|step|process|procedure|method/i.test(lowerQuery)) {
@@ -112,13 +127,8 @@ export function classifyQueryIntent(query: string): QueryIntent {
         return 'comparative';
     }
 
-    // Practice: MCQ, quiz, question, test, practice
-    if (/mcq|quiz|question|test|practice|example problem/i.test(lowerQuery)) {
-        return 'practice';
-    }
-
-    // Factual: What is, define, explain, describe
-    if (/what (is|are)|define|explain|describe|tell me about/i.test(lowerQuery)) {
+    // Factual: What is, explain, describe
+    if (/what (is|are)|explain|describe|tell me about/i.test(lowerQuery)) {
         return 'factual';
     }
 
@@ -130,6 +140,10 @@ export function classifyQueryIntent(query: string): QueryIntent {
  */
 export function getFormatInstructions(intent: QueryIntent): string {
     switch (intent) {
+        case 'concise':
+            return 'Provide a short, to-the-point answer (2-3 sentences max). Avoid unnecessary fluff.';
+        case 'detailed':
+            return 'Provide a comprehensive explanation with examples, key points, and deeper context.';
         case 'procedural':
             return 'Provide a clear step-by-step explanation with numbered steps.';
         case 'comparative':
@@ -139,7 +153,7 @@ export function getFormatInstructions(intent: QueryIntent): string {
         case 'factual':
             return 'Give a direct, concise definition followed by key points.';
         default:
-            return 'Explain clearly and concisely.';
+            return 'Explain clearly and concisely, adapting to the complexity of the topic.';
     }
 }
 
@@ -154,14 +168,20 @@ export async function logConversation(data: {
     intent: QueryIntent;
     responseTimeMs: number;
     wasFromCache: boolean;
+    userId?: string;
+    userName?: string;
+    userRole?: string;
+    feedback?: 'helpful' | 'not_helpful' | null;
 }) {
     try {
-        await adminDb.collection('ai_tutor_logs').add({
+        const docRef = await adminDb.collection('ai_tutor_logs').add({
             ...data,
             timestamp: new Date(),
         });
+        return docRef.id;
     } catch (error) {
         console.error('Failed to log conversation:', error);
+        return null;
     }
 }
 

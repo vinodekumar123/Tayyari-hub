@@ -172,6 +172,9 @@ export async function getRecentConversations(limit: number = 50): Promise<{
         responseTimeMs: number;
         wasFromCache: boolean;
         timestamp: Date;
+        userName?: string;
+        userId?: string;
+        feedback?: string;
     }[];
     error?: string;
 }> {
@@ -192,7 +195,10 @@ export async function getRecentConversations(limit: number = 50): Promise<{
                 intent: data.intent || 'general',
                 responseTimeMs: data.responseTimeMs || 0,
                 wasFromCache: data.wasFromCache || false,
-                timestamp: data.timestamp?.toDate() || new Date()
+                timestamp: data.timestamp?.toDate() || new Date(),
+                userName: data.userName,
+                userId: data.userId,
+                feedback: data.feedback
             };
         });
 
@@ -200,6 +206,32 @@ export async function getRecentConversations(limit: number = 50): Promise<{
 
     } catch (error: any) {
         console.error('Get Conversations Error:', error);
+        return { success: false, error: error.message };
+    }
+}
+
+export async function getStudentChatHistory(userId: string): Promise<{
+    success: boolean;
+    history?: any[];
+    error?: string;
+}> {
+    try {
+        const snapshot = await adminDb
+            .collection('ai_tutor_logs')
+            .where('userId', '==', userId)
+            .orderBy('timestamp', 'desc')
+            .limit(100)
+            .get();
+
+        const history = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data(),
+            timestamp: doc.data().timestamp?.toDate()
+        }));
+
+        return { success: true, history };
+    } catch (error: any) {
+        console.error('Get Student History Error:', error);
         return { success: false, error: error.message };
     }
 }

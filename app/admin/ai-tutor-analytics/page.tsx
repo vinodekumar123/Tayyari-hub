@@ -273,17 +273,21 @@ export default function AITutorAnalyticsPage() {
                                 <Table>
                                     <TableHeader>
                                         <TableRow>
+                                            <TableHead>User</TableHead>
                                             <TableHead>Query</TableHead>
                                             <TableHead>Subject</TableHead>
                                             <TableHead>Intent</TableHead>
-                                            <TableHead>Response Time</TableHead>
-                                            <TableHead>Cached</TableHead>
+                                            <TableHead>Feedback</TableHead>
                                             <TableHead>Time</TableHead>
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
                                         {conversations.map(c => (
                                             <TableRow key={c.id}>
+                                                <TableCell className="text-sm">
+                                                    <div className="font-medium">{c.userName || 'Anonymous'}</div>
+                                                    <div className="text-xs text-slate-500">{c.userId}</div>
+                                                </TableCell>
                                                 <TableCell className="max-w-[200px] truncate font-medium">
                                                     {c.query}
                                                 </TableCell>
@@ -291,13 +295,10 @@ export default function AITutorAnalyticsPage() {
                                                     <Badge variant="outline">{c.subject || 'general'}</Badge>
                                                 </TableCell>
                                                 <TableCell className="capitalize">{c.intent}</TableCell>
-                                                <TableCell>{c.responseTimeMs}ms</TableCell>
                                                 <TableCell>
-                                                    {c.wasFromCache ? (
-                                                        <Badge className="bg-green-100 text-green-700">Yes</Badge>
-                                                    ) : (
-                                                        <Badge variant="secondary">No</Badge>
-                                                    )}
+                                                    {c.feedback === 'helpful' && <Badge className="bg-green-100 text-green-700">Helpful</Badge>}
+                                                    {c.feedback === 'not_helpful' && <Badge className="bg-red-100 text-red-700">Not Helpful</Badge>}
+                                                    {!c.feedback && <span className="text-slate-400">-</span>}
                                                 </TableCell>
                                                 <TableCell className="text-slate-500 text-sm">
                                                     {new Date(c.timestamp).toLocaleString()}
