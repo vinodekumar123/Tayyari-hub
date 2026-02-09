@@ -169,3 +169,51 @@ export async function splitPdfByRanges(file: File, ranges: ChapterRange[]): Prom
         return { success: false, error: error.message };
     }
 }
+
+/**
+ * Extract a specific batch of pages as individual PDFs (base64).
+ * Efficient for processing large files in chunks without loading everything into memory.
+ * @param file The source PDF file
+ * @param startPage 1-indexed start page
+ * @param endPage 1-indexed end page (inclusive)
+ */
+export async function extractPageBatch(file: File, startPage: number, endPage: number): Promise<PageData[]> {
+    try {
+        const arrayBuffer = await file.arrayBuffer();
+        const pdfDoc = await PDFDocument.load(arrayBuffer);
+        const totalPages = pdfDoc.getPageCount();
+
+        const pages: PageData[] = [];
+
+        // Validate range
+        const start = Math.max(1, startPage);
+        const end = Math.min(totalPages, endPage);
+
+        if (start > end) return [];
+
+        // Efficiently copy multiple pages at once?
+        // pdf-lib copyPages copies from source to dest.
+        // But we want INDIVIDUAL files for each page to send to AI sequentially/parallel.
+        // So we must iterate.
+
+        for (let i = start - 1; i < end; i++) {
+            const singlePagePdf = await PDFDocument.create();
+            const [copiedPage] = await singlePagePdf.copyPages(pdfDoc, [i]);
+            singlePagePdf.addPage(copiedPage);
+
+            const singlePageBytes = await singlePagePdf.save();
+            const base64 = arrayBufferToBase64(singlePageBytes);
+
+            pages.push({
+                pageNumber: i + 1,
+                base64,
+                mimeType: 'application/pdf'
+            });
+        }
+
+        return pages;
+    } catch (error) {
+        console.error("Batch Extraction Error:", error);
+        throw error;
+    }
+}

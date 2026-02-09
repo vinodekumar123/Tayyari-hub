@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { toast } from 'sonner';
 import { Loader2, Upload, FileText, Download, Play, Scissors, Save } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
-import { splitPdfClientSide, getPdfPageCount, splitPdfByRanges, ChapterRange } from '@/lib/pdfClientProcessor';
+import { splitPdfClientSide, getPdfPageCount, splitPdfByRanges, ChapterRange, extractPageBatch } from '@/lib/pdfClientProcessor';
 import { detectChapterStart } from '@/app/actions/bookSplitter';
 import { analyzeDocument, saveToKnowledgeBase } from '@/app/actions/knowledgeBase';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -23,6 +23,8 @@ export default function BookSplitterPage() {
     const [loading, setLoading] = useState(false);
     const [progress, setProgress] = useState(0);
     const [status, setStatus] = useState('');
+    const [isScanning, setIsScanning] = useState(false);
+    const abortScan = useRef(false);
 
     // Scan Results
     const [totalPages, setTotalPages] = useState(0);
@@ -86,44 +88,43 @@ export default function BookSplitterPage() {
         if (!file) return;
 
         setLoading(true);
+        setIsScanning(true);
+        abortScan.current = false;
         setStep('scanning');
         setStatus('Preparing PDF...');
         setProgress(0);
 
         try {
-            // Split PDF into pages client-side to send for analysis
-            const splitRes = await splitPdfClientSide(file);
-            if (!splitRes.success || !splitRes.pages) {
-                throw new Error(splitRes.error);
-            }
+            // New optimized flow: Process in chunks to save memory
+            const total = await getPdfPageCount(file);
+            setTotalPages(total);
 
-            const total = splitRes.pages.length;
             const chapters: ChapterRange[] = [];
             let currentChapterStart = 1;
             let currentChapterTitle = "Introduction / Front Matter";
 
             // Parallel Processing Configuration
-            const BATCH_SIZE = 5;
-            const pages = splitRes.pages;
-
-            // We need to process sequentially to maintain chapter order logic,
-            // BUT we can fetch AI analysis in parallel batches.
-            // However, determining "Start of Chapter" relies on AI result.
-            // If we fetch Page 1, 2, 3, 4, 5 in parallel:
-            // Page 1: Start
-            // Page 2: Not Start
-            // Page 3: Start (Chapter 1)
-            // We can resolve them and THEN iterate to build chapters.
-
+            const BATCH_SIZE = 10; // Increased concurrency for speed
             const aiResults = new Array(total).fill(null);
             let processedCount = 0;
 
             for (let i = 0; i < total; i += BATCH_SIZE) {
-                const batch = pages.slice(i, i + BATCH_SIZE);
-                setStatus(`Analyzing Pages ${i + 1}-${Math.min(i + BATCH_SIZE, total)} of ${total}...`);
+                // Check for abort
+                if (abortScan.current) {
+                    setStatus('Scan aborted.');
+                    toast.info("Scan cancelled by user.");
+                    break;
+                }
+
+                const endPage = Math.min(i + BATCH_SIZE, total);
+                setStatus(`Analyzing Pages ${i + 1}-${endPage} of ${total}...`);
+
+                // Extract only this batch of pages
+                // 1-indexed for extractPageBatch
+                const batchPages = await extractPageBatch(file, i + 1, endPage);
 
                 // Fire requests in parallel
-                const promises = batch.map(page => detectChapterStart(page.base64, page.mimeType).then(res => ({ idx: page.pageNumber - 1, res })));
+                const promises = batchPages.map(page => detectChapterStart(page.base64, page.mimeType).then(res => ({ idx: page.pageNumber - 1, res })));
                 const results = await Promise.all(promises);
 
                 results.forEach(({ idx, res }) => {
@@ -136,10 +137,17 @@ export default function BookSplitterPage() {
                 setProgress(Math.round((processedCount / total) * 100));
             }
 
+            // Only build chapters if we finished (or partially finished?)
+            // If aborted, maybe we still show what we found?
+            // Let's assume we show what we have.
+
             // Post-Processing: Build Chapters from AI Results
             for (let i = 0; i < total; i++) {
                 const result = aiResults[i];
                 const pageNum = i + 1;
+
+                // Stop building if we hit nulls (aborted area)
+                if (!result && abortScan.current && i >= processedCount) break;
 
                 if (result && result.isStart && result.confidence > 0.6) {
                     // Found a new chapter start!
@@ -163,6 +171,8 @@ export default function BookSplitterPage() {
             }
 
             // Close the final chapter
+            // Note: If aborted, this "final chapter" might just be the rest of the book
+            // which we haven't scanned yet. That's actually fine, user can delete it.
             chapters.push({
                 name: currentChapterTitle,
                 startPage: currentChapterStart,
@@ -170,11 +180,16 @@ export default function BookSplitterPage() {
             });
 
             setDetectedChapters(chapters);
-            setStep('review');
 
-            // Save to local storage
-            localStorage.setItem(STORAGE_KEY_PREFIX + file.name, JSON.stringify(chapters));
-            toast.success(`Scan Complete! Detected ${chapters.length} sections.`);
+            if (!abortScan.current) {
+                setStep('review');
+                localStorage.setItem(STORAGE_KEY_PREFIX + file.name, JSON.stringify(chapters));
+                toast.success(`Scan Complete! Detected ${chapters.length} sections.`);
+            } else {
+                // If aborted, stay on review or go back?
+                // Maybe go to review to show partial results?
+                setStep('review');
+            }
 
         } catch (error: any) {
             console.error(error);
@@ -182,7 +197,13 @@ export default function BookSplitterPage() {
             setStep('upload');
         } finally {
             setLoading(false);
+            setIsScanning(false);
         }
+    };
+
+    const handleStopScan = () => {
+        abortScan.current = true;
+        setStatus('Stopping scan...');
     };
 
     const updateChapter = (index: number, field: keyof ChapterRange, value: any) => {
@@ -219,64 +240,84 @@ export default function BookSplitterPage() {
         if (!file) return;
 
         setLoading(true);
+        setIsScanning(true);
+        abortScan.current = false;
         setStep('splitting');
         // We reuse 'splitting' step for progress UI but chang text
         setStatus('Initializing Knowledge Base Upload...');
         setProgress(0);
 
         try {
-            setStatus('Preparing file for ingestion...');
-            const splitRes = await splitPdfClientSide(file);
-            if (!splitRes.success || !splitRes.pages) {
-                throw new Error(splitRes.error);
-            }
-
-            let totalPagesProcessed = 0;
             const totalPagesToProcess = detectedChapters.reduce((acc, ch) => acc + (ch.endPage - ch.startPage + 1), 0);
+            let totalPagesProcessed = 0;
 
             // Iterate through chapters
             for (const chapter of detectedChapters) {
-                // Iterate pages in this chapter
-                for (let i = chapter.startPage; i <= chapter.endPage; i++) {
-                    const pageIndex = i - 1; // 0-based
-                    const pageData = splitRes.pages[pageIndex];
+                if (abortScan.current) break;
 
-                    setStatus(`Uploading ${chapter.name} - Page ${i}...`);
+                // Process chapter in batches to save memory
+                const BATCH_SIZE = 5;
+                const chapterPages = chapter.endPage - chapter.startPage + 1;
 
-                    // 1. Analyze
-                    const analysis = await analyzeDocument({
-                        fileData: pageData.base64,
-                        mimeType: pageData.mimeType
-                    });
+                for (let i = 0; i < chapterPages; i += BATCH_SIZE) {
+                    if (abortScan.current) break;
 
-                    if (!analysis.success || !analysis.data) {
-                        console.error(`Failed to analyze page ${i}`, analysis.error);
-                        continue;
-                    }
+                    const batchStart = chapter.startPage + i;
+                    const batchEnd = Math.min(chapter.startPage + i + BATCH_SIZE - 1, chapter.endPage);
 
-                    // 2. Save
-                    await saveToKnowledgeBase({
-                        text: analysis.data.text,
-                        description: analysis.data.description,
-                        chapter: chapter.name,
-                        page_number: i.toString(),
-                        fileName: file.name,
-                        metadata: {
-                            subject: "Imported from Splitter",
-                            bookName: file.name.replace('.pdf', ''),
-                            province: "Unknown",
-                            year: new Date().getFullYear().toString(),
-                            type: 'book'
+                    setStatus(`Uploading ${chapter.name} - Pages ${batchStart}-${batchEnd}...`);
+
+                    // Extract batch
+                    const pages = await extractPageBatch(file, batchStart, batchEnd);
+
+                    // Process batch
+                    for (let p = 0; p < pages.length; p++) {
+                        if (abortScan.current) break;
+                        const pageData = pages[p];
+                        const absPageNum = batchStart + p;
+
+                        // 1. Analyze
+                        const analysis = await analyzeDocument({
+                            fileData: pageData.base64,
+                            mimeType: pageData.mimeType
+                        });
+
+                        if (!analysis.success || !analysis.data) {
+                            console.error(`Failed to analyze page ${absPageNum}`, analysis.error);
+                            // Robustness: Continue despite error? Yes.
+                            toast.error(`Failed to analyze Page ${absPageNum}`);
+                            continue;
                         }
-                    });
 
-                    totalPagesProcessed++;
-                    setProgress(Math.round((totalPagesProcessed / totalPagesToProcess) * 100));
+                        // 2. Save
+                        await saveToKnowledgeBase({
+                            text: analysis.data.text,
+                            description: analysis.data.description,
+                            chapter: chapter.name,
+                            page_number: absPageNum.toString(),
+                            fileName: file.name,
+                            metadata: {
+                                subject: "Imported from Splitter",
+                                bookName: file.name.replace('.pdf', ''),
+                                province: "Unknown",
+                                year: new Date().getFullYear().toString(),
+                                type: 'book'
+                            }
+                        });
+
+                        totalPagesProcessed++;
+                        setProgress(Math.round((totalPagesProcessed / totalPagesToProcess) * 100));
+                    }
                 }
             }
 
-            toast.success("All chapters uploaded to Knowledge Base!");
-            setStep('upload');
+            if (!abortScan.current) {
+                toast.success("All chapters uploaded to Knowledge Base!");
+                setStep('upload');
+            } else {
+                toast.info("Upload stopped.");
+                setStep('review');
+            }
 
         } catch (error: any) {
             console.error(error);
@@ -284,6 +325,7 @@ export default function BookSplitterPage() {
             setStep('review');
         } finally {
             setLoading(false);
+            setIsScanning(false);
         }
     };
 
@@ -392,6 +434,11 @@ export default function BookSplitterPage() {
                                 <span>{progress}%</span>
                             </div>
                             <Progress value={progress} />
+                            <div className="flex justify-end mt-4">
+                                <Button variant="destructive" size="sm" onClick={handleStopScan}>
+                                    Stop Scan
+                                </Button>
+                            </div>
                         </div>
                     </CardContent>
                 </Card>
