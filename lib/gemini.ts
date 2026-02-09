@@ -10,7 +10,7 @@ const genAI = new GoogleGenerativeAI(GEMINI_API_KEY || "");
 
 // Models
 export const geminiFlashModel = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
-export const geminiEmbeddingModel = genAI.getGenerativeModel({ model: "text-embedding-004" });
+export const geminiEmbeddingModel = genAI.getGenerativeModel({ model: "gemini-embedding-001" });
 
 export async function generateEmbedding(text: string) {
     if (!text) return [];
