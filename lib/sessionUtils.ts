@@ -60,7 +60,11 @@ const getGeoInfo = async (timeoutMs: number = 2000) => {
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
-            const res = await fetch('https://ipapi.co/json/', { signal: controller.signal });
+            const res = await fetch('https://ipapi.co/json/', {
+                signal: controller.signal,
+                mode: 'cors',
+                cache: 'no-store' // Prevent caching of failed requests
+            });
             clearTimeout(timeoutId);
 
             if (!res.ok) throw new Error('ipapi.co failed');
@@ -73,8 +77,7 @@ const getGeoInfo = async (timeoutMs: number = 2000) => {
                 region: data.region || ''
             };
         } catch (e) {
-            // Fallback: ipify (Simple IP, very reliable CORS)
-            // console.warn('Primary GeoIP failed, trying fallback...');
+            // Silently fallback - no console output to avoid noise
         }
 
         // Fallback: ipify

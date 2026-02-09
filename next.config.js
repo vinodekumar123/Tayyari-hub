@@ -92,6 +92,17 @@ const withPWA = require('@ducanh2912/next-pwa').default({
   disable: process.env.NODE_ENV === 'development',
   register: true,
   skipWaiting: true,
+  // Exclude external APIs from service worker caching
+  runtimeCaching: [
+    {
+      urlPattern: /^https:\/\/ipapi\.co\/.*/i,
+      handler: 'NetworkOnly',
+    },
+    {
+      urlPattern: /^https:\/\/api\.ipify\.org\/.*/i,
+      handler: 'NetworkOnly',
+    },
+  ],
 });
 
 module.exports = withPWA(nextConfig);
