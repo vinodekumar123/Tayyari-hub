@@ -6,7 +6,7 @@ import Link from 'next/link';
 import {
   BookOpen, Users, Trophy, BarChart3, Settings, Plus,
   Database, Home, ChevronDown, ChevronRight, LogOut,
-  ClipboardList, UserCircle, Menu, X, FileBarChart, Flag, Calendar, BrainCircuit, HelpCircle, ArrowLeftRight, Lock
+  ClipboardList, UserCircle, Menu, X, FileBarChart, Flag, Calendar, BrainCircuit, HelpCircle, ArrowLeftRight, Lock, Scissors
 } from 'lucide-react';
 import logo from "../../app/assets/logo.png";
 import Image from "next/image";
@@ -158,6 +158,7 @@ export function Sidebar() {
         { icon: BrainCircuit, label: 'AI Auto-Tagger', href: '/admin/questions/auto-tagger' },
         { icon: BrainCircuit, label: 'AI Tutor Test', href: '/admin/ai-tutor-test' },
         { icon: BarChart3, label: 'AI Tutor Analytics', href: '/admin/ai-tutor-analytics' },
+        { icon: Scissors, label: 'AI Book Splitter', href: '/admin/book-splitter' },
       ],
     },
     // User Management: Admin/SuperAdmin only

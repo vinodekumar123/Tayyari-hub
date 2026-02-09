@@ -118,3 +118,54 @@ export async function fileToBase64(file: File): Promise<{ base64: string; mimeTy
         reader.readAsDataURL(file);
     });
 }
+
+export interface ChapterRange {
+    startPage: number; // 1-indexed
+    endPage: number;   // 1-indexed
+    name: string;
+}
+
+/**
+ * Split a PDF into multiple files based on ranges.
+ * Returns an array of Blobs with filenames.
+ */
+export async function splitPdfByRanges(file: File, ranges: ChapterRange[]): Promise<{ success: boolean; files?: { name: string; blob: Blob }[]; error?: string }> {
+    try {
+        const arrayBuffer = await file.arrayBuffer();
+        const pdfDoc = await PDFDocument.load(arrayBuffer);
+        const totalPages = pdfDoc.getPageCount();
+
+        const resultFiles: { name: string; blob: Blob }[] = [];
+
+        for (const range of ranges) {
+            // Validate range
+            if (range.startPage < 1 || range.endPage > totalPages || range.startPage > range.endPage) {
+                console.warn(`Invalid range skipped: ${range.name} (${range.startPage}-${range.endPage})`);
+                continue;
+            }
+
+            const subDoc = await PDFDocument.create();
+            // copyPages takes 0-indexed indices
+            const indices = [];
+            for (let i = range.startPage - 1; i < range.endPage; i++) {
+                indices.push(i);
+            }
+
+            const copiedPages = await subDoc.copyPages(pdfDoc, indices);
+            copiedPages.forEach(page => subDoc.addPage(page));
+
+            const pdfBytes = await subDoc.save();
+            const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+
+            // Sanitize filename
+            const cleanName = range.name.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+            resultFiles.push({ name: `${cleanName}.pdf`, blob });
+        }
+
+        return { success: true, files: resultFiles };
+
+    } catch (error: any) {
+        console.error("Split Ranges Error:", error);
+        return { success: false, error: error.message };
+    }
+}

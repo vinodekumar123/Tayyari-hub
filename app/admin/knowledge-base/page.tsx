@@ -7,11 +7,19 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { toast } from 'sonner';
-import { Loader2, Upload, FileText, Image as ImageIcon } from 'lucide-react';
+import { Loader2, Upload, FileText, Image as ImageIcon, AlertCircle, RefreshCw, Trash2 } from 'lucide-react';
 import { analyzeDocument, saveToKnowledgeBase } from '@/app/actions/knowledgeBase';
 import { splitPdfClientSide, getPdfPageCount, fileToBase64 } from '@/lib/pdfClientProcessor';
 import { Progress } from '@/components/ui/progress';
 import Link from 'next/link';
+
+interface FailedItem {
+    id: string;
+    fileName: string;
+    pageLabel: string;
+    data: { base64: string; mimeType: string };
+    error: string;
+}
 
 export default function KnowledgeBasePage() {
     const [loading, setLoading] = useState(false);
@@ -32,6 +40,9 @@ export default function KnowledgeBasePage() {
     // Stats for summary
     const [stats, setStats] = useState({ processed: 0, saved: 0, failed: 0 });
 
+    // Failed Items for Retry
+    const [failedItems, setFailedItems] = useState<FailedItem[]>([]);
+
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files.length > 0) {
             setFiles(e.target.files);
@@ -39,6 +50,7 @@ export default function KnowledgeBasePage() {
             setProgress(0);
             setCurrentStep('');
             setStats({ processed: 0, saved: 0, failed: 0 });
+            setFailedItems([]); // Clear previous failures on new upload
         }
     };
 
@@ -48,14 +60,14 @@ export default function KnowledgeBasePage() {
         pageData: { base64: string; mimeType: string },
         fileName: string,
         pageLabel: string
-    ): Promise<boolean> => {
+    ): Promise<{ success: boolean; error?: string }> => {
         try {
             // Analyze with Gemini
             const analysisRes = await analyzeDocument({ fileData: pageData.base64, mimeType: pageData.mimeType });
 
             if (!analysisRes.success) {
                 addLog(`   ❌ Analysis failed: ${analysisRes.error}`);
-                return false;
+                return { success: false, error: analysisRes.error };
             }
 
             const { text, description, chapter, page_number } = analysisRes.data;
@@ -70,14 +82,14 @@ export default function KnowledgeBasePage() {
 
             if (saveRes.success) {
                 addLog(`   ✅ Saved successfully.`);
-                return true;
+                return { success: true };
             } else {
                 addLog(`   ❌ Save failed: ${saveRes.error}`);
-                return false;
+                return { success: false, error: saveRes.error };
             }
         } catch (error: any) {
             addLog(`   ❌ Error: ${error.message}`);
-            return false;
+            return { success: false, error: error.message };
         }
     };
 
@@ -95,6 +107,7 @@ export default function KnowledgeBasePage() {
         setLogs([]);
         setProgress(0);
         setStats({ processed: 0, saved: 0, failed: 0 });
+        setFailedItems([]);
 
         let totalSaved = 0;
         let totalFailed = 0;
@@ -108,12 +121,11 @@ export default function KnowledgeBasePage() {
             setCurrentStep('📊 Scanning files (client-side)...');
             addLog('📊 Scanning files locally (no upload yet)...');
 
-            // PHASE 1: Count pages on client-side (no server call needed)
+            // PHASE 1: Count pages on client-side
             for (const file of fileArray) {
                 const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
 
                 if (isPdf) {
-                    // Count pages on client-side using pdf-lib
                     const pageCount = await getPdfPageCount(file);
                     if (pageCount > 0) {
                         fileInfo.push({ file, isPdf: true, pageCount });
@@ -146,7 +158,6 @@ export default function KnowledgeBasePage() {
                         continue;
                     }
 
-                    // SPLIT PDF ON CLIENT-SIDE (key change!)
                     setCurrentStep(`📤 Splitting ${file.name} locally...`);
                     addLog(`   📤 Splitting PDF into pages (client-side)...`);
 
@@ -160,7 +171,6 @@ export default function KnowledgeBasePage() {
 
                     addLog(`   ✅ Split into ${splitResult.pages.length} pages`);
 
-                    // Process each page (each page is sent separately = small request)
                     for (const page of splitResult.pages) {
                         currentItem++;
                         const progressPercent = Math.round((currentItem / totalItems) * 100);
@@ -169,23 +179,30 @@ export default function KnowledgeBasePage() {
 
                         addLog(`   📖 Page ${page.pageNumber}/${pageCount}: Uploading & Analyzing...`);
 
-                        const success = await processPage(
+                        const pageLabel = `page_${page.pageNumber}`;
+                        const result = await processPage(
                             { base64: page.base64, mimeType: page.mimeType },
                             file.name,
-                            `page_${page.pageNumber}`
+                            pageLabel
                         );
 
                         totalProcessed++;
-                        if (success) {
+                        if (result.success) {
                             totalSaved++;
                         } else {
                             totalFailed++;
+                            setFailedItems(prev => [...prev, {
+                                id: Math.random().toString(36).substr(2, 9),
+                                fileName: file.name,
+                                pageLabel: pageLabel,
+                                data: { base64: page.base64, mimeType: page.mimeType },
+                                error: result.error || 'Unknown error'
+                            }]);
                         }
 
                         setStats({ processed: totalProcessed, saved: totalSaved, failed: totalFailed });
                     }
                 } else {
-                    // Image file - process directly (usually small)
                     currentItem++;
                     const progressPercent = Math.round((currentItem / totalItems) * 100);
                     setProgress(progressPercent);
@@ -195,17 +212,24 @@ export default function KnowledgeBasePage() {
 
                     addLog(`   🖼️ Uploading & Analyzing image...`);
 
-                    const success = await processPage(
+                    const result = await processPage(
                         { base64, mimeType },
                         file.name,
                         'image'
                     );
 
                     totalProcessed++;
-                    if (success) {
+                    if (result.success) {
                         totalSaved++;
                     } else {
                         totalFailed++;
+                        setFailedItems(prev => [...prev, {
+                            id: Math.random().toString(36).substr(2, 9),
+                            fileName: file.name,
+                            pageLabel: 'image',
+                            data: { base64, mimeType },
+                            error: result.error || 'Unknown error'
+                        }]);
                     }
 
                     setStats({ processed: totalProcessed, saved: totalSaved, failed: totalFailed });
@@ -221,12 +245,15 @@ export default function KnowledgeBasePage() {
             if (totalFailed === 0) {
                 toast.success(`Successfully processed ${totalSaved} pages!`);
             } else {
-                toast.warning(`Completed: ${totalSaved} saved, ${totalFailed} failed`);
+                toast.warning(`Completed with ${totalFailed} failures. Check "Failed Items" below.`);
             }
 
-            setFiles(null);
-            const fileInput = document.getElementById('file-upload') as HTMLInputElement;
-            if (fileInput) fileInput.value = '';
+            // Clean up file input if successful completely
+            if (totalFailed === 0) {
+                setFiles(null);
+                const fileInput = document.getElementById('file-upload') as HTMLInputElement;
+                if (fileInput) fileInput.value = '';
+            }
 
         } catch (error: any) {
             console.error(error);
@@ -235,6 +262,52 @@ export default function KnowledgeBasePage() {
         } finally {
             setLoading(false);
         }
+    };
+
+    const handleRetry = async () => {
+        if (failedItems.length === 0) return;
+
+        setLoading(true);
+        addLog(`\n🔄 Retrying ${failedItems.length} failed items...`);
+        setCurrentStep(`🔄 Retrying failures...`);
+
+        const itemsToRetry = [...failedItems];
+        setFailedItems([]); // Clear list, will re-add if they fail again
+
+        let retriedSaved = 0;
+        let retriedFailed = 0;
+
+        for (const item of itemsToRetry) {
+            addLog(`   🔄 Retrying ${item.fileName} (${item.pageLabel})...`);
+
+            const result = await processPage(item.data, item.fileName, item.pageLabel);
+
+            if (result.success) {
+                retriedSaved++;
+                setStats(prev => ({ ...prev, saved: prev.saved + 1, failed: prev.failed - 1 }));
+            } else {
+                retriedFailed++;
+                // Add back to failed list
+                setFailedItems(prev => [...prev, item]); // Keep the same item
+            }
+        }
+
+        setLoading(false);
+        setCurrentStep(retriedFailed === 0 ? '✅ Retry Complete!' : '⚠️ Retry Complete with some failures');
+
+        if (retriedFailed === 0) {
+            toast.success(`Successfully retried ${retriedSaved} items!`);
+        } else {
+            toast.warning(`Retry result: ${retriedSaved} recovered, ${retriedFailed} still failed.`);
+        }
+    };
+
+    const removeFailedItem = (id: string) => {
+        setFailedItems(prev => {
+            const updated = prev.filter(i => i.id !== id);
+            setStats(s => ({ ...s, failed: updated.length }));
+            return updated;
+        });
     };
 
     return (
@@ -339,6 +412,40 @@ export default function KnowledgeBasePage() {
                     <Button onClick={handleUpload} disabled={loading || !files} className="w-full">
                         {loading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Processing...</> : 'Start Upload & Processing'}
                     </Button>
+
+                    {/* Failed Items Retry Section */}
+                    {failedItems.length > 0 && (
+                        <div className="mt-6 border border-red-200 bg-red-50 rounded-lg p-4">
+                            <div className="flex justify-between items-center mb-4">
+                                <div className="flex items-center gap-2 text-red-800 font-bold">
+                                    <AlertCircle className="w-5 h-5" />
+                                    <span>Failed Items ({failedItems.length})</span>
+                                </div>
+                                <Button onClick={handleRetry} disabled={loading} variant="destructive" size="sm">
+                                    <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+                                    Retry All Failed
+                                </Button>
+                            </div>
+                            <div className="space-y-2 max-h-60 overflow-y-auto pr-2">
+                                {failedItems.map((item) => (
+                                    <div key={item.id} className="flex justify-between items-center bg-white p-3 rounded border border-red-100 text-sm">
+                                        <div>
+                                            <div className="font-medium text-slate-700">{item.fileName}</div>
+                                            <div className="text-xs text-slate-500">{item.pageLabel} • {item.error}</div>
+                                        </div>
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            className="text-red-500 hover:text-red-700 hover:bg-red-50 h-8 w-8 p-0"
+                                            onClick={() => removeFailedItem(item.id)}
+                                        >
+                                            <Trash2 className="w-4 h-4" />
+                                        </Button>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
 
                     {/* Detailed Logs */}
                     {logs.length > 0 && (
