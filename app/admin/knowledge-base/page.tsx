@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { toast } from 'sonner';
 import { Loader2, Upload, FileText, Image as ImageIcon } from 'lucide-react';
 import { analyzeDocument, saveToKnowledgeBase } from '@/app/actions/knowledgeBase';
-import { splitPdfToPages } from '@/lib/pdfProcessor';
+import { splitPdfClientSide, getPdfPageCount, fileToBase64 } from '@/lib/pdfClientProcessor';
 import { Progress } from '@/components/ui/progress';
 import Link from 'next/link';
 
@@ -50,7 +50,7 @@ export default function KnowledgeBasePage() {
         pageLabel: string
     ): Promise<boolean> => {
         try {
-            // Analyze
+            // Analyze with Gemini
             const analysisRes = await analyzeDocument({ fileData: pageData.base64, mimeType: pageData.mimeType });
 
             if (!analysisRes.success) {
@@ -61,7 +61,7 @@ export default function KnowledgeBasePage() {
             const { text, description, chapter, page_number } = analysisRes.data;
             addLog(`   ↳ Detected: ${chapter} (Page ${page_number || 'Unknown'})`);
 
-            // Save
+            // Save to knowledge base
             const saveRes = await saveToKnowledgeBase({
                 text, description, chapter, page_number,
                 fileName: `${fileName}_${pageLabel}`,
@@ -101,36 +101,24 @@ export default function KnowledgeBasePage() {
         let totalProcessed = 0;
 
         try {
-            // First, calculate total pages for accurate progress
             const fileArray = Array.from(files);
             let totalItems = 0;
             const fileInfo: { file: File; isPdf: boolean; pageCount: number }[] = [];
 
-            setCurrentStep('📊 Calculating total pages...');
-            addLog('📊 Scanning files...');
+            setCurrentStep('📊 Scanning files (client-side)...');
+            addLog('📊 Scanning files locally (no upload yet)...');
 
+            // PHASE 1: Count pages on client-side (no server call needed)
             for (const file of fileArray) {
                 const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
 
                 if (isPdf) {
-                    // Read and count pages
-                    const reader = new FileReader();
-                    const base64Promise = new Promise<string>((resolve, reject) => {
-                        reader.onload = () => {
-                            const result = reader.result as string;
-                            const [, base64] = result.split(',');
-                            resolve(base64);
-                        };
-                        reader.onerror = reject;
-                        reader.readAsDataURL(file);
-                    });
-                    const base64 = await base64Promise;
-
-                    const splitResult = await splitPdfToPages(base64);
-                    if (splitResult.success && splitResult.totalPages) {
-                        fileInfo.push({ file, isPdf: true, pageCount: splitResult.totalPages });
-                        totalItems += splitResult.totalPages;
-                        addLog(`   📄 ${file.name}: ${splitResult.totalPages} pages`);
+                    // Count pages on client-side using pdf-lib
+                    const pageCount = await getPdfPageCount(file);
+                    if (pageCount > 0) {
+                        fileInfo.push({ file, isPdf: true, pageCount });
+                        totalItems += pageCount;
+                        addLog(`   📄 ${file.name}: ${pageCount} pages (will be split locally)`);
                     } else {
                         fileInfo.push({ file, isPdf: true, pageCount: 0 });
                         addLog(`   ⚠️ ${file.name}: Could not read PDF`);
@@ -143,9 +131,11 @@ export default function KnowledgeBasePage() {
             }
 
             addLog(`\n📋 Total items to process: ${totalItems}\n`);
+            addLog(`💡 PDFs are split locally before uploading - no large file uploads!\n`);
 
             let currentItem = 0;
 
+            // PHASE 2: Process each file
             for (const { file, isPdf, pageCount } of fileInfo) {
                 addLog(`\n▶ Processing ${file.name}...`);
 
@@ -156,34 +146,28 @@ export default function KnowledgeBasePage() {
                         continue;
                     }
 
-                    // Re-read the file
-                    const reader = new FileReader();
-                    const base64Promise = new Promise<string>((resolve, reject) => {
-                        reader.onload = () => {
-                            const result = reader.result as string;
-                            const [, base64] = result.split(',');
-                            resolve(base64);
-                        };
-                        reader.onerror = reject;
-                        reader.readAsDataURL(file);
-                    });
-                    const base64 = await base64Promise;
+                    // SPLIT PDF ON CLIENT-SIDE (key change!)
+                    setCurrentStep(`📤 Splitting ${file.name} locally...`);
+                    addLog(`   📤 Splitting PDF into pages (client-side)...`);
 
-                    const splitResult = await splitPdfToPages(base64);
+                    const splitResult = await splitPdfClientSide(file);
+
                     if (!splitResult.success || !splitResult.pages) {
                         addLog(`   ❌ Failed to split PDF: ${splitResult.error}`);
                         totalFailed++;
                         continue;
                     }
 
-                    // Process each page
+                    addLog(`   ✅ Split into ${splitResult.pages.length} pages`);
+
+                    // Process each page (each page is sent separately = small request)
                     for (const page of splitResult.pages) {
                         currentItem++;
                         const progressPercent = Math.round((currentItem / totalItems) * 100);
                         setProgress(progressPercent);
                         setCurrentStep(`📄 ${file.name} - Page ${page.pageNumber}/${pageCount} (${progressPercent}%)`);
 
-                        addLog(`   📖 Page ${page.pageNumber}/${pageCount}: Analyzing...`);
+                        addLog(`   📖 Page ${page.pageNumber}/${pageCount}: Uploading & Analyzing...`);
 
                         const success = await processPage(
                             { base64: page.base64, mimeType: page.mimeType },
@@ -201,26 +185,15 @@ export default function KnowledgeBasePage() {
                         setStats({ processed: totalProcessed, saved: totalSaved, failed: totalFailed });
                     }
                 } else {
-                    // Image file - process directly
+                    // Image file - process directly (usually small)
                     currentItem++;
                     const progressPercent = Math.round((currentItem / totalItems) * 100);
                     setProgress(progressPercent);
                     setCurrentStep(`🖼️ ${file.name} (${progressPercent}%)`);
 
-                    const reader = new FileReader();
-                    const base64Promise = new Promise<{ base64: string, mimeType: string }>((resolve, reject) => {
-                        reader.onload = () => {
-                            const result = reader.result as string;
-                            const [header, base64] = result.split(',');
-                            const mimeType = header.match(/:(.*?);/)?.[1] || 'image/jpeg';
-                            resolve({ base64, mimeType });
-                        };
-                        reader.onerror = reject;
-                        reader.readAsDataURL(file);
-                    });
-                    const { base64, mimeType } = await base64Promise;
+                    const { base64, mimeType } = await fileToBase64(file);
 
-                    addLog(`   🖼️ Analyzing image...`);
+                    addLog(`   🖼️ Uploading & Analyzing image...`);
 
                     const success = await processPage(
                         { base64, mimeType },
@@ -252,7 +225,6 @@ export default function KnowledgeBasePage() {
             }
 
             setFiles(null);
-            // Reset input
             const fileInput = document.getElementById('file-upload') as HTMLInputElement;
             if (fileInput) fileInput.value = '';
 
@@ -284,7 +256,7 @@ export default function KnowledgeBasePage() {
                 <CardHeader>
                     <CardTitle>Upload Content</CardTitle>
                     <CardDescription>
-                        Upload images or multi-page PDFs. The AI will extract text, visual descriptions, and metadata from each page.
+                        Upload images or multi-page PDFs. PDFs are split locally before processing - no large file uploads!
                     </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
@@ -322,7 +294,7 @@ export default function KnowledgeBasePage() {
                     <div className="space-y-2 border-2 border-dashed rounded-lg p-6 flex flex-col items-center justify-center cursor-pointer hover:bg-slate-50 transition-colors">
                         <Upload className="h-10 w-10 text-slate-400 mb-2" />
                         <Label htmlFor="file-upload" className="cursor-pointer text-lg text-slate-700">Click to Select Files (Images or PDF)</Label>
-                        <p className="text-xs text-slate-400">PDFs will be split into individual pages for processing</p>
+                        <p className="text-xs text-slate-400">PDFs are split locally - no size limit on PDF files!</p>
                         <Input id="file-upload" type="file" multiple accept=".pdf, image/*" className="hidden" onChange={handleFileChange} />
                         {files && (
                             <div className="flex items-center gap-2 mt-2 text-sm text-green-600 font-medium">
