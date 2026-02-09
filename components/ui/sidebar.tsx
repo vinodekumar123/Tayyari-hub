@@ -157,6 +157,7 @@ export function Sidebar() {
         { icon: BrainCircuit, label: 'Repeated Questions', href: '/admin/mockquestions/find-repeated' },
         { icon: BrainCircuit, label: 'AI Auto-Tagger', href: '/admin/questions/auto-tagger' },
         { icon: BrainCircuit, label: 'AI Tutor Test', href: '/admin/ai-tutor-test' },
+        { icon: BarChart3, label: 'AI Tutor Analytics', href: '/admin/ai-tutor-analytics' },
       ],
     },
     // User Management: Admin/SuperAdmin only
