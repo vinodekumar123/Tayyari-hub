@@ -1,24 +1,64 @@
 'use client';
 
-import { useState, useEffect, useRef, memo } from 'react';
+import { useState, useEffect, useRef, memo, useCallback } from 'react';
 import { usePathname } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { MessageCircle, X, Send, Bot, Loader2, Minimize2, Download, Maximize2, Sparkles } from 'lucide-react';
+import { MessageCircle, X, Send, Bot, Loader2, Minimize2, Download, Maximize2, Sparkles, ThumbsUp, ThumbsDown, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { glassmorphism } from '@/lib/design-tokens';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import remarkMath from 'remark-math';
+import rehypeKatex from 'rehype-katex';
+import 'katex/dist/katex.min.css';
 import { generateSchedulePDF } from '@/utils/generate-schedule-pdf';
 
 interface Message {
     role: 'user' | 'model';
     text: string;
     action?: string;
+    feedback?: 'helpful' | 'not_helpful';
+}
+
+const STORAGE_KEY = 'tayyari_chat_history';
+
+// Load chat history from localStorage
+function loadChatHistory(): Message[] {
+    if (typeof window === 'undefined') return [];
+    try {
+        const saved = localStorage.getItem(STORAGE_KEY);
+        if (saved) {
+            const parsed = JSON.parse(saved);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+                return parsed;
+            }
+        }
+    } catch (e) {
+        console.error('Failed to load chat history:', e);
+    }
+    return [];
+}
+
+// Save chat history to localStorage
+function saveChatHistory(messages: Message[]) {
+    if (typeof window === 'undefined') return;
+    try {
+        // Only save last 20 messages to prevent bloat
+        const toSave = messages.slice(-20);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(toSave));
+    } catch (e) {
+        console.error('Failed to save chat history:', e);
+    }
 }
 
 // Memoized message component for performance
-const ChatMessage = memo(({ msg }: { msg: Message }) => (
+const ChatMessage = memo(({ msg, index, onFeedback }: {
+    msg: Message;
+    index: number;
+    onFeedback: (index: number, feedback: 'helpful' | 'not_helpful') => void;
+}) => (
     <div className={cn("flex w-full", msg.role === 'user' ? "justify-end" : "justify-start")}>
         <div className={cn(
             "max-w-[85%] rounded-2xl px-4 py-2.5 text-sm shadow-sm",
@@ -27,10 +67,25 @@ const ChatMessage = memo(({ msg }: { msg: Message }) => (
                 : "bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 text-slate-800 dark:text-slate-200 rounded-bl-none"
         )}>
             <ReactMarkdown
+                remarkPlugins={[remarkGfm, remarkMath]}
+                rehypePlugins={[rehypeKatex]}
                 className="prose prose-sm dark:prose-invert max-w-none break-words"
                 components={{
-                    p: ({ node, ...props }) => <p className="mb-1 last:mb-0" {...props} />,
-                    a: ({ node, ...props }) => <a className="text-blue-200 underline" target="_blank" {...props} />
+                    p: ({ node, ...props }) => <p className="mb-1 last:mb-0 leading-relaxed" {...props} />,
+                    a: ({ node, ...props }) => <a className={cn(
+                        msg.role === 'user' ? "text-blue-200" : "text-blue-600",
+                        "underline"
+                    )} target="_blank" {...props} />,
+                    table: ({ node, ...props }) => (
+                        <div className="overflow-x-auto my-2 rounded border border-slate-200 dark:border-slate-700">
+                            <table className="min-w-full text-xs" {...props} />
+                        </div>
+                    ),
+                    th: ({ node, ...props }) => <th className="px-2 py-1 bg-slate-50 dark:bg-slate-700 text-left font-medium" {...props} />,
+                    td: ({ node, ...props }) => <td className="px-2 py-1 border-t border-slate-100 dark:border-slate-600" {...props} />,
+                    code: ({ node, ...props }) => <code className="bg-slate-100 dark:bg-slate-700 px-1 py-0.5 rounded text-xs" {...props} />,
+                    ul: ({ node, ...props }) => <ul className="list-disc pl-4 my-1 space-y-0.5" {...props} />,
+                    ol: ({ node, ...props }) => <ol className="list-decimal pl-4 my-1 space-y-0.5" {...props} />,
                 }}
             >
                 {msg.text}
@@ -59,21 +114,70 @@ const ChatMessage = memo(({ msg }: { msg: Message }) => (
                     </Button>
                 </div>
             )}
+
+            {/* Feedback buttons for model messages */}
+            {msg.role === 'model' && !msg.action && msg.text.length > 50 && (
+                <div className="flex items-center gap-1 mt-2 pt-2 border-t border-slate-100 dark:border-slate-700">
+                    <span className="text-[10px] text-slate-400 mr-1">Helpful?</span>
+                    <button
+                        onClick={() => onFeedback(index, 'helpful')}
+                        className={cn(
+                            "p-1 rounded transition-colors",
+                            msg.feedback === 'helpful'
+                                ? "bg-green-100 text-green-600 dark:bg-green-900 dark:text-green-400"
+                                : "hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400"
+                        )}
+                    >
+                        <ThumbsUp className="w-3 h-3" />
+                    </button>
+                    <button
+                        onClick={() => onFeedback(index, 'not_helpful')}
+                        className={cn(
+                            "p-1 rounded transition-colors",
+                            msg.feedback === 'not_helpful'
+                                ? "bg-red-100 text-red-600 dark:bg-red-900 dark:text-red-400"
+                                : "hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400"
+                        )}
+                    >
+                        <ThumbsDown className="w-3 h-3" />
+                    </button>
+                </div>
+            )}
         </div>
     </div>
 ));
 ChatMessage.displayName = 'ChatMessage';
 
+const WELCOME_MESSAGE: Message = {
+    role: 'model',
+    text: 'Welcome to Tayyari Hub! 👋 I can help you with course details, pricing, and general questions. How can I assist you today?'
+};
+
 export function HelpChatWidget() {
     const [isOpen, setIsOpen] = useState(false);
     const [isFullScreen, setIsFullScreen] = useState(false);
-    const [messages, setMessages] = useState<Message[]>([
-        { role: 'model', text: 'Welcome to Tayyari Hub! I can help you with course details, pricing, and general questions. How can I assist you today?' }
-    ]);
+    const [messages, setMessages] = useState<Message[]>([WELCOME_MESSAGE]);
     const [input, setInput] = useState('');
     const [loading, setLoading] = useState(false);
     const [isMobile, setIsMobile] = useState(false);
+    const [isInitialized, setIsInitialized] = useState(false);
     const scrollRef = useRef<HTMLDivElement>(null);
+
+    // Load saved messages on mount
+    useEffect(() => {
+        const saved = loadChatHistory();
+        if (saved.length > 0) {
+            setMessages(saved);
+        }
+        setIsInitialized(true);
+    }, []);
+
+    // Save messages when they change
+    useEffect(() => {
+        if (isInitialized && messages.length > 0) {
+            saveChatHistory(messages);
+        }
+    }, [messages, isInitialized]);
 
     // Detect mobile
     useEffect(() => {
@@ -143,6 +247,19 @@ export function HelpChatWidget() {
         }
     };
 
+    const handleFeedback = useCallback((index: number, feedback: 'helpful' | 'not_helpful') => {
+        setMessages(prev => {
+            const newArr = [...prev];
+            newArr[index] = { ...newArr[index], feedback };
+            return newArr;
+        });
+    }, []);
+
+    const clearChat = () => {
+        setMessages([WELCOME_MESSAGE]);
+        localStorage.removeItem(STORAGE_KEY);
+    };
+
     const pathname = usePathname();
     const allowedPaths = ['/', '/series/fresher', '/series/improver', '/about', '/contact'];
 
@@ -178,6 +295,17 @@ export function HelpChatWidget() {
                                 </div>
                             </div>
                             <div className="flex items-center gap-1">
+                                {messages.length > 1 && (
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="hover:bg-white/20 text-white h-8 w-8"
+                                        onClick={clearChat}
+                                        title="Clear Chat"
+                                    >
+                                        <Trash2 className="w-4 h-4" />
+                                    </Button>
+                                )}
                                 {!isMobile && (
                                     <Button
                                         variant="ghost"
@@ -204,13 +332,13 @@ export function HelpChatWidget() {
                         </div>
                     </CardHeader>
 
-                    <CardContent className="flex-1 overflow-y-auto p-4 space-y-4" ref={scrollRef}>
+                    <CardContent className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50 dark:bg-slate-900" ref={scrollRef}>
                         {messages.map((msg, idx) => (
-                            <ChatMessage key={idx} msg={msg} />
+                            <ChatMessage key={idx} msg={msg} index={idx} onFeedback={handleFeedback} />
                         ))}
                         {loading && (
                             <div className="flex justify-start w-full">
-                                <div className="bg-white dark:bg-slate-800 border px-4 py-3 rounded-2xl rounded-bl-none shadow-sm flex items-center gap-2">
+                                <div className="bg-white dark:bg-slate-800 border dark:border-slate-700 px-4 py-3 rounded-2xl rounded-bl-none shadow-sm flex items-center gap-2">
                                     <Loader2 className="w-4 h-4 animate-spin text-blue-500" />
                                     <span className="text-xs text-muted-foreground">Thinking...</span>
                                 </div>
@@ -218,7 +346,7 @@ export function HelpChatWidget() {
                         )}
                     </CardContent>
 
-                    <div className="p-3 bg-white/50 dark:bg-slate-900/50 border-t backdrop-blur-sm">
+                    <div className="p-3 bg-white/80 dark:bg-slate-900/80 border-t dark:border-slate-700 backdrop-blur-sm">
                         <div className="relative flex items-center">
                             <Input
                                 value={input}
@@ -226,7 +354,7 @@ export function HelpChatWidget() {
                                 onKeyDown={handleKeyDown}
                                 placeholder="Type a question..."
                                 className={cn(
-                                    "pr-12 rounded-full border-slate-200 dark:border-slate-700 focus-visible:ring-blue-500",
+                                    "pr-12 rounded-full border-slate-200 dark:border-slate-700 dark:bg-slate-800 focus-visible:ring-blue-500",
                                     isMobile && "text-base h-12"
                                 )}
                             />
@@ -243,7 +371,7 @@ export function HelpChatWidget() {
                             </Button>
                         </div>
                         <div className="text-[10px] text-center text-muted-foreground mt-2">
-                            Displaying live info from Tayyari Hub. AI can make mistakes. Please verify important details.
+                            AI can make mistakes. Please verify important details.
                         </div>
                     </div>
                 </Card>

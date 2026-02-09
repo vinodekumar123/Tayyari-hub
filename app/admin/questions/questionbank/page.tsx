@@ -17,7 +17,9 @@ import {
   DocumentData,
   writeBatch,
   updateDoc,
-  getCountFromServer
+  getCountFromServer,
+  addDoc,
+  serverTimestamp
 } from 'firebase/firestore';
 import { db } from '../../../firebase';
 import {
@@ -109,6 +111,7 @@ import {
   Menu, // Added Menu icon
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { searchClient, QUESTIONS_INDEX } from '@/lib/algolia-client';
 import Papa from 'papaparse';
 import { useUIStore } from '@/stores/useUIStore'; // Imported store
 import { generateSearchTokens } from '@/lib/searchUtils';
@@ -131,6 +134,7 @@ type Question = {
   createdBy?: string; // UID for ownership tracking
   enableExplanation?: boolean;
   createdAt?: Date;
+  updatedAt?: Date;
   status?: 'draft' | 'published' | 'review';
   usageCount?: number;
   totalAttempts?: number;
@@ -448,120 +452,110 @@ export default function QuestionBankPage() {
   const fetchQuestions = useCallback(async (isLoadMore = false) => {
     setLoading(true);
     try {
-      let q;
-      const constraints: any[] = [];
+      let fetched: Question[] = [];
+      let finalLastDoc: any = null;
+      let finalHasMore = false;
 
-      // STRICT TEACHER OWNERSHIP RULE: Teachers can ONLY see questions they created
-      if (userRole === 'teacher' && currentUserId) {
-        console.log('🔒 TEACHER FILTER APPLIED:', { userRole, currentUserId });
-        constraints.push(where('createdBy', '==', currentUserId));
-      } else {
-        console.log('ℹ️ NO TEACHER FILTER:', { userRole, currentUserId });
-      }
-
-      // SERVER-SIDE SEARCH using search tokens
       if (searchQuery && searchQuery.trim()) {
-        const searchToken = searchQuery.toLowerCase().trim();
-        constraints.push(where('searchTokens', 'array-contains', searchToken));
-      }
+        console.log('Searching Algolia:', { index: QUESTIONS_INDEX, query: searchQuery, appId: process.env.NEXT_PUBLIC_ALGOLIA_APP_ID });
+        // Use Algolia for searching
+        const { results } = await searchClient.search({
+          requests: [{
+            indexName: QUESTIONS_INDEX,
+            query: searchQuery,
+            hitsPerPage: ITEMS_PER_PAGE,
+            page: (isLoadMore && lastDoc) ? Math.floor(questions.length / ITEMS_PER_PAGE) : 0,
+            filters: showDeleted ? 'isDeleted:true' : 'NOT isDeleted:true'
+          }]
+        });
 
-      if (filterCourse !== 'All') constraints.push(where('course', '==', filterCourse));
-      if (filterSubject !== 'All') {
-        // Specific Subject Selected
-        if (userRole === 'teacher' && !teacherSubjects.includes(filterSubject)) {
-          constraints.push(where('subject', '==', '__INVALID_ACCESS__'));
-        } else {
-          constraints.push(where('subject', '==', filterSubject));
+        const hits = (results[0] as any).hits;
+        fetched = hits.map((hit: any) => ({
+          id: hit.objectID,
+          questionText: hit.rawQuestionText || hit.questionText,
+          options: hit.options,
+          correctAnswer: hit.correctAnswer,
+          explanation: hit.explanation,
+          subject: hit.subject,
+          chapter: hit.chapter,
+          topic: hit.topic,
+          difficulty: hit.difficulty,
+          course: hit.course,
+          status: hit.status,
+          createdAt: hit.createdAt ? new Date(hit.createdAt) : undefined,
+          updatedAt: hit.updatedAt ? new Date(hit.updatedAt) : undefined
+        }));
+
+        finalHasMore = hits.length === ITEMS_PER_PAGE;
+        finalLastDoc = null; // Algolia doesn't use Firestore cursors
+
+      } else {
+        // Use Firestore for standard filtering
+        const constraints: any[] = [];
+        if (userRole === 'teacher' && currentUserId) {
+          constraints.push(where('createdBy', '==', currentUserId));
         }
-      } else {
-        // 'All' Subjects Selected - No additional subject filtering needed now
-        // because teacher ownership is already enforced above
-      }
-      if (filterDifficulty !== 'All') constraints.push(where('difficulty', '==', filterDifficulty));
-      if (filterYear !== 'All') constraints.push(where('year', '==', filterYear));
-      if (filterStatus !== 'All') constraints.push(where('status', '==', filterStatus));
 
-      // New Server Side Filters
-      if (filterTeacher !== 'All') constraints.push(where('teacherId', '==', filterTeacher));
-      if (filterChapter !== 'All') constraints.push(where('chapter', '==', filterChapter));
+        if (filterCourse !== 'All') constraints.push(where('course', '==', filterCourse));
+        if (filterSubject !== 'All') constraints.push(where('subject', '==', filterSubject));
+        if (filterDifficulty !== 'All') constraints.push(where('difficulty', '==', filterDifficulty));
+        if (filterYear !== 'All') constraints.push(where('year', '==', filterYear));
+        if (filterStatus !== 'All') constraints.push(where('status', '==', filterStatus));
+        if (filterTeacher !== 'All') constraints.push(where('teacherId', '==', filterTeacher));
+        if (filterChapter !== 'All') constraints.push(where('chapter', '==', filterChapter));
 
-      // Server-Side Filtering for Deleted Items Only
-      // We ONLY apply this constraint if we are looking for the Delete Bin.
-      if (showDeleted) {
-        constraints.push(where('isDeleted', '==', true));
-      } else {
-        // For Active Items, we generally filter Client-Side to support legacy docs (missing field).
-        // However, to ensure we don't over-fetch deleted items, we can try using 'Not Equal' if possible,
-        // but 'Not Equal' disables other ordering. Best to stick to Client-Side for Active view
-        // OR rely on a compound index if it exists. 
-        // Let's rely on Client-Side filter for now, but if the user wants strict server filtering:
-        // constraints.push(where('isDeleted', '!=', true)); 
-      }
-
-      // Server-Side Date Filter
-      if (dateRange && dateRange.from) {
-        // Start of day
-        const start = new Date(dateRange.from);
-        start.setHours(0, 0, 0, 0);
-        constraints.push(where('createdAt', '>=', start)); // Auto-converts JS Date to Timestamp
-
-        if (dateRange.to) {
-          // End of day
-          const end = new Date(dateRange.to);
-          end.setHours(23, 59, 59, 999);
-          constraints.push(where('createdAt', '<=', end));
-        }
-      }
-
-      if (constraints.length > 0) {
-        // If sorting by text search, that takes precedence. Otherwise desc sort by createdAt.
-        // Note: usage of '!=' or 'array-contains' might limit sorting.
-        q = query(collection(db, 'questions'), ...constraints, orderBy('createdAt', 'desc'), limit(ITEMS_PER_PAGE));
-      } else {
-        q = query(collection(db, 'questions'), orderBy('createdAt', 'desc'), limit(ITEMS_PER_PAGE));
-      }
-
-      if (isLoadMore && lastDoc) {
-        q = query(q, startAfter(lastDoc));
-      }
-
-      const snapshot = await getDocs(q);
-      console.log("Firestore snapshot size:", snapshot.size);
-
-      const fetched: Question[] = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...(doc.data() as Omit<Question, 'id'>),
-        createdAt: parseCreatedAt(doc.data())
-      }));
-
-      // Client-side filtering:
-      // 1. isDeleted status (to avoid querying legacy docs without the field)
-      const filtered = fetched.filter(q => {
         if (showDeleted) {
-          return q.isDeleted === true;
-        } else {
-          // If we are in "Active Mode", HIDE items that are isDeleted=true
-          return q.isDeleted !== true;
+          constraints.push(where('isDeleted', '==', true));
         }
-      });
 
-      console.log("Total fetched:", fetched.length, "After filtering:", filtered.length);
+        if (dateRange && dateRange.from) {
+          const start = new Date(dateRange.from);
+          start.setHours(0, 0, 0, 0);
+          constraints.push(where('createdAt', '>=', start));
+          if (dateRange.to) {
+            const end = new Date(dateRange.to);
+            end.setHours(23, 59, 59, 999);
+            constraints.push(where('createdAt', '<=', end));
+          }
+        }
+
+        let q = query(collection(db, 'questions'), ...constraints, orderBy('createdAt', 'desc'), limit(ITEMS_PER_PAGE));
+        if (isLoadMore && lastDoc) {
+          q = query(q, startAfter(lastDoc));
+        }
+
+        const snapshot = await getDocs(q);
+        const fetchedRaw = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...(doc.data() as Omit<Question, 'id'>),
+          createdAt: parseCreatedAt(doc.data())
+        }));
+
+        fetched = fetchedRaw.filter(q => {
+          if (showDeleted) return q.isDeleted === true;
+          return q.isDeleted !== true;
+        });
+
+        finalLastDoc = snapshot.docs[snapshot.docs.length - 1];
+        finalHasMore = snapshot.docs.length === ITEMS_PER_PAGE;
+      }
+
+      console.log("Total fetched:", fetched.length);
 
       if (isLoadMore) {
         setQuestions(prev => {
           const existingIds = new Set(prev.map(p => p.id));
-          const newUnique = filtered.filter(f => !existingIds.has(f.id));
+          const newUnique = fetched.filter(f => !existingIds.has(f.id));
           return [...prev, ...newUnique];
         });
       } else {
-        setQuestions(filtered);
+        setQuestions(fetched);
       }
 
-      setLastDoc(snapshot.docs[snapshot.docs.length - 1]);
-      setHasMore(snapshot.docs.length === ITEMS_PER_PAGE);
+      setLastDoc(finalLastDoc);
+      setHasMore(finalHasMore);
 
       // Extract unique values for filters (from FETCHED data - adaptive)
-      // Note: For Chapter/Teacher, we rely on the full lists we fetched separately.
       const subjects = new Set([...availableSubjects, ...fetched.map(q => q.subject || '')].filter(Boolean));
       setAvailableSubjects(Array.from(subjects));
 
@@ -616,8 +610,25 @@ export default function QuestionBankPage() {
 
   const handleSelectOne = (id: string) => {
     setSelectedQuestions(prev =>
-      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+      prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
     );
+  };
+
+  const syncToAlgolia = async (id: string | string[], action: 'save' | 'delete' | 'soft-delete' | 'restore', data?: any) => {
+    try {
+      await fetch('/api/admin/sync-algolia', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          [Array.isArray(id) ? 'questionIds' : 'questionId']: id,
+          action,
+          data,
+          type: 'official'
+        })
+      });
+    } catch (e) {
+      console.error('Algolia sync failed', e);
+    }
   };
 
   const handleSoftDelete = async (ids?: string[]) => {
@@ -640,6 +651,7 @@ export default function QuestionBankPage() {
 
       setQuestions(prev => prev.filter(q => !targetIds.includes(q.id)));
       if (!ids) setSelectedQuestions([]);
+      await syncToAlgolia(targetIds, 'soft-delete');
       toast.success("Questions moved to Delete Bin");
     } catch (err) {
       console.error(err);
@@ -666,6 +678,7 @@ export default function QuestionBankPage() {
 
       setQuestions(prev => prev.filter(q => !targetIds.includes(q.id)));
       if (!ids) setSelectedQuestions([]);
+      await syncToAlgolia(targetIds, 'restore');
       toast.success("Questions restored successfully");
     } catch (err) {
       console.error(err);
@@ -694,6 +707,7 @@ export default function QuestionBankPage() {
 
       setQuestions(prev => prev.filter(q => !targetIds.includes(q.id)));
       if (!ids) setSelectedQuestions([]);
+      await syncToAlgolia(targetIds, 'delete');
       toast.success("Questions permanently deleted");
     } catch (err) {
       console.error(err);
@@ -704,18 +718,17 @@ export default function QuestionBankPage() {
   };
 
   const handleClone = async (question: Question) => {
-    // Navigate to create page with pre-fill data? 
-    // Or duplicate directly. Let's direct duplication for speed.
     try {
-      const { id, ...data } = question; // eslint-disable-line
-      const newDoc = await import('firebase/firestore').then(mod => mod.addDoc(collection(db, 'questions'), {
+      const { id, createdAt, updatedAt, ...data } = question; // eslint-disable-line
+      const newDoc = await addDoc(collection(db, 'questions'), {
         ...data,
         questionText: `${data.questionText} (Copy)`,
-        createdAt: new Date(),
-      }));
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+      await syncToAlgolia(newDoc.id, 'save', { ...data, questionText: `${data.questionText} (Copy)` });
       toast.success("Question duplicated!");
-      // Optional: Add to current list
-      setQuestions([{ ...data, questionText: `${data.questionText} (Copy)`, id: newDoc.id, createdAt: new Date() } as Question, ...questions]);
+      setQuestions([{ ...data, questionText: `${data.questionText} (Copy)`, id: newDoc.id, createdAt: new Date(), updatedAt: new Date() } as Question, ...questions]);
     } catch (e) {
       toast.error("Failed to duplicate");
     }

@@ -6,6 +6,7 @@ import { onAuthStateChanged } from 'firebase/auth';
 import dynamic from 'next/dynamic';
 import { CsvImporter } from '@/components/admin/CsvImporter';
 import 'react-quill-new/dist/quill.snow.css';
+import { generateSearchTokens } from '@/lib/searchUtils';
 
 import { db, auth, storage } from '../../../firebase';
 import {
@@ -365,6 +366,18 @@ function CreateQuestionPageContent() {
     return true;
   }, [questionData]);
 
+  const syncToAlgolia = async (id: string, data: any) => {
+    try {
+      await fetch('/api/admin/sync-algolia', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ questionId: id, data, type: 'mock' })
+      });
+    } catch (e) {
+      console.error('Algolia sync failed', e);
+    }
+  };
+
   const handleSave = useCallback(async (status: 'draft' | 'published' = 'published') => {
     if (!validate()) return;
     setIsSaving(true);
@@ -374,11 +387,13 @@ function CreateQuestionPageContent() {
         status,
         updatedAt: new Date(),
         version: (questionData.version || 0) + 1,
-        isDeleted: questionData.isDeleted ?? false
+        isDeleted: questionData.isDeleted ?? false,
+        searchTokens: generateSearchTokens(questionData.questionText)
       };
 
       if (id) {
         await updateDoc(doc(db, 'mock-questions', id), dataToSave);
+        await syncToAlgolia(id, dataToSave);
         // Create history snapshot
         await addDoc(collection(db, 'mock-questions', id, 'history'), {
           ...questionData,
@@ -386,7 +401,8 @@ function CreateQuestionPageContent() {
         });
         toast.success("Question updated!");
       } else {
-        await addDoc(collection(db, 'mock-questions'), { ...dataToSave, createdAt: new Date() });
+        const docRef = await addDoc(collection(db, 'mock-questions'), { ...dataToSave, createdAt: new Date() });
+        await syncToAlgolia(docRef.id, dataToSave);
         toast.success("Question created successfully!");
         localStorage.removeItem(DRAFT_KEY);
         setQuestionData(INITIAL_QUESTION);
@@ -566,7 +582,7 @@ function CreateQuestionPageContent() {
     try {
       const batch = writeBatch(db);
 
-      importedData.forEach((row) => {
+      for (const row of importedData) {
         // Image Handling from raw CSV row
         let questionText = row.questionText;
         if (row.imageUrl || row.image) {
@@ -591,12 +607,14 @@ function CreateQuestionPageContent() {
           updatedAt: new Date(),
           version: 1,
           isDeleted: false,
-          isGrace: row.isGrace === 'true' || row.isGrace === true
+          isGrace: row.isGrace === 'true' || row.isGrace === true,
+          searchTokens: generateSearchTokens(questionText),
         };
         const newDocRef = doc(collection(db, 'mock-questions'));
         batch.set(newDocRef, data);
+        await syncToAlgolia(newDocRef.id, data);
         successCount++;
-      });
+      }
 
       await batch.commit();
       toast.success(`Successfully imported ${successCount} questions!`);

@@ -29,7 +29,10 @@ import {
 } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 
-import { Info, CheckCircle, XCircle, Circle, Clock, BarChart3, Target, BookOpen, Flag, Lock, Bookmark } from 'lucide-react';
+import { Info, CheckCircle, XCircle, Circle, Clock, BarChart3, Target, BookOpen, Flag, Lock, Bookmark, Download as DownloadIcon } from 'lucide-react';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import { addHeader, addFooter, sanitizeText } from '@/utils/pdf-style-helper';
 
 interface Question {
     id: string;
@@ -310,6 +313,85 @@ const ResultPageContent: React.FC = () => {
         }
     };
 
+    const [isExporting, setIsExporting] = useState(false);
+
+    const handleDownloadResultCard = async () => {
+        if (!quiz || !user) return;
+        setIsExporting(true);
+
+        try {
+            const doc = new jsPDF();
+            const pageWidth = doc.internal.pageSize.width;
+
+            // --- Header ---
+            const subtitle = `Student: ${user.displayName || user.email} | Date: ${new Date().toLocaleDateString()}`;
+            let currentY = addHeader(doc, `${quiz.title} - Result Card`, subtitle);
+
+            // --- Overview Stats Table ---
+            (autoTable as any)(doc, {
+                startY: currentY,
+                head: [['Total Questions', 'Correct', 'Wrong', 'Skipped', 'Score %']],
+                body: [[
+                    totalQuestions,
+                    score,
+                    wrongAnswers,
+                    skippedQuestions,
+                    `${percentage.toFixed(1)}%`
+                ]],
+                theme: 'grid',
+                headStyles: { fillColor: [37, 99, 235], halign: 'center' },
+                styles: { halign: 'center', fontSize: 12, fontStyle: 'bold' }
+            });
+
+            // @ts-ignore
+            currentY = doc.lastAutoTable.finalY + 15;
+
+            // --- Subject Analysis Table ---
+            doc.setFontSize(14);
+            doc.setTextColor(30, 41, 59);
+            doc.setFont("helvetica", "bold");
+            doc.text("Subject Analysis", 15, currentY);
+            currentY += 7;
+
+            (autoTable as any)(doc, {
+                startY: currentY,
+                head: [['Subject', 'Total', 'Correct', 'Wrong', 'Percentage']],
+                body: subjectStats.map(s => [
+                    s.subject,
+                    s.total,
+                    s.correct,
+                    s.wrong,
+                    `${s.percentage.toFixed(1)}%`
+                ]),
+                theme: 'striped',
+                headStyles: { fillColor: [79, 70, 229] },
+                styles: { fontSize: 10 }
+            });
+
+            // @ts-ignore
+            currentY = doc.lastAutoTable.finalY + 20;
+
+            // --- Remark ---
+            doc.setFontSize(16);
+            doc.setTextColor(37, 99, 235);
+            doc.setFont("helvetica", "bold");
+            const remarkText = `Performance Remark: ${remark.replace(/[^ -~]/g, '').trim()}`; // Strip emojis for PDF safety
+            doc.text(remarkText, 15, currentY);
+
+            // --- Footer ---
+            const pageCount = doc.getNumberOfPages();
+            addFooter(doc, pageCount);
+
+            doc.save(`${quiz.title.replace(/[^a-z0-9]/gi, '_')}_Result_Card.pdf`);
+            toast.success("Result Card downloaded!");
+        } catch (e) {
+            console.error(e);
+            toast.error("Failed to generate PDF");
+        } finally {
+            setIsExporting(false);
+        }
+    };
+
     if (accessDenied) {
         return (
             <div className="flex items-center justify-center min-h-screen bg-background">
@@ -483,15 +565,26 @@ const ResultPageContent: React.FC = () => {
 
                 {/* Header Section */}
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4">
-                    <div>
+                    <div className="flex-1">
                         <h1 className="text-3xl font-bold tracking-tight text-foreground">{quiz.title}</h1>
                         <p className="text-muted-foreground mt-1 text-sm font-medium uppercase tracking-wide">
                             {quiz.subject} &bull; Result Analysis
                         </p>
                     </div>
-                    <Badge className={`text-sm font-semibold px-4 py-1.5 rounded-full shadow-lg ${remarkColor} text-white hover:${remarkColor}`}>
-                        {remark}
-                    </Badge>
+                    <div className="flex flex-wrap items-center gap-3">
+                        <Button
+                            onClick={handleDownloadResultCard}
+                            disabled={isExporting}
+                            variant="outline"
+                            className="bg-white dark:bg-slate-900 border-indigo-200 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 text-indigo-700 dark:text-indigo-400 gap-2 shadow-sm"
+                        >
+                            <DownloadIcon className="w-4 h-4" />
+                            {isExporting ? 'Generating PDF...' : 'Download Result Card'}
+                        </Button>
+                        <Badge className={`text-sm font-semibold px-4 py-1.5 rounded-full shadow-lg ${remarkColor} text-white hover:${remarkColor}`}>
+                            {remark}
+                        </Badge>
+                    </div>
                 </div>
 
                 {/* Stats Grid */}

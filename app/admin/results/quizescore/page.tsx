@@ -9,6 +9,9 @@ import {
   getDoc,
 } from 'firebase/firestore';
 import { db } from '@/app/firebase';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import { addHeader, addFooter, sanitizeText } from '@/utils/pdf-style-helper';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
@@ -241,52 +244,34 @@ function QuizStudentScoresContent() {
     setGeneratingPDF(true);
 
     try {
-      const jsPDFModule = await import('jspdf');
-      const autoTableModule = await import('jspdf-autotable');
-      const jsPDF = jsPDFModule.default || jsPDFModule.jsPDF;
-      const autoTable = autoTableModule.default;
-
       const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
-      const currentDate = new Date().toLocaleDateString();
 
-      // Header
-      doc.setFontSize(22);
-      doc.setTextColor(30, 58, 138);
-      doc.text(quizTitle, 14, 20);
-
-      doc.setFontSize(10);
-      doc.setTextColor(100, 116, 139);
-      doc.text(`${currentDate} | Tayyari Hub`, 14, 26);
-
-      // Stats
-      if (showStatsInExport) {
-        doc.setFontSize(10);
-        doc.setTextColor(50, 50, 50);
-        const startX = doc.internal.pageSize.width - 60;
-        doc.text(`Total Students: ${stats.total}`, startX, 20);
-        doc.text(`Average Score: ${stats.avg}%`, startX, 26);
-      }
+      // --- Header ---
+      const subtitle = `Total Students: ${stats.total} | Average: ${stats.avg}% | Highest: ${stats.highest}%`;
+      const currentY = addHeader(doc, quizTitle, subtitle);
 
       const head = [
         [
           { content: '#', rowSpan: 2, styles: { halign: 'center' as const, valign: 'middle' as const } },
-          { content: 'Name', rowSpan: 2, styles: { valign: 'middle' as const } },
+          { content: 'Rank', rowSpan: 2, styles: { halign: 'center' as const, valign: 'middle' as const } },
+          { content: 'Student Name', rowSpan: 2, styles: { valign: 'middle' as const } },
           { content: "Father's Name", rowSpan: 2, styles: { valign: 'middle' as const } },
           { content: 'District', rowSpan: 2, styles: { valign: 'middle' as const } },
-          ...(showSubjectsInExport ? [{ content: 'Subject Breakdown', colSpan: subjects.length, styles: { halign: 'center' as const } }] : []),
-          { content: 'Performance', colSpan: 3, styles: { halign: 'center' as const } }
+          ...(showSubjectsInExport ? [{ content: 'Subject-wise Breakdown', colSpan: subjects.length, styles: { halign: 'center' as const } }] : []),
+          { content: 'Performance (MCQs)', colSpan: 4, styles: { halign: 'center' as const } }
         ],
         [
           ...(showSubjectsInExport ? subjects.map(s => ({ content: s, styles: { halign: 'center' as const, fontSize: 8 } })) : []),
           { content: 'Correct', styles: { halign: 'center' as const, textColor: [22, 163, 74] as [number, number, number] } },
           { content: 'Wrong', styles: { halign: 'center' as const, textColor: [220, 38, 38] as [number, number, number] } },
-          { content: 'Total', styles: { halign: 'center' as const } }
-
+          { content: 'Total', styles: { halign: 'center' as const } },
+          { content: 'Score %', styles: { halign: 'center' as const, fontStyle: 'bold' } }
         ]
       ];
 
       const body = processedData.map((d, index) => {
         const row: any[] = [
+          index + 1,
           index + 1,
           d.score.name,
           d.score.fatherName || '-',
@@ -300,40 +285,47 @@ function QuizStudentScoresContent() {
         row.push(d.totalCorrect);
         row.push(d.totalWrong);
         row.push(d.totalQuestions);
+        row.push(`${d.percentage.toFixed(1)}%`);
         return row;
       });
 
-      autoTable(doc, {
+      (autoTable as any)(doc, {
         head: head,
         body: body,
-        startY: 35,
+        startY: currentY + 5,
         theme: 'grid',
         styles: {
-          fontSize: 9,
-          cellPadding: 3,
+          fontSize: 8,
+          cellPadding: 2,
           lineColor: [226, 232, 240],
           lineWidth: 0.1,
-          textColor: [30, 41, 59]
+          textColor: [30, 41, 59],
+          font: 'helvetica'
         },
         headStyles: {
-          fillColor: [248, 250, 252],
-          textColor: [15, 23, 42],
+          fillColor: [30, 58, 138], // Dark Blue
+          textColor: [255, 255, 255],
           fontStyle: 'bold',
-          lineColor: [226, 232, 240],
+          lineColor: [30, 58, 138],
           lineWidth: 0.1
         },
         alternateRowStyles: {
-          fillColor: [255, 255, 255]
+          fillColor: [248, 250, 252]
         },
         columnStyles: {
-          0: { cellWidth: 12, halign: 'center' as const }, // S.No
-          1: { cellWidth: 40 }, // Name
-          2: { cellWidth: 40 }, // Father Name
-          3: { cellWidth: 35 }  // District
+          0: { cellWidth: 8, halign: 'center' as const }, // S.No
+          1: { cellWidth: 10, halign: 'center' as const }, // Rank
+          2: { cellWidth: 35 }, // Name
+          3: { cellWidth: 35 }, // Father Name
+          4: { cellWidth: 25 }  // District
         }
       });
 
-      doc.save(`${quizTitle.replace(/[^a-z0-9]/gi, '_')}.pdf`);
+      // --- Footer ---
+      const pageCount = doc.getNumberOfPages();
+      addFooter(doc, pageCount);
+
+      doc.save(`${quizTitle.replace(/[^a-z0-9]/gi, '_')}_Result_Report.pdf`);
     } catch (err) {
       console.error(err);
       alert("PDF Export failed");

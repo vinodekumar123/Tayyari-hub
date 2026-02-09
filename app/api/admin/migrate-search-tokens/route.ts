@@ -22,6 +22,8 @@ export async function GET(request: NextRequest) {
         // For now, require a simple token (you should change this!)
         const MIGRATION_TOKEN = process.env.MIGRATION_TOKEN || 'change-me-in-production';
         const providedToken = request.headers.get('x-migration-token');
+        const searchParams = request.nextUrl.searchParams;
+        const targetCollection = searchParams.get('collection') || 'questions';
 
         if (providedToken !== MIGRATION_TOKEN) {
             return NextResponse.json(
@@ -30,18 +32,22 @@ export async function GET(request: NextRequest) {
             );
         }
 
-        console.log('🚀 Starting search tokens migration via API...');
+        if (!['questions', 'mock-questions'].includes(targetCollection)) {
+            return NextResponse.json({ error: 'Invalid collection specified' }, { status: 400 });
+        }
 
-        // Fetch all questions
-        const questionsRef = adminDb.collection('questions');
+        console.log(`🚀 Starting search tokens migration for ${targetCollection} via API...`);
+
+        // Fetch all questions from target collection
+        const questionsRef = adminDb.collection(targetCollection);
         const snapshot = await questionsRef.get();
 
-        console.log(`📊 Found ${snapshot.size} questions to process`);
+        console.log(`📊 Found ${snapshot.size} items in ${targetCollection} to process`);
 
         if (snapshot.empty) {
             return NextResponse.json({
                 success: true,
-                message: 'No questions found in database',
+                message: `No items found in ${targetCollection}`,
                 stats: { total: 0, updated: 0, skipped: 0, errors: 0 }
             });
         }
@@ -60,7 +66,7 @@ export async function GET(request: NextRequest) {
             try {
                 const data = doc.data();
 
-                // Skip if searchTokens already exists
+                // Skip if searchTokens already exists and is not empty
                 if (data.searchTokens && Array.isArray(data.searchTokens) && data.searchTokens.length > 0) {
                     skippedCount++;
                     continue;
@@ -100,11 +106,11 @@ export async function GET(request: NextRequest) {
             console.log(`✅ Committed final batch of ${batchCount} updates`);
         }
 
-        console.log('🎉 Migration completed!');
+        console.log(`🎉 Migration for ${targetCollection} completed!`);
 
         return NextResponse.json({
             success: true,
-            message: 'Migration completed successfully',
+            message: `Migration for ${targetCollection} completed successfully`,
             stats: {
                 total: snapshot.size,
                 updated: successCount,

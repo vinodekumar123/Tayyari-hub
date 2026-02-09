@@ -16,7 +16,9 @@ import {
   writeBatch,
   updateDoc,
   orderBy,
-  getCountFromServer
+  getCountFromServer,
+  addDoc,
+  serverTimestamp
 } from 'firebase/firestore';
 import { db } from '../../../firebase';
 import {
@@ -58,6 +60,8 @@ import {
 } from "@/components/ui/select";
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { toast } from 'sonner';
+import { searchClient, MOCK_QUESTIONS_INDEX } from '@/lib/algolia-client';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Skeleton } from "@/components/ui/skeleton";
@@ -94,8 +98,9 @@ import {
   CheckCircle,
   Database
 } from 'lucide-react';
-import { toast } from 'sonner';
 import Papa from 'papaparse';
+import jsPDF from 'jspdf';
+import { addHeader, addFooter, sanitizeText } from '@/utils/pdf-style-helper';
 
 // --- Types ---
 type Question = {
@@ -114,6 +119,7 @@ type Question = {
   teacher?: string;
   enableExplanation?: boolean;
   createdAt?: Date;
+  updatedAt?: Date;
   status?: 'draft' | 'published' | 'review';
   usageCount?: number;
   totalAttempts?: number;
@@ -177,55 +183,90 @@ export default function MockQuestionBankPage() {
   const fetchQuestions = useCallback(async (isLoadMore = false, currentLastDoc: QueryDocumentSnapshot<DocumentData> | null = null) => {
     setLoading(true);
     try {
-      let q;
-      const constraints: any[] = [];
-      if (filterCourse !== 'All') constraints.push(where('course', '==', filterCourse));
-      if (filterSubject !== 'All') constraints.push(where('subject', '==', filterSubject));
-      if (filterDifficulty !== 'All') constraints.push(where('difficulty', '==', filterDifficulty));
-      if (filterYear !== 'All') constraints.push(where('year', '==', filterYear));
-      if (filterStatus !== 'All') constraints.push(where('status', '==', filterStatus));
+      let fetched: Question[] = [];
+      let finalLastDoc: any = null;
+      let finalHasMore = false;
 
-      if (showDeleted) {
-        constraints.push(where('isDeleted', '==', true));
-      }
+      if (searchQuery && searchQuery.trim()) {
+        console.log('Searching Mock Algolia:', { index: MOCK_QUESTIONS_INDEX, query: searchQuery, appId: process.env.NEXT_PUBLIC_ALGOLIA_APP_ID });
+        // Use Algolia for searching
+        const { results } = await searchClient.search({
+          requests: [{
+            indexName: MOCK_QUESTIONS_INDEX,
+            query: searchQuery,
+            hitsPerPage: ITEMS_PER_PAGE,
+            page: (isLoadMore && currentLastDoc) ? Math.floor(questions.length / ITEMS_PER_PAGE) : 0,
+            filters: showDeleted ? 'isDeleted:true' : 'NOT isDeleted:true'
+          }]
+        });
 
-      if (constraints.length > 0) {
-        // Note: usage of orderBy with where clauses may require composite indexes
-        q = query(collection(db, 'mock-questions'), ...constraints, orderBy('createdAt', 'desc'), limit(ITEMS_PER_PAGE));
+        const hits = (results[0] as any).hits;
+        fetched = hits.map((hit: any) => ({
+          id: hit.objectID,
+          questionText: hit.rawQuestionText || hit.questionText,
+          options: hit.options,
+          correctAnswer: hit.correctAnswer,
+          explanation: hit.explanation,
+          subject: hit.subject,
+          chapter: hit.chapter,
+          topic: hit.topic,
+          difficulty: hit.difficulty,
+          course: hit.course,
+          status: hit.status,
+          createdAt: hit.createdAt ? new Date(hit.createdAt) : undefined,
+          updatedAt: hit.updatedAt ? new Date(hit.updatedAt) : undefined
+        }));
+
+        finalHasMore = hits.length === ITEMS_PER_PAGE;
+        finalLastDoc = null;
+
       } else {
-        q = query(collection(db, 'mock-questions'), orderBy('createdAt', 'desc'), limit(ITEMS_PER_PAGE));
+        // Use Firestore for standard filtering
+        const constraints: any[] = [];
+        if (filterCourse !== 'All') constraints.push(where('course', '==', filterCourse));
+        if (filterSubject !== 'All') constraints.push(where('subject', '==', filterSubject));
+        if (filterDifficulty !== 'All') constraints.push(where('difficulty', '==', filterDifficulty));
+        if (filterYear !== 'All') constraints.push(where('year', '==', filterYear));
+        if (filterStatus !== 'All') constraints.push(where('status', '==', filterStatus));
+
+        if (showDeleted) {
+          constraints.push(where('isDeleted', '==', true));
+        }
+
+        let q = query(collection(db, 'mock-questions'), ...constraints, orderBy('createdAt', 'desc'), limit(ITEMS_PER_PAGE));
+
+        if (isLoadMore && currentLastDoc) {
+          q = query(q, startAfter(currentLastDoc));
+        }
+
+        const snapshot = await getDocs(q);
+        const fetchedRaw = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...(doc.data() as Omit<Question, 'id'>),
+          createdAt: parseCreatedAt(doc.data())
+        }));
+
+        fetched = fetchedRaw.filter(q => {
+          if (showDeleted) return q.isDeleted === true;
+          return q.isDeleted !== true;
+        });
+
+        finalLastDoc = snapshot.docs[snapshot.docs.length - 1];
+        finalHasMore = snapshot.docs.length === ITEMS_PER_PAGE;
       }
-
-      if (isLoadMore && currentLastDoc) {
-        q = query(q, startAfter(currentLastDoc));
-      }
-
-      const snapshot = await getDocs(q);
-      console.log("Firestore snapshot size:", snapshot.size);
-
-      const fetched: Question[] = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...(doc.data() as Omit<Question, 'id'>),
-        createdAt: parseCreatedAt(doc.data())
-      }));
-
-      // Client-side filtering
-      const filtered = fetched.filter(q => {
-        const matchesSearch = searchQuery ? q.questionText.toLowerCase().includes(searchQuery.toLowerCase()) : true;
-        const matchesDeleted = showDeleted ? q.isDeleted === true : q.isDeleted !== true;
-        return matchesSearch && matchesDeleted;
-      });
-
-      console.log("Total fetched:", fetched.length, "After filtering:", filtered.length);
 
       if (isLoadMore) {
-        setQuestions(prev => [...prev, ...filtered]);
+        setQuestions(prev => {
+          const existingIds = new Set(prev.map(p => p.id));
+          const newUnique = fetched.filter(f => !existingIds.has(f.id));
+          return [...prev, ...newUnique];
+        });
       } else {
-        setQuestions(filtered);
+        setQuestions(fetched);
       }
 
-      setLastDoc(snapshot.docs[snapshot.docs.length - 1] || null);
-      setHasMore(snapshot.docs.length === ITEMS_PER_PAGE);
+      setLastDoc(finalLastDoc || null);
+      setHasMore(finalHasMore);
 
       // Extract unique values for filters
       const subjects = new Set([...availableSubjects, ...fetched.map(q => q.subject || '')].filter(Boolean));
@@ -336,25 +377,43 @@ export default function MockQuestionBankPage() {
 
   const handleSelectOne = (id: string) => {
     setSelectedQuestions(prev =>
-      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+      prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
     );
   };
 
+  const syncToAlgolia = async (id: string | string[], action: 'save' | 'delete' | 'soft-delete' | 'restore', data?: any) => {
+    try {
+      await fetch('/api/admin/sync-algolia', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          [Array.isArray(id) ? 'questionIds' : 'questionId']: id,
+          action,
+          data,
+          type: 'mock'
+        })
+      });
+    } catch (e) {
+      console.error('Algolia sync failed', e);
+    }
+  };
+
   const handleSoftDelete = async (questionIds?: string[]) => {
-    const idsToDelete = questionIds || selectedQuestions;
-    if (idsToDelete.length === 0) return;
-    if (!confirm(`Move ${idsToDelete.length} question(s) to Delete Bin?`)) return;
+    const targetIds = questionIds || selectedQuestions;
+    if (targetIds.length === 0) return;
+    if (!confirm(`Move ${targetIds.length} question(s) to Delete Bin?`)) return;
 
     setLoading(true);
     try {
       const batch = writeBatch(db);
-      idsToDelete.forEach(id => {
+      targetIds.forEach(id => {
         batch.update(doc(db, 'mock-questions', id), { isDeleted: true, updatedAt: new Date() });
       });
       await batch.commit();
 
-      setQuestions(prev => prev.filter(q => !idsToDelete.includes(q.id)));
-      setSelectedQuestions(prev => prev.filter(id => !idsToDelete.includes(id)));
+      setQuestions(prev => prev.filter(q => !targetIds.includes(q.id)));
+      if (!questionIds) setSelectedQuestions([]);
+      await syncToAlgolia(targetIds, 'soft-delete');
       toast.success("Questions moved to Delete Bin");
     } catch (err) {
       toast.error("Failed to delete questions");
@@ -364,18 +423,19 @@ export default function MockQuestionBankPage() {
   };
 
   const handleRestore = async (questionIds?: string[]) => {
-    const idsToRestore = questionIds || selectedQuestions;
-    if (idsToRestore.length === 0) return;
+    const targetIds = questionIds || selectedQuestions;
+    if (targetIds.length === 0) return;
     setLoading(true);
     try {
       const batch = writeBatch(db);
-      idsToRestore.forEach(id => {
+      targetIds.forEach(id => {
         batch.update(doc(db, 'mock-questions', id), { isDeleted: false, updatedAt: new Date() });
       });
       await batch.commit();
 
-      setQuestions(prev => prev.filter(q => !idsToRestore.includes(q.id)));
-      setSelectedQuestions(prev => prev.filter(id => !idsToRestore.includes(id)));
+      setQuestions(prev => prev.filter(q => !targetIds.includes(q.id)));
+      if (!questionIds) setSelectedQuestions([]);
+      await syncToAlgolia(targetIds, 'restore');
       toast.success("Questions restored successfully");
     } catch (err) {
       toast.error("Failed to restore questions");
@@ -385,20 +445,21 @@ export default function MockQuestionBankPage() {
   };
 
   const handlePermanentDelete = async (questionIds?: string[]) => {
-    const idsToDelete = questionIds || selectedQuestions;
-    if (idsToDelete.length === 0) return;
-    if (!confirm(`PERMANENTLY DELETE ${idsToDelete.length} question(s)? This cannot be undone.`)) return;
+    const targetIds = questionIds || selectedQuestions;
+    if (targetIds.length === 0) return;
+    if (!confirm(`PERMANENTLY DELETE ${targetIds.length} question(s)? This cannot be undone.`)) return;
 
     setLoading(true);
     try {
       const batch = writeBatch(db);
-      idsToDelete.forEach(id => {
+      targetIds.forEach(id => {
         batch.delete(doc(db, 'mock-questions', id));
       });
       await batch.commit();
 
-      setQuestions(prev => prev.filter(q => !idsToDelete.includes(q.id)));
-      setSelectedQuestions(prev => prev.filter(id => !idsToDelete.includes(id)));
+      setQuestions(prev => prev.filter(q => !targetIds.includes(q.id)));
+      if (!questionIds) setSelectedQuestions([]);
+      await syncToAlgolia(targetIds, 'delete');
       toast.success("Questions permanently deleted");
     } catch (err) {
       toast.error("Failed to delete questions");
@@ -410,11 +471,13 @@ export default function MockQuestionBankPage() {
   const handleClone = async (question: Question) => {
     try {
       const { id, ...data } = question; // eslint-disable-line
-      const newDoc = await import('firebase/firestore').then(mod => mod.addDoc(collection(db, 'mock-questions'), {
+      const newDoc = await addDoc(collection(db, 'mock-questions'), {
         ...data,
         questionText: `${data.questionText} (Copy)`,
-        createdAt: new Date(),
-      }));
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+      await syncToAlgolia(newDoc.id, 'save', { ...data, questionText: `${data.questionText} (Copy)` });
       toast.success("Question duplicated!");
       setQuestions([{ ...data, questionText: `${data.questionText} (Copy)`, id: newDoc.id, createdAt: new Date() } as Question, ...questions]);
     } catch (e) {
@@ -422,7 +485,7 @@ export default function MockQuestionBankPage() {
     }
   };
 
-  const handleExport = () => {
+  const handleExportCSV = () => {
     const dataToExport = questions.filter(q => selectedQuestions.length ? selectedQuestions.includes(q.id) : true);
     const csv = Papa.unparse(dataToExport.map(q => ({
       ...q,
@@ -432,12 +495,76 @@ export default function MockQuestionBankPage() {
     const link = document.createElement("a");
     const url = URL.createObjectURL(blob);
     link.setAttribute("href", url);
-    link.setAttribute("download", "mock_questions_export.csv");
+    link.setAttribute("download", `mock_questions_export_${new Date().getTime()}.csv`);
     link.style.visibility = 'hidden';
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
+  };
+
+  const [isExportingPDF, setIsExportingPDF] = useState(false);
+
+  const handleExportPDF = async () => {
+    const dataToExport = questions.filter(q => selectedQuestions.length ? selectedQuestions.includes(q.id) : true);
+    if (dataToExport.length === 0) return;
+
+    setIsExportingPDF(true);
+    try {
+      const doc = new jsPDF();
+      const pageWidth = doc.internal.pageSize.width;
+      const margin = 15;
+
+      let currentY = addHeader(doc, "Mock Question Bank Export", `Questions: ${dataToExport.length} | Date: ${new Date().toLocaleDateString()}`);
+
+      dataToExport.forEach((q, i) => {
+        const qText = `Q${i + 1}. ${sanitizeText(stripHtml(q.questionText))}`;
+        const options = q.options.map((opt, idx) => `${['A', 'B', 'C', 'D'][idx]}. ${sanitizeText(stripHtml(opt))}`);
+
+        // Estimated height check
+        const estimatedHeight = 10 + (options.length * 7) + 12; // +12 for Correct Answer and spacing
+        if (currentY + estimatedHeight > 270) {
+          doc.addPage();
+          currentY = 20;
+        }
+
+        doc.setFontSize(11);
+        doc.setTextColor(30, 41, 59);
+        doc.setFont("helvetica", "bold");
+
+        const splitTitle = doc.splitTextToSize(qText, pageWidth - (margin * 2));
+        doc.text(splitTitle, margin, currentY);
+        currentY += (splitTitle.length * 6) + 2;
+
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(10);
+        doc.setTextColor(71, 85, 105);
+
+        options.forEach((opt) => {
+          const splitOpt = doc.splitTextToSize(opt, pageWidth - (margin * 2) - 5);
+          doc.text(splitOpt, margin + 5, currentY);
+          currentY += (splitOpt.length * 5.5);
+        });
+
+        currentY += 2;
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(22, 163, 74);
+        doc.text(`Correct Answer: ${sanitizeText(stripHtml(q.correctAnswer))}`, margin + 5, currentY);
+        currentY += 10;
+        doc.setTextColor(0, 0, 0);
+      });
+
+      const pageCount = doc.getNumberOfPages();
+      addFooter(doc, pageCount);
+
+      doc.save(`Mock_Question_Bank_${new Date().getTime()}.pdf`);
+      toast.success("PDF Exported successfully");
+    } catch (e) {
+      console.error(e);
+      toast.error("Failed to export PDF");
+    } finally {
+      setIsExportingPDF(false);
+    }
   };
 
   const handleBulkUpdate = async () => {
@@ -691,9 +818,19 @@ export default function MockQuestionBankPage() {
             <Button size="sm" variant="ghost" className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/30" onClick={() => setIsBatchEditing(true)}>
               <Edit className="h-4 w-4 mr-1" /> Update
             </Button>
-            <Button size="sm" variant="ghost" className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/30" onClick={handleExport}>
-              <Download className="h-4 w-4 mr-1" /> Export
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button size="sm" variant="ghost" className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/30">
+                  <Download className="h-4 w-4 mr-1" /> Export
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent>
+                <DropdownMenuItem onClick={handleExportCSV}>Export as CSV</DropdownMenuItem>
+                <DropdownMenuItem onClick={handleExportPDF} disabled={isExportingPDF}>
+                  {isExportingPDF ? 'Exporting...' : 'Export as PDF'}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         )}
       </div>

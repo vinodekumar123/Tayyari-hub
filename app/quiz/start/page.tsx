@@ -16,6 +16,8 @@ import { ArrowLeft, ArrowRight, BookOpen, Flag, Save, LogOut, Loader2, Cloud, Cl
 import { toast } from 'sonner';
 import { ModeToggle } from '@/components/mode-toggle';
 import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import { addHeader, addFooter, sanitizeText } from '@/utils/pdf-style-helper';
 
 // --- Type Definitions ---
 interface Question {
@@ -605,35 +607,68 @@ const StartQuizPageContent: React.FC = () => {
   // Export functions
   const generatePDF = useCallback((withAnswers: boolean) => {
     if (!quiz) return;
-    const pdf = new jsPDF();
-    let y = 20;
-    pdf.setFontSize(18);
-    pdf.text(quiz.title, 105, y, { align: 'center' });
-    y += 15;
+    const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.width;
+    const margin = 15;
 
+    // --- Header ---
+    const extractedSubject = Array.isArray(quiz.subject)
+      ? quiz.subject.map((s: any) => s.name || s).join(', ')
+      : typeof quiz.subject === 'object'
+        ? (quiz.subject as any)?.name
+        : quiz.subject || 'General Quiz';
+
+    let currentY = addHeader(doc, quiz.title, `Subject: ${extractedSubject} | Total Questions: ${quiz.selectedQuestions.length}`);
+
+    // --- Questions ---
     quiz.selectedQuestions.forEach((q, i) => {
-      if (y > 270) {
-        pdf.addPage();
-        y = 20;
+      const qText = `Q${i + 1}. ${stripHtml(q.questionText)}`;
+      const options = q.options.map((opt, idx) => `${['A', 'B', 'C', 'D'][idx]}. ${stripHtml(opt)}`);
+
+      // Calculate height needed for question and options (rough estimate)
+      // jsPDF auto wrapping handles text, but we need to check if we should break BEFORE a question
+      const estimatedHeight = 10 + (options.length * 7) + (withAnswers ? 10 : 0);
+
+      if (currentY + estimatedHeight > 270) {
+        doc.addPage();
+        currentY = 20; // Margin on top of new page
       }
-      pdf.setFontSize(12);
-      pdf.text(`Q${i + 1}. ${stripHtml(q.questionText)}`, 10, y, { maxWidth: 180 });
-      y += 10;
-      q.options.forEach((opt, j) => {
-        const prefix = ['A', 'B', 'C', 'D'][j];
-        pdf.text(`${prefix}. ${stripHtml(opt)}`, 15, y, { maxWidth: 175 });
-        y += 7;
+
+      doc.setFontSize(12);
+      doc.setTextColor(30, 41, 59);
+      doc.setFont("helvetica", "bold");
+
+      const splitTitle = doc.splitTextToSize(qText, pageWidth - (margin * 2));
+      doc.text(splitTitle, margin, currentY);
+      currentY += (splitTitle.length * 6) + 2;
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(11);
+      doc.setTextColor(71, 85, 105);
+
+      options.forEach((opt) => {
+        const splitOpt = doc.splitTextToSize(opt, pageWidth - (margin * 2) - 5);
+        doc.text(splitOpt, margin + 5, currentY);
+        currentY += (splitOpt.length * 6);
       });
+
       if (withAnswers && q.correctAnswer) {
-        pdf.setTextColor(0, 128, 0);
-        pdf.text(`Answer: ${stripHtml(q.correctAnswer)}`, 15, y);
-        pdf.setTextColor(0, 0, 0);
-        y += 10;
+        currentY += 2;
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(22, 163, 74);
+        doc.text(`Correct Answer: ${stripHtml(q.correctAnswer)}`, margin + 5, currentY);
+        currentY += 8;
+        doc.setTextColor(0, 0, 0);
+      } else {
+        currentY += 4;
       }
-      y += 5;
     });
 
-    pdf.save(`${quiz.title}${withAnswers ? '_with_answers' : ''}.pdf`);
+    // --- Footer & Page Numbers ---
+    const pageCount = doc.getNumberOfPages();
+    addFooter(doc, pageCount);
+
+    doc.save(`${quiz.title.replace(/[^a-z0-9]/gi, '_')}${withAnswers ? '_with_answers' : ''}.pdf`);
   }, [quiz]);
 
   const generateWord = useCallback((withAnswers: boolean) => {

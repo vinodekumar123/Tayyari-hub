@@ -201,3 +201,240 @@ export async function getUniqueSubjects() {
         return { success: false, error: error.message, subjects: [] };
     }
 }
+
+/**
+ * Bulk update subject for multiple documents
+ */
+export async function bulkUpdateSubject(docIds: string[], newSubject: string) {
+    try {
+        const batch = adminDb.batch();
+        for (const docId of docIds) {
+            const docRef = adminDb.collection('knowledge_base').doc(docId);
+            batch.update(docRef, { 'metadata.subject': newSubject });
+        }
+        await batch.commit();
+        return { success: true, updated: docIds.length };
+    } catch (error: any) {
+        console.error('Bulk Update Subject Error:', error);
+        return { success: false, error: error.message };
+    }
+}
+
+/**
+ * Re-embed a document with the latest embedding model
+ */
+export async function reEmbedDocument(docId: string) {
+    try {
+        const { generateEmbedding } = await import('@/lib/gemini');
+        const { FieldValue } = await import('firebase-admin/firestore');
+
+        const docRef = adminDb.collection('knowledge_base').doc(docId);
+        const doc = await docRef.get();
+
+        if (!doc.exists) {
+            return { success: false, error: 'Document not found' };
+        }
+
+        const data = doc.data()!;
+
+        // Build embedding text
+        const textToEmbed = `
+            Subject: ${data.metadata?.subject || ''}
+            Book: ${data.metadata?.bookName || ''}
+            Chapter: ${data.metadata?.chapter || ''}
+            Content: ${data.content || ''}
+            Visuals: ${data.visual_description || ''}
+        `.trim();
+
+        const embedding = await generateEmbedding(textToEmbed);
+
+        await docRef.update({
+            embedding: FieldValue.vector(embedding),
+            'metadata.lastEmbeddedAt': new Date()
+        });
+
+        return { success: true };
+    } catch (error: any) {
+        console.error('Re-embed Error:', error);
+        return { success: false, error: error.message };
+    }
+}
+
+/**
+ * Batch re-embed multiple documents
+ */
+export async function batchReEmbed(docIds: string[]): Promise<{ success: boolean; completed: number; failed: number; error?: string }> {
+    let completed = 0;
+    let failed = 0;
+
+    try {
+        for (const docId of docIds) {
+            const result = await reEmbedDocument(docId);
+            if (result.success) {
+                completed++;
+            } else {
+                failed++;
+            }
+        }
+
+        return { success: true, completed, failed };
+    } catch (error: any) {
+        return { success: false, completed, failed, error: error.message };
+    }
+}
+
+/**
+ * Calculate quality score for a document
+ */
+export interface DocumentQuality {
+    id: string;
+    score: number; // 0-100
+    issues: string[];
+    hasContent: boolean;
+    hasVisualDesc: boolean;
+    hasEmbedding: boolean;
+    contentLength: number;
+}
+
+export async function getDocumentQuality(docId: string): Promise<{ success: boolean; quality?: DocumentQuality; error?: string }> {
+    try {
+        const doc = await adminDb.collection('knowledge_base').doc(docId).get();
+
+        if (!doc.exists) {
+            return { success: false, error: 'Document not found' };
+        }
+
+        const data = doc.data()!;
+        const issues: string[] = [];
+        let score = 100;
+
+        // Check content
+        const hasContent = !!data.content && data.content.length > 50;
+        if (!hasContent) {
+            issues.push('Content is empty or too short');
+            score -= 30;
+        }
+
+        // Check visual description
+        const hasVisualDesc = !!data.visual_description && data.visual_description.length > 20;
+        if (!hasVisualDesc) {
+            issues.push('Missing visual description');
+            score -= 10;
+        }
+
+        // Check embedding
+        const hasEmbedding = !!data.embedding && Array.isArray(data.embedding);
+        if (!hasEmbedding) {
+            issues.push('Missing embedding - document will not appear in searches');
+            score -= 40;
+        }
+
+        // Check metadata
+        if (!data.metadata?.subject || data.metadata.subject === 'Unknown') {
+            issues.push('Missing or unknown subject');
+            score -= 10;
+        }
+        if (!data.metadata?.chapter || data.metadata.chapter === 'Unknown') {
+            issues.push('Missing chapter information');
+            score -= 5;
+        }
+        if (!data.metadata?.page || data.metadata.page === 'Unknown') {
+            issues.push('Missing page number');
+            score -= 5;
+        }
+
+        return {
+            success: true,
+            quality: {
+                id: docId,
+                score: Math.max(0, score),
+                issues,
+                hasContent,
+                hasVisualDesc,
+                hasEmbedding,
+                contentLength: data.content?.length || 0
+            }
+        };
+    } catch (error: any) {
+        return { success: false, error: error.message };
+    }
+}
+
+/**
+ * Get quality summary for all documents
+ */
+export async function getKnowledgeBaseQualitySummary(): Promise<{
+    success: boolean;
+    summary?: {
+        totalDocs: number;
+        avgScore: number;
+        docsWithIssues: number;
+        commonIssues: Record<string, number>;
+    };
+    error?: string;
+}> {
+    try {
+        const allDocs = await adminDb.collection('knowledge_base').get();
+
+        let totalScore = 0;
+        let docsWithIssues = 0;
+        const issueCount: Record<string, number> = {};
+
+        for (const doc of allDocs.docs) {
+            const qualityResult = await getDocumentQuality(doc.id);
+            if (qualityResult.success && qualityResult.quality) {
+                totalScore += qualityResult.quality.score;
+                if (qualityResult.quality.issues.length > 0) {
+                    docsWithIssues++;
+                    qualityResult.quality.issues.forEach(issue => {
+                        issueCount[issue] = (issueCount[issue] || 0) + 1;
+                    });
+                }
+            }
+        }
+
+        return {
+            success: true,
+            summary: {
+                totalDocs: allDocs.size,
+                avgScore: Math.round(totalScore / allDocs.size),
+                docsWithIssues,
+                commonIssues: issueCount
+            }
+        };
+    } catch (error: any) {
+        return { success: false, error: error.message };
+    }
+}
+
+/**
+ * Export knowledge base as JSON
+ */
+export async function exportKnowledgeBase(): Promise<{ success: boolean; data?: any[]; error?: string }> {
+    try {
+        const allDocs = await adminDb.collection('knowledge_base').get();
+
+        const data = allDocs.docs.map(doc => {
+            const docData = doc.data();
+            return {
+                id: doc.id,
+                content: docData.content,
+                visual_description: docData.visual_description,
+                metadata: {
+                    subject: docData.metadata?.subject,
+                    bookName: docData.metadata?.bookName,
+                    province: docData.metadata?.province,
+                    year: docData.metadata?.year,
+                    type: docData.metadata?.type,
+                    chapter: docData.metadata?.chapter,
+                    page: docData.metadata?.page,
+                    fileName: docData.metadata?.fileName
+                }
+            };
+        });
+
+        return { success: true, data };
+    } catch (error: any) {
+        return { success: false, error: error.message };
+    }
+}

@@ -7,24 +7,49 @@ const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
 // Cache context to avoid scraping on every request
 let cachedContext: string | null = null;
 let lastCacheTime = 0;
-const CACHE_DURATION = 1000 * 60 * 60; // 1 hour cache (increased from 30 min)
+const CACHE_DURATION = 1000 * 60 * 60 * 24; // 24 hours (increased from 1 hour)
+
+// Pre-built static context for faster cold starts
+const STATIC_CONTEXT = `
+**TAYYARI HUB - QUICK FACTS:**
+- MDCAT Preparation Platform
+- Two main series: Fresher Series (new students) & Improver Series (repeaters)
+- Features: AI Tutor, Mock Tests, Question Bank, Performance Analytics
+- Contact: WhatsApp 03237507673
+
+**PRICING (Verify for latest):**
+- Fresher Series: Starting from PKR 2000
+- Improver Series: Starting from PKR 2500
+- Discounts available for early registration
+
+**SUPPORT:**
+- For account/payment issues: WhatsApp 03237507673
+- Technical support via chat
+`;
 
 async function fetchWebsiteContent(url: string): Promise<string> {
     try {
         const response = await fetch(url, {
-            next: { revalidate: 3600 }, // Cache for 1 hour
-            signal: AbortSignal.timeout(5000) // 5s timeout per request
+            next: { revalidate: 86400 }, // Cache for 24 hours
+            signal: AbortSignal.timeout(3000) // Reduced to 3s timeout
         });
-        if (!response.ok) return `[Failed to fetch ${url}]`;
+        if (!response.ok) return '';
         const html = await response.text();
-        return html.replace(/<script\b[^>]*>([\s\S]*?)<\/script>/gm, "")
-            .replace(/<style\b[^>]*>([\s\S]*?)<\/style>/gm, "")
+
+        // More efficient HTML cleaning
+        return html
+            .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gm, "")
+            .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gm, "")
+            .replace(/<nav\b[^>]*>[\s\S]*?<\/nav>/gm, "") // Remove nav
+            .replace(/<footer\b[^>]*>[\s\S]*?<\/footer>/gm, "") // Remove footer
+            .replace(/<header\b[^>]*>[\s\S]*?<\/header>/gm, "") // Remove header
             .replace(/<[^>]+>/g, ' ')
-            .replace(/\s+/g, ' ').trim()
-            .substring(0, 8000); // Reduced to 8k chars for speed
+            .replace(/\s+/g, ' ')
+            .trim()
+            .substring(0, 5000); // Reduced from 8k for speed
     } catch (error) {
         console.error(`Error fetching ${url}:`, error);
-        return `[Error accessing ${url}]`;
+        return '';
     }
 }
 
@@ -35,76 +60,66 @@ async function getMultiSiteContext() {
     }
 
     try {
-        console.log("Fetching contexts...");
-        // Fetch all pages in parallel for speed
-        const [tayyariText, medicoText, aboutText, contactText, privacyText, fresherText, improverText] = await Promise.all([
+        console.log("Fetching website contexts...");
+
+        // Fetch only essential pages in parallel
+        const results = await Promise.allSettled([
             fetchWebsiteContent('https://tayyarihub.com'),
-            fetchWebsiteContent('https://medicoengineer.com'),
-            fetchWebsiteContent('https://tayyarihub.com/about-us'),
-            fetchWebsiteContent('https://tayyarihub.com/contact-us'),
-            fetchWebsiteContent('https://tayyarihub.com/privacy-policy'),
             fetchWebsiteContent('https://tayyarihub.com/series/fresher'),
-            fetchWebsiteContent('https://tayyarihub.com/series/improver')
+            fetchWebsiteContent('https://tayyarihub.com/series/improver'),
+            fetchWebsiteContent('https://tayyarihub.com/about-us'),
         ]);
 
-        const context = `
-You are the Official AI Support Assistant for **Tayyari Hub** AND **MedicoEngineer**.
-You represent BOTH platforms.
+        const [tayyariText, fresherText, improverText, aboutText] = results.map(
+            r => r.status === 'fulfilled' ? r.value : ''
+        );
 
-**SOURCE 1: TAYYARI HUB (MDCAT/FSc Prep)**
-**Homepage (Courses, Features, Reviews, Pricing):**
-${tayyariText}
+        const context = `
+You are the Official AI Support Assistant for **Tayyari Hub**.
+
+${STATIC_CONTEXT}
+
+**LIVE WEBSITE CONTENT:**
+
+**Homepage:**
+${tayyariText.substring(0, 3000) || 'Unable to fetch - use static info above'}
 
 **Fresher Series:**
-${fresherText}
+${fresherText.substring(0, 2000) || 'Details on fresherihub.com/series/fresher'}
 
 **Improver Series:**
-${improverText}
+${improverText.substring(0, 2000) || 'Details on tayyarihub.com/series/improver'}
 
 **About Us:**
-${aboutText}
-
-**Contact Us:**
-${contactText}
-
-**Privacy Policy:**
-${privacyText}
-
-**SOURCE 2: MEDICOENGINEER (MDCAT Platform)**
-${medicoText}
+${aboutText.substring(0, 1500) || 'Pakistan\'s leading MDCAT preparation platform'}
 
 **YOUR INSTRUCTIONS:**
-1. **Role**: You are the intelligent, helpful AI Support Assistant.
-2. **Knowledge Base**: Use the content above as your source of truth.
-   - If a user asks about "MedicoEngineer", check Source 2.
-   - If a user asks about "Tayyari Hub", check Source 1.
-   - If unspecified, assume they are asking about the site they are likely on (Tayyari Hub), but you can mention the other if relevant.
-
-3. **Conversational Ability**:
-   - Be helpful, professional, and warm.
-   - You can answer greetings and follow-up questions.
+1. **Role**: Helpful AI Support Assistant for Tayyari Hub.
+2. **Knowledge Base**: Use the content above as source of truth.
+3. **Conversational Ability**: Be helpful, professional, and warm. Answer greetings naturally.
 
 4. **Logic & Reasoning (CRITICAL)**:
-   - **Think Step-by-Step**: Before answering, internally verify facts.
-   - **Math**: EXACTLY calculate discounts. 
-     - *User*: "Freshers Bundle is 2000, 30% discount pe ktna hoga?"
-     - *You*: "Original Fee: 2000. Discount: 30% (600). Final Fee: 1400."
-   - **Context Matching**: If user says "Freshers Bundle", FIND the price in the text. If text says "2000", USE IT.
+   - **Think Step-by-Step**: Before answering, verify facts.
+   - **Math**: EXACTLY calculate discounts.
+     - User: "Freshers Bundle 2000, 30% discount?"
+     - You: "Original: 2000. Discount: 30% (600). Final: 1400."
+   - **Context Matching**: If something is in the text, use that exact information.
 
 5. **Language Support (Roman Urdu)**:
-   - You MUST understand and reply in **Roman Urdu** if the user speaks it.
-   - User: "Fees ktni hai?" -> You: "Freshers Bundle ki fee 2000 hai."
-   - Keep tone helpful and natural.
+   - Understand and reply in **Roman Urdu** if user speaks it.
+   - User: "Fees ktni hai?" → You: "Freshers Bundle ki fee 2000 hai."
 
 6. **Escalation Protocol**: 
-   - For specific account/payment issues you cannot solve:
-   - **Direct to WhatsApp**: "Please contact Admin via WhatsApp at **03237507673**."
+   - For account/payment issues: "Please contact Admin via WhatsApp at **03237507673**."
 
 7. **Downloads & PDFs**:
    - If user asks for "Schedule", "Date Sheet", "PDF Download":
-   - **Ask Clarity**: "Which schedule? Fresher or Improver?"
-   - OR if unsure, APPEND: **###ACTION:DOWNLOAD_SCHEDULE_OPTIONS###**
-   - Example: "Please select which schedule you want to download below. ###ACTION:DOWNLOAD_SCHEDULE_OPTIONS###"
+   - APPEND: **###ACTION:DOWNLOAD_SCHEDULE_OPTIONS###**
+   - Example: "Please select which schedule you want below. ###ACTION:DOWNLOAD_SCHEDULE_OPTIONS###"
+
+8. **Suggested Actions**:
+   - End responses with helpful next steps when appropriate.
+   - Example: "Would you like to know about pricing or course features?"
 `;
         cachedContext = context;
         lastCacheTime = now;
@@ -112,7 +127,8 @@ ${medicoText}
 
     } catch (error) {
         console.error("Context Gen Error:", error);
-        return "I am unable to access the websites right now. Please contact WhatsApp 03237507673.";
+        // Return static context as fallback
+        return `You are Tayyari Hub's AI Assistant. ${STATIC_CONTEXT} For detailed info, please visit tayyarihub.com or WhatsApp 03237507673.`;
     }
 }
 
@@ -135,8 +151,8 @@ export async function POST(req: NextRequest) {
         const chat = model.startChat({
             history: [
                 { role: 'user', parts: [{ text: systemPrompt }] },
-                { role: 'model', parts: [{ text: "Understood. I will use the context from both Tayyari Hub and MedicoEngineer to assist the user." }] },
-                ...chatHistory.slice(-4) // Keep last 4 for speed
+                { role: 'model', parts: [{ text: "Understood. I'll help users with Tayyari Hub information." }] },
+                ...chatHistory.slice(-6) // Increased to 6 for better context
             ]
         });
 

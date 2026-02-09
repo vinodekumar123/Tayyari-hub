@@ -12,8 +12,11 @@ import {
     ArrowRight,
     Database,
     Plus,
-    Trash2
+    Trash2,
+    Copy,
+    CheckSquare
 } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
 import Papa from 'papaparse';
 import { Button } from '@/components/ui/button';
 import {
@@ -74,6 +77,7 @@ export function CsvImporter({
     const [validationErrors, setValidationErrors] = useState<{ row: number, error: string }[]>([]);
     const [isImporting, setIsImporting] = useState(false);
     const [editingRow, setEditingRow] = useState<{ index: number, data: any } | null>(null);
+    const [selectedRows, setSelectedRows] = useState<Set<number>>(new Set());
 
     const fileInputRef = useRef<HTMLInputElement>(null);
     const loadedRef = useRef(false);
@@ -133,6 +137,7 @@ export function CsvImporter({
         setValidationErrors([]);
         setIsImporting(false);
         setEditingRow(null);
+        setSelectedRows(new Set());
     };
 
     const handleClose = () => {
@@ -204,6 +209,75 @@ export function CsvImporter({
 
         // Reset input
         if (fileInputRef.current) fileInputRef.current.value = '';
+    };
+
+    // Selection Helpers
+    const toggleSelectAll = () => {
+        if (selectedRows.size === csvData.length) {
+            setSelectedRows(new Set());
+        } else {
+            setSelectedRows(new Set(csvData.map((_, i) => i)));
+        }
+    };
+
+    const toggleSelectRow = (index: number) => {
+        const next = new Set(selectedRows);
+        if (next.has(index)) {
+            next.delete(index);
+        } else {
+            next.add(index);
+        }
+        setSelectedRows(next);
+    };
+
+    const handleDuplicateSelected = () => {
+        if (selectedRows.size === 0) return;
+
+        const sortedIndices = Array.from(selectedRows).sort((a, b) => b - a); // Descending
+        const updatedData = [...csvData];
+
+        // Process in reverse to maintain indices while inserting right after the original row
+        sortedIndices.forEach(idx => {
+            updatedData.splice(idx + 1, 0, { ...csvData[idx] });
+        });
+
+        setCsvData(updatedData);
+        revalidateAll(updatedData);
+        setSelectedRows(new Set());
+        toast.success(`Duplicated ${sortedIndices.length} questions`);
+    };
+
+    const handleDeleteSelected = () => {
+        if (selectedRows.size === 0) return;
+
+        const updatedData = csvData.filter((_, i) => !selectedRows.has(i));
+        setCsvData(updatedData);
+        revalidateAll(updatedData);
+        setSelectedRows(new Set());
+        toast.success(`Deleted ${selectedRows.size} questions`);
+    };
+
+    const handleDeduplicate = () => {
+        const seen = new Map<string, number>();
+        const duplicates = new Set<number>();
+
+        csvData.forEach((row, i) => {
+            const text = (row.questionText || '').trim().toLowerCase();
+            if (!text) return;
+
+            if (seen.has(text)) {
+                duplicates.add(i);
+            } else {
+                seen.set(text, i);
+            }
+        });
+
+        if (duplicates.size === 0) {
+            toast.info("No duplicate questions found.");
+        } else {
+            setSelectedRows(duplicates);
+            toast.success(`Found and selected ${duplicates.size} duplicate questions.`);
+        }
     };
 
     const handleFinalImport = async () => {
@@ -338,13 +412,19 @@ export function CsvImporter({
                                     <Table>
                                         <TableHeader>
                                             <TableRow>
+                                                <TableHead className="w-[40px]">
+                                                    <Checkbox
+                                                        checked={selectedRows.size === csvData.length && csvData.length > 0}
+                                                        onCheckedChange={toggleSelectAll}
+                                                    />
+                                                </TableHead>
                                                 <TableHead className="w-[50px]">#</TableHead>
                                                 <TableHead className="min-w-[200px]">Question</TableHead>
                                                 <TableHead className="min-w-[150px]">Options</TableHead>
                                                 <TableHead className="w-[100px]">Correct</TableHead>
                                                 <TableHead className="w-[100px]">Difficulty</TableHead>
                                                 <TableHead className="w-[100px]">Status</TableHead>
-                                                <TableHead className="w-[50px]"></TableHead>
+                                                <TableHead className="w-[80px]">Actions</TableHead>
                                             </TableRow>
                                         </TableHeader>
                                         <TableBody>
@@ -355,7 +435,16 @@ export function CsvImporter({
                                                 const optionsDisplay = optionKeys.map(k => row[k]).filter(Boolean).join(', ');
 
                                                 return (
-                                                    <TableRow key={i} className={error ? "bg-red-50/50 dark:bg-red-900/10 hover:bg-red-100/50" : ""}>
+                                                    <TableRow key={i} className={cn(
+                                                        error ? "bg-red-50/50 dark:bg-red-900/10 hover:bg-red-100/50" : "",
+                                                        selectedRows.has(i) && "bg-primary/5 dark:bg-primary/10"
+                                                    )}>
+                                                        <TableCell>
+                                                            <Checkbox
+                                                                checked={selectedRows.has(i)}
+                                                                onCheckedChange={() => toggleSelectRow(i)}
+                                                            />
+                                                        </TableCell>
                                                         <TableCell className="text-xs text-muted-foreground">{i + 1}</TableCell>
                                                         <TableCell className="max-w-[400px]">
                                                             <div className="whitespace-pre-wrap font-medium pr-2">{row.questionText}</div>
@@ -382,14 +471,30 @@ export function CsvImporter({
                                                             )}
                                                         </TableCell>
                                                         <TableCell>
-                                                            <Button
-                                                                variant="ghost"
-                                                                size="sm"
-                                                                className="h-8 w-8 p-0"
-                                                                onClick={() => setEditingRow({ index: i, data: { ...row } })}
-                                                            >
-                                                                <FileText className="w-4 h-4 text-muted-foreground hover:text-foreground" />
-                                                            </Button>
+                                                            <div className="flex items-center gap-1">
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="sm"
+                                                                    className="h-8 w-8 p-0"
+                                                                    onClick={() => setEditingRow({ index: i, data: { ...row } })}
+                                                                >
+                                                                    <FileText className="w-4 h-4 text-muted-foreground hover:text-foreground" />
+                                                                </Button>
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="sm"
+                                                                    className="h-8 w-8 p-0"
+                                                                    onClick={() => {
+                                                                        const updatedData = [...csvData];
+                                                                        updatedData.splice(i + 1, 0, { ...row });
+                                                                        setCsvData(updatedData);
+                                                                        revalidateAll(updatedData);
+                                                                        toast.success("Row duplicated");
+                                                                    }}
+                                                                >
+                                                                    <Copy className="w-4 h-4 text-muted-foreground hover:text-foreground" />
+                                                                </Button>
+                                                            </div>
                                                         </TableCell>
                                                     </TableRow>
                                                 );
@@ -418,18 +523,48 @@ export function CsvImporter({
                         <Button variant="ghost" onClick={handleClose}>Cancel</Button>
                     ) : (
                         <div className="flex justify-between w-full items-center">
-                            <Button variant="ghost" onClick={() => setStep('upload')}>
-                                Change File
-                            </Button>
+                            <div className="flex gap-2">
+                                <Button variant="ghost" size="sm" onClick={() => setStep('upload')}>
+                                    Change File
+                                </Button>
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={handleDeduplicate}
+                                    className="text-orange-600 hover:text-orange-700 hover:bg-orange-50 gap-1.5"
+                                >
+                                    <CheckSquare className="w-3.5 h-3.5" /> Auto-Select Duplicates
+                                </Button>
+                                {selectedRows.size > 0 && (
+                                    <div className="flex items-center gap-1 border-l pl-2 animate-in fade-in slide-in-from-left-2">
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={handleDuplicateSelected}
+                                            className="h-8 gap-1.5 text-xs text-blue-600 border-blue-200 bg-blue-50/50 hover:bg-blue-100 dark:bg-blue-900/20 dark:border-blue-800 dark:text-blue-400"
+                                        >
+                                            <Copy className="w-3.5 h-3.5" /> Duplicate ({selectedRows.size})
+                                        </Button>
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={handleDeleteSelected}
+                                            className="h-8 gap-1.5 text-xs text-red-600 border-red-200 bg-red-50/50 hover:bg-red-100 dark:bg-red-900/20 dark:border-red-800 dark:text-red-400"
+                                        >
+                                            <Trash2 className="w-3.5 h-3.5" /> Delete ({selectedRows.size})
+                                        </Button>
+                                    </div>
+                                )}
+                            </div>
                             <div className="flex gap-2">
                                 <Button variant="outline" onClick={handleClose}>Cancel</Button>
                                 <Button
                                     onClick={handleFinalImport}
-                                    disabled={validationErrors.length > 0 || isImporting}
-                                    className={cn(validationErrors.length > 0 && "opacity-50 cursor-not-allowed")}
+                                    disabled={validationErrors.length > 0 || isImporting || csvData.length === 0}
+                                    className={cn(validationErrors.length > 0 && "opacity-50 cursor-not-allowed", "min-w-[140px]")}
                                 >
                                     {isImporting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Database className="w-4 h-4 mr-2" />}
-                                    Import {validCount} Questions
+                                    Import {csvData.length} Questions
                                 </Button>
                             </div>
                         </div>

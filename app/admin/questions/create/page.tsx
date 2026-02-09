@@ -378,6 +378,18 @@ const CreateQuestionPageContent = () => {
     toast.success("Question applied to form!");
   };
 
+  const syncToAlgolia = async (id: string, data: any, type: 'official' | 'mock' = 'official') => {
+    try {
+      await fetch('/api/admin/sync-algolia', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ questionId: id, data, type })
+      });
+    } catch (e) {
+      console.error('Algolia sync failed', e);
+    }
+  };
+
   const handleSubmit = async () => {
     // Validation
     if (!questionText || !correctAnswer || options.some(o => !o) || !subject || !selectedCourse) {
@@ -416,14 +428,16 @@ const CreateQuestionPageContent = () => {
       if (isEditMode && questionId) {
         // Update
         await updateDoc(doc(db, 'questions', questionId), payload);
+        await syncToAlgolia(questionId, payload);
         toast.success("Question updated successfully!");
         // Don't clear form on edit, maybe redirect or stay
       } else {
         // Create
-        await addDoc(collection(db, 'questions'), {
+        const docRef = await addDoc(collection(db, 'questions'), {
           ...payload,
           createdAt: serverTimestamp(),
         });
+        await syncToAlgolia(docRef.id, payload);
         toast.success("Question created successfully!");
         // Reset form
         setQuestionText('');
@@ -522,7 +536,7 @@ const CreateQuestionPageContent = () => {
       if (!db) throw new Error("Firestore DB not initialized");
       const batch = writeBatch(db);
 
-      importedData.forEach((row) => {
+      for (const row of importedData) {
         // Image Handling from raw CSV row, if CsvImporter passes it
         let questionText = row.questionText;
         if (row.imageUrl || row.image) {
@@ -570,8 +584,9 @@ const CreateQuestionPageContent = () => {
         };
         const newDocRef = doc(collection(db, 'questions'));
         batch.set(newDocRef, data);
+        await syncToAlgolia(newDocRef.id, data);
         successCount++;
-      });
+      }
 
       await batch.commit();
       toast.success(`Successfully imported ${successCount} questions!`);

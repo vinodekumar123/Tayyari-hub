@@ -20,6 +20,27 @@ import { HelpChatWidget } from '@/components/HelpChatWidget';
 
 const inter = Inter({ subsets: ['latin'] });
 
+export const metadata: Metadata = {
+  title: {
+    default: 'TayyariHub',
+    template: '%s | TayyariHub'
+  },
+  description: 'Elevate your performance with TayyariHub - The ultimate entry test companion.',
+  manifest: '/manifest.json', // Manifest generated at build or served
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'default',
+    title: 'TayyariHub',
+  },
+  formatDetection: {
+    telephone: false,
+  },
+}
+
+export const viewport = {
+  themeColor: '#2563eb',
+}
+
 
 
 export default function RootLayout({

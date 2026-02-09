@@ -57,7 +57,7 @@ export function Sidebar() {
   const collapsed = sidebarCollapsed;
   const setCollapsed = setSidebarCollapsed;
 
-  const [expandedSections, setExpandedSections] = useState<string[]>(['main', 'content', 'users', 'settings', 'student', 'main_nav', 'learning', 'practice', 'community', 'performance', 'account']);
+  const [expandedSections, setExpandedSections] = useState<string[]>(['main', 'content', 'users', 'ai', 'settings', 'student', 'main_nav', 'learning', 'practice', 'community', 'performance', 'account']);
   // removed local state for collapsed and mobileOpen
   const [showSignOutDialog, setShowSignOutDialog] = useState(false);
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
@@ -144,11 +144,19 @@ export function Sidebar() {
         { icon: ArrowLeftRight, label: 'Sync Questions', href: '/admin/sync' },
         { icon: Trophy, label: 'Quizzes', href: '/admin/quizzes/quizebank' },
         { icon: Plus, label: 'Create Quiz', href: '/admin/quizzes/create' },
-        { icon: BrainCircuit, label: 'AI Auto-Tagger', href: '/admin/questions/auto-tagger' },
         { icon: BookOpen, label: 'Knowledge Base', href: '/admin/knowledge-base' },
         { icon: Database, label: 'Manage KB', href: '/admin/knowledge-base/manage' },
-        { icon: BrainCircuit, label: 'AI Tutor Test', href: '/admin/ai-tutor-test' },
         { icon: Flag, label: 'Reported Questions', href: '/admin/reports' },
+      ],
+    },
+    // AI Tools Section
+    {
+      section: 'ai',
+      title: 'AI Intelligence Hub',
+      items: [
+        { icon: BrainCircuit, label: 'Repeated Questions', href: '/admin/mockquestions/find-repeated' },
+        { icon: BrainCircuit, label: 'AI Auto-Tagger', href: '/admin/questions/auto-tagger' },
+        { icon: BrainCircuit, label: 'AI Tutor Test', href: '/admin/ai-tutor-test' },
       ],
     },
     // User Management: Admin/SuperAdmin only
