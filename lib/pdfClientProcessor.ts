@@ -155,7 +155,7 @@ export async function splitPdfByRanges(file: File, ranges: ChapterRange[]): Prom
             copiedPages.forEach(page => subDoc.addPage(page));
 
             const pdfBytes = await subDoc.save();
-            const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+            const blob = new Blob([pdfBytes as any], { type: 'application/pdf' });
 
             // Sanitize filename
             const cleanName = range.name.replace(/[^a-z0-9]/gi, '_').toLowerCase();
