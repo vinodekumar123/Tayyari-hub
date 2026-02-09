@@ -1,5 +1,8 @@
 'use client';
 
+// Prevent static generation - this page requires auth and runtime data
+export const dynamic = 'force-dynamic';
+
 import { useEffect, useState } from 'react';
 import { getAuth, onAuthStateChanged } from 'firebase/auth';
 import {
