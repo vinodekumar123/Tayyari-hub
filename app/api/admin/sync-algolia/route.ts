@@ -1,6 +1,6 @@
 
 import { NextRequest, NextResponse } from 'next/server';
-import { adminClient, QUESTIONS_INDEX, MOCK_QUESTIONS_INDEX } from '@/lib/algolia-admin';
+import { getAdminClient, QUESTIONS_INDEX, MOCK_QUESTIONS_INDEX } from '@/lib/algolia-admin';
 
 // Force dynamic to prevent build-time evaluation
 export const dynamic = 'force-dynamic';
@@ -17,7 +17,7 @@ export async function POST(request: NextRequest) {
         const ids = questionIds || [questionId];
 
         if (action === 'delete') {
-            await adminClient.deleteObjects({
+            await getAdminClient().deleteObjects({
                 indexName,
                 objectIDs: ids
             });
@@ -44,7 +44,7 @@ export async function POST(request: NextRequest) {
                 updatedAt: Date.now()
             };
 
-            await adminClient.saveObjects({
+            await getAdminClient().saveObjects({
                 indexName,
                 objects: [record]
             });
@@ -59,7 +59,7 @@ export async function POST(request: NextRequest) {
                 isDeleted: action === 'soft-delete'
             }));
 
-            await adminClient.partialUpdateObjects({
+            await getAdminClient().partialUpdateObjects({
                 indexName,
                 objects,
                 createIfNotExists: false
