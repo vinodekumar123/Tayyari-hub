@@ -15,27 +15,33 @@ const firebaseConfig = {
   measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID,
 };
 
-// ✅ Prevent multiple instances in Next.js/React
-const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
+// Check if required Firebase config is present
+const hasValidConfig = !!(
+  firebaseConfig.apiKey &&
+  firebaseConfig.appId &&
+  firebaseConfig.projectId
+);
 
 // 🔑 Firebase services
+let app: any = null;
 let auth: any;
 let db: any;
 let storage: any;
 
-if (!process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
-  console.warn("⚠️ NEXT_PUBLIC_FIREBASE_API_KEY is missing. Firebase services will be mocked to prevent build crash.");
+if (!hasValidConfig) {
+  console.warn("⚠️ Firebase config is incomplete. Firebase services will be mocked to prevent build crash.");
   const mockService = {
     currentUser: null,
     onAuthStateChanged: () => () => { },
-    signInWithPopup: () => Promise.reject("Missing Firebase Key"),
+    signInWithPopup: () => Promise.reject("Missing Firebase Config"),
     signOut: () => Promise.resolve(),
-    // Add other methods as needed to satisfy direct access during build
   } as any;
   auth = mockService;
-  db = {} as any; // Mock DB to prevent immediate crash, though queries will fail if run
+  db = {} as any;
   storage = {} as any;
 } else {
+  // ✅ Prevent multiple instances in Next.js/React
+  app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
   auth = getAuth(app);
   db = getFirestore(app);
   // Enable ignoreUndefinedProperties to prevent crashes when saving objects with undefined fields
@@ -49,7 +55,7 @@ const provider = new GoogleAuthProvider();
 // Initialize Messaging only on client side
 // Initialize Messaging only on client side
 let messaging: any = null;
-if (typeof window !== 'undefined') {
+if (typeof window !== 'undefined' && app) {
   import('firebase/messaging').then(async ({ getMessaging, isSupported }) => {
     try {
       if (await isSupported()) {
