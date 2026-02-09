@@ -29,7 +29,15 @@ let db: any;
 let storage: any;
 
 if (!hasValidConfig) {
-  console.warn("⚠️ Firebase config is incomplete. Firebase services will be mocked to prevent build crash.");
+  // Only log warning in browser (not during build/SSR)
+  if (typeof window !== 'undefined') {
+    console.warn("⚠️ Firebase config is incomplete. Firebase services will be mocked.");
+    console.warn("Missing config:", {
+      apiKey: !!firebaseConfig.apiKey,
+      appId: !!firebaseConfig.appId,
+      projectId: !!firebaseConfig.projectId
+    });
+  }
   const mockService = {
     currentUser: null,
     onAuthStateChanged: () => () => { },
