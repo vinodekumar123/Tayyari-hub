@@ -123,7 +123,9 @@ export async function saveToKnowledgeBase(data: SaveRequest) {
     `.trim();
 
         const embeddingResult = await geminiEmbeddingModel.embedContent(textToEmbed);
-        const vector = embeddingResult.embedding.values;
+        // Truncate to 2048 dimensions (Firestore limit) - gemini-embedding-001 outputs 3072
+        const fullVector = embeddingResult.embedding.values;
+        const vector = fullVector.slice(0, 2048);
 
         const docRef = await adminDb.collection('knowledge_base').add({
             content: text,

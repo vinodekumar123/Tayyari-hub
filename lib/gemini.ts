@@ -15,5 +15,6 @@ export const geminiEmbeddingModel = genAI.getGenerativeModel({ model: "gemini-em
 export async function generateEmbedding(text: string) {
     if (!text) return [];
     const result = await geminiEmbeddingModel.embedContent(text);
-    return result.embedding.values;
+    // Truncate to 2048 dimensions (Firestore limit) - gemini-embedding-001 outputs 3072
+    return result.embedding.values.slice(0, 2048);
 }
