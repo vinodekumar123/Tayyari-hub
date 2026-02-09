@@ -2,6 +2,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminClient, QUESTIONS_INDEX, MOCK_QUESTIONS_INDEX } from '@/lib/algolia-admin';
 
+// Force dynamic to prevent build-time evaluation
+export const dynamic = 'force-dynamic';
+
 export async function POST(request: NextRequest) {
     try {
         const { questionId, questionIds, data, type, action } = await request.json();
