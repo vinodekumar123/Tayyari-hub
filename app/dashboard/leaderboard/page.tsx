@@ -99,8 +99,8 @@ export default function LeaderboardPage() {
     };
 
     const getRowStyle = (rank: number, isCurrentUser: boolean) => {
-        let base = "transition-all duration-200 border-b border-white/5 last:border-0 hover:bg-white/5 ";
-        if (isCurrentUser) return base + "bg-indigo-500/10 border-l-4 border-l-indigo-500";
+        let base = "transition-all duration-200 border-b border-border last:border-0 hover:bg-muted/50 ";
+        if (isCurrentUser) return base + "bg-primary/10 border-l-4 border-l-primary";
         if (rank === 1) return base + "bg-yellow-500/5 hover:bg-yellow-500/10";
         if (rank === 2) return base + "bg-slate-500/5 hover:bg-slate-500/10";
         if (rank === 3) return base + "bg-amber-500/5 hover:bg-amber-500/10";
@@ -131,7 +131,7 @@ export default function LeaderboardPage() {
                     </div>
                 </div>
                 <div className="text-center">
-                    <p className="font-bold text-slate-100 truncate max-w-[120px]">{student.fullName}</p>
+                    <p className="font-bold text-foreground truncate max-w-[120px]">{student.fullName}</p>
                     <p className={`text-sm font-medium text-${color}-400`}>{student.totalScore} pts</p>
                 </div>
             </motion.div>
@@ -140,7 +140,7 @@ export default function LeaderboardPage() {
         return (
             <div className="flex justify-center items-end gap-4 md:gap-12 py-8 mb-8 relative">
                 {/* Spotlight Effect */}
-                <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-full max-w-lg bg-gradient-to-b from-indigo-500/10 to-transparent rounded-full blur-3xl pointer-events-none"></div>
+                <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-full max-w-lg bg-gradient-to-b from-primary/10 to-transparent rounded-full blur-3xl pointer-events-none"></div>
 
                 {/* 2nd Place */}
                 <div className="order-1 md:order-1 mb-4">
@@ -161,7 +161,7 @@ export default function LeaderboardPage() {
     };
 
     return (
-        <div className="min-h-screen bg-slate-950 text-slate-100 pb-20">
+        <div className="min-h-screen bg-background text-foreground pb-20">
             {/* Unified Header with custom background blending */}
             <div className="relative z-10">
                 <UnifiedHeader
@@ -173,7 +173,7 @@ export default function LeaderboardPage() {
 
             {/* Background elements */}
             <div className="fixed inset-0 overflow-hidden pointer-events-none">
-                <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] bg-indigo-600/20 rounded-full blur-[100px]"></div>
+                <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] bg-primary/20 rounded-full blur-[100px]"></div>
                 <div className="absolute bottom-[-10%] right-[-10%] w-[500px] h-[500px] bg-blue-600/20 rounded-full blur-[100px]"></div>
             </div>
 
@@ -192,10 +192,10 @@ export default function LeaderboardPage() {
                 {/* Loading State */}
                 {loading ? (
                     <div className="space-y-6">
-                        <Skeleton className="h-64 w-full rounded-3xl bg-slate-800/50" />
+                        <Skeleton className="h-64 w-full rounded-3xl bg-muted" />
                         <div className="space-y-4">
                             {[1, 2, 3, 4, 5].map((i) => (
-                                <Skeleton key={i} className="h-20 w-full rounded-xl bg-slate-800/50" />
+                                <Skeleton key={i} className="h-20 w-full rounded-xl bg-muted" />
                             ))}
                         </div>
                     </div>
@@ -205,30 +205,30 @@ export default function LeaderboardPage() {
                         {!searchQuery && leaders.length >= 3 && <Podium />}
 
                         {/* Search & Stats Bar */}
-                        <div className="flex flex-col md:flex-row gap-4 mb-6 sticky top-20 z-40 bg-slate-950/80 backdrop-blur-md p-4 rounded-2xl border border-white/5">
+                        <div className="flex flex-col md:flex-row gap-4 mb-6 sticky top-20 z-40 bg-background/80 backdrop-blur-md p-4 rounded-2xl border border-border shadow-sm">
                             <div className="relative flex-1">
-                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 h-4 w-4" />
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground h-4 w-4" />
                                 <Input
                                     placeholder="Search for a student..."
                                     value={searchQuery}
                                     onChange={(e) => setSearchQuery(e.target.value)}
-                                    className="pl-10 bg-slate-900/50 border-white/10 text-slate-100 placeholder:text-slate-500 focus:ring-indigo-500"
+                                    className="pl-10 bg-muted/50 border-input text-foreground placeholder:text-muted-foreground focus:ring-primary"
                                 />
                             </div>
 
                             {/* User Mini Stat (Mobile sticky fallback or additional info) */}
                             {user && userRank && (
-                                <div className="flex items-center gap-4 px-4 py-2 bg-indigo-600/10 border border-indigo-500/20 rounded-xl">
+                                <div className="flex items-center gap-4 px-4 py-2 bg-primary/10 border border-primary/20 rounded-xl">
                                     <div className="flex flex-col">
-                                        <span className="text-xs text-indigo-300 font-bold uppercase tracking-wider">Your Rank</span>
+                                        <span className="text-xs text-primary font-bold uppercase tracking-wider">Your Rank</span>
                                         <div className="flex items-baseline gap-1">
-                                            <span className="text-lg font-black text-indigo-400">#{userRank}</span>
+                                            <span className="text-lg font-black text-primary">#{userRank}</span>
                                         </div>
                                     </div>
-                                    <div className="h-8 w-[1px] bg-indigo-500/20"></div>
+                                    <div className="h-8 w-[1px] bg-primary/20"></div>
                                     <div className="flex flex-col">
-                                        <span className="text-xs text-indigo-300 font-bold uppercase tracking-wider">Score</span>
-                                        <span className="text-lg font-bold text-white">{leaders.find(l => l.uid === user.uid)?.totalScore || 0}</span>
+                                        <span className="text-xs text-primary font-bold uppercase tracking-wider">Score</span>
+                                        <span className="text-lg font-bold text-foreground">{leaders.find(l => l.uid === user.uid)?.totalScore || 0}</span>
                                     </div>
                                 </div>
                             )}
@@ -244,26 +244,26 @@ export default function LeaderboardPage() {
                                     exit={{ opacity: 0, scale: 0.95 }}
                                     transition={{ duration: 0.2, delay: index * 0.05 }}
                                 >
-                                    <div className={`rounded-xl border-none shadow-lg backdrop-blur-xl ${student.uid === user?.uid ? 'bg-indigo-600/20 border border-indigo-500/30 ring-1 ring-indigo-500/50' : 'bg-slate-900/60 border border-white/5'}`}>
+                                    <div className={`rounded-xl border shadow-lg backdrop-blur-xl ${student.uid === user?.uid ? 'bg-primary/10 border-primary/50' : 'bg-card/50 border-border'}`}>
                                         <div className="p-4 flex items-center justify-between">
                                             <div className="flex items-center gap-4">
                                                 <div className="flex flex-col items-center justify-center w-8">
                                                     {getRankIcon(student.rank)}
                                                 </div>
-                                                <Avatar className="h-12 w-12 border-2 border-white/10">
+                                                <Avatar className="h-12 w-12 border-2 border-border/50">
                                                     <AvatarImage src={student.profileImage} />
                                                     <AvatarFallback>{student.fullName?.[0]}</AvatarFallback>
                                                 </Avatar>
                                                 <div>
-                                                    <h3 className={`font-bold ${student.uid === user?.uid ? 'text-indigo-300' : 'text-slate-200'}`}>
+                                                    <h3 className={`font-bold ${student.uid === user?.uid ? 'text-primary' : 'text-foreground'}`}>
                                                         {student.fullName}
                                                     </h3>
-                                                    <p className="text-xs text-slate-500">{student.quizzesTaken} Quizzes • {student.accuracy}% Acc</p>
+                                                    <p className="text-xs text-muted-foreground">{student.quizzesTaken} Quizzes • {student.accuracy}% Acc</p>
                                                 </div>
                                             </div>
                                             <div className="text-right">
-                                                <span className="block text-xl font-black text-white">{student.totalScore}</span>
-                                                <span className="text-[10px] uppercase tracking-wider text-slate-500 font-bold">Points</span>
+                                                <span className="block text-xl font-black text-foreground">{student.totalScore}</span>
+                                                <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold">Points</span>
                                             </div>
                                         </div>
                                     </div>
@@ -271,22 +271,22 @@ export default function LeaderboardPage() {
                             ))}
 
                             {filteredLeaders.length === 0 && (
-                                <div className="text-center py-12 text-slate-500">
+                                <div className="text-center py-12 text-muted-foreground">
                                     <p>No students found matching &quot;{searchQuery}&quot;</p>
                                 </div>
                             )}
                         </div>
 
                         {/* Desktop: Table View */}
-                        <div className="hidden md:block rounded-2xl overflow-hidden border border-white/5 bg-slate-900/40 backdrop-blur-xl shadow-2xl">
+                        <div className="hidden md:block rounded-2xl overflow-hidden border border-border bg-card/40 backdrop-blur-xl shadow-sm">
                             <Table>
                                 <TableHeader>
-                                    <TableRow className="border-b border-white/5 hover:bg-transparent">
-                                        <TableHead className="w-[80px] text-center text-slate-400 font-bold">Rank</TableHead>
-                                        <TableHead className="text-slate-400 font-bold">Student</TableHead>
-                                        <TableHead className="text-right text-slate-400 font-bold">Quizzes</TableHead>
-                                        <TableHead className="text-right text-slate-400 font-bold">Accuracy</TableHead>
-                                        <TableHead className="text-right pr-8 text-slate-400 font-bold">Total Score</TableHead>
+                                    <TableRow className="border-b border-border hover:bg-transparent">
+                                        <TableHead className="w-[80px] text-center text-muted-foreground font-bold">Rank</TableHead>
+                                        <TableHead className="text-muted-foreground font-bold">Student</TableHead>
+                                        <TableHead className="text-right text-muted-foreground font-bold">Quizzes</TableHead>
+                                        <TableHead className="text-right text-muted-foreground font-bold">Accuracy</TableHead>
+                                        <TableHead className="text-right pr-8 text-muted-foreground font-bold">Total Score</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
@@ -304,38 +304,38 @@ export default function LeaderboardPage() {
                                             </TableCell>
                                             <TableCell className="py-4">
                                                 <div className="flex items-center gap-3">
-                                                    <Avatar className="h-10 w-10 border border-white/10">
+                                                    <Avatar className="h-10 w-10 border border-border/50">
                                                         <AvatarImage src={student.profileImage} />
-                                                        <AvatarFallback className="bg-slate-800 text-slate-200 font-bold">
+                                                        <AvatarFallback className="bg-muted text-muted-foreground font-bold">
                                                             {student.fullName?.[0]}
                                                         </AvatarFallback>
                                                     </Avatar>
                                                     <div className="flex flex-col">
-                                                        <span className={`font-medium ${student.uid === user?.uid ? 'text-indigo-300' : 'text-slate-200'}`}>
+                                                        <span className={`font-medium ${student.uid === user?.uid ? 'text-primary' : 'text-foreground'}`}>
                                                             {student.fullName}
                                                         </span>
-                                                        {student.uid === user?.uid && <Badge variant="secondary" className="w-fit text-[10px] h-4 px-1 mt-1 bg-indigo-500/20 text-indigo-300 pointer-events-none">YOU</Badge>}
+                                                        {student.uid === user?.uid && <Badge variant="secondary" className="w-fit text-[10px] h-4 px-1 mt-1 bg-primary/20 text-primary pointer-events-none">YOU</Badge>}
                                                     </div>
                                                 </div>
                                             </TableCell>
-                                            <TableCell className="text-right py-4 text-slate-400 font-medium">
+                                            <TableCell className="text-right py-4 text-muted-foreground font-medium">
                                                 <div className="flex items-center justify-end gap-2">
-                                                    <BookOpen className="w-4 h-4 text-slate-600" />
+                                                    <BookOpen className="w-4 h-4 text-muted-foreground" />
                                                     {student.quizzesTaken}
                                                 </div>
                                             </TableCell>
                                             <TableCell className="text-right py-4">
                                                 <div className="flex items-center justify-end gap-2">
-                                                    <Target className="w-4 h-4 text-slate-600" />
-                                                    <span className={`${student.accuracy >= 80 ? 'text-green-400' : 'text-slate-400'}`}>
+                                                    <Target className="w-4 h-4 text-muted-foreground" />
+                                                    <span className={`${student.accuracy >= 80 ? 'text-green-500' : 'text-muted-foreground'}`}>
                                                         {student.accuracy}%
                                                     </span>
                                                 </div>
                                             </TableCell>
                                             <TableCell className="text-right pr-8 py-4">
                                                 <div className="flex items-center justify-end gap-2">
-                                                    <TrendingUp className="w-4 h-4 text-slate-600" />
-                                                    <span className="font-black text-lg text-white">{student.totalScore}</span>
+                                                    <TrendingUp className="w-4 h-4 text-muted-foreground" />
+                                                    <span className="font-black text-lg text-foreground">{student.totalScore}</span>
                                                 </div>
                                             </TableCell>
                                         </motion.tr>
@@ -343,7 +343,7 @@ export default function LeaderboardPage() {
 
                                     {filteredLeaders.length === 0 && (
                                         <TableRow>
-                                            <TableCell colSpan={5} className="text-center py-12 text-slate-500">
+                                            <TableCell colSpan={5} className="text-center py-12 text-muted-foreground">
                                                 No results found.
                                             </TableCell>
                                         </TableRow>
