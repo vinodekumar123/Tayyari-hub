@@ -28,7 +28,7 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Flag, Eye, MessageSquare, Check, X, FolderOpen, BookOpen, Layers, CheckCircle, Calendar, Filter, User as UserIcon, AlertCircle, BarChart3, Search } from 'lucide-react';
+import { Flag, Eye, MessageSquare, Check, X, FolderOpen, BookOpen, Layers, CheckCircle, Calendar, Filter, User as UserIcon, AlertCircle, BarChart3, Search, Edit } from 'lucide-react';
 import { format, subDays, isWithinInterval, startOfDay, endOfDay } from 'date-fns';
 import { toast } from 'sonner';
 import { glassmorphism, brandColors } from '@/lib/design-tokens';
@@ -155,7 +155,7 @@ export default function AdminReportsPage() {
     // I will include the caching and other useEffects.
 
     // ... Caching Logic Re-implementation ...
-    const [questionsCache, setQuestionsCache] = useState<Record<string, { subject: string; topic?: string }>>({});
+    const [questionsCache, setQuestionsCache] = useState<Record<string, { subject: string; topic?: string; questionType: 'question_bank' | 'mock_question' }>>({});
 
     useEffect(() => {
         const fetchMissingSubjects = async () => {
@@ -172,17 +172,30 @@ export default function AdminReportsPage() {
             for (let i = 0; i < uniqueMissingIds.length; i += chunkSize) {
                 const chunk = uniqueMissingIds.slice(i, i + chunkSize);
                 try {
+                    // Try questions collection first
                     const qQuestions = query(collection(db, 'questions'), where(documentId(), 'in', chunk));
                     const snap = await getDocs(qQuestions);
 
-                    const newCache: Record<string, { subject: string; topic?: string }> = {};
+                    const newCache: Record<string, { subject: string; topic?: string; questionType: 'question_bank' | 'mock_question' }> = {};
                     snap.forEach(doc => {
                         const data = doc.data();
-                        newCache[doc.id] = { subject: data.subject || 'Unknown', topic: data.topic };
+                        newCache[doc.id] = { subject: data.subject || 'Unknown', topic: data.topic, questionType: 'question_bank' };
                     });
 
+                    // For IDs not found in questions, check mock_questions
+                    const notFound = chunk.filter(id => !newCache[id]);
+                    if (notFound.length > 0) {
+                        const qMockQuestions = query(collection(db, 'mock_questions'), where(documentId(), 'in', notFound));
+                        const mockSnap = await getDocs(qMockQuestions);
+                        mockSnap.forEach(doc => {
+                            const data = doc.data();
+                            newCache[doc.id] = { subject: data.subject || 'Unknown', topic: data.topic, questionType: 'mock_question' };
+                        });
+                    }
+
+                    // Mark remaining as Unknown
                     chunk.forEach(id => {
-                        if (!newCache[id]) newCache[id] = { subject: 'Unknown' };
+                        if (!newCache[id]) newCache[id] = { subject: 'Unknown', questionType: 'question_bank' };
                     });
 
                     setQuestionsCache(prev => ({ ...prev, ...newCache }));
@@ -691,6 +704,7 @@ export default function AdminReportsPage() {
                                         <TableHead>Status</TableHead>
                                         <TableHead>Issue</TableHead>
                                         <TableHead>Question</TableHead>
+                                        <TableHead>Type</TableHead>
                                         <TableHead>Date</TableHead>
                                         <TableHead className="text-right">Action</TableHead>
                                     </TableRow>
@@ -716,6 +730,14 @@ export default function AdminReportsPage() {
                                             <TableCell className="max-w-[250px] truncate text-muted-foreground" title={report.questionText.replace(/<[^>]+>/g, '')}>
                                                 {report.questionText.replace(/<[^>]+>/g, '')}
                                             </TableCell>
+                                            <TableCell>
+                                                <Badge variant="outline" className={questionsCache[report.questionId]?.questionType === 'mock_question'
+                                                    ? 'bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-400 border-purple-200 dark:border-purple-800'
+                                                    : 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-800'
+                                                }>
+                                                    {questionsCache[report.questionId]?.questionType === 'mock_question' ? 'Mock Question' : 'Question Bank'}
+                                                </Badge>
+                                            </TableCell>
                                             <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
                                                 {report.createdAt?.seconds ? format(new Date(report.createdAt.seconds * 1000), 'MMM d, p') : 'N/A'}
                                             </TableCell>
@@ -728,7 +750,7 @@ export default function AdminReportsPage() {
                                     ))}
                                     {filteredReports.length === 0 && (
                                         <TableRow>
-                                            <TableCell colSpan={5} className="h-32 text-center text-muted-foreground">
+                                            <TableCell colSpan={6} className="h-32 text-center text-muted-foreground">
                                                 {userRole === 'teacher' && teacherSubjects.length === 0
                                                     ? "You have no subjects assigned. Please contact an administrator."
                                                     : "No reports found matching your filters."}
@@ -800,6 +822,32 @@ export default function AdminReportsPage() {
                                         <div className="flex flex-wrap gap-2 pt-2">
                                             {(questionDetails?.subject || selectedReport.subject) && <Badge variant="outline">{questionDetails?.subject || selectedReport.subject}</Badge>}
                                             {(questionDetails?.topic || selectedReport.topic) && <Badge variant="outline">{questionDetails?.topic || selectedReport.topic}</Badge>}
+                                            {questionsCache[selectedReport.questionId]?.questionType && (
+                                                <Badge variant="outline" className={questionsCache[selectedReport.questionId]?.questionType === 'mock_question'
+                                                    ? 'bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-400 border-purple-200 dark:border-purple-800'
+                                                    : 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-800'
+                                                }>
+                                                    {questionsCache[selectedReport.questionId]?.questionType === 'mock_question' ? 'Mock Question' : 'Question Bank'}
+                                                </Badge>
+                                            )}
+                                        </div>
+
+                                        {/* Edit Button */}
+                                        <div className="pt-4">
+                                            <Button
+                                                variant="outline"
+                                                className="w-full"
+                                                onClick={() => {
+                                                    const type = questionsCache[selectedReport.questionId]?.questionType;
+                                                    const url = type === 'mock_question'
+                                                        ? `/admin/mockquestions?edit=${selectedReport.questionId}`
+                                                        : `/admin/questionbank?edit=${selectedReport.questionId}`;
+                                                    window.open(url, '_blank');
+                                                }}
+                                            >
+                                                <Edit className="w-4 h-4 mr-2" />
+                                                Edit Question in {questionsCache[selectedReport.questionId]?.questionType === 'mock_question' ? 'Mock Questions' : 'Question Bank'}
+                                            </Button>
                                         </div>
                                     </div>
                                 </div>
