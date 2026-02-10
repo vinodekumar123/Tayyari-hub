@@ -211,7 +211,7 @@ export default function AdminReportsPage() {
         return Array.from(admins).sort();
     }, [reports]);
 
-    // Fetch deep details (remains same)
+    // Fetch deep details
     useEffect(() => {
         if (!selectedReport) {
             setQuestionDetails(null);
@@ -223,9 +223,12 @@ export default function AdminReportsPage() {
                 const docSnap = await getDoc(doc(db, 'questions', selectedReport.questionId));
                 if (docSnap.exists()) {
                     setQuestionDetails(docSnap.data() as QuestionDetails);
+                } else {
+                    setQuestionDetails(null);
                 }
             } catch (error) {
                 console.error("Failed to fetch details", error);
+                setQuestionDetails(null);
             }
         };
         fetchDetails();
@@ -322,6 +325,7 @@ export default function AdminReportsPage() {
     }, [filteredReports, questionsCache]);
 
     const openReply = (report: Report) => {
+        setQuestionDetails(null);
         setSelectedReport(report);
         setReplyText(report.adminReply || '');
         setReplyDialogOpen(true);

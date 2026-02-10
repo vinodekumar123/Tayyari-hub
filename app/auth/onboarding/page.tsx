@@ -144,6 +144,7 @@ export default function OnboardingPage() {
       await setDoc(doc(db, 'users', userId), {
         ...form,
         uid: userId,
+        role: 'student', // Default role for new users
         createdAt: serverTimestamp(),
         plan: 'free',
       });
