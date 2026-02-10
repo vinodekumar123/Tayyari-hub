@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { db } from '@/app/firebase';
-import { collection, query, orderBy, limit, getDocs, addDoc, serverTimestamp, updateDoc, doc, arrayUnion, arrayRemove, increment } from 'firebase/firestore';
+import { collection, query, orderBy, limit, getDocs, addDoc, serverTimestamp, updateDoc, doc, arrayUnion, arrayRemove, increment, startAfter, QueryConstraint, where } from 'firebase/firestore';
 import { ForumPost, Subject } from '@/types';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -12,7 +12,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { MessageSquare, ThumbsUp, Search, Plus, Filter, CheckCircle, Users } from 'lucide-react';
+import { MessageSquare, ThumbsUp, Search, Plus, Filter, CheckCircle, Users, Pin } from 'lucide-react';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useUserStore } from '@/stores/useUserStore';
 import Link from 'next/link';
 import { formatDistanceToNow } from 'date-fns';
@@ -30,6 +31,10 @@ export default function TeacherCommunityPage() {
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
     const [subjectFilter, setSubjectFilter] = useState('all');
+    const [sortBy, setSortBy] = useState('newest');
+    const [lastVisible, setLastVisible] = useState<any>(null);
+    const [hasMore, setHasMore] = useState(true);
+    const [loadingMore, setLoadingMore] = useState(false);
 
     // New Post Form
     const [isAsking, setAsking] = useState(false);
@@ -46,21 +51,81 @@ export default function TeacherCommunityPage() {
         fetchData();
     }, []);
 
-    const fetchData = async () => {
+    useEffect(() => {
+        // Refetch when sorting changes
+        if (sortBy !== 'newest') {
+            fetchData();
+        }
+    }, [sortBy]);
+
+    const fetchData = async (loadMore = false) => {
         try {
-            setLoading(true);
+            setLoading(!loadMore);
+            setLoadingMore(loadMore);
+
+            const constraints: QueryConstraint[] = [];
+
+            // Filter out deleted posts for teachers
+            constraints.push(where('isDeleted', '!=', true));
+
+            // Prioritize pinned posts
+            constraints.push(orderBy('isPinned', 'desc'));
+
+            // Apply sorting
+            switch (sortBy) {
+                case 'newest':
+                    constraints.push(orderBy('createdAt', 'desc'));
+                    break;
+                case 'popular':
+                    constraints.push(orderBy('upvotes', 'desc'));
+                    break;
+                case 'replies':
+                    constraints.push(orderBy('replyCount', 'desc'));
+                    break;
+                default:
+                    constraints.push(orderBy('createdAt', 'desc'));
+            }
+
+            constraints.push(limit(20));
+
+            if (loadMore && lastVisible) {
+                constraints.push(startAfter(lastVisible));
+            }
+
+
             const [postsSnap, subjectsSnap] = await Promise.all([
-                getDocs(query(collection(db, 'forum_posts'), orderBy('createdAt', 'desc'), limit(50))),
-                getDocs(collection(db, 'subjects'))
+                getDocs(query(collection(db, 'forum_posts'), ...constraints)),
+                !loadMore ? getDocs(collection(db, 'subjects')) : Promise.resolve({ docs: subjects.map(s => ({ id: s.id, data: () => s })) })
             ]);
 
-            setPosts(postsSnap.docs.map(d => ({ id: d.id, ...d.data() } as ForumPost)));
-            setSubjects(subjectsSnap.docs.map(d => ({ id: d.id, ...d.data() } as Subject)));
+            let newPosts = postsSnap.docs.map(d => ({ id: d.id, ...d.data() } as ForumPost));
+
+            // Client-side filtering for special cases
+            if (sortBy === 'unanswered') {
+                newPosts = newPosts.filter(p => (p.replyCount || 0) === 0);
+            } else if (sortBy === 'solved') {
+                newPosts = newPosts.filter(p => p.isSolved === true);
+            }
+
+            if (loadMore) {
+                setPosts(prev => [...prev, ...newPosts]);
+            } else {
+                setPosts(newPosts);
+            }
+
+            if (!loadMore) {
+                setSubjects(subjectsSnap.docs.map(d => ({ id: d.id, ...d.data() } as Subject)));
+            }
+
+            // Update pagination state
+            setLastVisible(postsSnap.docs[postsSnap.docs.length - 1]);
+            setHasMore(postsSnap.docs.length === 20);
         } catch (error) {
             console.error(error);
             toast.error('Failed to load community feed');
         } finally {
             setLoading(false);
+            setLoadingMore(false);
         }
     };
 
@@ -234,66 +299,142 @@ export default function TeacherCommunityPage() {
                         </SelectContent>
                     </Select>
                 </div>
+                <div className="flex items-center gap-2 border-l pl-4 dark:border-gray-700">
+                    <Select value={sortBy} onValueChange={(value) => {
+                        setSortBy(value);
+                        setPosts([]);
+                        setLastVisible(null);
+                        setHasMore(true);
+                    }}>
+                        <SelectTrigger className="w-[150px] border-none shadow-none focus:ring-0 bg-transparent">
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="newest">Newest</SelectItem>
+                            <SelectItem value="popular">Most Upvoted</SelectItem>
+                            <SelectItem value="replies">Most Replies</SelectItem>
+                            <SelectItem value="unanswered">Unanswered</SelectItem>
+                            <SelectItem value="solved">Solved</SelectItem>
+                        </SelectContent>
+                    </Select>
+                </div>
             </div>
 
             {/* Posts List */}
             <div className="space-y-4">
-                {filteredPosts.map(post => (
-                    <Link href={`/dashboard/community/${post.id}`} key={post.id} className="block group">
-                        <Card className="hover:border-blue-500/50 hover:shadow-lg transition-all duration-300">
-                            <CardContent className="p-6">
+                {loading && posts.length === 0 ? (
+                    // Loading Skeletons
+                    <>
+                        {[1, 2, 3, 4, 5].map((i) => (
+                            <Card key={i} className="p-6">
                                 <div className="flex items-start gap-4">
-                                    {/* Upvote Box */}
-                                    <div className="flex flex-col items-center gap-1 min-w-[50px]">
-                                        <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            className={`h-auto p-2 flex flex-col gap-1 rounded-xl hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-blue-900/20 ${post.upvotedBy?.includes(user?.uid || '') ? 'text-blue-600 bg-blue-50 dark:bg-blue-900/20' : 'text-muted-foreground'}`}
-                                            onClick={(e) => { e.preventDefault(); handleUpvote(post.id, post.upvotedBy || []); }}
-                                        >
-                                            <ThumbsUp className={`h-5 w-5 ${post.upvotedBy?.includes(user?.uid || '') ? 'fill-current' : ''}`} />
-                                            <span className="font-bold text-sm">{post.upvotes || 0}</span>
-                                        </Button>
-                                    </div>
-
-                                    {/* Content */}
-                                    <div className="flex-1 min-w-0">
-                                        <div className="flex items-center gap-2 mb-2">
-                                            <Badge variant="outline" className="text-xs font-normal bg-gray-50 dark:bg-gray-800">{post.subject}</Badge>
-                                            <span className="text-xs text-muted-foreground">• Posted by {post.authorName}</span>
-                                            <span className="text-xs text-muted-foreground">• {post.createdAt?.toDate ? formatDistanceToNow(post.createdAt.toDate()) + ' ago' : 'Just now'}</span>
+                                    <Skeleton className="h-16 w-16 rounded-xl" />
+                                    <div className="flex-1 space-y-3">
+                                        <div className="flex items-center gap-2">
+                                            <Skeleton className="h-5 w-20" />
+                                            <Skeleton className="h-4 w-32" />
                                         </div>
-                                        <h3 className="text-lg font-bold text-foreground mb-2 group-hover:text-blue-600 transition-colors line-clamp-1">
-                                            {post.title}
-                                        </h3>
-                                        <p className="text-muted-foreground text-sm line-clamp-2 mb-4">
-                                            {post.content}
-                                        </p>
-
-                                        <div className="flex items-center gap-4 text-xs font-medium text-muted-foreground">
-                                            <div className="flex items-center gap-1 hover:text-foreground">
-                                                <MessageSquare className="h-4 w-4" />
-                                                {post.replyCount || 0} Answers
-                                            </div>
-                                            {post.isSolved && (
-                                                <div className="flex items-center gap-1 text-green-600 bg-green-50 dark:bg-green-900/20 px-2 py-0.5 rounded-full">
-                                                    <CheckCircle className="h-3 w-3" /> Solved
-                                                </div>
-                                            )}
-                                        </div>
+                                        <Skeleton className="h-6 w-3/4" />
+                                        <Skeleton className="h-4 w-full" />
+                                        <Skeleton className="h-4 w-2/3" />
                                     </div>
                                 </div>
-                            </CardContent>
-                        </Card>
-                    </Link>
-                ))}
+                            </Card>
+                        ))}
+                    </>
+                ) : (
+                    <>
+                        {filteredPosts.map(post => (
+                            <Link href={`/dashboard/community/${post.id}`} key={post.id} className="block group">
+                                <Card className="hover:border-blue-500/50 hover:shadow-lg transition-all duration-300">
+                                    <CardContent className="p-6">
+                                        <div className="flex items-start gap-4">
+                                            {/* Upvote Box */}
+                                            <div className="flex flex-col items-center gap-1 min-w-[50px]">
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    className={`h-auto p-2 flex flex-col gap-1 rounded-xl hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-blue-900/20 ${post.upvotedBy?.includes(user?.uid || '') ? 'text-blue-600 bg-blue-50 dark:bg-blue-900/20' : 'text-muted-foreground'}`}
+                                                    onClick={(e) => { e.preventDefault(); handleUpvote(post.id, post.upvotedBy || []); }}
+                                                >
+                                                    <ThumbsUp className={`h-5 w-5 ${post.upvotedBy?.includes(user?.uid || '') ? 'fill-current' : ''}`} />
+                                                    <span className="font-bold text-sm">{post.upvotes || 0}</span>
+                                                </Button>
+                                            </div>
 
-                {filteredPosts.length === 0 && !loading && (
-                    <div className="text-center py-20 text-muted-foreground">
-                        <MessageSquare className="h-16 w-16 mx-auto mb-4 opacity-20" />
-                        <h3 className="text-xl font-bold">No discussions found</h3>
-                        <p>Be the first to start a conversation!</p>
-                    </div>
+                                            {/* Content */}
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex items-center gap-2 mb-2">
+                                                    <Badge variant="outline" className="text-xs font-normal bg-gray-50 dark:bg-gray-800">{post.subject}</Badge>
+                                                    <span className="text-xs text-muted-foreground">• Posted by {post.authorName}</span>
+                                                    <span className="text-xs text-muted-foreground">• {post.createdAt?.toDate ? formatDistanceToNow(post.createdAt.toDate()) + ' ago' : 'Just now'}</span>
+                                                </div>
+                                                <h3 className="text-lg font-bold text-foreground mb-2 group-hover:text-blue-600 transition-colors line-clamp-1">
+                                                    {post.title}
+                                                </h3>
+                                                <p className="text-muted-foreground text-sm line-clamp-2 mb-4">
+                                                    {post.content}
+                                                </p>
+
+                                                {post.images && post.images.length > 0 && (
+                                                    <div className="mb-4 rounded-lg overflow-hidden border bg-gray-50 dark:bg-gray-900">
+                                                        <div className="aspect-video w-full relative">
+                                                            <img
+                                                                src={post.images[0]}
+                                                                alt="Post attachment"
+                                                                className="w-full h-full object-cover"
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                <div className="flex items-center gap-4 text-xs font-medium text-muted-foreground">
+                                                    <div className="flex items-center gap-1 hover:text-foreground">
+                                                        <MessageSquare className="h-4 w-4" />
+                                                        {post.replyCount || 0} Answers
+                                                    </div>
+                                                    {post.isSolved && (
+                                                        <div className="flex items-center gap-1 text-green-600 bg-green-50 dark:bg-green-900/20 px-2 py-0.5 rounded-full">
+                                                            <CheckCircle className="h-3 w-3" /> Solved
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </CardContent>
+                                </Card>
+                            </Link>
+                        ))}
+
+                        {/* Load More Button */}
+                        {hasMore && filteredPosts.length > 0 && (
+                            <div className="flex justify-center pt-4">
+                                <Button
+                                    variant="outline"
+                                    onClick={() => fetchData(true)}
+                                    disabled={loadingMore}
+                                    className="min-w-[200px]"
+                                >
+                                    {loadingMore ? (
+                                        <>
+                                            <div className="h-4 w-4 mr-2 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                                            Loading...
+                                        </>
+                                    ) : (
+                                        'Load More Discussions'
+                                    )}
+                                </Button>
+                            </div>
+                        )}
+
+                        {filteredPosts.length === 0 && !loading && (
+                            <div className="text-center py-20 text-muted-foreground">
+                                <MessageSquare className="h-16 w-16 mx-auto mb-4 opacity-20" />
+                                <h3 className="text-xl font-bold">No discussions found</h3>
+                                <p>Be the first to start a conversation!</p>
+                            </div>
+                        )}
+                    </>
                 )}
             </div>
         </div >

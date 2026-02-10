@@ -269,6 +269,13 @@ export interface ForumPost {
     replyCount: number;
     isSolved: boolean;
     createdAt: any;
+    editedAt?: any;
+    // Moderation
+    isDeleted?: boolean;
+    deletedAt?: any;
+    isPinned?: boolean;
+    isFlagged?: boolean;
+    flagReason?: string;
 }
 
 export interface ForumReply {
@@ -282,5 +289,10 @@ export interface ForumReply {
     upvotes: number;
     upvotedBy: string[];
     createdAt: any;
+    editedAt?: any;
+    // Moderation
+    isDeleted?: boolean;
+    deletedAt?: any;
+    isFlagged?: boolean;
 }
 
