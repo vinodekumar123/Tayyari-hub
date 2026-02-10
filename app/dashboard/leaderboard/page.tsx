@@ -42,7 +42,7 @@ export default function LeaderboardPage() {
                 usersRef,
                 where('role', '==', 'student'),
                 orderBy('stats.grandTotalScore', 'desc'),
-                limit(50)
+                limit(20)
             );
 
             const snap = await getDocs(q);
