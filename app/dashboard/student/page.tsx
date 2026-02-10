@@ -53,24 +53,33 @@ export default function StudentDashboard() {
     const fetchData = async () => {
       setLoading(true);
       try {
-        const userDoc = await getDoc(doc(db, 'users', uid));
+        // Parallelize all independent fetches
+        const [
+          userDoc,
+          recentSnap,
+          userRecentSnap,
+          unfinishedSnap,
+          unfinishedUserSnap,
+          totalSnap
+        ] = await Promise.all([
+          getDoc(doc(db, 'users', uid)),
+          getDocs(query(collection(db, 'users', uid, 'quizAttempts'), orderBy('submittedAt', 'desc'), limit(10))),
+          getDocs(query(collection(db, 'users', uid, 'user-quizattempts'), orderBy('submittedAt', 'desc'), limit(10))),
+          getDocs(query(collection(db, 'users', uid, 'quizAttempts'), where('completed', '==', false), limit(5))),
+          getDocs(query(collection(db, 'users', uid, 'user-quizattempts'), where('completed', '==', false), limit(5))),
+          getCountFromServer(collection(db, 'mock-questions')).catch(e => {
+            console.error("Failed to fetch question stats", e);
+            return null;
+          })
+        ]);
+
         const data = userDoc.exists() ? userDoc.data() : null;
         setStudentData(data);
 
-        // Fetch recent OFFICIAL quizzes
-        const recentSnap = await getDocs(query(
-          collection(db, 'users', uid, 'quizAttempts'),
-          orderBy('submittedAt', 'desc'),
-          limit(10)
-        ));
+        // Process Recent Official
         const officialAttempts = recentSnap.docs.map(d => ({ id: d.id, ...d.data(), quizType: 'admin' }));
 
-        // Fetch recent USER quizzes (Separated Collection)
-        const userRecentSnap = await getDocs(query(
-          collection(db, 'users', uid, 'user-quizattempts'),
-          orderBy('submittedAt', 'desc'),
-          limit(10)
-        ));
+        // Process Recent User
         const userAttempts = userRecentSnap.docs.map(d => ({ id: d.id, ...d.data(), quizType: 'user' }));
 
         // Fetch User Quiz Titles Helper
@@ -99,20 +108,7 @@ export default function StudentDashboard() {
 
         setRecentQuizzes(allAttempts);
 
-        // Fetch Unfinished OFFICIAL
-        const unfinishedSnap = await getDocs(query(
-          collection(db, 'users', uid, 'quizAttempts'),
-          where('completed', '==', false),
-          limit(5)
-        ));
-
-        // Fetch Unfinished USER
-        const unfinishedUserSnap = await getDocs(query(
-          collection(db, 'users', uid, 'user-quizattempts'),
-          where('completed', '==', false),
-          limit(5)
-        ));
-
+        // Process Unfinished Official
         const unfinishedOfficial = await Promise.all(unfinishedSnap.docs.map(async (d) => {
           const data = d.data();
           let title = data.title;
@@ -125,6 +121,7 @@ export default function StudentDashboard() {
           return { id: d.id, ...data, title: title || 'Untitled Quiz', quizType: 'admin' };
         }));
 
+        // Process Unfinished User
         const unfinishedUser = await Promise.all(unfinishedUserSnap.docs.map(async (d) => {
           const data = d.data();
           let title = data.title; // Usually missing on attempt doc
@@ -139,18 +136,10 @@ export default function StudentDashboard() {
 
         setUnfinishedQuizzes([...unfinishedOfficial, ...unfinishedUser]);
 
-        // Fetch Question Bank Stats
-        try {
-          const totalSnap = await getCountFromServer(collection(db, 'mock-questions'));
-          const total = totalSnap.data().count;
-          const usedCount = data?.usedMockQuestionIds?.length || 0;
-          setQuestionStats({ total, used: usedCount });
-        } catch (e) {
-          console.error("Failed to fetch question stats", e);
-        }
-
-        // --- Client-side Calc Removed for Performance ---
-        // Relying on server-aggregated stats in studentData.stats
+        // Process Question Bank Stats
+        const total = totalSnap ? totalSnap.data().count : 0;
+        const usedCount = data?.usedMockQuestionIds?.length || 0;
+        setQuestionStats({ total, used: usedCount });
 
       } catch (err) {
         console.error(err);
