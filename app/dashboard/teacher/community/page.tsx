@@ -176,7 +176,7 @@ export default function TeacherCommunityPage() {
                                         </Select>
                                     </div>
 
-                                    {/* <div className="grid grid-cols-2 gap-4">
+                                    <div className="grid grid-cols-2 gap-4">
                                         <div className="space-y-2">
                                             <label className="text-sm font-medium">Province (Optional)</label>
                                             <Select value={newProvince} onValueChange={setNewProvince}>
@@ -195,7 +195,7 @@ export default function TeacherCommunityPage() {
                                                 </SelectContent>
                                             </Select>
                                         </div>
-                                    </div> */}
+                                    </div>
 
                                     <div className="space-y-2">
                                         <label className="text-sm font-medium">Content</label>

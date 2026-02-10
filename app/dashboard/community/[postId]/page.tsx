@@ -2,9 +2,9 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { db } from '@/app/firebase';
-import { doc, getDoc, collection, query, where, orderBy, getDocs, addDoc, serverTimestamp, updateDoc, increment, arrayUnion, arrayRemove } from 'firebase/firestore';
+import { doc, getDoc, collection, query, where, orderBy, getDocs, addDoc, serverTimestamp, updateDoc, increment, arrayUnion, arrayRemove, deleteDoc } from 'firebase/firestore';
 import { ForumPost, ForumReply } from '@/types';
-import { checkSeriesEnrollment } from '@/lib/community';
+import { checkSeriesEnrollment, awardPoints, sendNotification, POINTS } from '@/lib/community';
 import { useParams, useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -65,7 +65,15 @@ export default function ThreadPage() {
             // For now, assume admin claim is on user object or we fetch doc
             const checkRole = async () => {
                 const snap = await getDoc(doc(db, 'users', user.uid));
-                if (snap.exists() && snap.data().admin) setCurrentUserRole('admin');
+                if (snap.exists()) {
+                    const userData = snap.data();
+                    const role = userData.role;
+                    if (role === 'admin' || role === 'superadmin') {
+                        setCurrentUserRole('admin');
+                    } else if (role === 'teacher') {
+                        setCurrentUserRole('teacher');
+                    }
+                }
             };
             checkRole();
             fetchThread();
@@ -102,7 +110,21 @@ export default function ThreadPage() {
                 replyCount: increment(1)
             });
 
-            toast.success('Answer posted');
+            // Award points for replying
+            await awardPoints(user.uid, POINTS.CREATE_REPLY, 'Posted an answer');
+
+            // Notify post author of new reply
+            if (post && post.authorId !== user.uid) {
+                await sendNotification(
+                    post.authorId,
+                    'New Answer',
+                    `${user.fullName} answered your question: "${post.title}"`,
+                    'info',
+                    `/dashboard/community/${postId}`
+                );
+            }
+
+            toast.success('Answer posted! +2 points');
             setReplyContent('');
             fetchThread();
         } catch (error) {
@@ -124,6 +146,33 @@ export default function ThreadPage() {
                 isSolved: true
             });
 
+            // Find the reply to get author info
+            const reply = replies.find(r => r.id === replyId);
+            if (reply) {
+                // Award bonus points for verified answer
+                await awardPoints(reply.authorId, POINTS.VERIFIED_ANSWER, 'Answer was verified by faculty');
+
+                // Notify reply author
+                await sendNotification(
+                    reply.authorId,
+                    'Answer Verified! 🎉',
+                    `Your answer was verified by a faculty member. You earned ${POINTS.VERIFIED_ANSWER} points!`,
+                    'success',
+                    `/dashboard/community/${postId}`
+                );
+
+                // Notify post author
+                if (post && post.authorId !== reply.authorId) {
+                    await sendNotification(
+                        post.authorId,
+                        'Question Solved',
+                        `Your question "${post.title}" has been solved!`,
+                        'success',
+                        `/dashboard/community/${postId}`
+                    );
+                }
+            }
+
             toast.success('Answer Verified');
             fetchThread();
         } catch (error) {
@@ -131,15 +180,33 @@ export default function ThreadPage() {
         }
     };
 
-    const handleUpvote = async (collectionName: 'forum_posts' | 'forum_replies', id: string, currentUpvotedBy: string[]) => {
+    const handleDeleteReply = async (replyId: string, authorId: string) => {
         if (!user) return;
 
-        // Check enrollment
-        const canVote = await checkSeriesEnrollment(user.uid);
-        if (!canVote) {
-            toast.error("Only Series Enrolled students can vote.");
+        // Check permissions: author can delete their own, admin/teacher can delete any
+        const canDelete = user.uid === authorId || currentUserRole === 'admin' || currentUserRole === 'teacher';
+        if (!canDelete) {
+            toast.error('You cannot delete this reply');
             return;
         }
+
+        if (!confirm('Are you sure you want to delete this reply?')) return;
+
+        try {
+            await deleteDoc(doc(db, 'forum_replies', replyId));
+            await updateDoc(doc(db, 'forum_posts', postId as string), {
+                replyCount: increment(-1)
+            });
+            toast.success('Reply deleted');
+            fetchThread();
+        } catch (error) {
+            console.error(error);
+            toast.error('Failed to delete reply');
+        }
+    };
+
+    const handleUpvote = async (collectionName: 'forum_posts' | 'forum_replies', id: string, currentUpvotedBy: string[]) => {
+        if (!user) return;
 
         const isUpvoted = currentUpvotedBy.includes(user.uid);
         const docRef = doc(db, collectionName, id);
@@ -156,7 +223,16 @@ export default function ThreadPage() {
             } else {
                 setReplies(prev => prev.map(r => r.id === id ? { ...r, upvotes: isUpvoted ? r.upvotes - 1 : r.upvotes + 1, upvotedBy: isUpvoted ? r.upvotedBy.filter(u => u !== user.uid) : [...r.upvotedBy, user.uid] } : r));
             }
-        } catch (err) { console.error(err); }
+        } catch (err) {
+            console.error(err);
+            // Rollback optimistic update on error
+            if (collectionName === 'forum_posts') {
+                setPost(prev => prev ? { ...prev, upvotes: isUpvoted ? prev.upvotes + 1 : prev.upvotes - 1, upvotedBy: isUpvoted ? [...prev.upvotedBy, user.uid] : prev.upvotedBy.filter(u => u !== user.uid) } : null);
+            } else {
+                setReplies(prev => prev.map(r => r.id === id ? { ...r, upvotes: isUpvoted ? r.upvotes + 1 : r.upvotes - 1, upvotedBy: isUpvoted ? [...r.upvotedBy, user.uid] : r.upvotedBy.filter(u => u !== user.uid) } : r));
+            }
+            toast.error('Failed to update vote');
+        }
     };
 
     if (!post) return <div className="p-8 text-center">Loading...</div>;
@@ -249,6 +325,15 @@ export default function ThreadPage() {
                                         <ThumbsUp className={`w-3.5 h-3.5 ${reply.upvotedBy?.includes(user?.uid || '') ? 'fill-current' : ''}`} />
                                         {reply.upvotes} Helpful
                                     </button>
+                                    {(user?.uid === reply.authorId || currentUserRole === 'admin' || currentUserRole === 'teacher') && (
+                                        <button
+                                            className="flex items-center gap-1 text-xs font-medium text-red-600 hover:text-red-700 transition-colors"
+                                            onClick={() => handleDeleteReply(reply.id, reply.authorId)}
+                                        >
+                                            <Trash2 className="w-3.5 h-3.5" />
+                                            Delete
+                                        </button>
+                                    )}
                                 </div>
                             </div>
                         </div>

@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { db } from '@/app/firebase';
 import { collection, query, orderBy, limit, getDocs, addDoc, serverTimestamp, updateDoc, doc, arrayUnion, arrayRemove, increment } from 'firebase/firestore';
 import { ForumPost, Subject } from '@/types';
-import { checkSeriesEnrollment } from '@/lib/community';
+import { checkSeriesEnrollment, awardPoints, POINTS } from '@/lib/community';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -25,9 +25,7 @@ const PROVINCES = [
     'Federal (Islamabad)', 'AJK', 'Gilgit Baltistan'
 ];
 
-import ComingSoon from '@/components/ui/coming-soon';
-
-function StudentCommunityPageOriginal() {
+function StudentCommunityPage() {
     const { user } = useUserStore();
     const [posts, setPosts] = useState<ForumPost[]>([]);
     const [subjects, setSubjects] = useState<Subject[]>([]);
@@ -102,7 +100,10 @@ function StudentCommunityPageOriginal() {
                 createdAt: serverTimestamp()
             });
 
-            toast.success('Question Posted!');
+            // Award points for creating post
+            await awardPoints(user.uid, POINTS.CREATE_POST, 'Created a question post');
+
+            toast.success('Question Posted! +5 points');
             setNewTitle('');
             setNewContent('');
             setNewSubject('');
@@ -122,21 +123,24 @@ function StudentCommunityPageOriginal() {
         const isUpvoted = currentUpvotedBy.includes(user.uid);
         const docRef = doc(db, 'forum_posts', postId);
 
+        // Optimistic update
+        setPosts(prev => prev.map(p => p.id === postId ? { ...p, upvotes: isUpvoted ? p.upvotes - 1 : p.upvotes + 1, upvotedBy: isUpvoted ? p.upvotedBy.filter(u => u !== user.uid) : [...p.upvotedBy, user.uid] } : p));
+
         try {
             if (isUpvoted) {
                 await updateDoc(docRef, {
                     upvotes: increment(-1),
                     upvotedBy: arrayRemove(user.uid)
                 });
-                setPosts(prev => prev.map(p => p.id === postId ? { ...p, upvotes: p.upvotes - 1, upvotedBy: p.upvotedBy.filter(u => u !== user.uid) } : p));
             } else {
                 await updateDoc(docRef, {
                     upvotes: increment(1),
                     upvotedBy: arrayUnion(user.uid)
                 });
-                setPosts(prev => prev.map(p => p.id === postId ? { ...p, upvotes: p.upvotes + 1, upvotedBy: [...p.upvotedBy, user.uid] } : p));
             }
         } catch (error) {
+            // Rollback on failure
+            setPosts(prev => prev.map(p => p.id === postId ? { ...p, upvotes: isUpvoted ? p.upvotes + 1 : p.upvotes - 1, upvotedBy: isUpvoted ? [...p.upvotedBy, user.uid] : p.upvotedBy.filter(u => u !== user.uid) } : p));
             toast.error('Action failed');
         }
     };
@@ -303,4 +307,4 @@ function StudentCommunityPageOriginal() {
     );
 }
 
-export default function StudentCommunityPage() { return <ComingSoon />; }
+export default StudentCommunityPage;
