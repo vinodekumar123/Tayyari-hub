@@ -2,13 +2,13 @@ importScripts('https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js')
 importScripts('https://www.gstatic.com/firebasejs/9.0.0/firebase-messaging-compat.js');
 
 const firebaseConfig = {
-    apiKey: "YOUR_API_KEY",
-    authDomain: "YOUR_AUTH_DOMAIN",
-    projectId: "YOUR_PROJECT_ID",
-    storageBucket: "YOUR_STORAGE_BUCKET",
-    messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-    appId: "YOUR_APP_ID",
-    measurementId: "YOUR_MEASUREMENT_ID",
+    apiKey: "AIzaSyD30ttpHoP4xaQEjuPgCbyguZ8yMDOw0RM",
+    authDomain: "tayyari-hub.firebaseapp.com",
+    projectId: "tayyari-hub",
+    storageBucket: "tayyari-hub.firebasestorage.app",
+    messagingSenderId: "476210572589",
+    appId: "1:476210572589:web:14444ade6d84edba8df7a4",
+    measurementId: "G-H21039HJ2F",
 };
 
 firebase.initializeApp(firebaseConfig);
