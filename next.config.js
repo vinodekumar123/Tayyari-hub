@@ -92,8 +92,14 @@ const withPWA = require('@ducanh2912/next-pwa').default({
   disable: process.env.NODE_ENV === 'development',
   register: true,
   skipWaiting: true,
+  // Exclude Vercel Analytics and other internal paths from SW
+  buildExcludes: [/middleware-manifest\.json$/, /_vercel/],
   // Exclude external APIs from service worker caching
   runtimeCaching: [
+    {
+      urlPattern: ({ url }) => url.pathname.startsWith('/_vercel'),
+      handler: 'NetworkOnly',
+    },
     {
       urlPattern: /^https:\/\/ipapi\.co\/.*/i,
       handler: 'NetworkOnly',
@@ -102,6 +108,10 @@ const withPWA = require('@ducanh2912/next-pwa').default({
       urlPattern: /^https:\/\/api\.ipify\.org\/.*/i,
       handler: 'NetworkOnly',
     },
+    {
+      urlPattern: /\/api\/geo/,
+      handler: 'NetworkOnly', // Don't cache the Geo API
+    }
   ],
 });
 

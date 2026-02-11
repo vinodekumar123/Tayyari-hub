@@ -50,61 +50,21 @@ const getBrowserFingerprint = () => {
  */
 const getGeoInfo = async (timeoutMs: number = 2000) => {
     try {
-        // Skip GeoIP on localhost
-        if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
-            return { ip: '127.0.0.1', city: 'Localhost', country: 'Localhost', region: 'Localhost' };
-        }
+        // Use our own API route to avoid CORS and handle IP detection server-side
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
-        // Primary: ipapi.co (Rich data but strict CORS/Rate limits)
-        try {
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+        const res = await fetch('/api/geo', {
+            signal: controller.signal,
+            cache: 'no-store'
+        });
+        clearTimeout(timeoutId);
 
-            const res = await fetch('https://ipapi.co/json/', {
-                signal: controller.signal,
-                mode: 'cors',
-                cache: 'no-store' // Prevent caching of failed requests
-            });
-            clearTimeout(timeoutId);
+        if (!res.ok) throw new Error('Geo API failed');
 
-            if (!res.ok) throw new Error('ipapi.co failed');
-
-            const data = await res.json();
-            return {
-                ip: data.ip || 'unknown',
-                city: data.city || 'Unknown City',
-                country: data.country_name || 'Unknown Country',
-                region: data.region || ''
-            };
-        } catch (e) {
-            // Silently fallback - no console output to avoid noise
-        }
-
-        // Fallback: ipify
-        try {
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 1500); // Short timeout
-
-            const res = await fetch('https://api.ipify.org?format=json', { signal: controller.signal });
-            clearTimeout(timeoutId);
-
-            if (!res.ok) throw new Error('ipify failed');
-
-            const data = await res.json();
-            return {
-                ip: data.ip,
-                city: 'Unknown (Fallback)',
-                country: 'Unknown (Fallback)',
-                region: ''
-            };
-        } catch (e) {
-            // console.warn('All GeoIP lookups failed');
-        }
-
-        return { ip: 'unknown', city: 'Unknown', country: 'Unknown', region: '' };
-
+        return await res.json();
     } catch (e) {
-        // Absolute safety net
+        // Silent fallback
         return { ip: 'unknown', city: 'Unknown', country: 'Unknown', region: '' };
     }
 };
