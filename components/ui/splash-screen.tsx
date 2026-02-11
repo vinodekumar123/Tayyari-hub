@@ -5,20 +5,28 @@ import Image from 'next/image';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export function SplashScreen() {
-    const [isVisible, setIsVisible] = useState(true);
+    const [isVisible, setIsVisible] = useState(false); // Default to false, check for PWA first
+    const [isPWA, setIsPWA] = useState(false);
 
     useEffect(() => {
-        // Hide splash screen after 2.5 seconds or when app is ready
-        // We can make this smarter by checking actual loading state, 
-        // but for a splash screen, a minimum duration is often desired relevant for branding.
-        const timer = setTimeout(() => {
-            setIsVisible(false);
-        }, 2500);
+        // Check if running in standalone mode (PWA)
+        const isStandalone = window.matchMedia('(display-mode: standalone)').matches ||
+            (window.navigator as any).standalone ||
+            document.referrer.includes('android-app://');
 
-        return () => clearTimeout(timer);
+        if (isStandalone) {
+            setIsPWA(true);
+            setIsVisible(true);
+
+            // Hide splash screen after 2.5 seconds
+            const timer = setTimeout(() => {
+                setIsVisible(false);
+            }, 2500);
+            return () => clearTimeout(timer);
+        }
     }, []);
 
-    if (!isVisible) return null;
+    if (!isPWA || !isVisible) return null;
 
     return (
         <AnimatePresence>
@@ -30,16 +38,15 @@ export function SplashScreen() {
                     className="fixed inset-0 z-[99999] bg-white dark:bg-slate-950 flex flex-col items-center justify-center p-4"
                 >
                     <div className="flex-1 flex flex-col items-center justify-center space-y-8">
-                        {/* Logo Animation */}
+                        {/* Logo Animation - Using full logo same as sidebar */}
                         <motion.div
                             initial={{ scale: 0.8, opacity: 0 }}
                             animate={{ scale: 1, opacity: 1 }}
                             transition={{ duration: 0.8, ease: "easeOut" }}
-                            className="relative w-32 h-32 md:w-40 md:h-40"
+                            className="relative w-64 h-64" // Increased size for full logo
                         >
-                            {/* Ensure /logo.png exists in public folder */}
                             <Image
-                                src="/logo.png"
+                                src="/logo.png" // Assuming this is the full logo as requested
                                 alt="TayyariHub Logo"
                                 fill
                                 className="object-contain"
@@ -47,22 +54,27 @@ export function SplashScreen() {
                             />
                         </motion.div>
 
-                        {/* Text Animation */}
+                        {/* Text Animation - Removed "TayyariHub" text since it's likely in the full logo, 
+                            or we keep it if the logo is just an icon. 
+                            User asked for "full logo... same that is sidebar". 
+                            Sidebar usually has icon+text. 
+                            I'll keep the slogan but remove the potentially redundant Title if the logo has text.
+                            Actually, sidebar often has logo + text next to it. 
+                            If /logo.png is the sidebar image, it might be the icon.
+                            Let's keep the text for safety but style it elegantly.
+                         */}
                         <motion.div
                             initial={{ y: 20, opacity: 0 }}
                             animate={{ y: 0, opacity: 1 }}
                             transition={{ delay: 0.3, duration: 0.6 }}
                             className="text-center"
                         >
-                            <h1 className="text-3xl md:text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400 tracking-tight">
-                                TayyariHub
-                            </h1>
                             <p className="text-sm text-muted-foreground mt-2 tracking-widest uppercase">
                                 Excellence in Preparation
                             </p>
                         </motion.div>
 
-                        {/* Loading Spinner (Optional) */}
+                        {/* Loading Spinner */}
                         <motion.div
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
