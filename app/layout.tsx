@@ -13,6 +13,7 @@ import { LoadingOverlay } from '@/components/ui/loading-overlay';
 import { Toaster } from "@/components/ui/sonner";
 import { ThemeProvider } from "@/components/theme-provider";
 import { GoodNewsPopup } from "@/components/ui/good-news-popup";
+import { SplashScreen } from "@/components/ui/splash-screen";
 
 import { GlobalAuthListener } from '@/components/global-auth-listener';
 
@@ -58,6 +59,7 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           <GlobalAuthListener />
+          <SplashScreen />
           <React.Suspense fallback={null}>
             <NavigationLoader />
             <LoadingOverlay />

@@ -9,22 +9,22 @@ export default function manifest(): MetadataRoute.Manifest {
         start_url: '/',
         display: 'standalone',
         background_color: '#ffffff',
-        theme_color: '#2563eb', // Blue-600 to match our theme
+        theme_color: '#2563eb',
         icons: [
             {
-                src: '/icons/icon-192x192.png',
+                src: '/logo.png', // Main logo as icon
                 sizes: '192x192',
                 type: 'image/png',
                 purpose: 'maskable',
             },
             {
-                src: '/icons/icon-512x512.png',
+                src: '/logo.png',
                 sizes: '512x512',
                 type: 'image/png',
                 purpose: 'maskable',
             },
             {
-                src: '/icons/icon-512x512.png',
+                src: '/logo.png',
                 sizes: '512x512',
                 type: 'image/png',
                 purpose: 'any',
