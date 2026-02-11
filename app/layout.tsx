@@ -28,6 +28,11 @@ export const metadata: Metadata = {
   },
   description: 'Elevate your performance with TayyariHub - The ultimate entry test companion.',
   manifest: '/manifest.json', // Manifest generated at build or served
+  icons: {
+    icon: '/logo.png',
+    shortcut: '/logo.png',
+    apple: '/logo.png',
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
