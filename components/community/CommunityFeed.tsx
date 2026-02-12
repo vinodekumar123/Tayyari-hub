@@ -59,7 +59,13 @@ export function CommunityFeed({ role, canCreate = true, initialShowDeleted = fal
     const [isUploading, setIsUploading] = useState(false);
 
     // Derived State for Chapters
-    const availableChapters = subjects.find(s => s.name === newSubject)?.chapters || [];
+    const selectedSubjectData = subjects.find(s => s.name === newSubject);
+    const availableChapters = Array.isArray(selectedSubjectData?.chapters) ? selectedSubjectData.chapters : [];
+
+    // Reset chapter when subject changes
+    useEffect(() => {
+        setNewChapter('');
+    }, [newSubject]);
 
     // Privileged roles for announcements
     const canMakeAnnouncement = role === 'admin' || role === 'teacher';
@@ -288,7 +294,7 @@ export function CommunityFeed({ role, canCreate = true, initialShowDeleted = fal
                             </SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="all">All Subjects</SelectItem>
-                                {subjects.map(s => <SelectItem key={s.id} value={s.name}>{s.name}</SelectItem>)}
+                                {subjects.filter(s => s.name).map(s => <SelectItem key={s.id} value={s.name}>{s.name}</SelectItem>)}
                                 <SelectItem value="Other">Other</SelectItem>
                             </SelectContent>
                         </Select>
@@ -370,7 +376,7 @@ export function CommunityFeed({ role, canCreate = true, initialShowDeleted = fal
                                             <Select value={newSubject} onValueChange={setNewSubject}>
                                                 <SelectTrigger><SelectValue placeholder="Select Subject" /></SelectTrigger>
                                                 <SelectContent>
-                                                    {subjects.map(s => <SelectItem key={s.id} value={s.name}>{s.name}</SelectItem>)}
+                                                    {subjects.filter(s => s.name).map(s => <SelectItem key={s.id} value={s.name}>{s.name}</SelectItem>)}
                                                     <SelectItem value="Other">Other</SelectItem>
                                                 </SelectContent>
                                             </Select>
