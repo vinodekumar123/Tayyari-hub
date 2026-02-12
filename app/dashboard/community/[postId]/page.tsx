@@ -6,18 +6,19 @@ import { doc, getDoc, collection, query, where, orderBy, getDocs, addDoc, server
 import { ForumPost, ForumReply } from '@/types';
 import { checkSeriesEnrollment, awardPoints, sendNotification, POINTS } from '@/lib/community';
 import { useParams, useRouter } from 'next/navigation';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { toast } from 'sonner';
-import { ThumbsUp, CheckCircle, ShieldCheck, ArrowLeft, MoreHorizontal, Trash2, Edit2, Pin, Flag, Eye, EyeOff, XCircle } from 'lucide-react';
+import { ThumbsUp, CheckCircle, ShieldCheck, ArrowLeft, MoreHorizontal, Trash2, Edit2, Pin, Flag, EyeOff, Share2, Megaphone, Loader2 } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { useUserStore } from '@/stores/useUserStore';
 import { formatDistanceToNow } from 'date-fns';
-import Link from 'next/link';
+import { glassmorphism } from '@/lib/design-tokens';
+import DOMPurify from 'dompurify';
+import { RichTextEditor } from '@/components/RichTextEditor';
 
 export default function ThreadPage() {
     const { postId } = useParams();
@@ -28,12 +29,17 @@ export default function ThreadPage() {
     const [replies, setReplies] = useState<ForumReply[]>([]);
     const [replyContent, setReplyContent] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [currentUserRole, setCurrentUserRole] = useState<'student' | 'admin' | 'teacher'>('student');
     const [editingReplyId, setEditingReplyId] = useState<string | null>(null);
     const [editContent, setEditContent] = useState('');
     const [isEditingPost, setIsEditingPost] = useState(false);
     const [editPostTitle, setEditPostTitle] = useState('');
     const [editPostContent, setEditPostContent] = useState('');
+
+    // Determine back link and role based on user
+    const userRole = user?.role || 'student';
+    const backLink = userRole === 'admin' ? '/dashboard/admin/community' :
+        userRole === 'teacher' ? '/dashboard/teacher/community' :
+            '/dashboard/student/community';
 
     const fetchThread = useCallback(async () => {
         try {
@@ -42,12 +48,12 @@ export default function ThreadPage() {
             const postSnap = await getDoc(doc(db, 'forum_posts', postId));
             if (!postSnap.exists()) {
                 toast.error('Post not found');
-                router.push('/dashboard/community');
+                router.push(backLink);
                 return;
             }
             setPost({ id: postSnap.id, ...postSnap.data() } as ForumPost);
 
-            const q = query(collection(db, 'forum_replies'), where('postId', '==', postId), orderBy('createdAt', 'asc')); // Oldest first like chat, or sorting by Verified first
+            const q = query(collection(db, 'forum_replies'), where('postId', '==', postId), orderBy('createdAt', 'asc'));
             const replySnap = await getDocs(q);
 
             const fetchedReplies = replySnap.docs.map(d => ({ id: d.id, ...d.data() } as ForumReply));
@@ -62,51 +68,43 @@ export default function ThreadPage() {
             setReplies(fetchedReplies);
         } catch (error) {
             console.error(error);
+            toast.error("Failed to load thread");
         }
-    }, [postId, router]);
+    }, [postId, router, backLink]);
 
     useEffect(() => {
-        if (postId && user) {
-            // Check role - simplified for now, ideally strictly checked on backend or claims
-            // In a real app we'd fetch the user's role from their profile claim or doc
-            // For now, assume admin claim is on user object or we fetch doc
-            const checkRole = async () => {
-                const snap = await getDoc(doc(db, 'users', user.uid));
-                if (snap.exists()) {
-                    const userData = snap.data();
-                    const role = userData.role;
-                    if (role === 'admin' || role === 'superadmin') {
-                        setCurrentUserRole('admin');
-                    } else if (role === 'teacher') {
-                        setCurrentUserRole('teacher');
-                    }
-                }
-            };
-            checkRole();
+        if (postId) {
             fetchThread();
         }
-    }, [postId, user, fetchThread]);
+    }, [postId, fetchThread]);
 
     const handlePostReply = async () => {
-        if (!replyContent.trim()) return;
+        // Simple HTML check - basic tags are okay, but empty check might need text extraction
+        // For now, strict check on length
+        if (replyContent.replace(/<[^>]*>/g, '').trim().length === 0) {
+            toast.error("Please write a meaningful answer");
+            return;
+        }
+
         if (!user) return;
 
         setIsSubmitting(true);
         try {
-            // Check enrollment
-            const canPost = await checkSeriesEnrollment(user.uid);
-            if (!canPost) {
-                toast.error("Only Series Enrolled students can post answers.");
-                setIsSubmitting(false);
-                return;
+            if (userRole === 'student') {
+                const canPost = await checkSeriesEnrollment(user.uid);
+                if (!canPost) {
+                    toast.error("Only Series Enrolled students can post answers.");
+                    setIsSubmitting(false);
+                    return;
+                }
             }
 
             await addDoc(collection(db, 'forum_replies'), {
                 postId,
-                content: replyContent,
+                content: replyContent, // Rich text
                 authorId: user?.uid,
-                authorName: user?.fullName || 'Student',
-                authorRole: currentUserRole,
+                authorName: user?.fullName || 'User',
+                authorRole: userRole,
                 isVerified: false,
                 upvotes: 0,
                 upvotedBy: [],
@@ -117,10 +115,11 @@ export default function ThreadPage() {
                 replyCount: increment(1)
             });
 
-            // Award points for replying
-            await awardPoints(user.uid, POINTS.CREATE_REPLY, 'Posted an answer');
+            if (userRole === 'student') {
+                await awardPoints(user.uid, POINTS.CREATE_REPLY, 'Posted an answer');
+            }
 
-            // Notify post author of new reply
+            // Notify post author
             if (post && post.authorId !== user.uid) {
                 await sendNotification(
                     post.authorId,
@@ -131,7 +130,7 @@ export default function ThreadPage() {
                 );
             }
 
-            toast.success('Answer posted! +2 points');
+            toast.success('Answer posted!');
             setReplyContent('');
             fetchThread();
         } catch (error) {
@@ -142,24 +141,20 @@ export default function ThreadPage() {
     };
 
     const handleVerify = async (replyId: string) => {
-        if (currentUserRole !== 'admin' && currentUserRole !== 'teacher') return;
+        if (userRole !== 'admin' && userRole !== 'teacher') return;
         try {
             await updateDoc(doc(db, 'forum_replies', replyId), {
                 isVerified: true
             });
 
-            // Also mark post as solved
             await updateDoc(doc(db, 'forum_posts', postId as string), {
                 isSolved: true
             });
 
-            // Find the reply to get author info
             const reply = replies.find(r => r.id === replyId);
             if (reply) {
-                // Award bonus points for verified answer
                 await awardPoints(reply.authorId, POINTS.VERIFIED_ANSWER, 'Answer was verified by faculty');
 
-                // Notify reply author
                 await sendNotification(
                     reply.authorId,
                     'Answer Verified! 🎉',
@@ -167,17 +162,6 @@ export default function ThreadPage() {
                     'success',
                     `/dashboard/community/${postId}`
                 );
-
-                // Notify post author
-                if (post && post.authorId !== reply.authorId) {
-                    await sendNotification(
-                        post.authorId,
-                        'Question Solved',
-                        `Your question "${post.title}" has been solved!`,
-                        'success',
-                        `/dashboard/community/${postId}`
-                    );
-                }
             }
 
             toast.success('Answer Verified');
@@ -189,15 +173,10 @@ export default function ThreadPage() {
 
     const handleDeleteReply = async (replyId: string, authorId: string) => {
         if (!user) return;
+        const canDelete = user.uid === authorId || userRole === 'admin' || userRole === 'teacher';
+        if (!canDelete) return;
 
-        // Check permissions: author can delete their own, admin/teacher can delete any
-        const canDelete = user.uid === authorId || currentUserRole === 'admin' || currentUserRole === 'teacher';
-        if (!canDelete) {
-            toast.error('You cannot delete this reply');
-            return;
-        }
-
-        if (!confirm('Are you sure you want to delete this reply?')) return;
+        if (!confirm('Delete this reply?')) return;
 
         try {
             await deleteDoc(doc(db, 'forum_replies', replyId));
@@ -207,94 +186,48 @@ export default function ThreadPage() {
             toast.success('Reply deleted');
             fetchThread();
         } catch (error) {
-            console.error(error);
             toast.error('Failed to delete reply');
         }
     };
 
-    const canEdit = (reply: ForumReply) => {
-        if (!user || user.uid !== reply.authorId) return false;
-        if (!reply.createdAt?.seconds) return false;
-
-        const elapsed = Date.now() - reply.createdAt.seconds * 1000;
-        return elapsed < 10 * 60 * 1000; // 10 minutes
-    };
-
     const handleEditReply = async (replyId: string) => {
-        if (!editContent.trim()) {
-            toast.error('Reply content cannot be empty');
-            return;
-        }
-
+        if (editContent.replace(/<[^>]*>/g, '').trim().length === 0) return;
         try {
             await updateDoc(doc(db, 'forum_replies', replyId), {
                 content: editContent,
                 editedAt: serverTimestamp()
             });
-
-            // Update local state
-            setReplies(prev => prev.map(r =>
-                r.id === replyId
-                    ? { ...r, content: editContent, editedAt: { seconds: Date.now() / 1000 } as any }
-                    : r
-            ));
-
+            setReplies(prev => prev.map(r => r.id === replyId ? { ...r, content: editContent, editedAt: { seconds: Date.now() / 1000 } as any } : r));
             setEditingReplyId(null);
             setEditContent('');
             toast.success('Reply updated');
         } catch (error) {
-            console.error(error);
             toast.error('Failed to update reply');
         }
     };
 
-    const canEditPost = (post: ForumPost) => {
-        if (!user || user.uid !== post.authorId) return false;
-        if (!post.createdAt?.seconds) return false;
-
-        const elapsed = Date.now() - post.createdAt.seconds * 1000;
-        return elapsed < 10 * 60 * 1000; // 10 minutes
-    };
-
     const handleEditPost = async () => {
-        if (!editPostTitle.trim() || !editPostContent.trim()) {
-            toast.error('Title and content cannot be empty');
-            return;
-        }
-
+        if (!editPostTitle.trim() || editPostContent.replace(/<[^>]*>/g, '').trim().length === 0) return;
         try {
             await updateDoc(doc(db, 'forum_posts', postId as string), {
                 title: editPostTitle,
                 content: editPostContent,
                 editedAt: serverTimestamp()
             });
-
-            setPost(prev => prev ? {
-                ...prev,
-                title: editPostTitle,
-                content: editPostContent,
-                editedAt: { seconds: Date.now() / 1000 }
-            } : null);
-
+            setPost(prev => prev ? { ...prev, title: editPostTitle, content: editPostContent, editedAt: { seconds: Date.now() / 1000 } } : null);
             setIsEditingPost(false);
-            toast.success('Post updated successfully');
+            toast.success('Post updated');
         } catch (error) {
             toast.error('Failed to update post');
         }
     };
 
-    // --- Moderation Functions ---
-
     const handleSoftDelete = async () => {
-        if (!confirm('Are you sure you want to hide this post? It will be visible only to admins.')) return;
         try {
-            await updateDoc(doc(db, 'forum_posts', postId as string), {
-                isDeleted: true,
-                deletedAt: serverTimestamp()
-            });
+            await updateDoc(doc(db, 'forum_posts', postId as string), { isDeleted: true, deletedAt: serverTimestamp() });
             setPost(prev => prev ? { ...prev, isDeleted: true } : null);
-            toast.success('Post hidden successfully');
-            router.push('/dashboard/community');
+            toast.success('Post hidden');
+            router.push(backLink);
         } catch (error) {
             toast.error('Failed to hide post');
         }
@@ -302,23 +235,20 @@ export default function ThreadPage() {
 
     const handleRestore = async () => {
         try {
-            await updateDoc(doc(db, 'forum_posts', postId as string), {
-                isDeleted: false,
-                deletedAt: null
-            });
+            await updateDoc(doc(db, 'forum_posts', postId as string), { isDeleted: false, deletedAt: null });
             setPost(prev => prev ? { ...prev, isDeleted: false } : null);
-            toast.success('Post restored successfully');
+            toast.success('Post restored');
         } catch (error) {
             toast.error('Failed to restore post');
         }
     };
 
     const handlePermanentDelete = async () => {
-        if (!confirm('Are you sure you want to PERMANENTLY delete this post? This cannot be undone.')) return;
+        if (!confirm('PERMANENTLY delete this post? This cannot be undone.')) return;
         try {
             await deleteDoc(doc(db, 'forum_posts', postId as string));
-            toast.success('Post permanently deleted');
-            router.push('/dashboard/community');
+            toast.success('Post deleted');
+            router.push(backLink);
         } catch (error) {
             toast.error('Failed to delete post');
         }
@@ -327,136 +257,109 @@ export default function ThreadPage() {
     const handlePinPost = async () => {
         if (!post) return;
         try {
-            const newPinnedState = !post.isPinned;
-            await updateDoc(doc(db, 'forum_posts', postId as string), { isPinned: newPinnedState });
-            setPost(prev => prev ? { ...prev, isPinned: newPinnedState } : null);
-            toast.success(newPinnedState ? 'Post pinned' : 'Post unpinned');
+            await updateDoc(doc(db, 'forum_posts', postId as string), { isPinned: !post.isPinned });
+            setPost(prev => prev ? { ...prev, isPinned: !prev.isPinned } : null);
+            toast.success('Pin status updated');
         } catch (error) {
-            toast.error('Failed to update pin status');
+            toast.error('Failed to update pin');
         }
     };
 
     const handleFlagPost = async () => {
         if (!post) return;
         try {
-            // Toggle flag
-            const newFlaggedState = !post.isFlagged;
-            await updateDoc(doc(db, 'forum_posts', postId as string), { isFlagged: newFlaggedState });
-            setPost(prev => prev ? { ...prev, isFlagged: newFlaggedState } : null);
-            toast.success(newFlaggedState ? 'Post flagged for review' : 'Flag removed');
+            await updateDoc(doc(db, 'forum_posts', postId as string), { isFlagged: !post.isFlagged });
+            setPost(prev => prev ? { ...prev, isFlagged: !prev.isFlagged } : null);
+            toast.success('Flag status updated');
         } catch (error) {
-            toast.error('Failed to update flag status');
-        }
-    };
-
-    const handleBanUser = async (userId: string) => {
-        if (!confirm('Are you sure you want to BAN this user? They will not be able to post anymore.')) return;
-        try {
-            await updateDoc(doc(db, 'users', userId), { status: 'banned' });
-            toast.success('User banned successfully');
-        } catch (error) {
-            toast.error('Failed to ban user');
+            toast.error('Failed to update flag');
         }
     };
 
     const handleUpvote = async (collectionName: 'forum_posts' | 'forum_replies', id: string, currentUpvotedBy: string[]) => {
         if (!user) return;
-
         const isUpvoted = currentUpvotedBy.includes(user.uid);
         const docRef = doc(db, collectionName, id);
 
-        try {
-            if (isUpvoted) {
-                await updateDoc(docRef, { upvotes: increment(-1), upvotedBy: arrayRemove(user.uid) });
-            } else {
-                await updateDoc(docRef, { upvotes: increment(1), upvotedBy: arrayUnion(user.uid) });
-            }
-            // Optimistic update
+        // Optimistic UI
+        const updateState = (isUpvoted: boolean) => {
             if (collectionName === 'forum_posts') {
                 setPost(prev => prev ? { ...prev, upvotes: isUpvoted ? prev.upvotes - 1 : prev.upvotes + 1, upvotedBy: isUpvoted ? prev.upvotedBy.filter(u => u !== user.uid) : [...prev.upvotedBy, user.uid] } : null);
             } else {
                 setReplies(prev => prev.map(r => r.id === id ? { ...r, upvotes: isUpvoted ? r.upvotes - 1 : r.upvotes + 1, upvotedBy: isUpvoted ? r.upvotedBy.filter(u => u !== user.uid) : [...r.upvotedBy, user.uid] } : r));
             }
-        } catch (err) {
-            console.error(err);
-            // Rollback optimistic update on error
-            if (collectionName === 'forum_posts') {
-                setPost(prev => prev ? { ...prev, upvotes: isUpvoted ? prev.upvotes + 1 : prev.upvotes - 1, upvotedBy: isUpvoted ? [...prev.upvotedBy, user.uid] : prev.upvotedBy.filter(u => u !== user.uid) } : null);
-            } else {
-                setReplies(prev => prev.map(r => r.id === id ? { ...r, upvotes: isUpvoted ? r.upvotes + 1 : r.upvotes - 1, upvotedBy: isUpvoted ? [...r.upvotedBy, user.uid] : r.upvotedBy.filter(u => u !== user.uid) } : r));
-            }
-            toast.error('Failed to update vote');
+        };
+
+        updateState(isUpvoted);
+
+        try {
+            await updateDoc(docRef, {
+                upvotes: increment(isUpvoted ? -1 : 1),
+                upvotedBy: isUpvoted ? arrayRemove(user.uid) : arrayUnion(user.uid)
+            });
+        } catch (error) {
+            updateState(!isUpvoted); // Rollback
+            toast.error('Upvote failed');
         }
     };
 
-    if (!post) return <div className="p-8 text-center">Loading...</div>;
+    if (!post) return (
+        <div className="flex h-screen items-center justify-center">
+            <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+        </div>
+    );
+
+    const isAnnouncement = post.type === 'announcement';
 
     return (
-        <div className="max-w-4xl mx-auto p-4 md:p-8 space-y-8">
-            <Link href="/dashboard/community">
-                <Button variant="ghost" className="mb-4 pl-0 hover:pl-2 transition-all">
-                    <ArrowLeft className="mr-2 h-4 w-4" /> Back to Feed
+        <div className="min-h-screen bg-slate-50/[0.6] dark:bg-slate-950 p-4 md:p-8">
+            <div className="max-w-4xl mx-auto space-y-6">
+                <Button
+                    variant="ghost"
+                    className="pl-0 hover:pl-2 transition-all hover:bg-transparent text-muted-foreground hover:text-foreground"
+                    onClick={() => router.push(backLink)}
+                >
+                    <ArrowLeft className="mr-2 h-4 w-4" /> Back to Discussions
                 </Button>
-            </Link>
 
-            {/* Main Question Post */}
-            <Card className="border-l-4 border-l-purple-600 shadow-lg">
-                <CardHeader className="flex flex-row gap-4 space-y-0 pb-2">
-                    <Avatar className="h-10 w-10 border">
-                        <AvatarFallback>{post.authorName[0]?.toUpperCase()}</AvatarFallback>
-                    </Avatar>
-                </CardHeader>
-                <CardContent className="pt-4">
-                    {post.isDeleted && (
-                        <div className="bg-red-100 border border-red-200 text-red-700 px-4 py-2 rounded-md mb-4 flex items-center gap-2">
-                            <EyeOff className="w-4 h-4" />
-                            This post is hidden/deleted (Visible to Admins only)
-                        </div>
-                    )}
+                {/* Main Post Card */}
+                <Card className={`overflow-hidden shadow-lg border hover:border-purple-500/20 transition-colors
+                    ${isAnnouncement
+                        ? 'bg-gradient-to-br from-yellow-50 to-orange-50 dark:from-yellow-900/10 dark:to-orange-900/10 border-yellow-200 dark:border-yellow-800'
+                        : 'bg-white/80 dark:bg-slate-900/50 border-white/20 dark:border-white/10'
+                    } backdrop-blur-md`}>
 
-                    <div className="flex justify-between items-start mb-4">
-                        <div className="flex-1">
-                            <h1 className="text-2xl font-black text-foreground flex items-center gap-2">
-                                {post.isPinned && <Pin className="w-5 h-5 text-blue-500 fill-blue-500 transform rotate-45" />}
-                                {isEditingPost ? (
-                                    <Input
-                                        value={editPostTitle}
-                                        onChange={e => setEditPostTitle(e.target.value)}
-                                        className="text-lg font-bold"
-                                    />
-                                ) : (
-                                    post.title
+                    <CardHeader className="flex flex-row items-start gap-4 pb-4">
+                        <Avatar className={`h-12 w-12 border-2 ${isAnnouncement ? 'border-yellow-400' : 'border-white dark:border-slate-700'} shadow-sm`}>
+                            <AvatarFallback className={`text-lg ${post.authorRole === 'teacher' ? 'bg-indigo-100 text-indigo-700' : post.authorRole === 'admin' ? 'bg-rose-100 text-rose-700' : 'bg-gradient-to-br from-blue-500 to-purple-500 text-white'}`}>
+                                {post.authorName[0]?.toUpperCase()}
+                            </AvatarFallback>
+                        </Avatar>
+                        <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                                <span className="font-bold text-foreground">{post.authorName}</span>
+                                {post.authorRole !== 'student' && (
+                                    <Badge variant="secondary" className="text-[10px] h-5 px-1.5">
+                                        {post.authorRole.toUpperCase()}
+                                    </Badge>
                                 )}
-                            </h1>
-                            <div className="flex items-center gap-2 text-sm text-muted-foreground mt-1">
-                                <span className="font-medium text-foreground">{post.authorName}</span>
-                                <span>•</span>
-                                <span>{post.createdAt?.toDate ? formatDistanceToNow(post.createdAt.toDate()) + ' ago' : ''}</span>
-                                <Badge variant="secondary" className="ml-2">{post.subject}</Badge>
-                                {post.isSolved && <Badge className="bg-green-100 text-green-700 hover:bg-green-200 ml-2"><CheckCircle className="w-3 h-3 mr-1" /> Solved</Badge>}
-                                {post.isFlagged && (currentUserRole === 'admin' || currentUserRole === 'teacher') &&
-                                    <Badge className="bg-yellow-100 text-yellow-700 ml-2"><Flag className="w-3 h-3 mr-1" /> Flagged</Badge>
-                                }
+                                {isAnnouncement && <Badge variant="outline" className="text-[10px] border-yellow-500 text-yellow-600 bg-yellow-50"><Megaphone className="w-3 h-3 mr-1" /> Announcement</Badge>}
+                                <span className="text-xs text-muted-foreground">• {post.createdAt?.toDate ? formatDistanceToNow(post.createdAt.toDate(), { addSuffix: true }) : 'Just now'}</span>
                             </div>
+                            <h1 className="text-2xl md:text-3xl font-extrabold text-foreground leading-tight tracking-tight">
+                                {post.isPinned && <Pin className="inline w-6 h-6 text-blue-500 mr-2 transform rotate-45" />}
+                                {post.title}
+                            </h1>
                         </div>
 
-                        {/* Dropdown Menu for Actions */}
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                                 <Button variant="ghost" size="icon" className="h-8 w-8">
                                     <MoreHorizontal className="h-4 w-4" />
                                 </Button>
                             </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                                {/* Actions for Author */}
-                                {user?.uid === post.authorId && !post.isDeleted && (
-                                    <DropdownMenuItem onClick={handleSoftDelete} className="text-red-600 focus:text-red-600">
-                                        <Trash2 className="w-4 h-4 mr-2" /> Delete Post
-                                    </DropdownMenuItem>
-                                )}
-
-                                {/* Edit Post (Author Only) */}
-                                {canEditPost(post) && !post.isDeleted && !isEditingPost && (
+                            <DropdownMenuContent align="end" className="w-48">
+                                {user?.uid === post.authorId && (
                                     <DropdownMenuItem onClick={() => {
                                         setEditPostTitle(post.title);
                                         setEditPostContent(post.content);
@@ -465,215 +368,218 @@ export default function ThreadPage() {
                                         <Edit2 className="w-4 h-4 mr-2" /> Edit Post
                                     </DropdownMenuItem>
                                 )}
-
-                                {/* Actions for Everyone (Flagging) */}
-                                {user?.uid !== post.authorId && (
-                                    <DropdownMenuItem onClick={handleFlagPost}>
-                                        <Flag className="w-4 h-4 mr-2" /> {post.isFlagged ? 'Unflag Post' : 'Flag Post'}
-                                    </DropdownMenuItem>
-                                )}
-
-                                {/* Admin/Teacher Actions */}
-                                {(currentUserRole === 'admin' || currentUserRole === 'teacher') && (
+                                {(userRole === 'admin' || userRole === 'teacher') && (
                                     <>
                                         <DropdownMenuItem onClick={handlePinPost}>
                                             <Pin className="w-4 h-4 mr-2" /> {post.isPinned ? 'Unpin Post' : 'Pin Post'}
                                         </DropdownMenuItem>
-
-                                        {post.isDeleted ? (
-                                            <>
-                                                <DropdownMenuItem onClick={handleRestore} className="text-green-600 focus:text-green-600">
-                                                    <Eye className="w-4 h-4 mr-2" /> Restore Post
-                                                </DropdownMenuItem>
-                                                <DropdownMenuItem onClick={handlePermanentDelete} className="text-red-700 focus:text-red-700 font-bold">
-                                                    <XCircle className="w-4 h-4 mr-2" /> Delete Permanently
-                                                </DropdownMenuItem>
-                                            </>
-                                        ) : (
-                                            <DropdownMenuItem onClick={handleSoftDelete} className="text-red-600 focus:text-red-600">
-                                                <EyeOff className="w-4 h-4 mr-2" /> Hide Post (Soft Delete)
-                                            </DropdownMenuItem>
-                                        )}
-
-                                        {currentUserRole === 'admin' && (
-                                            <DropdownMenuItem onClick={() => handleBanUser(post.authorId)} className="text-red-600 focus:text-red-600">
-                                                <XCircle className="w-4 h-4 mr-2" /> Ban User
-                                            </DropdownMenuItem>
-                                        )}
+                                        <DropdownMenuItem onClick={handleSoftDelete} className="text-orange-600">
+                                            <EyeOff className="w-4 h-4 mr-2" /> Hide Post
+                                        </DropdownMenuItem>
                                     </>
                                 )}
+                                {userRole === 'admin' && (
+                                    <DropdownMenuItem onClick={handlePermanentDelete} className="text-red-600 focus:text-red-600">
+                                        <Trash2 className="w-4 h-4 mr-2" /> Delete Permanently
+                                    </DropdownMenuItem>
+                                )}
+                                <DropdownMenuItem onClick={handleFlagPost}>
+                                    <Flag className="w-4 h-4 mr-2" /> {post.isFlagged ? 'Unflag' : 'Report'}
+                                </DropdownMenuItem>
                             </DropdownMenuContent>
                         </DropdownMenu>
-                    </div>
+                    </CardHeader>
 
-                    {isEditingPost ? (
-                        <div className="space-y-4">
-                            <Textarea
-                                value={editPostContent}
-                                onChange={e => setEditPostContent(e.target.value)}
-                                className="min-h-[200px]"
-                            />
-                            <div className="flex gap-2">
-                                <Button onClick={handleEditPost} size="sm">Save Changes</Button>
-                                <Button onClick={() => setIsEditingPost(false)} variant="ghost" size="sm">Cancel</Button>
+                    <CardContent className="space-y-6">
+                        {isEditingPost ? (
+                            <div className="space-y-4 p-4 bg-slate-50 dark:bg-slate-900 rounded-xl border border-dashed border-slate-300 dark:border-slate-700">
+                                <div className="space-y-2">
+                                    <label className="text-sm font-medium">Title</label>
+                                    <Input value={editPostTitle} onChange={e => setEditPostTitle(e.target.value)} className="text-lg font-bold bg-white dark:bg-slate-950" />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-sm font-medium">Content</label>
+                                    <RichTextEditor
+                                        value={editPostContent}
+                                        onChange={setEditPostContent}
+                                        className="min-h-[200px]"
+                                    />
+                                </div>
+                                <div className="flex gap-2 justify-end pt-2">
+                                    <Button variant="ghost" onClick={() => setIsEditingPost(false)}>Cancel</Button>
+                                    <Button onClick={handleEditPost} className="bg-purple-600 hover:bg-purple-700 text-white">Save Changes</Button>
+                                </div>
                             </div>
-                        </div>
-                    ) : (
-                        <p className="text-lg whitespace-pre-wrap leading-relaxed text-foreground/90">{post.content}</p>
-                    )}
-
-                    {/* Image Attachment */}
-                    {post.images && post.images.length > 0 && (
-                        <div className="mt-6 mb-6">
-                            <h3 className="text-sm font-semibold mb-2 text-muted-foreground uppercase tracking-wider">Attachment</h3>
-                            <div className="rounded-xl overflow-hidden border bg-gray-50 dark:bg-gray-900 inline-block">
-                                <img
-                                    src={post.images[0]}
-                                    alt="Post attachment"
-                                    className="w-full h-auto object-contain max-h-[600px]"
-                                />
-                            </div>
-                        </div>
-                    )}
-
-                    <div className="flex items-center gap-4 mt-6 pt-4 border-t">
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            className={`flex gap-2 ${post.upvotedBy?.includes(user?.uid || '') ? 'border-purple-200 bg-purple-50 text-purple-700' : ''}`}
-                            onClick={() => handleUpvote('forum_posts', post.id, post.upvotedBy || [])}
-                        >
-                            <ThumbsUp className={`h-4 w-4 ${post.upvotedBy?.includes(user?.uid || '') ? 'fill-current' : ''}`} />
-                            {post.upvotes} Upvotes
-                        </Button>
-                    </div>
-                </CardContent>
-            </Card>
-
-            {/* Answers Section */}
-            <div className="space-y-6">
-                <h3 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-gray-900 to-gray-600 dark:from-gray-100 dark:to-gray-400">
-                    {replies.length} Answers
-                </h3>
-
-                {replies.map((reply) => (
-                    <div key={reply.id} className={`group relative p-6 rounded-2xl border bg-card shadow-sm transition-all ${reply.isVerified ? 'border-green-500/50 bg-green-50/10 shadow-green-500/10' : 'hover:border-purple-200'}`}>
-                        {reply.isVerified && (
-                            <div className="absolute -top-3 -right-3 bg-green-500 text-white px-3 py-1 rounded-full text-xs font-bold shadow-lg flex items-center gap-1 animate-in zoom-in">
-                                <ShieldCheck className="w-3 h-3" /> Faculty Verified
+                        ) : (
+                            <div className="prose prose-lg dark:prose-invert max-w-none prose-p:leading-relaxed prose-headings:font-bold prose-a:text-blue-600">
+                                <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(post.content) }} />
                             </div>
                         )}
 
-                        <div className="flex items-start gap-4">
-                            <Avatar className="h-8 w-8 mt-1">
-                                <AvatarFallback className={reply.authorRole !== 'student' ? 'bg-purple-100 text-purple-700' : ''}>
-                                    {reply.authorName[0]?.toUpperCase()}
-                                </AvatarFallback>
-                            </Avatar>
-                            <div className="flex-1">
-                                <div className="flex justify-between items-start">
-                                    <div>
-                                        <span className="font-bold text-sm mr-2">{reply.authorName}</span>
-                                        {reply.authorRole !== 'student' && <Badge variant="secondary" className="text-[10px] h-5 px-1.5">{reply.authorRole.toUpperCase()}</Badge>}
-                                        <div className="text-xs text-muted-foreground">{reply.createdAt?.toDate ? formatDistanceToNow(reply.createdAt.toDate()) + ' ago' : ''}</div>
-                                    </div>
-                                    {(currentUserRole === 'admin' || currentUserRole === 'teacher') && !reply.isVerified && (
-                                        <Button size="sm" variant="ghost" className="text-green-600 hover:text-green-700 hover:bg-green-50 h-8" onClick={() => handleVerify(reply.id)}>
-                                            <ShieldCheck className="w-4 h-4 mr-1" /> Verify Answer
-                                        </Button>
-                                    )}
-                                </div>
-
-                                <div className="mt-3 text-sm leading-relaxed text-foreground/90 whitespace-pre-wrap">
-                                    {editingReplyId === reply.id ? (
-                                        <div className="space-y-3">
-                                            <Textarea
-                                                value={editContent}
-                                                onChange={(e) => setEditContent(e.target.value)}
-                                                className="min-h-[100px] resize-y"
-                                            />
-                                            <div className="flex gap-2">
-                                                <Button size="sm" onClick={() => handleEditReply(reply.id)}>
-                                                    Save
-                                                </Button>
-                                                <Button
-                                                    size="sm"
-                                                    variant="outline"
-                                                    onClick={() => {
-                                                        setEditingReplyId(null);
-                                                        setEditContent('');
-                                                    }}
-                                                >
-                                                    Cancel
-                                                </Button>
-                                            </div>
-                                        </div>
-                                    ) : (
-                                        <div>
-                                            <p>{reply.content}</p>
-                                            {reply.editedAt && (
-                                                <span className="text-xs text-muted-foreground italic mt-1 inline-block">
-                                                    (edited {reply.editedAt?.toDate ? formatDistanceToNow(reply.editedAt.toDate()) : ''} ago)
-                                                </span>
-                                            )}
-                                        </div>
-                                    )}
-                                </div>
-
-                                <div className="flex items-center gap-3 mt-4">
-                                    <button
-                                        className={`flex items-center gap-1 text-xs font-medium transition-colors ${reply.upvotedBy?.includes(user?.uid || '') ? 'text-purple-600' : 'text-muted-foreground hover:text-foreground'}`}
-                                        onClick={() => handleUpvote('forum_replies', reply.id, reply.upvotedBy || [])}
-                                    >
-                                        <ThumbsUp className={`w-3.5 h-3.5 ${reply.upvotedBy?.includes(user?.uid || '') ? 'fill-current' : ''}`} />
-                                        {reply.upvotes} Helpful
-                                    </button>
-                                    {canEdit(reply) && editingReplyId !== reply.id && (
-                                        <button
-                                            className="flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700 transition-colors"
-                                            onClick={() => {
-                                                setEditingReplyId(reply.id);
-                                                setEditContent(reply.content);
-                                            }}
-                                        >
-                                            <Edit2 className="w-3.5 h-3.5" />
-                                            Edit
-                                        </button>
-                                    )}
-                                    {(user?.uid === reply.authorId || currentUserRole === 'admin' || currentUserRole === 'teacher') && (
-                                        <button
-                                            className="flex items-center gap-1 text-xs font-medium text-red-600 hover:text-red-700 transition-colors"
-                                            onClick={() => handleDeleteReply(reply.id, reply.authorId)}
-                                        >
-                                            <Trash2 className="w-3.5 h-3.5" />
-                                            Delete
-                                        </button>
-                                    )}
-                                </div>
+                        {post.images && post.images.length > 0 && (
+                            <div className="rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 shadow-sm">
+                                <img src={post.images[0]} alt="Attachment" className="max-h-[600px] w-auto mx-auto object-contain cursor-zoom-in hover:scale-[1.01] transition-transform duration-300" />
                             </div>
-                        </div>
-                    </div>
-                ))}
+                        )}
 
-                {/* Reply Form */}
-                <Card className="mt-8 border-t-2 border-t-purple-600">
-                    <CardHeader>
-                        <CardTitle className="text-lg">Your Answer</CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                        <Textarea
-                            value={replyContent}
-                            onChange={e => setReplyContent(e.target.value)}
-                            placeholder="Write a clear and helpful explanation..."
-                            className="min-h-[120px] resize-y bg-background focus:bg-background"
-                        />
-                        <div className="flex justify-end">
-                            <Button onClick={handlePostReply} disabled={isSubmitting || !replyContent.trim()} className="bg-purple-600 hover:bg-purple-700 font-semibold px-8">
-                                {isSubmitting ? 'Posting...' : 'Post Answer'}
-                            </Button>
+                        <div className="flex items-center justify-between pt-6 border-t border-slate-100 dark:border-slate-800/50">
+                            <div className="flex gap-3">
+                                <Button
+                                    variant={post.upvotedBy?.includes(user?.uid || '') ? "secondary" : "outline"}
+                                    size="sm"
+                                    onClick={() => handleUpvote('forum_posts', post.id, post.upvotedBy || [])}
+                                    className={`rounded-full px-4 ${post.upvotedBy?.includes(user?.uid || '') ? "text-purple-600 bg-purple-50 dark:bg-purple-900/20 ring-1 ring-purple-200 dark:ring-purple-800" : "hover:bg-slate-50 dark:hover:bg-slate-800"}`}
+                                >
+                                    <ThumbsUp className={`w-4 h-4 mr-2 ${post.upvotedBy?.includes(user?.uid || '') ? "fill-current" : ""}`} />
+                                    {post.upvotes} <span className="hidden sm:inline ml-1">Upvotes</span>
+                                </Button>
+                                <Button variant="outline" size="sm" className="rounded-full px-4 hover:bg-slate-50 dark:hover:bg-slate-800">
+                                    <Share2 className="w-4 h-4 mr-2" /> Share
+                                </Button>
+                            </div>
+
+                            <div className="flex gap-2 flex-wrap justify-end">
+                                <Badge variant="outline" className="text-xs bg-slate-50 dark:bg-slate-900 px-3 py-1">{post.subject}</Badge>
+                                {post.isSolved && <Badge variant="default" className="bg-green-600 hover:bg-green-700 text-xs px-3 py-1 shadow-green-200 dark:shadow-none shadow-sm"><CheckCircle className="w-3 h-3 mr-1" /> Solved</Badge>}
+                            </div>
                         </div>
                     </CardContent>
                 </Card>
+
+                {/* Answers Section */}
+                <div className="space-y-6 pt-4">
+                    <div className="flex items-center justify-between">
+                        <h3 className="text-xl font-bold flex items-center gap-2">
+                            {replies.length} Answers
+                        </h3>
+                    </div>
+
+                    {replies.map((reply) => (
+                        <div key={reply.id} className={`group relative p-6 rounded-2xl border bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm transition-all hover:shadow-md hover:border-slate-300 dark:hover:border-slate-700
+                            ${reply.isVerified ? 'border-green-500/50 ring-1 ring-green-500/20 bg-green-50/10 dark:bg-green-900/10' : 'border-slate-200 dark:border-slate-800'}`}>
+
+                            {reply.isVerified && (
+                                <div className="absolute -top-3 -right-2 bg-green-600 text-white px-3 py-1 rounded-full text-xs font-bold shadow-lg flex items-center gap-1 animate-in zoom-in slide-in-from-bottom-2">
+                                    <ShieldCheck className="w-3.5 h-3.5" /> Faculty Verified
+                                </div>
+                            )}
+
+                            <div className="flex gap-4">
+                                <Avatar className="h-10 w-10 mt-1 border border-slate-200 dark:border-slate-800">
+                                    <AvatarFallback className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-medium">
+                                        {reply.authorName[0]?.toUpperCase()}
+                                    </AvatarFallback>
+                                </Avatar>
+
+                                <div className="flex-1 space-y-2 min-w-0">
+                                    <div className="flex justify-between items-start">
+                                        <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
+                                            <span className="font-bold text-sm text-foreground">{reply.authorName}</span>
+                                            <div className="flex items-center gap-2">
+                                                {reply.authorRole !== 'student' && <Badge variant="secondary" className="text-[10px] h-5 px-1.5 font-normal">{reply.authorRole.toUpperCase()}</Badge>}
+                                                <span className="text-xs text-muted-foreground">{reply.createdAt?.toDate ? formatDistanceToNow(reply.createdAt.toDate()) + ' ago' : ''}</span>
+                                            </div>
+                                        </div>
+
+                                        <div className="flex items-center gap-2">
+                                            {(userRole === 'admin' || userRole === 'teacher') && !reply.isVerified && (
+                                                <Button size="sm" variant="outline" className="text-green-600 hover:text-green-700 hover:bg-green-50 h-7 text-xs border-green-200" onClick={() => handleVerify(reply.id)}>
+                                                    <ShieldCheck className="w-3 h-3 mr-1" /> Verify
+                                                </Button>
+                                            )}
+
+                                            {(user?.uid === reply.authorId || userRole === 'admin' || userRole === 'teacher') && (
+                                                <DropdownMenu>
+                                                    <DropdownMenuTrigger asChild>
+                                                        <Button variant="ghost" size="icon" className="h-7 w-7">
+                                                            <MoreHorizontal className="h-3 w-3" />
+                                                        </Button>
+                                                    </DropdownMenuTrigger>
+                                                    <DropdownMenuContent align="end">
+                                                        {user?.uid === reply.authorId && (
+                                                            <DropdownMenuItem onClick={() => { setEditingReplyId(reply.id); setEditContent(reply.content); }}>
+                                                                <Edit2 className="w-4 h-4 mr-2" /> Edit
+                                                            </DropdownMenuItem>
+                                                        )}
+                                                        <DropdownMenuItem onClick={() => handleDeleteReply(reply.id, reply.authorId)} className="text-red-600">
+                                                            <Trash2 className="w-4 h-4 mr-2" /> Delete
+                                                        </DropdownMenuItem>
+                                                    </DropdownMenuContent>
+                                                </DropdownMenu>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {editingReplyId === reply.id ? (
+                                        <div className="space-y-4 p-4 border rounded-xl bg-slate-50 dark:bg-slate-900 border-dashed">
+                                            <RichTextEditor
+                                                value={editContent}
+                                                onChange={setEditContent}
+                                                className="min-h-[150px]"
+                                            />
+                                            <div className="flex gap-2 justify-end">
+                                                <Button size="sm" variant="ghost" onClick={() => setEditingReplyId(null)}>Cancel</Button>
+                                                <Button size="sm" onClick={() => handleEditReply(reply.id)}>Save Updates</Button>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div
+                                            className="prose prose-sm dark:prose-invert max-w-none text-foreground/90 leading-relaxed"
+                                            dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(reply.content) }}
+                                        />
+                                    )}
+
+                                    <div className="flex items-center gap-4 pt-3">
+                                        <button
+                                            className={`flex items-center gap-1.5 text-xs font-semibold py-1 px-3 rounded-full transition-all 
+                                                ${reply.upvotedBy?.includes(user?.uid || '')
+                                                    ? 'text-blue-600 bg-blue-50 dark:bg-blue-900/20'
+                                                    : 'text-muted-foreground hover:bg-slate-100 dark:hover:bg-slate-800'}`}
+                                            onClick={() => handleUpvote('forum_replies', reply.id, reply.upvotedBy || [])}
+                                        >
+                                            <ThumbsUp className={`w-3.5 h-3.5 ${reply.upvotedBy?.includes(user?.uid || '') ? 'fill-current' : ''}`} />
+                                            {reply.upvotes} Helpful
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+
+                    <div className="sticky bottom-6 pt-4">
+                        <div className="absolute inset-0 bg-gradient-to-t from-slate-50 via-slate-50/80 to-transparent dark:from-slate-950 dark:via-slate-950/80 pointer-events-none -mb-8" />
+                        <Card className="relative border-none shadow-xl bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl ring-1 ring-slate-200 dark:ring-slate-800">
+                            <CardContent className="pt-6 space-y-4">
+                                <h4 className="font-semibold flex items-center gap-2 text-foreground">
+                                    <Avatar className="h-6 w-6 border"><AvatarFallback className="text-[10px]">{user?.fullName?.[0]}</AvatarFallback></Avatar>
+                                    Your Answer
+                                </h4>
+                                <RichTextEditor
+                                    value={replyContent}
+                                    onChange={setReplyContent}
+                                    placeholder="Write a clear and helpful explanation..."
+                                    className="min-h-[150px] bg-white dark:bg-slate-950"
+                                />
+                                <div className="flex justify-end pt-2">
+                                    <Button
+                                        onClick={handlePostReply}
+                                        disabled={isSubmitting || !replyContent}
+                                        className="bg-gradient-to-r from-blue-600 to-purple-600 hover:shadow-lg hover:shadow-blue-500/20 transition-all text-white rounded-full px-6"
+                                    >
+                                        {isSubmitting ? (
+                                            <>
+                                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                                Posting...
+                                            </>
+                                        ) : (
+                                            'Post Answer'
+                                        )}
+                                    </Button>
+                                </div>
+                            </CardContent>
+                        </Card>
+                    </div>
+                </div>
             </div>
         </div>
     );

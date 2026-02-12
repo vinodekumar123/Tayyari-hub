@@ -205,7 +205,6 @@ export default function StudentSettingsPage() {
                                 </CardTitle>
                                 <CardDescription>
                                     Maximize security by logging out of devices you don&apos;t recognize.
-                                    Limit: 3 Active Devices.
                                 </CardDescription>
                             </CardHeader>
                             <CardContent>

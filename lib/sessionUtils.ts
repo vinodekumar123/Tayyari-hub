@@ -204,14 +204,13 @@ export const logUserSession = async (user: any, isAutoCheck = false) => {
             // if we are Logging In (isAutoCheck=false), we should proceed to create a NEW session.
 
             if (isAutoCheck) {
-                // Check if it was a forced revocation (we'll assume so if we're checking validity)
-                // But wait - if user logged out normally, they shouldn't be here (auth state would be null).
-                // If auth state exists but session is inactive, it MIGHT be a revocation.
-
-                // FIX: To distinguish normal logout vs admin revoke, we can check a flag.
-                // For now, if we are in auto-check and session is inactive, it's a revocation.
-                // BUT - on re-login, isAutoCheck is FALSE. So we skip this throw.
-                throw new SessionRevokedError();
+                // Check if it was a forced revocation
+                if (deviceSession.wasAdminRevoked === true) {
+                    throw new SessionRevokedError();
+                }
+                // Otherwise, if just inactive but not explicitly revoked, we ignore it to prevent accidental force-logout
+                // This effectively allows "zombie" sessions to revive if they have valid auth token, 
+                // which is better for UX if we are having issues with sessions being marked inactive erroneously.
             }
 
             // Login Flow (isAutoCheck=false): We are starting fresh. 
@@ -249,43 +248,9 @@ export const logUserSession = async (user: any, isAutoCheck = false) => {
         // FIX #2: Reconcile count before enforcing limit to ensure accuracy
         const reconciledCount = await reconcileSessionCount(user.uid);
 
-        // STRICT LIMIT ENFORCEMENT
-        const MAX_DEVICES = 3;
-        // FIX #1: Use reconciled count (more accurate than activeSessions.length which might have race conditions)
-        if (reconciledCount >= MAX_DEVICES) {
-            // BLOCK LOGIC: Log the attempt first, then throw
-            const blockedReason = `Device limit reached (${MAX_DEVICES})`;
-
-            // Create "Blocked" session doc
-            await addDoc(sessionsRef, {
-                userId: user.uid,
-                email: user.email,
-                userName: user.displayName || 'Unknown',
-                ip, city, country, region,
-                deviceId,
-                deviceType: result.device.type || 'desktop',
-                os: `${result.os.name} ${result.os.version}`,
-                browser: `${result.browser.name} ${result.browser.version}`,
-                loginTime: serverTimestamp(),
-                lastActive: serverTimestamp(),
-                isActive: false, // NOT Active
-                isBlocked: true, // BLOCKED Flag
-                blockReason: blockedReason,
-                isRedFlagSession: true, // Mark as red flag too
-                deviceFingerprint: fingerprint,
-                deviceMemory: (navigator as any).deviceMemory || null,
-                screenResolution: `${window.screen.width}x${window.screen.height}`,
-                hardwareConcurrency: navigator.hardwareConcurrency || null,
-            });
-
-            // Mark user as Red Flag
-            await updateDoc(doc(db, 'users', user.uid), {
-                redFlag: true,
-                redFlagReason: 'Multiple active sessions (>3) - Blocked Attempt'
-            });
-
-            throw new DeviceLimitError(`Device limit reached (${MAX_DEVICES}). Please logout from another device to continue.`);
-        }
+        // STRICT LIMIT ENFORCEMENT - REMOVED PER USER REQUEST
+        // const MAX_DEVICES = 3;
+        // if (reconciledCount >= MAX_DEVICES) { ... }
 
         // Create New Active Session
         await addDoc(sessionsRef, {

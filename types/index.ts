@@ -255,6 +255,7 @@ export interface StudyMaterial {
 export interface ForumPost {
     id: string;
     title: string;
+    type?: 'question' | 'discussion' | 'announcement'; // Add type field
     content: string; // HTML/RichText
     images?: string[];
     authorId: string;
