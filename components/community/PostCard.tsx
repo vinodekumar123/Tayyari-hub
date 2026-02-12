@@ -80,12 +80,9 @@ export function PostCard({ post, currentUserId }: PostCardProps) {
 
     return (
         <Link href={`/dashboard/community/${post.id}`} className="block group">
-            <Card
-                className={`overflow-hidden transition-all duration-300 border hover:border-purple-500/30
-                ${isAnnouncement
-                        ? 'bg-gradient-to-br from-yellow-50 to-orange-50 dark:from-yellow-900/10 dark:to-orange-900/10 border-yellow-200 dark:border-yellow-800'
-                        : 'bg-white/60 dark:bg-slate-900/40 border-white/20 dark:border-white/10 hover:shadow-lg hover:shadow-purple-500/5'
-                    } backdrop-blur-md`}
+            <Card className={`relative overflow-hidden transition-all duration-300 border-0 shadow-sm hover:shadow-md hover:-translate-y-1 bg-white dark:bg-slate-900/50
+                ${isAnnouncement ? 'ring-1 ring-yellow-500/30 bg-gradient-to-br from-yellow-50 to-orange-50 dark:from-yellow-900/10 dark:to-orange-900/10' : ''}
+            `}
                 onMouseEnter={() => setIsHovered(true)}
                 onMouseLeave={() => setIsHovered(false)}
             >

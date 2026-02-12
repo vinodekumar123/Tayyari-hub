@@ -278,7 +278,7 @@ export function CommunityFeed({ role, canCreate = true, initialShowDeleted = fal
     return (
         <div className="space-y-6">
             {/* Header / Action Bar */}
-            <div className={`flex flex-col md:flex-row gap-4 justify-between items-center ${glassmorphism.light} p-4 rounded-xl border border-white/20 dark:border-white/10 shadow-sm backdrop-blur-md`}>
+            <div className={`sticky top-2 z-30 flex flex-col md:flex-row gap-4 justify-between items-center ${glassmorphism.light} p-4 rounded-xl border border-white/20 dark:border-white/10 shadow-sm backdrop-blur-md transition-all duration-300`}>
                 {/* Search & Filter Group */}
                 <div className="flex flex-col sm:flex-row flex-1 w-full gap-3">
                     <div className="relative flex-1 min-w-[200px]">
@@ -291,18 +291,35 @@ export function CommunityFeed({ role, canCreate = true, initialShowDeleted = fal
                         />
                     </div>
 
+                    {/* Modern Subject Pills Filter */}
+                    <div className="w-full overflow-x-auto pb-2 -mx-4 px-4 md:mx-0 md:px-0 md:pb-0 scrollbar-hide">
+                        <div className="flex gap-2 min-w-max">
+                            <button
+                                onClick={() => setSubjectFilter('all')}
+                                className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all
+                                    ${subjectFilter === 'all'
+                                        ? 'bg-purple-600 text-white shadow-lg shadow-purple-500/30 ring-2 ring-purple-600 ring-offset-2 dark:ring-offset-slate-900'
+                                        : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700'
+                                    }`}
+                            >
+                                All Topics
+                            </button>
+                            {subjects.map((subject) => (
+                                <button
+                                    key={subject.id}
+                                    onClick={() => setSubjectFilter(subject.name)}
+                                    className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all whitespace-nowrap
+                                        ${subjectFilter === subject.name
+                                            ? 'bg-purple-600 text-white shadow-lg shadow-purple-500/30 ring-2 ring-purple-600 ring-offset-2 dark:ring-offset-slate-900'
+                                            : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700'
+                                        }`}
+                                >
+                                    {subject.name}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
                     <div className="grid grid-cols-2 sm:flex gap-2 w-full sm:w-auto">
-                        <Select value={subjectFilter} onValueChange={setSubjectFilter}>
-                            <SelectTrigger className="w-full sm:w-[150px] bg-white/50 dark:bg-slate-900/50 border-slate-200 dark:border-slate-800 rounded-full">
-                                <SelectValue placeholder="All Subjects" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">All Subjects</SelectItem>
-                                {subjects.filter(s => s.name).map(s => <SelectItem key={s.id} value={s.name}>{s.name}</SelectItem>)}
-                                <SelectItem value="Other">Other</SelectItem>
-                            </SelectContent>
-                        </Select>
-
                         <Select value={sortBy} onValueChange={(value) => {
                             setSortBy(value);
                             setPosts([]);
@@ -325,6 +342,20 @@ export function CommunityFeed({ role, canCreate = true, initialShowDeleted = fal
 
                 {/* Right Side Actions */}
                 <div className="flex flex-wrap items-center gap-3 w-full md:w-auto justify-end">
+
+                    {/* Sort Filter - Compact */}
+                    <Select value={sortBy} onValueChange={setSortBy}>
+                        <SelectTrigger className="w-[140px] h-9 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 rounded-lg text-xs">
+                            <Filter className="w-3.5 h-3.5 mr-2 text-slate-500" />
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="newest">Newest First</SelectItem>
+                            <SelectItem value="votes">Most Voted</SelectItem>
+                            <SelectItem value="unanswered">Unanswered</SelectItem>
+                        </SelectContent>
+                    </Select>
+
                     {role === 'admin' && (
                         <div className="flex items-center gap-2 mr-2">
                             <Switch id="show-deleted" checked={showDeleted} onCheckedChange={setShowDeleted} />
