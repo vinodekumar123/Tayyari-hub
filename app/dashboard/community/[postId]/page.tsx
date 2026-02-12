@@ -19,6 +19,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { glassmorphism } from '@/lib/design-tokens';
 import DOMPurify from 'dompurify';
 import { RichTextEditor } from '@/components/RichTextEditor';
+import { CommunityBackground } from '@/components/community/CommunityBackground';
 
 export default function ThreadPage() {
     const { postId } = useParams();
@@ -311,9 +312,13 @@ export default function ThreadPage() {
 
     const isAnnouncement = post.type === 'announcement';
 
+
+
     return (
-        <div className="min-h-screen bg-slate-50/[0.6] dark:bg-slate-950 p-4 md:p-8 pt-16 md:pt-8">
-            <div className="max-w-4xl mx-auto space-y-6">
+        <div className="min-h-screen bg-slate-50/[0.6] dark:bg-slate-950 relative overflow-hidden">
+            <CommunityBackground />
+
+            <div className="relative z-10 p-4 md:p-8 pt-16 md:pt-8 max-w-4xl mx-auto space-y-6">
                 <Button
                     variant="ghost"
                     className="pl-0 hover:pl-2 transition-all hover:bg-transparent text-muted-foreground hover:text-foreground"
@@ -323,71 +328,81 @@ export default function ThreadPage() {
                 </Button>
 
                 {/* Main Post Card */}
-                <Card className={`overflow-hidden shadow-lg border hover:border-purple-500/20 transition-colors
+                <Card className={`overflow-hidden shadow-2xl border-0 ring-1 ring-white/20 dark:ring-white/10
                     ${isAnnouncement
-                        ? 'bg-gradient-to-br from-yellow-50 to-orange-50 dark:from-yellow-900/10 dark:to-orange-900/10 border-yellow-200 dark:border-yellow-800'
-                        : 'bg-white/80 dark:bg-slate-900/50 border-white/20 dark:border-white/10'
-                    } backdrop-blur-md`}>
+                        ? 'bg-gradient-to-br from-yellow-50/90 to-orange-50/90 dark:from-yellow-900/40 dark:to-orange-900/40 backdrop-blur-3xl'
+                        : 'bg-white/80 dark:bg-slate-900/60 backdrop-blur-3xl'
+                    }`}>
 
-                    <CardHeader className="flex flex-row items-start gap-4 pb-4">
-                        <Avatar className={`h-12 w-12 border-2 ${isAnnouncement ? 'border-yellow-400' : 'border-white dark:border-slate-700'} shadow-sm`}>
-                            <AvatarFallback className={`text-lg ${post.authorRole === 'teacher' ? 'bg-indigo-100 text-indigo-700' : post.authorRole === 'admin' ? 'bg-rose-100 text-rose-700' : 'bg-gradient-to-br from-blue-500 to-purple-500 text-white'}`}>
+                    <CardHeader className="flex flex-row items-start gap-4 pb-6 pt-8 px-8 relative">
+                        {/* Header Background Decoration */}
+                        <div className="absolute top-0 left-0 w-full h-32 bg-gradient-to-b from-purple-500/5 to-transparent pointer-events-none" />
+
+                        <Avatar className={`h-14 w-14 ring-4 ring-white dark:ring-slate-800 shadow-lg relative z-10 ${isAnnouncement ? 'border-yellow-400' : ''}`}>
+                            <AvatarFallback className={`text-xl font-bold ${post.authorRole === 'teacher' ? 'bg-indigo-100 text-indigo-700' : post.authorRole === 'admin' ? 'bg-rose-100 text-rose-700' : 'bg-gradient-to-br from-blue-500 to-purple-500 text-white'}`}>
                                 {post.authorName[0]?.toUpperCase()}
                             </AvatarFallback>
                         </Avatar>
-                        <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-                                <span className="font-bold text-foreground">{post.authorName}</span>
+
+                        <div className="flex-1 min-w-0 relative z-10 pt-1">
+                            <div className="flex items-center gap-2 mb-2 flex-wrap">
+                                <h1 className="text-3xl md:text-4xl font-black text-foreground leading-tight tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-slate-900 via-purple-900 to-slate-900 dark:from-white dark:via-purple-200 dark:to-white">
+                                    {post.isPinned && <Pin className="inline w-6 h-6 text-blue-500 mr-2 transform rotate-45" />}
+                                    {post.title}
+                                </h1>
+                            </div>
+
+                            <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                                <span className="font-semibold text-foreground">{post.authorName}</span>
                                 {post.authorRole !== 'student' && (
-                                    <Badge variant="secondary" className="text-[10px] h-5 px-1.5">
+                                    <Badge variant="secondary" className="h-5 px-1.5 text-[10px] tracking-wide font-normal">
                                         {post.authorRole.toUpperCase()}
                                     </Badge>
                                 )}
-                                {isAnnouncement && <Badge variant="outline" className="text-[10px] border-yellow-500 text-yellow-600 bg-yellow-50"><Megaphone className="w-3 h-3 mr-1" /> Announcement</Badge>}
-                                <span className="text-xs text-muted-foreground">• {post.createdAt?.toDate ? formatDistanceToNow(post.createdAt.toDate(), { addSuffix: true }) : 'Just now'}</span>
+                                <span className="w-1 h-1 rounded-full bg-slate-300 dark:bg-slate-600" />
+                                <span>{post.createdAt?.toDate ? formatDistanceToNow(post.createdAt.toDate(), { addSuffix: true }) : 'Just now'}</span>
+                                {isAnnouncement && <Badge variant="outline" className="border-yellow-500 text-yellow-600 bg-yellow-50"><Megaphone className="w-3 h-3 mr-1" /> Announcement</Badge>}
                             </div>
-                            <h1 className="text-2xl md:text-3xl font-extrabold text-foreground leading-tight tracking-tight">
-                                {post.isPinned && <Pin className="inline w-6 h-6 text-blue-500 mr-2 transform rotate-45" />}
-                                {post.title}
-                            </h1>
                         </div>
 
-                        <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="icon" className="h-8 w-8">
-                                    <MoreHorizontal className="h-4 w-4" />
-                                </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-48">
-                                {user?.uid === post.authorId && (
-                                    <DropdownMenuItem onClick={() => {
-                                        setEditPostTitle(post.title);
-                                        setEditPostContent(post.content);
-                                        setIsEditingPost(true);
-                                    }}>
-                                        <Edit2 className="w-4 h-4 mr-2" /> Edit Post
-                                    </DropdownMenuItem>
-                                )}
-                                {(userRole === 'admin' || userRole === 'teacher') && (
-                                    <>
-                                        <DropdownMenuItem onClick={handlePinPost}>
-                                            <Pin className="w-4 h-4 mr-2" /> {post.isPinned ? 'Unpin Post' : 'Pin Post'}
+                        <div className="relative z-10">
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-slate-100/50 dark:hover:bg-slate-800/50">
+                                        <MoreHorizontal className="h-5 w-5" />
+                                    </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="w-48">
+                                    {user?.uid === post.authorId && (
+                                        <DropdownMenuItem onClick={() => {
+                                            setEditPostTitle(post.title);
+                                            setEditPostContent(post.content);
+                                            setIsEditingPost(true);
+                                        }}>
+                                            <Edit2 className="w-4 h-4 mr-2" /> Edit Post
                                         </DropdownMenuItem>
-                                        <DropdownMenuItem onClick={handleSoftDelete} className="text-orange-600">
-                                            <EyeOff className="w-4 h-4 mr-2" /> Hide Post
+                                    )}
+                                    {(userRole === 'admin' || userRole === 'teacher') && (
+                                        <>
+                                            <DropdownMenuItem onClick={handlePinPost}>
+                                                <Pin className="w-4 h-4 mr-2" /> {post.isPinned ? 'Unpin Post' : 'Pin Post'}
+                                            </DropdownMenuItem>
+                                            <DropdownMenuItem onClick={handleSoftDelete} className="text-orange-600">
+                                                <EyeOff className="w-4 h-4 mr-2" /> Hide Post
+                                            </DropdownMenuItem>
+                                        </>
+                                    )}
+                                    {userRole === 'admin' && (
+                                        <DropdownMenuItem onClick={handlePermanentDelete} className="text-red-600 focus:text-red-600">
+                                            <Trash2 className="w-4 h-4 mr-2" /> Delete Permanently
                                         </DropdownMenuItem>
-                                    </>
-                                )}
-                                {userRole === 'admin' && (
-                                    <DropdownMenuItem onClick={handlePermanentDelete} className="text-red-600 focus:text-red-600">
-                                        <Trash2 className="w-4 h-4 mr-2" /> Delete Permanently
+                                    )}
+                                    <DropdownMenuItem onClick={handleFlagPost}>
+                                        <Flag className="w-4 h-4 mr-2" /> {post.isFlagged ? 'Unflag' : 'Report'}
                                     </DropdownMenuItem>
-                                )}
-                                <DropdownMenuItem onClick={handleFlagPost}>
-                                    <Flag className="w-4 h-4 mr-2" /> {post.isFlagged ? 'Unflag' : 'Report'}
-                                </DropdownMenuItem>
-                            </DropdownMenuContent>
-                        </DropdownMenu>
+                                </DropdownMenuContent>
+                            </DropdownMenu>
+                        </div>
                     </CardHeader>
 
                     <CardContent className="space-y-6">
