@@ -91,7 +91,7 @@ export function PostCard({ post, currentUserId }: PostCardProps) {
             >
                 <div className="p-5 sm:p-6">
                     {/* Header: Author & Meta */}
-                    <div className="flex justify-between items-start mb-4">
+                    <div className="flex flex-wrap justify-between items-start mb-4 gap-2">
                         <div className="flex items-center gap-3">
                             <Avatar className={`h-10 w-10 border-2 ${isAnnouncement ? 'border-yellow-400' : 'border-white dark:border-slate-700'} shadow-sm`}>
                                 <AvatarFallback className={`${post.authorRole === 'teacher' ? 'bg-indigo-100 text-indigo-700' : post.authorRole === 'admin' ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-700'}`}>

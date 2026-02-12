@@ -291,7 +291,7 @@ export function CommunityFeed({ role, canCreate = true, initialShowDeleted = fal
                         />
                     </div>
 
-                    <div className="flex gap-2 w-full sm:w-auto">
+                    <div className="grid grid-cols-2 sm:flex gap-2 w-full sm:w-auto">
                         <Select value={subjectFilter} onValueChange={setSubjectFilter}>
                             <SelectTrigger className="w-full sm:w-[150px] bg-white/50 dark:bg-slate-900/50 border-slate-200 dark:border-slate-800 rounded-full">
                                 <SelectValue placeholder="All Subjects" />
@@ -324,7 +324,7 @@ export function CommunityFeed({ role, canCreate = true, initialShowDeleted = fal
                 </div>
 
                 {/* Right Side Actions */}
-                <div className="flex items-center gap-3 w-full md:w-auto justify-end">
+                <div className="flex flex-wrap items-center gap-3 w-full md:w-auto justify-end">
                     {role === 'admin' && (
                         <div className="flex items-center gap-2 mr-2">
                             <Switch id="show-deleted" checked={showDeleted} onCheckedChange={setShowDeleted} />
@@ -344,7 +344,7 @@ export function CommunityFeed({ role, canCreate = true, initialShowDeleted = fal
                             </DialogTrigger>
                             <DialogContent className="w-[95vw] max-w-[90vw] h-[90vh] max-h-[90vh] overflow-y-auto sm:max-w-[700px] sm:h-auto rounded-xl">
                                 <DialogHeader>
-                                    <DialogTitle className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-purple-600 to-blue-600">
+                                    <DialogTitle className="text-xl sm:text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-purple-600 to-blue-600">
                                         {role === 'student' && !isAnnouncement ? 'Ask a Doubt' : (isAnnouncement ? 'Create Announcement' : 'Start Discussion')}
                                     </DialogTitle>
                                 </DialogHeader>
