@@ -840,8 +840,8 @@ export default function AdminReportsPage() {
                                                 onClick={() => {
                                                     const type = questionsCache[selectedReport.questionId]?.questionType;
                                                     const url = type === 'mock_question'
-                                                        ? `/admin/mockquestions?edit=${selectedReport.questionId}`
-                                                        : `/admin/questionbank?edit=${selectedReport.questionId}`;
+                                                        ? `/admin/mockquestions/create?id=${selectedReport.questionId}`
+                                                        : `/admin/questions/create?id=${selectedReport.questionId}`;
                                                     window.open(url, '_blank');
                                                 }}
                                             >
