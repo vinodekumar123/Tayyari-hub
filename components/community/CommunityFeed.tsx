@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { db, storage } from '@/app/firebase';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { collection, query, orderBy, limit, getDocs, addDoc, serverTimestamp, startAfter, QueryConstraint, where } from 'firebase/firestore';
@@ -81,6 +81,9 @@ export function CommunityFeed({ role, canCreate = true, initialShowDeleted = fal
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [sortBy, showDeleted]);
+
+    // Ref for file input
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files[0]) {
@@ -206,8 +209,9 @@ export function CommunityFeed({ role, canCreate = true, initialShowDeleted = fal
                     const snapshot = await uploadBytes(storageRef, selectedFile);
                     const url = await getDownloadURL(snapshot.ref);
                     imageUrls.push(url);
-                } catch (error) {
-                    toast.error('Failed to upload image');
+                } catch (error: any) {
+                    console.error("Image upload error:", error);
+                    toast.error(`Failed to upload image: ${error.message || 'Unknown error'}`);
                     setIsUploading(false);
                     return;
                 }
@@ -338,7 +342,7 @@ export function CommunityFeed({ role, canCreate = true, initialShowDeleted = fal
                                     {role === 'student' ? 'Ask Doubt' : 'New Post'}
                                 </Button>
                             </DialogTrigger>
-                            <DialogContent className="sm:max-w-[700px] h-[90vh] sm:h-auto overflow-y-auto">
+                            <DialogContent className="w-[95vw] max-w-[90vw] h-[90vh] max-h-[90vh] overflow-y-auto sm:max-w-[700px] sm:h-auto rounded-xl">
                                 <DialogHeader>
                                     <DialogTitle className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-purple-600 to-blue-600">
                                         {role === 'student' && !isAnnouncement ? 'Ask a Doubt' : (isAnnouncement ? 'Create Announcement' : 'Start Discussion')}
@@ -421,12 +425,13 @@ export function CommunityFeed({ role, canCreate = true, initialShowDeleted = fal
                                         <Label>Attachment (Optional)</Label>
                                         {!imagePreview ? (
                                             <div
-                                                onClick={() => document.getElementById('image-upload')?.click()}
+                                                onClick={() => fileInputRef.current?.click()}
                                                 className="border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-lg p-6 flex flex-col items-center justify-center cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-900/50 transition-colors"
                                             >
                                                 <ImageIcon className="h-8 w-8 text-slate-400 mb-2" />
                                                 <span className="text-sm text-muted-foreground">Click to upload image</span>
                                                 <Input
+                                                    ref={fileInputRef}
                                                     id="image-upload"
                                                     type="file"
                                                     accept="image/*"
