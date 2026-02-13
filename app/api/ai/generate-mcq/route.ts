@@ -139,7 +139,13 @@ Guidelines:
 
 Tone:
 - Make the questions feel like puzzles or intellectual challenges.
-- Push students to “aha!” moments where they connect ideas in new ways.`;
+- Push students to “aha!” moments where they connect ideas in new ways.
+
+Formatting Instructions:
+- **Keys**: BOLD the keys (e.g., **List I**, **Statement 1**).
+- **Match the Following**: Use a Markdown Table for the matching lists.
+- **Lists/Sequences**: Use separate lines for each item.
+- Note: The frontend uses Markdown rendering, so use standard Markdown syntax (tables, bold, lists).`;
 
         const userPrompt = `Content to generate from:\n\n${contentToProcess}`;
 

@@ -105,7 +105,7 @@ export function PostCard({ post, currentUserId }: PostCardProps) {
                                     {post.isPinned && <Pin className="w-5 h-5 text-blue-500 fill-blue-500/10 rotate-45 shrink-0 mt-1" />}
                                     {post.title}
                                 </h3>
-                                <p className="text-sm md:text-base text-slate-600 dark:text-slate-400 line-clamp-2 md:line-clamp-3 leading-relaxed">
+                                <p className="text-sm md:text-base text-slate-600 dark:text-slate-400 break-words whitespace-pre-wrap leading-relaxed">
                                     {previewContent}
                                 </p>
                             </div>

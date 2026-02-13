@@ -11,6 +11,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Loader2, Wand2, Save, Check, Trash2, FileText, UploadCloud, BrainCircuit, Library, BookOpen } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+
 import { toast } from 'sonner';
 import { db } from '@/app/firebase';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
@@ -545,7 +548,11 @@ export default function AIGeneratorPage() {
                                                             <span key={tag} className="text-[10px] text-slate-500 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">#{tag}</span>
                                                         ))}
                                                     </div>
-                                                    <p className="font-medium text-base text-foreground leading-snug">{q.question}</p>
+                                                    <div className="font-medium text-base text-foreground leading-snug prose dark:prose-invert max-w-none">
+                                                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                                                            {q.question}
+                                                        </ReactMarkdown>
+                                                    </div>
                                                 </div>
                                             </div>
                                             <Button size="icon" variant="ghost" className="h-6 w-6 text-slate-400 hover:text-red-500" onClick={() => {

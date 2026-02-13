@@ -205,39 +205,6 @@ export default function ThreadPage() {
         }
     };
 
-    const handleVerify = async (replyId: string) => {
-        if (user?.role !== 'admin' && user?.role !== 'teacher') return;
-        try {
-            const reply = replies.find(r => r.id === replyId);
-            const isVerifying = !reply?.isVerified;
-
-            await updateDoc(doc(db, 'forum_replies', replyId), {
-                isVerified: isVerifying
-            });
-
-            if (isVerifying) {
-                await updateDoc(doc(db, 'forum_posts', postId as string), {
-                    isSolved: true
-                });
-
-                if (reply) {
-                    await awardPoints(reply.authorId, POINTS.VERIFIED_ANSWER, 'Answer was verified by faculty');
-                    await sendNotification(
-                        reply.authorId,
-                        'Answer Verified! 🎉',
-                        `Your answer was verified by a faculty member. You earned ${POINTS.VERIFIED_ANSWER} points!`,
-                        'success',
-                        `/dashboard/community/${postId}`
-                    );
-                }
-            }
-
-            toast.success(isVerifying ? 'Answer Verified' : 'Verification removed');
-        } catch (error) {
-            toast.error('Failed to verify');
-        }
-    };
-
     const handleDeleteReply = async (replyId: string, authorId: string) => {
         if (!user) return;
         const canDelete = user.uid === authorId || user.role === 'admin' || user.role === 'teacher';
@@ -286,8 +253,59 @@ export default function ThreadPage() {
         }
     };
 
-    const handleEditPost = async () => { /* ... existing logic ... */ }; // Copied from previous or simplified if needed
-    // Actually need to implement it for the Rewrite to work
+    const handleVerify = async (replyId: string) => {
+        if (user?.role !== 'admin' && user?.role !== 'teacher') return;
+        try {
+            const reply = replies.find(r => r.id === replyId);
+            const isVerifying = !reply?.isVerified;
+
+            await updateDoc(doc(db, 'forum_replies', replyId), {
+                isVerified: isVerifying
+            });
+
+            if (isVerifying) {
+                await updateDoc(doc(db, 'forum_posts', postId as string), {
+                    isSolved: true
+                });
+
+                if (reply) {
+                    await awardPoints(reply.authorId, POINTS.VERIFIED_ANSWER, 'Answer was verified by faculty');
+                    await sendNotification(
+                        reply.authorId,
+                        'Answer Verified! 🎉',
+                        `Your answer was verified by a faculty member. You earned ${POINTS.VERIFIED_ANSWER} points!`,
+                        'success',
+                        `/dashboard/community/${postId}`
+                    );
+                }
+            }
+
+            toast.success(isVerifying ? 'Answer Verified' : 'Verification removed');
+        } catch (error) {
+            toast.error('Failed to verify');
+        }
+    };
+
+    const handleEditImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files && e.target.files[0]) {
+            const file = e.target.files[0];
+            if (file.size > 5 * 1024 * 1024) {
+                toast.error('Image size must be < 5MB');
+                return;
+            }
+            setEditImageFile(file);
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                setEditImage(reader.result as string);
+            };
+            reader.readAsDataURL(file);
+        }
+    };
+
+    const removeEditImage = () => {
+        setEditImageFile(null);
+        setEditImage(null);
+    };
 
     const submitEditPost = async () => {
         if (!editPostTitle.trim() || editPostContent.replace(/<[^>]*>/g, '').trim().length === 0) {
@@ -302,17 +320,25 @@ export default function ThreadPage() {
                 const snapshot = await uploadBytes(storageRef, editImageFile);
                 finalImageUrl = await getDownloadURL(snapshot.ref);
             }
+
             await updateDoc(doc(db, 'forum_posts', postId as string), {
                 title: editPostTitle,
                 content: editPostContent,
                 images: finalImageUrl ? [finalImageUrl] : [],
                 editedAt: serverTimestamp()
             });
-            // State updates via effect usually, but we can force it
-            setPost(prev => prev ? { ...prev, title: editPostTitle, content: editPostContent, images: finalImageUrl ? [finalImageUrl] : [] } : null);
+
+            setPost(prev => prev ? {
+                ...prev,
+                title: editPostTitle,
+                content: editPostContent,
+                images: finalImageUrl ? [finalImageUrl] : []
+            } : null);
+
             setIsEditingPost(false);
             toast.success('Post updated');
         } catch (e) {
+            console.error(e);
             toast.error('Update failed');
         } finally {
             setIsUploading(false);
@@ -410,9 +436,50 @@ export default function ThreadPage() {
                             <div className="space-y-4 border p-4 rounded-xl">
                                 <Input value={editPostTitle} onChange={e => setEditPostTitle(e.target.value)} className="font-bold text-lg" />
                                 <RichTextEditor value={editPostContent} onChange={setEditPostContent} />
-                                <div className="flex justify-end gap-2">
+
+                                {/* Edit Image Section */}
+                                <div className="space-y-2">
+                                    <label className="text-sm font-medium">Post Image</label>
+                                    <div className="flex flex-wrap gap-4 items-center">
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => document.getElementById('edit-post-image')?.click()}
+                                            className="text-slate-500 hover:text-blue-600"
+                                        >
+                                            <ImageIcon className="h-4 w-4 mr-2" />
+                                            {editImage ? 'Change Image' : 'Add Image'}
+                                        </Button>
+                                        <Input
+                                            id="edit-post-image"
+                                            type="file"
+                                            accept="image/*"
+                                            className="hidden"
+                                            onChange={handleEditImageSelect}
+                                        />
+
+                                        {editImage && (
+                                            <div className="relative group">
+                                                <div className="w-24 h-24 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-800 bg-slate-100">
+                                                    <img src={editImage} alt="Preview" className="w-full h-full object-cover" />
+                                                </div>
+                                                <button
+                                                    onClick={removeEditImage}
+                                                    className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 shadow-md opacity-0 group-hover:opacity-100 transition-opacity"
+                                                    title="Remove Image"
+                                                >
+                                                    <X className="w-3 h-3" />
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+
+                                <div className="flex justify-end gap-2 pt-2">
                                     <Button variant="ghost" onClick={() => setIsEditingPost(false)}>Cancel</Button>
-                                    <Button onClick={submitEditPost} disabled={isUploading}>{isUploading ? 'Saving...' : 'Save'}</Button>
+                                    <Button onClick={submitEditPost} disabled={isUploading}>
+                                        {isUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : 'Save Changes'}
+                                    </Button>
                                 </div>
                             </div>
                         ) : (

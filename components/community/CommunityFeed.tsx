@@ -279,8 +279,187 @@ export function CommunityFeed({ role, canCreate = true, initialShowDeleted = fal
 
     return (
         <div className="space-y-8">
-            {/* Action Bar */}
-            <div className="flex flex-col md:flex-row gap-4 justify-between items-start md:items-center">
+            {/* Mobile Header Layout (2 Rows) */}
+            <div className="md:hidden flex flex-col gap-3 mb-6">
+                {/* Row 1: Search + Sort + Filter Toggle */}
+                <div className="flex gap-2">
+                    <div className="relative flex-1">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 pointer-events-none" />
+                        <Input
+                            placeholder="Search..."
+                            className="pl-10 h-10 w-full text-base rounded-xl bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800"
+                            value={search}
+                            onChange={e => setSearch(e.target.value)}
+                        />
+                    </div>
+                    <Select value={sortBy} onValueChange={setSortBy}>
+                        <SelectTrigger className="w-[110px] h-10 rounded-xl bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-xs px-2">
+                            <SelectValue placeholder="Sort" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="newest">Newest</SelectItem>
+                            <SelectItem value="popular">Upvoted</SelectItem>
+                            <SelectItem value="replies">Active</SelectItem>
+                            <SelectItem value="unanswered">Unanswered</SelectItem>
+                            <SelectItem value="solved">Solved</SelectItem>
+                        </SelectContent>
+                    </Select>
+                </div>
+
+                {/* Row 2: Ask Doubt + Subject Filter */}
+                <div className="flex gap-2">
+                    {canCreate && (
+                        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+                            <DialogTrigger asChild>
+                                <Button className="flex-1 h-10 rounded-xl bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-500/20">
+                                    <Plus className="h-5 w-5 mr-1.5" />
+                                    <span className="font-medium text-sm">Ask Doubt</span>
+                                </Button>
+                            </DialogTrigger>
+                            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+                                <DialogHeader>
+                                    <DialogTitle className="text-2xl font-bold">
+                                        {role === 'student' && !isAnnouncement ? 'Ask the Community' : (isAnnouncement ? 'Create Announcement' : 'Start Discussion')}
+                                    </DialogTitle>
+                                </DialogHeader>
+                                <div className="space-y-5 py-4">
+                                    {canMakeAnnouncement && (
+                                        <div className="flex items-center gap-2 p-3 bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800 rounded-lg">
+                                            <Switch id="announcement-mode" checked={isAnnouncement} onCheckedChange={setIsAnnouncement} />
+                                            <Label htmlFor="announcement-mode" className="font-semibold text-amber-800 dark:text-amber-200 cursor-pointer flex items-center gap-2">
+                                                <Megaphone className="h-4 w-4" /> Post as Announcement
+                                            </Label>
+                                        </div>
+                                    )}
+
+                                    <div className="space-y-2">
+                                        <Label>Title</Label>
+                                        <Input
+                                            value={newTitle}
+                                            onChange={e => setNewTitle(e.target.value)}
+                                            placeholder="What's your question?"
+                                            className="text-lg font-medium"
+                                        />
+                                    </div>
+
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                        <div className="space-y-2">
+                                            <Label>Subject</Label>
+                                            <Select value={newSubject} onValueChange={setNewSubject}>
+                                                <SelectTrigger><SelectValue placeholder="Select Subject" /></SelectTrigger>
+                                                <SelectContent>
+                                                    {subjects.filter(s => s.name).map(s => <SelectItem key={s.id} value={s.name}>{s.name}</SelectItem>)}
+                                                    <SelectItem value="Other">Other</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            <Label>Province (Optional)</Label>
+                                            <Select value={newProvince} onValueChange={setNewProvince}>
+                                                <SelectTrigger><SelectValue placeholder="Select Province" /></SelectTrigger>
+                                                <SelectContent>
+                                                    {PROVINCES.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                    </div>
+
+                                    {newSubject !== 'Other' && (
+                                        <div className="space-y-2">
+                                            <Label>Chapter (Optional)</Label>
+                                            <Select value={newChapter} onValueChange={setNewChapter} disabled={!newSubject || availableChapters.length === 0}>
+                                                <SelectTrigger><SelectValue placeholder={!newSubject ? "Select Subject First" : availableChapters.length === 0 ? "No Chapters" : "Select Chapter"} /></SelectTrigger>
+                                                <SelectContent>
+                                                    {availableChapters.map((c, i) => <SelectItem key={i} value={c}>{c}</SelectItem>)}
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                    )}
+
+                                    <div className="space-y-2">
+                                        <Label>Details</Label>
+                                        <RichTextEditor
+                                            value={newContent}
+                                            onChange={setNewContent}
+                                            placeholder="Explain your question in detail..."
+                                            className="min-h-[200px]"
+                                        />
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <Label>Attachment (Optional)</Label>
+                                        {!imagePreview ? (
+                                            <div
+                                                onClick={() => fileInputRef.current?.click()}
+                                                className="border-2 border-dashed border-slate-200 dark:border-slate-800 hover:border-blue-500 dark:hover:border-blue-500 rounded-xl p-8 flex flex-col items-center justify-center cursor-pointer transition-colors bg-slate-50 dark:bg-slate-900/50"
+                                            >
+                                                <ImageIcon className="h-8 w-8 text-slate-400 mb-2" />
+                                                <span className="text-sm text-slate-500 font-medium">Click to upload image</span>
+                                                <Input
+                                                    ref={fileInputRef}
+                                                    id="image-upload"
+                                                    type="file"
+                                                    accept="image/*"
+                                                    className="hidden"
+                                                    onChange={handleFileSelect}
+                                                />
+                                            </div>
+                                        ) : (
+                                            <div className="relative w-full h-48 bg-slate-100 dark:bg-slate-900 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-800 group">
+                                                <img src={imagePreview} alt="Preview" className="w-full h-full object-contain" />
+                                                <Button
+                                                    size="icon"
+                                                    variant="destructive"
+                                                    className="absolute top-2 right-2 h-8 w-8 rounded-full shadow-md opacity-0 group-hover:opacity-100 transition-opacity"
+                                                    onClick={removeImage}
+                                                >
+                                                    <X className="w-4 h-4" />
+                                                </Button>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    <div className="pt-2">
+                                        <Button
+                                            className="w-full h-12 text-base font-medium bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-lg shadow-blue-500/20 transition-all hover:scale-[1.02]"
+                                            onClick={handleCreatePost}
+                                            disabled={isAsking || isUploading}
+                                        >
+                                            {isAsking || isUploading ? (
+                                                <>
+                                                    <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                                                    {isUploading ? 'Uploading Image...' : 'Posting Question...'}
+                                                </>
+                                            ) : (
+                                                'Post Question'
+                                            )}
+                                        </Button>
+                                    </div>
+                                </div>
+                            </DialogContent>
+                        </Dialog>
+                    )}
+
+                    <Select value={subjectFilter} onValueChange={setSubjectFilter}>
+                        <SelectTrigger className="w-[140px] h-10 rounded-xl bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-xs">
+                            <div className="flex items-center gap-1.5 truncate">
+                                <Filter className="h-3.5 w-3.5 opacity-70" />
+                                <span className="truncate">{subjectFilter === 'all' ? 'Topics' : subjectFilter}</span>
+                            </div>
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">All Topics</SelectItem>
+                            {subjects.map((subject) => (
+                                <SelectItem key={subject.id} value={subject.name}>{subject.name}</SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                </div>
+            </div>
+
+            {/* Desktop Action Bar (Hidden on Mobile) */}
+            <div className="hidden md:flex flex-col md:flex-row gap-4 justify-between items-start md:items-center">
                 <div className="flex-1 w-full relative">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 pointer-events-none" />
                     <Input
@@ -447,8 +626,8 @@ export function CommunityFeed({ role, canCreate = true, initialShowDeleted = fal
                 </div>
             </div>
 
-            {/* Subject Filters (Pills) */}
-            <div className="flex flex-wrap gap-2 pb-2">
+            {/* Subject Filters (Pills) - HIDDEN ON MOBILE */}
+            <div className="hidden md:flex flex-wrap gap-2 pb-2">
                 <button
                     onClick={() => setSubjectFilter('all')}
                     className={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-200

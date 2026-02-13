@@ -60,10 +60,13 @@ export async function POST(req: NextRequest) {
       1. Ensure options are distinct.
       2. Ensure correctAnswer matches one option exactly.
       3. No Markdown formatting in the explanation.
-      4. HTML FORMATTING:
-         - Use <strong> for bold text.
-         - Use <table>, <tr>, <th>, <td> for "Match the following" or tabular data.
-         - Add simple inline styles or classes to tables if needed (e.g. border="1").
+      4. HTML FORMATTING (STRICT):
+         - **Tables**: For "Match the following", "Compare", or any tabular data, you MUST use HTML <table> tags.
+           - Add style="width: 100%; border-collapse: collapse; border: 1px solid #ddd;" to the <table>.
+           - Add style="border: 1px solid #ddd; padding: 8px;" to every <th> and <td>.
+         - **Lists**: Use <ul> or <ol> for lists of items. Use <li> for each item.
+         - **Keys/Labeling**: Wrap keys like "Statement 1:", "List I:", "Reason:" in <strong> tags (e.g., <strong>Statement 1:</strong>).
+         - **Newlines**: Use <br/> for line breaks where lists or paragraphs are not used.
     `;
 
         if (validChapters && Array.isArray(validChapters) && validChapters.length > 0) {
