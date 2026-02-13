@@ -76,11 +76,11 @@ export function CommunityFeed({ role, canCreate = true, initialShowDeleted = fal
     }, []);
 
     useEffect(() => {
-        if (sortBy !== 'newest' || showDeleted) {
+        if (sortBy !== 'newest' || showDeleted || subjectFilter !== 'all') {
             fetchData();
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [sortBy, showDeleted]);
+    }, [sortBy, showDeleted, subjectFilter]);
 
     // Ref for file input
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -112,8 +112,12 @@ export function CommunityFeed({ role, canCreate = true, initialShowDeleted = fal
 
     const fetchData = async (loadMore = false) => {
         try {
-            if (!loadMore) setLoading(true);
-            else setLoadingMore(true);
+            if (!loadMore) {
+                setLoading(true);
+                setPosts([]); // Clear previous posts on new filter
+            } else {
+                setLoadingMore(true);
+            }
 
             const constraints: QueryConstraint[] = [];
 
@@ -121,21 +125,35 @@ export function CommunityFeed({ role, canCreate = true, initialShowDeleted = fal
                 constraints.push(where('isDeleted', '!=', true));
             }
 
-            // Prioritize pinned posts
-            constraints.push(orderBy('isPinned', 'desc'));
+            // Subject Filter
+            if (subjectFilter !== 'all') {
+                constraints.push(where('subject', '==', subjectFilter));
+            }
 
-            // Apply sorting
+            // Apply different sorting/filtering strategies
             switch (sortBy) {
                 case 'newest':
+                    constraints.push(orderBy('isPinned', 'desc')); // Keep pinned on top for newest
                     constraints.push(orderBy('createdAt', 'desc'));
                     break;
                 case 'popular':
                     constraints.push(orderBy('upvotes', 'desc'));
+                    constraints.push(orderBy('createdAt', 'desc'));
                     break;
                 case 'replies':
                     constraints.push(orderBy('replyCount', 'desc'));
+                    constraints.push(orderBy('createdAt', 'desc'));
+                    break;
+                case 'unanswered':
+                    constraints.push(where('replyCount', '==', 0));
+                    constraints.push(orderBy('createdAt', 'desc'));
+                    break;
+                case 'solved':
+                    constraints.push(where('isSolved', '==', true));
+                    constraints.push(orderBy('createdAt', 'desc'));
                     break;
                 default:
+                    constraints.push(orderBy('isPinned', 'desc'));
                     constraints.push(orderBy('createdAt', 'desc'));
             }
 
@@ -152,13 +170,6 @@ export function CommunityFeed({ role, canCreate = true, initialShowDeleted = fal
 
             let newPosts = postsSnap.docs.map(d => ({ id: d.id, ...d.data() } as ForumPost));
 
-            // Client-side filtering for special cases
-            if (sortBy === 'unanswered') {
-                newPosts = newPosts.filter(p => (p.replyCount || 0) === 0);
-            } else if (sortBy === 'solved') {
-                newPosts = newPosts.filter(p => p.isSolved === true);
-            }
-
             if (loadMore) {
                 setPosts(prev => [...prev, ...newPosts]);
             } else {
@@ -174,7 +185,7 @@ export function CommunityFeed({ role, canCreate = true, initialShowDeleted = fal
             setHasMore(postsSnap.docs.length === 20);
         } catch (error) {
             console.error(error);
-            toast.error('Failed to load community feed');
+            toast.error('Failed to load community feed. Try refreshing or clearing filters.');
         } finally {
             setLoading(false);
             setLoadingMore(false);
@@ -182,7 +193,8 @@ export function CommunityFeed({ role, canCreate = true, initialShowDeleted = fal
     };
 
     const handleCreatePost = async () => {
-        if (!newTitle || !newContent || !newSubject) {
+        const strippedContent = newContent.replace(/<[^>]*>/g, '').trim();
+        if (!newTitle.trim() || strippedContent.length === 0 || !newSubject) {
             toast.error('Please fill all fields');
             return;
         }
@@ -292,9 +304,27 @@ export function CommunityFeed({ role, canCreate = true, initialShowDeleted = fal
                     </div>
 
                     {/* Modern Subject Pills Filter */}
-                    {/* Modern Subject Pills Filter - Wrapped */}
+                    {/* Modern Subject Pills Filter - Desktop & Mobile Adaptive */}
                     <div className="w-full">
-                        <div className="flex flex-wrap gap-2">
+                        {/* Mobile View: Dropdown */}
+                        <div className="md:hidden w-full mb-2">
+                            <Select value={subjectFilter} onValueChange={setSubjectFilter}>
+                                <SelectTrigger className="w-full bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800">
+                                    <SelectValue placeholder="Select Topic" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All Topics</SelectItem>
+                                    {subjects.map((subject) => (
+                                        <SelectItem key={subject.id} value={subject.name}>
+                                            {subject.name}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        {/* Desktop View: Pills */}
+                        <div className="hidden md:flex flex-wrap gap-2">
                             <button
                                 onClick={() => setSubjectFilter('all')}
                                 className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all

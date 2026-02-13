@@ -7,8 +7,11 @@ import { ThumbsUp, MessageSquare, Pin, Megaphone, CheckCircle, Clock } from 'luc
 import { formatDistanceToNow } from 'date-fns';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import Link from 'next/link';
+import NextImage from 'next/image';
 import { useState } from 'react';
 import { toast } from 'sonner';
+
+
 import { motion } from 'framer-motion';
 import { db } from '@/app/firebase';
 import { doc, updateDoc, increment, arrayUnion, arrayRemove } from 'firebase/firestore';
@@ -24,8 +27,13 @@ export function PostCard({ post, currentUserId }: PostCardProps) {
     const [upvoteCount, setUpvoteCount] = useState(post.upvotes || 0);
 
     // Extract first image if available or from content
+    // Extract first image if available or from content
     const featureImage = post.images?.[0] || extractFirstImage(post.content);
-    const previewContent = post.content.replace(/<[^>]*>/g, '').substring(0, 140) + (post.content.length > 140 ? '...' : '');
+
+    // Create preview content: Strip HTML -> Decode Entities -> Truncate
+    const rawText = post.content.replace(/<[^>]*>/g, ' ');
+    const decodedText = decodeHtmlEntities(rawText);
+    const previewContent = decodedText.substring(0, 140) + (decodedText.length > 140 ? '...' : '');
 
     const handleUpvote = async (e: React.MouseEvent) => {
         e.preventDefault();
@@ -142,12 +150,14 @@ export function PostCard({ post, currentUserId }: PostCardProps) {
 
                         {/* Right Side (Feature Image - Desktop) */}
                         {featureImage && (
-                            <div className="hidden sm:block w-48 h-auto relative overflow-hidden">
+                            <div className="hidden sm:block w-48 h-full relative overflow-hidden min-h-[12rem]">
                                 <div className="absolute inset-0 bg-gradient-to-l from-transparent to-white/10 z-10" />
-                                <img
+                                <NextImage
                                     src={featureImage}
                                     alt="Preview"
-                                    className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+                                    fill
+                                    className="object-cover transition-transform duration-700 group-hover:scale-110"
+                                    unoptimized={!featureImage.startsWith('https://firebasestorage.googleapis.com')}
                                 />
                             </div>
                         )}
@@ -155,10 +165,12 @@ export function PostCard({ post, currentUserId }: PostCardProps) {
                         {/* Mobile Image (Banner) */}
                         {featureImage && (
                             <div className="sm:hidden w-full h-40 relative overflow-hidden order-first">
-                                <img
+                                <NextImage
                                     src={featureImage}
                                     alt="Preview"
-                                    className="w-full h-full object-cover"
+                                    fill
+                                    className="object-cover"
+                                    unoptimized={!featureImage.startsWith('https://firebasestorage.googleapis.com')}
                                 />
                             </div>
                         )}
@@ -174,6 +186,13 @@ function extractFirstImage(htmlContent: string): string | null {
     if (!htmlContent) return null;
     const match = htmlContent.match(/<img[^>]+src="([^">]+)"/);
     return match ? match[1] : null;
+}
+
+// Helper to decode HTML entities
+function decodeHtmlEntities(text: string): string {
+    const textarea = document.createElement('textarea');
+    textarea.innerHTML = text;
+    return textarea.value;
 }
 
 function getRoleColor(role: string) {

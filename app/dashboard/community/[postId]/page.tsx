@@ -1,7 +1,9 @@
 'use client';
 
+import Image from 'next/image';
 import { useState, useEffect, useCallback } from 'react';
-import { db } from '@/app/firebase';
+import { db, storage } from '@/app/firebase';
+import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { doc, getDoc, collection, query, where, orderBy, getDocs, addDoc, serverTimestamp, updateDoc, increment, arrayUnion, arrayRemove, deleteDoc } from 'firebase/firestore';
 import { ForumPost, ForumReply } from '@/types';
 import { checkSeriesEnrollment, awardPoints, sendNotification, POINTS } from '@/lib/community';
@@ -12,7 +14,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { toast } from 'sonner';
-import { ThumbsUp, CheckCircle, ShieldCheck, ArrowLeft, MoreHorizontal, Trash2, Edit2, Pin, Flag, EyeOff, Share2, Megaphone, Loader2 } from 'lucide-react';
+import { ThumbsUp, CheckCircle, ShieldCheck, ArrowLeft, MoreHorizontal, Trash2, Edit2, Pin, Flag, EyeOff, Share2, Megaphone, Loader2, Image as ImageIcon, X } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { useUserStore } from '@/stores/useUserStore';
 import { formatDistanceToNow } from 'date-fns';
@@ -36,6 +38,9 @@ export default function ThreadPage() {
     const [isEditingPost, setIsEditingPost] = useState(false);
     const [editPostTitle, setEditPostTitle] = useState('');
     const [editPostContent, setEditPostContent] = useState('');
+    const [editImage, setEditImage] = useState<string | null>(null); // Existing or new URL
+    const [editImageFile, setEditImageFile] = useState<File | null>(null); // File to upload
+    const [isUploading, setIsUploading] = useState(false);
 
     // Determine back link and role based on user
     const userRole = user?.role || 'student';
@@ -209,18 +214,64 @@ export default function ThreadPage() {
     };
 
     const handleEditPost = async () => {
-        if (!editPostTitle.trim() || editPostContent.replace(/<[^>]*>/g, '').trim().length === 0) return;
+        if (!editPostTitle.trim() || editPostContent.replace(/<[^>]*>/g, '').trim().length === 0) {
+            toast.error("Title and content cannot be empty");
+            return;
+        }
+
         try {
+            setIsUploading(true);
+            let finalImageUrl = editImage;
+
+            // If a new file is selected, upload it
+            if (editImageFile && user) {
+                const storageRef = ref(storage, `community/${user.uid}/${Date.now()}_${editImageFile.name}`);
+                const snapshot = await uploadBytes(storageRef, editImageFile);
+                finalImageUrl = await getDownloadURL(snapshot.ref);
+            }
+
+            // If image was removed (editImage is null) but post had an image previously...
+            // Note: We are strictly setting the images array to [finalImageUrl] if it exists, or []
+
             await updateDoc(doc(db, 'forum_posts', postId as string), {
                 title: editPostTitle,
                 content: editPostContent,
+                images: finalImageUrl ? [finalImageUrl] : [],
                 editedAt: serverTimestamp()
             });
-            setPost(prev => prev ? { ...prev, title: editPostTitle, content: editPostContent, editedAt: { seconds: Date.now() / 1000 } } : null);
+
+            setPost(prev => prev ? {
+                ...prev,
+                title: editPostTitle,
+                content: editPostContent,
+                images: finalImageUrl ? [finalImageUrl] : [],
+                editedAt: serverTimestamp() as any // Mock timestamp for optimistic update
+            } : null);
+
             setIsEditingPost(false);
+            setEditImageFile(null);
             toast.success('Post updated');
         } catch (error) {
+            console.error(error);
             toast.error('Failed to update post');
+        } finally {
+            setIsUploading(false);
+        }
+    };
+
+    const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files && e.target.files[0]) {
+            const file = e.target.files[0];
+            if (file.size > 5 * 1024 * 1024) {
+                toast.error('Image size should be less than 5MB');
+                return;
+            }
+            if (!file.type.startsWith('image/')) {
+                toast.error('Please upload an image file');
+                return;
+            }
+            setEditImageFile(file);
+            setEditImage(URL.createObjectURL(file)); // Preview locally
         }
     };
 
@@ -334,6 +385,18 @@ export default function ThreadPage() {
                 </Button>
             </UnifiedHeader>
 
+            {/* Mobile Back Button */}
+            <div className="md:hidden px-4 pt-2 -mb-2">
+                <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => router.push(backLink)}
+                    className="pl-0 text-muted-foreground hover:text-foreground hover:bg-transparent"
+                >
+                    <ArrowLeft className="h-4 w-4 mr-2" /> Back to Feed
+                </Button>
+            </div>
+
             <div className="relative z-10 p-4 md:p-8 pt-4 md:pt-4 max-w-4xl mx-auto space-y-6">
 
                 {/* Main Post Card */}
@@ -383,13 +446,19 @@ export default function ThreadPage() {
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end" className="w-48">
                                     {user?.uid === post.authorId && (
-                                        <DropdownMenuItem onClick={() => {
-                                            setEditPostTitle(post.title);
-                                            setEditPostContent(post.content);
-                                            setIsEditingPost(true);
-                                        }}>
-                                            <Edit2 className="w-4 h-4 mr-2" /> Edit Post
-                                        </DropdownMenuItem>
+                                        <>
+                                            <DropdownMenuItem onClick={() => {
+                                                setEditPostTitle(post.title);
+                                                setEditPostContent(post.content);
+                                                setEditImage(post.images && post.images.length > 0 ? post.images[0] : null);
+                                                setIsEditingPost(true);
+                                            }}>
+                                                <Edit2 className="w-4 h-4 mr-2" /> Edit Post
+                                            </DropdownMenuItem>
+                                            <DropdownMenuItem onClick={handleSoftDelete} className="text-red-600 focus:text-red-600">
+                                                <Trash2 className="w-4 h-4 mr-2" /> Delete Post
+                                            </DropdownMenuItem>
+                                        </>
                                     )}
                                     {(userRole === 'admin' || userRole === 'teacher') && (
                                         <>
@@ -429,6 +498,38 @@ export default function ThreadPage() {
                                         className="min-h-[200px]"
                                     />
                                 </div>
+                                <div className="space-y-2">
+                                    <label className="text-sm font-medium">Attachment</label>
+                                    {!editImage ? (
+                                        <div className="flex items-center gap-4">
+                                            <Button variant="outline" onClick={() => document.getElementById('edit-image-upload')?.click()}>
+                                                <ImageIcon className="w-4 h-4 mr-2" /> Upload Image
+                                            </Button>
+                                            <input
+                                                id="edit-image-upload"
+                                                type="file"
+                                                accept="image/*"
+                                                className="hidden"
+                                                onChange={handleFileSelect}
+                                            />
+                                        </div>
+                                    ) : (
+                                        <div className="relative w-full max-w-sm h-48 bg-slate-100 dark:bg-slate-900 rounded-lg overflow-hidden border">
+                                            <img src={editImage} alt="Preview" className="w-full h-full object-contain" />
+                                            <Button
+                                                size="icon"
+                                                variant="destructive"
+                                                className="absolute top-2 right-2 h-8 w-8 rounded-full shadow-md"
+                                                onClick={() => {
+                                                    setEditImage(null);
+                                                    setEditImageFile(null);
+                                                }}
+                                            >
+                                                <X className="w-4 h-4" />
+                                            </Button>
+                                        </div>
+                                    )}
+                                </div>
                                 <div className="flex gap-2 justify-end pt-2">
                                     <Button variant="ghost" onClick={() => setIsEditingPost(false)}>Cancel</Button>
                                     <Button onClick={handleEditPost} className="bg-purple-600 hover:bg-purple-700 text-white">Save Changes</Button>
@@ -441,8 +542,14 @@ export default function ThreadPage() {
                         )}
 
                         {post.images && post.images.length > 0 && (
-                            <div className="rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 shadow-sm">
-                                <img src={post.images[0]} alt="Attachment" className="max-h-[600px] w-auto mx-auto object-contain cursor-zoom-in hover:scale-[1.01] transition-transform duration-300" />
+                            <div className="rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 shadow-sm relative min-h-[400px]">
+                                <Image
+                                    src={post.images[0]}
+                                    alt="Attachment"
+                                    fill
+                                    className="object-contain cursor-zoom-in hover:scale-[1.01] transition-transform duration-300"
+                                    unoptimized={!post.images[0].startsWith('https://firebasestorage.googleapis.com')}
+                                />
                             </div>
                         )}
 

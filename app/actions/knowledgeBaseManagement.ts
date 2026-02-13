@@ -456,3 +456,41 @@ export async function getAllSubjectsWithChapters() {
         return { success: false, error: error.message };
     }
 }
+
+/**
+ * Get all content for a specific subject and chapter
+ * Concatenates text from all matching documents.
+ */
+export async function getChapterContent(subject: string, chapter: string): Promise<{ success: boolean; content?: string; error?: string }> {
+    try {
+        if (!subject || !chapter) {
+            return { success: false, error: "Subject and Chapter are required" };
+        }
+
+        const snapshot = await adminDb.collection('knowledge_base')
+            .where('metadata.subject', '==', subject)
+            .where('metadata.chapter', '==', chapter)
+            .get();
+
+        if (snapshot.empty) {
+            return { success: false, error: `No content found for ${subject} - ${chapter}` };
+        }
+
+        let fullContent = "";
+        snapshot.docs.forEach(doc => {
+            const data = doc.data();
+            if (data.content) {
+                fullContent += `\n--- Source: ${data.metadata?.fileName || 'Unknown'} ---\n`;
+                fullContent += data.content + "\n";
+            }
+            if (data.visual_description) {
+                fullContent += `[Visual Description: ${data.visual_description}]\n`;
+            }
+        });
+
+        return { success: true, content: fullContent };
+    } catch (error: any) {
+        console.error("Get Chapter Content Error:", error);
+        return { success: false, error: error.message };
+    }
+}

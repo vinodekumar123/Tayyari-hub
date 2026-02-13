@@ -65,7 +65,7 @@ export async function POST(req: Request) {
         }
 
         // Limit tokens
-        contentToProcess = contentToProcess.substring(0, 50000);
+        contentToProcess = contentToProcess.substring(0, 100000); // Increased limit for larger contexts
 
         // 2. Parse Requested Types
         let selectedTypes: string[] = ['single_correct'];
@@ -75,47 +75,71 @@ export async function POST(req: Request) {
             console.error("Failed to parse types", e);
         }
 
-        // 3. Construct Advanced Prompt
+        // 3. Construct Advanced Prompt with 15 Types
         const typeInstructions = selectedTypes.map(t => {
             switch (t) {
+                case 'single_correct': return '- Single Best Option (SBA): Standard conceptual question.';
                 case 'multiple_correct': return '- Multiple Correct: Questions where more than one option is correct. (Label options A,B,C,D)';
-                case 'true_false': return '- True/False: Evaluate a statement.';
-                case 'assertion_reason': return '- Assertion-Reason: Provide two statements (Assertion and Reason). Options should be: A) Both true & R explains A, B) Both true but R does not explain A, C) A true R false, D) A false R true.';
+                case 'assertion_reason': return '- Assertion-Reason (A/R): Provide two statements (Assertion and Reason). Options: A) Both true & R explains A, B) Both true but R does not explain A, C) A true R false, D) A false R true.';
+                case 'true_false': return '- True / False: Mark correct biological statement. Options: A) True, B) False.';
+                case 'fill_blanks': return '- Fill in the Blank: Correct biological term or name. Options must be the terms.';
                 case 'match_following': return '- Match the Following: Present two lists in the question text. Options should be combinations (e.g. A-1, B-2).';
-                case 'chronological': return '- Chronological: Arrange events in order.';
-                case 'statement_based': return '- Statement Based: "Consider statements I and II". Options: Only I follows, etc.';
-                case 'case_study': return '- Case Study: A short scenario provided in the question text.';
-                case 'negation': return '- Negation: "Which of the following is NOT..."';
-                case 'fill_blanks': return '- Fill in the Blanks: Question with a missing word.';
-                default: return '- Single Correct: Standard MCQ.';
+                case 'chronological': return '- Sequence / Process Order: Steps of biological process (e.g., mitosis). Options are sequences.';
+                case 'case_study': return '- Case Study: A short clinical or scenario vignette provided in the question text.';
+                case 'statement_based': return '- Statement Based: "Consider statements I, II, III". Options: "Only I and II are correct", etc.';
+                case 'negation': return '- Except / Not Correct: All options correct except one.';
+                case 'error_spotting': return '- Error Spotting / Statement Correction: Identify the incorrect statement.';
+                case 'analogy': return '- Analogy: "Mitochondria : Powerhouse :: Ribosome : ?"';
+                case 'odd_one_out': return '- Odd One Out: Which option does not belong to the group?';
+                case 'best_explanation': return '- Best Explanation: "Which option best explains the phenomenon?"';
+                case 'definition': return '- Definition Based: Direct recall of definitions.';
+                default: return '- Single Best Option (SBA).';
             }
         }).join('\n');
 
-        const systemPrompt = `You are an expert AI Exam Creator. Generate ${count} high-quality MCQs based on the provided text.
-        Difficulty: ${difficulty}.
-        
-        REQUIRED QUESTION TYPES (Mix these):
-        ${typeInstructions}
-        
-        OUTPUT FORMAT (JSON):
-        {
-          "questions": [
-            {
-              "question": "Question text here (include lists/scenarios if needed)",
-              "options": ["Option A", "Option B", "Option C", "Option D"],
-              "answer": "The text of the correct option (must match one of the options exactly)",
-              "explanation": "Detailed explanation",
-              "type": "The specific type key (e.g. 'assertion_reason')",
-              "tags": ["Topic", "Subtopic"]
-            }
-          ]
-        }
-        
-        RULES:
-        1. Distractors must be plausible.
-        2. "answer" field MUST be the exact string of the correct option.
-        3. For "True/False", options must be ["True", "False"].
-        4. Generate appropriate "tags" for each question based on its content.`;
+        const systemPrompt = `You are an elite exam designer, philosopher, and master educator combined. Your mission is to generate a set of multiple-choice questions (MCQs) that are so diverse, challenging, and conceptually rich that they squeeze every possible insight from the given topic/book/PDF.
+
+Guidelines:
+1. **Genres of Questions**:
+   - Recall: test definitions, facts, and basic concepts.
+   - Application: real-world scenarios, problem-solving, experiments.
+   - Analysis: compare/contrast, cause-effect, data interpretation.
+   - Synthesis: combine ideas, predict outcomes, design solutions.
+   - Evaluation: judge validity, critique arguments, spot flaws.
+   - Misconception-busting: expose common student errors.
+   - Creative twist: unusual angles, riddles, or analogies.
+
+2. **Question Design**:
+   - Each MCQ must have 4 options (A–D).
+   - Only one correct answer, but distractors must be plausible.
+   - Vary difficulty: easy → moderate → advanced → mind-blowing.
+
+3. **Coverage / Instructions**:
+   - Generate exactly ${count} questions.
+   - Difficulty Level: ${difficulty}.
+   - You MUST include the following types in your set:
+     ${typeInstructions}
+   - Ensure every subtopic is tested.
+   - Include hidden details, subtle nuances, and cross-links between concepts.
+
+4. **Output Format (STRICT JSON)**:
+   You must output ONLY valid JSON. No other text. The JSON must match this schema:
+   {
+     "questions": [
+       {
+         "question": "Question text here (include lists/scenarios if needed)",
+         "options": ["Option A", "Option B", "Option C", "Option D"],
+         "answer": "The text of the correct option (must match one of the options exactly)",
+         "explanation": "Detailed explanation including why the answer is correct and distractors are wrong.",
+         "type": "The specific type key (e.g. 'assertion_reason')",
+         "tags": ["Topic", "Subtopic"]
+       }
+     ]
+   }
+
+Tone:
+- Make the questions feel like puzzles or intellectual challenges.
+- Push students to “aha!” moments where they connect ideas in new ways.`;
 
         const userPrompt = `Content to generate from:\n\n${contentToProcess}`;
 
@@ -126,7 +150,7 @@ export async function POST(req: Request) {
                 { role: "user", content: userPrompt }
             ],
             response_format: { type: "json_object" },
-            temperature: 0.5,
+            temperature: 0.7, // Increased for creativity
         });
 
         const content = completion.choices[0].message.content;
