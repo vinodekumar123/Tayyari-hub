@@ -284,6 +284,7 @@ export interface ForumReply {
     id: string;
     postId: string;
     content: string;
+    imageUrl?: string;
     authorId: string;
     authorName: string; // Snapshot for performance
     authorRole: 'student' | 'admin' | 'teacher';

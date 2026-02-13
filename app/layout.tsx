@@ -27,12 +27,7 @@ export const metadata: Metadata = {
     template: '%s | TayyariHub'
   },
   description: 'Elevate your performance with TayyariHub - The ultimate entry test companion.',
-  manifest: '/manifest.json', // Manifest generated at build or served
-  icons: {
-    icon: '/logo.png',
-    shortcut: '/logo.png',
-    apple: '/logo.png',
-  },
+  // Manifest and icons handle automatically by Next.js conventions
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',

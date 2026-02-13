@@ -40,9 +40,9 @@ export function SplashScreen() {
                     <div className="flex-1 flex flex-col items-center justify-center space-y-8">
                         {/* Logo Animation - Using full logo same as sidebar */}
                         <motion.div
-                            initial={{ scale: 0.8, opacity: 0 }}
+                            initial={{ scale: 1, opacity: 1 }}
                             animate={{ scale: 1, opacity: 1 }}
-                            transition={{ duration: 0.8, ease: "easeOut" }}
+                            transition={{ duration: 0 }}
                             className="relative w-64 h-64" // Increased size for full logo
                         >
                             <Image

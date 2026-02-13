@@ -14,7 +14,6 @@ import { toast } from 'sonner';
 import { Search, Plus, Filter, Image as ImageIcon, X, Megaphone, Loader2 } from 'lucide-react';
 import { useUserStore } from '@/stores/useUserStore';
 import { PostCard } from './PostCard';
-import { glassmorphism } from '@/lib/design-tokens';
 import { Card } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
@@ -286,7 +285,7 @@ export function CommunityFeed({ role, canCreate = true, initialShowDeleted = fal
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 pointer-events-none" />
                     <Input
                         placeholder="Search questions, topics..."
-                        className="pl-10 h-12 text-base rounded-2xl bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-sm focus:ring-2 focus:ring-purple-500/20 transition-shadow"
+                        className="pl-10 h-12 text-base rounded-2xl bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-sm focus:ring-2 focus:ring-blue-500/20 transition-shadow"
                         value={search}
                         onChange={e => setSearch(e.target.value)}
                     />
@@ -316,7 +315,7 @@ export function CommunityFeed({ role, canCreate = true, initialShowDeleted = fal
                     {canCreate && (
                         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
                             <DialogTrigger asChild>
-                                <Button className="h-12 w-12 md:w-auto px-0 md:px-6 rounded-xl bg-purple-600 hover:bg-purple-700 text-white shadow-lg shadow-purple-500/25 transition-all hover:scale-105">
+                                <Button className="h-12 w-12 md:w-auto px-0 md:px-6 rounded-xl bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-500/25 transition-all hover:scale-105">
                                     <Plus className="h-6 w-6 md:mr-2" />
                                     <span className="hidden md:inline font-medium">Ask Question</span>
                                 </Button>
@@ -397,7 +396,7 @@ export function CommunityFeed({ role, canCreate = true, initialShowDeleted = fal
                                         {!imagePreview ? (
                                             <div
                                                 onClick={() => fileInputRef.current?.click()}
-                                                className="border-2 border-dashed border-slate-200 dark:border-slate-800 hover:border-purple-500 dark:hover:border-purple-500 rounded-xl p-8 flex flex-col items-center justify-center cursor-pointer transition-colors bg-slate-50 dark:bg-slate-900/50"
+                                                className="border-2 border-dashed border-slate-200 dark:border-slate-800 hover:border-blue-500 dark:hover:border-blue-500 rounded-xl p-8 flex flex-col items-center justify-center cursor-pointer transition-colors bg-slate-50 dark:bg-slate-900/50"
                                             >
                                                 <ImageIcon className="h-8 w-8 text-slate-400 mb-2" />
                                                 <span className="text-sm text-slate-500 font-medium">Click to upload image</span>
@@ -427,7 +426,7 @@ export function CommunityFeed({ role, canCreate = true, initialShowDeleted = fal
 
                                     <div className="pt-2">
                                         <Button
-                                            className="w-full h-12 text-base font-medium bg-purple-600 hover:bg-purple-700 text-white rounded-xl shadow-lg shadow-purple-500/20 transition-all hover:scale-[1.02]"
+                                            className="w-full h-12 text-base font-medium bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-lg shadow-blue-500/20 transition-all hover:scale-[1.02]"
                                             onClick={handleCreatePost}
                                             disabled={isAsking || isUploading}
                                         >
@@ -454,7 +453,7 @@ export function CommunityFeed({ role, canCreate = true, initialShowDeleted = fal
                     onClick={() => setSubjectFilter('all')}
                     className={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-200
                         ${subjectFilter === 'all'
-                            ? 'bg-purple-600 text-white shadow-md shadow-purple-500/30'
+                            ? 'bg-blue-600 text-white shadow-md shadow-blue-500/30'
                             : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800'
                         }`}
                 >
@@ -466,7 +465,7 @@ export function CommunityFeed({ role, canCreate = true, initialShowDeleted = fal
                         onClick={() => setSubjectFilter(subject.name)}
                         className={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 whitespace-nowrap
                             ${subjectFilter === subject.name
-                                ? 'bg-purple-600 text-white shadow-md shadow-purple-500/30'
+                                ? 'bg-blue-600 text-white shadow-md shadow-blue-500/30'
                                 : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800'
                             }`}
                     >
@@ -507,7 +506,7 @@ export function CommunityFeed({ role, canCreate = true, initialShowDeleted = fal
                                     variant="ghost"
                                     onClick={() => fetchData(true)}
                                     disabled={loadingMore}
-                                    className="min-w-[160px] rounded-full text-slate-500 hover:text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-900/10"
+                                    className="min-w-[160px] rounded-full text-slate-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/10"
                                 >
                                     {loadingMore ? (
                                         <>

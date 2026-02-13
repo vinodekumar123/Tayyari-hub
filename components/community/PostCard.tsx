@@ -3,7 +3,7 @@
 import { ForumPost } from '@/types';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { ThumbsUp, MessageSquare, Pin, Megaphone, CheckCircle, Clock, MoreHorizontal, Share2 } from 'lucide-react';
+import { ThumbsUp, MessageSquare, Pin, Megaphone, CheckCircle, Clock } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import Link from 'next/link';
@@ -64,7 +64,7 @@ export function PostCard({ post, currentUserId }: PostCardProps) {
                 transition={{ type: "spring", stiffness: 400, damping: 25 }}
             >
                 <Card className={`relative overflow-hidden border border-slate-100 dark:border-slate-800/50 shadow-sm hover:shadow-xl transition-all duration-300 bg-white dark:bg-slate-900/50 rounded-2xl
-                    ${isAnnouncement ? 'bg-gradient-to-r from-amber-50/50 to-orange-50/50 dark:from-amber-950/10 dark:to-orange-950/10 border-l-4 border-l-amber-400' : ''}
+                    ${isAnnouncement ? 'bg-gradient-to-r from-sky-50/50 to-blue-50/50 dark:from-sky-950/10 dark:to-blue-950/10 border-l-4 border-l-blue-400' : ''}
                 `}>
                     <div className="flex flex-col md:flex-row h-full">
                         {/* Main Content Side */}
@@ -91,7 +91,7 @@ export function PostCard({ post, currentUserId }: PostCardProps) {
                                 </div>
 
                                 {isAnnouncement && (
-                                    <div className="flex items-center gap-1 text-amber-600 bg-amber-50 dark:bg-amber-900/20 px-2 py-0.5 rounded-full text-[10px] font-semibold tracking-wide uppercase">
+                                    <div className="flex items-center gap-1 text-blue-600 bg-blue-50 dark:bg-blue-900/20 px-2 py-0.5 rounded-full text-[10px] font-semibold tracking-wide uppercase">
                                         <Megaphone className="w-3 h-3" /> Announcement
                                     </div>
                                 )}
@@ -99,10 +99,10 @@ export function PostCard({ post, currentUserId }: PostCardProps) {
 
                             {/* Title & Preview */}
                             <div className="space-y-2">
-                                <h3 className={`text-lg md:text-xl font-bold text-slate-900 dark:text-white leading-tight group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors flex items-start gap-2
+                                <h3 className={`text-lg md:text-xl font-bold text-slate-900 dark:text-white leading-tight group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors flex items-start gap-2
                                     ${post.isPinned ? 'pr-8' : ''}
                                 `}>
-                                    {post.isPinned && <Pin className="w-5 h-5 text-purple-500 fill-purple-500/10 rotate-45 shrink-0 mt-1" />}
+                                    {post.isPinned && <Pin className="w-5 h-5 text-blue-500 fill-blue-500/10 rotate-45 shrink-0 mt-1" />}
                                     {post.title}
                                 </h3>
                                 <p className="text-sm md:text-base text-slate-600 dark:text-slate-400 line-clamp-2 md:line-clamp-3 leading-relaxed">
@@ -113,7 +113,7 @@ export function PostCard({ post, currentUserId }: PostCardProps) {
                             {/* Tags / Subject */}
                             {post.subject && (
                                 <div className="mt-1">
-                                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-medium bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-200">
+                                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-medium bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
                                         {post.subject}
                                     </span>
                                 </div>
@@ -125,8 +125,8 @@ export function PostCard({ post, currentUserId }: PostCardProps) {
                                     onClick={handleUpvote}
                                     className={`flex items-center gap-1.5 transition-colors group/upvote
                                         ${isUpvoted
-                                            ? "text-purple-600 dark:text-purple-400"
-                                            : "hover:text-purple-600 dark:hover:text-purple-400"
+                                            ? "text-blue-600 dark:text-blue-400"
+                                            : "hover:text-blue-600 dark:hover:text-blue-400"
                                         }`}
                                 >
                                     <ThumbsUp className={`w-4 h-4 transition-transform group-hover/upvote:-translate-y-0.5 ${isUpvoted ? "fill-current" : ""}`} />
@@ -198,6 +198,6 @@ function getRoleColor(role: string) {
     switch (role) {
         case 'teacher': return 'bg-indigo-100 text-indigo-700';
         case 'admin': return 'bg-rose-100 text-rose-700';
-        default: return 'bg-blue-100 text-blue-700';
+        default: return 'bg-blue-100 text-blue-700'; // Student now uses nice blue
     }
 }
