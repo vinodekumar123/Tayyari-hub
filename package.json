@@ -73,6 +73,7 @@
       "next": "^15.5.9",
       "next-sitemap": "^4.2.3",
       "next-themes": "^0.3.0",
+      "openai": "^6.21.0",
       "papa": "^0.0.0",
       "papaparse": "^5.5.3",
       "pdf-lib": "^1.17.1",

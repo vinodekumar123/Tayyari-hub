@@ -18,6 +18,7 @@ export interface Question {
     allOptionsCorrect?: boolean;
     year?: string;
     book?: string;
+    source?: string; // e.g. 'ai_generator'
 }
 
 export interface QuizConfig {

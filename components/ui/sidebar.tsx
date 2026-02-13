@@ -6,7 +6,7 @@ import Link from 'next/link';
 import {
   BookOpen, Users, Trophy, BarChart3, Settings, Plus,
   Database, Home, ChevronDown, ChevronRight, LogOut,
-  ClipboardList, UserCircle, Menu, X, FileBarChart, Flag, Calendar, BrainCircuit, HelpCircle, ArrowLeftRight, Lock, Scissors
+  ClipboardList, UserCircle, Menu, X, FileBarChart, Flag, Calendar, BrainCircuit, HelpCircle, ArrowLeftRight, Lock, Scissors, Wand2
 } from 'lucide-react';
 import logo from "../../app/assets/logo.png";
 import Image from "next/image";
@@ -159,6 +159,7 @@ export function Sidebar() {
         { icon: BrainCircuit, label: 'AI Tutor Test', href: '/admin/ai-tutor-test' },
         { icon: BarChart3, label: 'AI Tutor Analytics', href: '/admin/ai-tutor-analytics' },
         { icon: Scissors, label: 'AI Book Splitter', href: '/admin/book-splitter' },
+        { icon: Wand2, label: 'AI MCQ Generator', href: '/dashboard/admin/ai-generator' },
       ],
     },
     // User Management: Admin/SuperAdmin only
