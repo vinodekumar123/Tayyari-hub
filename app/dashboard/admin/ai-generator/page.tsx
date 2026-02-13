@@ -276,12 +276,14 @@ export default function AIGeneratorPage() {
         }
 
         const loadingToast = toast.loading(`Saving to ${targetBank === 'questions' ? 'Question Bank' : 'Mock Bank'}...`);
+        console.log(`Starting Save: Target=${targetBank}, Subject=${subject}, Chapter=${chapter}, Count=${generatedQuestions.length}`);
 
         try {
-            const batchPromises = generatedQuestions.map(q => {
+            const batchPromises = generatedQuestions.map((q, idx) => {
+                console.log(`Preparing Doc #${idx}:`, q);
                 return addDoc(collection(db, targetBank), {
                     text: q.question,
-                    questionText: q.question,
+                    questionText: q.question, // Markdown preserved
                     options: q.options,
                     correctAnswer: q.answer,
                     explanation: q.explanation,
@@ -297,11 +299,12 @@ export default function AIGeneratorPage() {
             });
 
             await Promise.all(batchPromises);
+            console.log("Save Batch Completed Successfully");
             toast.success("Saved successfully!", { id: loadingToast });
             setGeneratedQuestions([]);
-        } catch (error) {
-            console.error(error);
-            toast.error("Failed to save questions", { id: loadingToast });
+        } catch (error: any) {
+            console.error("Save Failed:", error);
+            toast.error(`Failed to save: ${error.message}`, { id: loadingToast });
         }
     };
 
@@ -548,7 +551,7 @@ export default function AIGeneratorPage() {
                                                             <span key={tag} className="text-[10px] text-slate-500 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">#{tag}</span>
                                                         ))}
                                                     </div>
-                                                    <div className="font-medium text-base text-foreground leading-snug prose dark:prose-invert max-w-none">
+                                                    <div className="font-medium text-base text-foreground leading-snug prose dark:prose-invert max-w-none question-content">
                                                         <ReactMarkdown remarkPlugins={[remarkGfm]}>
                                                             {q.question}
                                                         </ReactMarkdown>
@@ -579,12 +582,14 @@ export default function AIGeneratorPage() {
                                             ))}
                                         </div>
 
-                                        {q.explanation && (
-                                            <div className="ml-9 text-xs text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-800/50 p-3 rounded-lg flex gap-2">
-                                                <div className="shrink-0 mt-0.5"><BookOpen className="w-3.5 h-3.5 text-violet-500" /></div>
-                                                <div><span className="font-semibold text-violet-600 dark:text-violet-400">Explanation:</span> {q.explanation}</div>
-                                            </div>
-                                        )}
+                                        {
+                                            q.explanation && (
+                                                <div className="ml-9 text-xs text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-800/50 p-3 rounded-lg flex gap-2">
+                                                    <div className="shrink-0 mt-0.5"><BookOpen className="w-3.5 h-3.5 text-violet-500" /></div>
+                                                    <div><span className="font-semibold text-violet-600 dark:text-violet-400">Explanation:</span> {q.explanation}</div>
+                                                </div>
+                                            )
+                                        }
                                     </div>
                                 ))
                             )}
@@ -612,7 +617,8 @@ export default function AIGeneratorPage() {
                         )}
                     </Card>
                 </div>
-            </div>
-        </div>
+            </div >
+        </div >
     );
 }
+
