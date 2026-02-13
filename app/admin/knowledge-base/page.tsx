@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { toast } from 'sonner';
 import { Loader2, Upload, FileText, Image as ImageIcon, AlertCircle, RefreshCw, Trash2 } from 'lucide-react';
 import { analyzeDocument, saveToKnowledgeBase } from '@/app/actions/knowledgeBase';
+import { getAllSubjectsWithChapters } from '@/app/actions/knowledgeBaseManagement';
 import { splitPdfClientSide, getPdfPageCount, fileToBase64 } from '@/lib/pdfClientProcessor';
 import { Progress } from '@/components/ui/progress';
 import Link from 'next/link';
@@ -43,6 +44,21 @@ export default function KnowledgeBasePage() {
     // Failed Items for Retry
     const [failedItems, setFailedItems] = useState<FailedItem[]>([]);
 
+    // Subjects and Chapters
+    const [subjectsList, setSubjectsList] = useState<{ id: string; name: string; chapters: Record<string, boolean> }[]>([]);
+    const [selectedChapter, setSelectedChapter] = useState<string>('');
+
+    // Fetch Subjects on Mount
+    useEffect(() => {
+        const fetchSubjects = async () => {
+            const res = await getAllSubjectsWithChapters();
+            if (res.success && res.subjects) {
+                setSubjectsList(res.subjects);
+            }
+        };
+        fetchSubjects();
+    }, []);
+
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files.length > 0) {
             setFiles(e.target.files);
@@ -71,11 +87,13 @@ export default function KnowledgeBasePage() {
             }
 
             const { text, description, chapter, page_number } = analysisRes.data;
+            const finalChapter = selectedChapter || chapter;
             addLog(`   ↳ Detected: ${chapter} (Page ${page_number || 'Unknown'})`);
+            if (selectedChapter) addLog(`   ↳ Using selected chapter: ${selectedChapter}`);
 
             // Save to knowledge base
             const saveRes = await saveToKnowledgeBase({
-                text, description, chapter, page_number,
+                text, description, chapter: finalChapter, page_number,
                 fileName: `${fileName}_${pageLabel}`,
                 metadata
             });
@@ -100,6 +118,12 @@ export default function KnowledgeBasePage() {
         }
         if (!metadata.subject || !metadata.bookName || !metadata.province || !metadata.year) {
             toast.error('Please fill in all metadata fields');
+            return;
+        }
+
+        // Force valid chapter if subject is selected but chapter is not
+        if (metadata.subject && subjectsList.find(s => s.name === metadata.subject) && !selectedChapter) {
+            toast.warning('Please select a chapter associated with the subject.');
             return;
         }
 
@@ -347,8 +371,35 @@ export default function KnowledgeBasePage() {
                         </div>
                         <div className="space-y-2">
                             <Label>Subject</Label>
-                            <Input placeholder="e.g. Biology" value={metadata.subject} onChange={e => setMetadata({ ...metadata, subject: e.target.value })} />
+                            {/* <Input placeholder="e.g. Biology" value={metadata.subject} onChange={e => setMetadata({ ...metadata, subject: e.target.value })} /> */}
+                            <Select value={metadata.subject} onValueChange={(v) => {
+                                setMetadata({ ...metadata, subject: v });
+                                setSelectedChapter(''); // Reset chapter on subject change
+                            }}>
+                                <SelectTrigger><SelectValue placeholder="Select Subject" /></SelectTrigger>
+                                <SelectContent>
+                                    {subjectsList.map((sub) => (
+                                        <SelectItem key={sub.id} value={sub.name}>{sub.name}</SelectItem>
+                                    ))}
+                                    {/* Fallback or allow custom? For now standard list */}
+                                </SelectContent>
+                            </Select>
                         </div>
+
+                        {/* Chapter Selection (Conditional) */}
+                        {metadata.subject && subjectsList.find(s => s.name === metadata.subject) && (
+                            <div className="space-y-2">
+                                <Label>Chapter</Label>
+                                <Select value={selectedChapter} onValueChange={setSelectedChapter}>
+                                    <SelectTrigger><SelectValue placeholder="Select Chapter" /></SelectTrigger>
+                                    <SelectContent>
+                                        {Object.keys(subjectsList.find(s => s.name === metadata.subject)?.chapters || {}).map((ch) => (
+                                            <SelectItem key={ch} value={ch}>{ch}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        )}
                         <div className="space-y-2">
                             <Label>Book Name / Syllabus Title</Label>
                             <Input placeholder="e.g. PTB 11th Class" value={metadata.bookName} onChange={e => setMetadata({ ...metadata, bookName: e.target.value })} />

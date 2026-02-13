@@ -17,7 +17,7 @@ import {
     deleteKnowledgeBaseDocument,
     deleteMultipleKnowledgeBaseDocuments,
     getDocumentById,
-    getUniqueSubjects,
+    getAllSubjectsWithChapters, // Changed from getUniqueSubjects
     KnowledgeBaseDocument
 } from '@/app/actions/knowledgeBaseManagement';
 import Link from 'next/link';
@@ -26,10 +26,11 @@ export default function ManageKnowledgeBasePage() {
     const [loading, setLoading] = useState(true);
     const [documents, setDocuments] = useState<KnowledgeBaseDocument[]>([]);
     const [stats, setStats] = useState<any>(null);
-    const [subjects, setSubjects] = useState<string[]>([]);
+    const [subjects, setSubjects] = useState<{ id: string; name: string; chapters: Record<string, boolean> }[]>([]);
 
     // Filters
     const [subjectFilter, setSubjectFilter] = useState<string>('all');
+    const [chapterFilter, setChapterFilter] = useState<string>('all');
     const [typeFilter, setTypeFilter] = useState<string>('all');
     const [searchQuery, setSearchQuery] = useState<string>('');
 
@@ -55,7 +56,7 @@ export default function ManageKnowledgeBasePage() {
             const [docsRes, statsRes, subjectsRes] = await Promise.all([
                 getKnowledgeBaseDocuments({ limit: 50 }),
                 getKnowledgeBaseStats(),
-                getUniqueSubjects()
+                getAllSubjectsWithChapters()
             ]);
 
             if (docsRes.success) {
@@ -86,7 +87,8 @@ export default function ManageKnowledgeBasePage() {
             const docsRes = await getKnowledgeBaseDocuments({
                 limit: 50,
                 subjectFilter: subjectFilter !== 'all' ? subjectFilter : undefined,
-                typeFilter: typeFilter !== 'all' ? typeFilter : undefined
+                typeFilter: typeFilter !== 'all' ? typeFilter : undefined,
+                chapterFilter: chapterFilter !== 'all' ? chapterFilter : undefined
             });
 
             if (docsRes.success) {
@@ -109,7 +111,8 @@ export default function ManageKnowledgeBasePage() {
                 limit: 50,
                 startAfter: lastDocId,
                 subjectFilter: subjectFilter !== 'all' ? subjectFilter : undefined,
-                typeFilter: typeFilter !== 'all' ? typeFilter : undefined
+                typeFilter: typeFilter !== 'all' ? typeFilter : undefined,
+                chapterFilter: chapterFilter !== 'all' ? chapterFilter : undefined
             });
 
             if (docsRes.success) {
@@ -262,10 +265,27 @@ export default function ManageKnowledgeBasePage() {
                             <SelectContent>
                                 <SelectItem value="all">All Subjects</SelectItem>
                                 {subjects.map(s => (
-                                    <SelectItem key={s} value={s}>{s}</SelectItem>
+                                    <SelectItem key={s.id} value={s.name}>{s.name}</SelectItem>
                                 ))}
                             </SelectContent>
                         </Select>
+
+                        {/* Chapter Filter */}
+                        {subjectFilter !== 'all' && (
+                            <Select value={chapterFilter} onValueChange={setChapterFilter}>
+                                <SelectTrigger className="w-[180px]">
+                                    <SelectValue placeholder="All Chapters" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All Chapters</SelectItem>
+                                    {subjects.find(s => s.name === subjectFilter)?.chapters &&
+                                        Object.keys(subjects.find(s => s.name === subjectFilter)?.chapters || {}).map(ch => (
+                                            <SelectItem key={ch} value={ch}>{ch}</SelectItem>
+                                        ))}
+                                </SelectContent>
+                            </Select>
+                        )}
+
                         <Select value={typeFilter} onValueChange={setTypeFilter}>
                             <SelectTrigger className="w-[150px]">
                                 <SelectValue placeholder="All Types" />

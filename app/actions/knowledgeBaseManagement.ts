@@ -24,12 +24,13 @@ interface GetDocumentsParams {
     startAfter?: string;
     subjectFilter?: string;
     typeFilter?: string;
+    chapterFilter?: string;
     searchQuery?: string;
 }
 
 export async function getKnowledgeBaseDocuments(params: GetDocumentsParams = {}) {
     try {
-        const { limit = 50, startAfter, subjectFilter, typeFilter } = params;
+        const { limit = 50, startAfter, subjectFilter, typeFilter, chapterFilter } = params;
 
         let query: any = adminDb.collection('knowledge_base').orderBy('metadata.uploadedAt', 'desc');
 
@@ -39,6 +40,9 @@ export async function getKnowledgeBaseDocuments(params: GetDocumentsParams = {})
         }
         if (typeFilter) {
             query = query.where('metadata.type', '==', typeFilter);
+        }
+        if (chapterFilter) {
+            query = query.where('metadata.chapter', '==', chapterFilter);
         }
 
         // Pagination
@@ -435,6 +439,20 @@ export async function exportKnowledgeBase(): Promise<{ success: boolean; data?: 
 
         return { success: true, data };
     } catch (error: any) {
+        return { success: false, error: error.message };
+    }
+}
+export async function getAllSubjectsWithChapters() {
+    try {
+        const subjectsSnap = await adminDb.collection('subjects').get();
+        const subjects = subjectsSnap.docs.map(doc => ({
+            id: doc.id,
+            name: doc.data().name as string,
+            chapters: doc.data().chapters as Record<string, boolean>
+        }));
+        return { success: true, subjects };
+    } catch (error: any) {
+        console.error("Get All Subjects Error:", error);
         return { success: false, error: error.message };
     }
 }

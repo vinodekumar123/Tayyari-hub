@@ -9,6 +9,8 @@ const nextConfig = {
   },
 
   // Increase Server Actions Body Limit for PDF Uploads
+  serverExternalPackages: ['pdf-parse'],
+
   experimental: {
     serverActions: {
       bodySizeLimit: '300mb',
