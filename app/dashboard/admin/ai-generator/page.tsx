@@ -15,6 +15,7 @@ import { Loader2, Wand2, Save, Check, Copy, Trash2, FileText, UploadCloud, Brain
 import { toast } from 'sonner';
 import { db } from '@/app/firebase';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { extractTextFromPdf } from '@/lib/pdfTextExtractor';
 
 interface GeneratedQuestion {
     question: string;
@@ -93,21 +94,40 @@ export default function AIGeneratorPage() {
         setIsGenerating(true);
         setGeneratedQuestions([]);
 
+        // Client-side PDF Parsing Logic
+        let finalContent = text;
+
+        if (inputMethod === 'pdf' && file) {
+            try {
+                // Extract text on client using pdfjs-dist
+                const extractedText = await extractTextFromPdf(file);
+                if (!extractedText || extractedText.trim().length < 50) {
+                    toast.error("Could not extract enough text from this PDF. It might be scanned/image-based.");
+                    setIsGenerating(false);
+                    return;
+                }
+                finalContent = extractedText;
+                toast.success("PDF parsed successfully!");
+            } catch (err: any) {
+                console.error("Client PDF Error:", err);
+                toast.error("Failed to parse PDF: " + err.message);
+                setIsGenerating(false);
+                return;
+            }
+        }
+
         const formData = new FormData();
         formData.append('count', count);
         formData.append('difficulty', difficulty);
         formData.append('types', JSON.stringify(selectedTypes));
 
-        if (inputMethod === 'text') {
-            formData.append('text', text);
-        } else if (file) {
-            formData.append('file', file);
-        }
+        // Always send as text now, since we parsed it client-side
+        formData.append('text', finalContent);
 
         try {
             const response = await fetch('/api/ai/generate-mcq', {
                 method: 'POST',
-                body: formData, // Send as FormData to handle potential file
+                body: formData,
             });
 
             const data = await response.json();
