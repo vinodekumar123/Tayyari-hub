@@ -503,7 +503,7 @@ export default function FlashcardsPage() {
                                                 {card.topic && <div className="text-xs text-gray-500 dark:text-gray-400 font-medium truncate">{card.topic}</div>}
                                             </CardHeader>
                                             <CardContent className="pt-4 flex-1 flex flex-col">
-                                                <div className="flex-1 mb-4 text-gray-800 dark:text-gray-100" dangerouslySetInnerHTML={{ __html: card.questionText }} />
+                                                <div className="flex-1 mb-4 text-gray-800 dark:text-gray-100 question-content" dangerouslySetInnerHTML={{ __html: card.questionText }} />
 
                                                 {/* Options Display */}
                                                 {card.options && card.options.length > 0 && (
@@ -700,7 +700,7 @@ export default function FlashcardsPage() {
                                                 Question
                                             </h3>
                                             <div
-                                                className="prose dark:prose-invert max-w-none text-base md:text-lg mb-6"
+                                                className="prose dark:prose-invert max-w-none text-base md:text-lg mb-6 question-content"
                                                 dangerouslySetInnerHTML={{ __html: studyCards[studyIndex].questionText }}
                                             />
 
@@ -715,13 +715,13 @@ export default function FlashcardsPage() {
                                                                 handleAnswerSelect(opt);
                                                             }}
                                                             className={`w-full p-3 rounded-lg border text-sm text-left flex items-start gap-3 transition-all ${selectedAnswer === opt
-                                                                    ? 'bg-indigo-50 dark:bg-indigo-900/20 border-indigo-300 dark:border-indigo-700 ring-2 ring-indigo-200 dark:ring-indigo-800'
-                                                                    : 'bg-gray-50 dark:bg-slate-800 border-gray-200 dark:border-slate-700 hover:bg-gray-100 dark:hover:bg-slate-750'
+                                                                ? 'bg-indigo-50 dark:bg-indigo-900/20 border-indigo-300 dark:border-indigo-700 ring-2 ring-indigo-200 dark:ring-indigo-800'
+                                                                : 'bg-gray-50 dark:bg-slate-800 border-gray-200 dark:border-slate-700 hover:bg-gray-100 dark:hover:bg-slate-750'
                                                                 }`}
                                                         >
                                                             <div className={`flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium border ${selectedAnswer === opt
-                                                                    ? 'bg-indigo-100 dark:bg-indigo-900/40 border-indigo-400 dark:border-indigo-600 text-indigo-700 dark:text-indigo-300'
-                                                                    : 'bg-white dark:bg-slate-700 border-gray-300 dark:border-slate-600 text-gray-500 dark:text-gray-400'
+                                                                ? 'bg-indigo-100 dark:bg-indigo-900/40 border-indigo-400 dark:border-indigo-600 text-indigo-700 dark:text-indigo-300'
+                                                                : 'bg-white dark:bg-slate-700 border-gray-300 dark:border-slate-600 text-gray-500 dark:text-gray-400'
                                                                 }`}>
                                                                 {String.fromCharCode(65 + i)}
                                                             </div>
@@ -751,8 +751,8 @@ export default function FlashcardsPage() {
                                             {/* Show if user selected answer */}
                                             {selectedAnswer && (
                                                 <div className={`mb-4 p-3 rounded-lg text-center ${selectedAnswer === studyCards[studyIndex].correctAnswer
-                                                        ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
-                                                        : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400'
+                                                    ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
+                                                    : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400'
                                                     }`}>
                                                     {selectedAnswer === studyCards[studyIndex].correctAnswer ? (
                                                         <span className="flex items-center justify-center gap-2">
@@ -773,7 +773,7 @@ export default function FlashcardsPage() {
                                             {studyCards[studyIndex].explanation && (
                                                 <div className="flex-1 p-4 bg-white/50 dark:bg-slate-800/50 rounded-lg text-sm md:text-base text-gray-600 dark:text-gray-300">
                                                     <span className="font-semibold text-indigo-600 dark:text-indigo-400 text-xs uppercase tracking-wide block mb-2">Explanation:</span>
-                                                    <div dangerouslySetInnerHTML={{ __html: studyCards[studyIndex].explanation }} />
+                                                    <div className="question-content" dangerouslySetInnerHTML={{ __html: studyCards[studyIndex].explanation }} />
                                                 </div>
                                             )}
                                         </div>

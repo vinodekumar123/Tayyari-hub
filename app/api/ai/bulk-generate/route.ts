@@ -60,6 +60,10 @@ export async function POST(req: NextRequest) {
       1. Ensure options are distinct.
       2. Ensure correctAnswer matches one option exactly.
       3. No Markdown formatting in the explanation.
+      4. HTML FORMATTING:
+         - Use <strong> for bold text.
+         - Use <table>, <tr>, <th>, <td> for "Match the following" or tabular data.
+         - Add simple inline styles or classes to tables if needed (e.g. border="1").
     `;
 
         if (validChapters && Array.isArray(validChapters) && validChapters.length > 0) {

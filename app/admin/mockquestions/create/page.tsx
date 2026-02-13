@@ -144,7 +144,7 @@ const EDITOR_MODULES = {
     [{ 'list': 'ordered' }, { 'list': 'bullet' }, { 'indent': '-1' }, { 'indent': '+1' }],
     [{ 'align': [] }],
     ['blockquote', 'code-block'],
-    ['link', 'image'],
+    ['link', 'image', 'video'],
     ['clean']
   ],
   imageResize: {

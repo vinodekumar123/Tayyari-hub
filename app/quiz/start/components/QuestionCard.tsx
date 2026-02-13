@@ -39,7 +39,7 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({
                     style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}
                 >
                     <span className="font-bold text-slate-700 dark:text-slate-300">Q{totalIndex + 1}. </span>
-                    <span dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(q.questionText || '') }} />
+                    <div className="question-content inline" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(q.questionText || '') }} />
 
                     {isAdmin && (
                         <a

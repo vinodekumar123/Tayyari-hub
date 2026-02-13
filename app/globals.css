@@ -315,3 +315,39 @@
 .animate-spin {
   animation: spin 1s linear infinite;
 }
+
+/* Question Content Table Support */
+.question-content table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1rem 0;
+  font-size: 0.9em;
+}
+
+.question-content th,
+.question-content td {
+  border: 1px solidhsl(var(--border));
+  padding: 8px 12px;
+  text-align: left;
+}
+
+.question-content th {
+  background-color: hsl(var(--muted));
+  font-weight: 600;
+}
+
+.dark .question-content th,
+.dark .question-content td {
+  border-color: hsl(var(--border));
+}
+
+.question-content tr:nth-child(even) {
+  background-color: hsl(var(--muted) / 0.3);
+}
+
+.question-content img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 0.5rem;
+  margin: 0.5rem 0;
+}

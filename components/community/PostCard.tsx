@@ -3,15 +3,13 @@
 import { ForumPost } from '@/types';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { ThumbsUp, MessageSquare, Pin, Megaphone, CheckCircle, Clock } from 'lucide-react';
+import { ThumbsUp, MessageSquare, Pin, Megaphone, CheckCircle, Clock, MoreHorizontal, Share2 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import Link from 'next/link';
 import NextImage from 'next/image';
 import { useState } from 'react';
 import { toast } from 'sonner';
-
-
 import { motion } from 'framer-motion';
 import { db } from '@/app/firebase';
 import { doc, updateDoc, increment, arrayUnion, arrayRemove } from 'firebase/firestore';
@@ -27,13 +25,12 @@ export function PostCard({ post, currentUserId }: PostCardProps) {
     const [upvoteCount, setUpvoteCount] = useState(post.upvotes || 0);
 
     // Extract first image if available or from content
-    // Extract first image if available or from content
     const featureImage = post.images?.[0] || extractFirstImage(post.content);
 
     // Create preview content: Strip HTML -> Decode Entities -> Truncate
     const rawText = post.content.replace(/<[^>]*>/g, ' ');
     const decodedText = decodeHtmlEntities(rawText);
-    const previewContent = decodedText.substring(0, 140) + (decodedText.length > 140 ? '...' : '');
+    const previewContent = decodedText.substring(0, 180) + (decodedText.length > 180 ? '...' : '');
 
     const handleUpvote = async (e: React.MouseEvent) => {
         e.preventDefault();
@@ -61,110 +58,111 @@ export function PostCard({ post, currentUserId }: PostCardProps) {
     };
 
     return (
-        <Link href={`/dashboard/community/${post.id}`} className="block group w-full max-w-5xl mx-auto">
+        <Link href={`/dashboard/community/${post.id}`} className="block group w-full mx-auto">
             <motion.div
-                whileHover={{ y: -4, scale: 1.01 }}
-                transition={{ type: "spring", stiffness: 300, damping: 20 }}
+                whileHover={{ y: -2 }}
+                transition={{ type: "spring", stiffness: 400, damping: 25 }}
             >
-                <Card className={`relative overflow-hidden border-0 shadow-lg hover:shadow-2xl transition-shadow duration-300 bg-white/80 dark:bg-slate-900/60 backdrop-blur-xl rounded-2xl
-                    ${isAnnouncement
-                        ? 'ring-1 ring-yellow-500/40 bg-gradient-to-br from-yellow-50/50 to-orange-50/50 dark:from-yellow-900/10 dark:to-orange-900/10'
-                        : 'border border-white/20 dark:border-white/5'
-                    }
+                <Card className={`relative overflow-hidden border border-slate-100 dark:border-slate-800/50 shadow-sm hover:shadow-xl transition-all duration-300 bg-white dark:bg-slate-900/50 rounded-2xl
+                    ${isAnnouncement ? 'bg-gradient-to-r from-amber-50/50 to-orange-50/50 dark:from-amber-950/10 dark:to-orange-950/10 border-l-4 border-l-amber-400' : ''}
                 `}>
-                    {/* Announcement Glow */}
-                    {isAnnouncement && (
-                        <div className="absolute top-0 right-0 w-32 h-32 bg-yellow-500/10 rounded-full blur-3xl -mr-10 -mt-10 pointer-events-none" />
-                    )}
+                    <div className="flex flex-col md:flex-row h-full">
+                        {/* Main Content Side */}
+                        <div className="flex-1 p-5 md:p-6 flex flex-col gap-3">
 
-                    <div className="flex flex-col sm:flex-row h-full">
-                        {/* Left Side (Content) */}
-                        <div className="flex-1 p-6 md:p-8 flex flex-col gap-4">
-                            {/* Meta Header */}
-                            <div className="flex items-center gap-3 text-xs md:text-sm text-slate-500 dark:text-slate-400">
-                                <Avatar className="h-8 w-8 ring-2 ring-white dark:ring-slate-800 shadow-sm">
-                                    <AvatarFallback className={`text-[10px] font-bold ${getRoleColor(post.authorRole)}`}>
-                                        {post.authorName[0]?.toUpperCase()}
-                                    </AvatarFallback>
-                                </Avatar>
-                                <span className="font-semibold text-slate-700 dark:text-slate-200">{post.authorName}</span>
-                                {post.authorRole !== 'student' && (
-                                    <Badge variant="secondary" className="text-[10px] h-5 px-1.5 font-normal tracking-wide">
-                                        {post.authorRole.toUpperCase()}
-                                    </Badge>
+                            {/* Top Meta Row */}
+                            <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 mb-1">
+                                <div className="flex items-center gap-2">
+                                    <Avatar className="h-6 w-6 ring-1 ring-slate-100 dark:ring-slate-800">
+                                        <AvatarFallback className={`text-[9px] font-bold ${getRoleColor(post.authorRole)}`}>
+                                            {post.authorName[0]?.toUpperCase()}
+                                        </AvatarFallback>
+                                    </Avatar>
+                                    <span className="font-medium text-slate-700 dark:text-slate-300 hover:underline decoration-slate-300 underline-offset-2 transition-all">
+                                        {post.authorName}
+                                    </span>
+                                    {post.authorRole !== 'student' && (
+                                        <Badge variant="secondary" className="text-[9px] h-4 px-1.5 font-normal tracking-wide rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-0">
+                                            {post.authorRole}
+                                        </Badge>
+                                    )}
+                                    <span className="w-0.5 h-0.5 rounded-full bg-slate-300 dark:bg-slate-600" />
+                                    <span>{post.createdAt?.toDate ? formatDistanceToNow(post.createdAt.toDate(), { addSuffix: true }) : 'Just now'}</span>
+                                </div>
+
+                                {isAnnouncement && (
+                                    <div className="flex items-center gap-1 text-amber-600 bg-amber-50 dark:bg-amber-900/20 px-2 py-0.5 rounded-full text-[10px] font-semibold tracking-wide uppercase">
+                                        <Megaphone className="w-3 h-3" /> Announcement
+                                    </div>
                                 )}
-                                <span className="flex items-center gap-1 opacity-70">
-                                    <Clock className="w-3 h-3" />
-                                    {post.createdAt?.toDate ? formatDistanceToNow(post.createdAt.toDate(), { addSuffix: true }) : 'Just now'}
-                                </span>
                             </div>
 
-                            {/* Main Content */}
+                            {/* Title & Preview */}
                             <div className="space-y-2">
-                                <div className="flex items-start justify-between gap-4">
-                                    <h3 className="text-xl md:text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-slate-900 to-slate-700 dark:from-white dark:to-slate-300 leading-tight">
-                                        {post.isPinned && <Pin className="inline w-5 h-5 text-blue-500 mr-2 transform rotate-45" />}
-                                        {isAnnouncement && <Megaphone className="inline w-5 h-5 text-yellow-500 mr-2" />}
-                                        {post.title}
-                                    </h3>
-                                </div>
-                                <p className="text-slate-600 dark:text-slate-300 line-clamp-2 md:line-clamp-3 leading-relaxed">
+                                <h3 className={`text-lg md:text-xl font-bold text-slate-900 dark:text-white leading-tight group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors flex items-start gap-2
+                                    ${post.isPinned ? 'pr-8' : ''}
+                                `}>
+                                    {post.isPinned && <Pin className="w-5 h-5 text-purple-500 fill-purple-500/10 rotate-45 shrink-0 mt-1" />}
+                                    {post.title}
+                                </h3>
+                                <p className="text-sm md:text-base text-slate-600 dark:text-slate-400 line-clamp-2 md:line-clamp-3 leading-relaxed">
                                     {previewContent}
                                 </p>
                             </div>
 
-                            {/* Footer / Actions */}
-                            <div className="mt-auto pt-4 flex items-center justify-between">
-                                <div className="flex items-center gap-4">
-                                    <button
-                                        onClick={handleUpvote}
-                                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-colors
-                                            ${isUpvoted
-                                                ? "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300"
-                                                : "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700"
-                                            }`}
-                                    >
-                                        <ThumbsUp className={`w-3.5 h-3.5 ${isUpvoted ? "fill-current" : ""}`} />
-                                        {upvoteCount}
-                                    </button>
+                            {/* Tags / Subject */}
+                            {post.subject && (
+                                <div className="mt-1">
+                                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-medium bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-200">
+                                        {post.subject}
+                                    </span>
+                                </div>
+                            )}
 
-                                    <div className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-3 py-1.5 rounded-full text-xs font-medium">
-                                        <MessageSquare className="w-3.5 h-3.5" />
-                                        {post.replyCount} Replies
-                                    </div>
+                            {/* Footer Actions */}
+                            <div className="mt-auto pt-4 flex items-center gap-4 text-sm font-medium text-slate-500 dark:text-slate-500">
+                                <button
+                                    onClick={handleUpvote}
+                                    className={`flex items-center gap-1.5 transition-colors group/upvote
+                                        ${isUpvoted
+                                            ? "text-purple-600 dark:text-purple-400"
+                                            : "hover:text-purple-600 dark:hover:text-purple-400"
+                                        }`}
+                                >
+                                    <ThumbsUp className={`w-4 h-4 transition-transform group-hover/upvote:-translate-y-0.5 ${isUpvoted ? "fill-current" : ""}`} />
+                                    <span>{upvoteCount}</span>
+                                </button>
 
-                                    {post.subject && (
-                                        <Badge variant="outline" className="hidden sm:inline-flex border-slate-200 dark:border-slate-700 text-slate-500">
-                                            {post.subject}
-                                        </Badge>
-                                    )}
+                                <div className="flex items-center gap-1.5 hover:text-slate-800 dark:hover:text-slate-300 transition-colors">
+                                    <MessageSquare className="w-4 h-4" />
+                                    <span>{post.replyCount}</span>
                                 </div>
 
                                 {post.isSolved && (
-                                    <Badge className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300 hover:bg-green-200 border-0 shadow-none">
-                                        <CheckCircle className="w-3 h-3 mr-1" /> Solved
-                                    </Badge>
+                                    <div className="ml-auto flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 px-2 py-0.5 rounded-full text-xs">
+                                        <CheckCircle className="w-3.5 h-3.5" />
+                                        <span>Solved</span>
+                                    </div>
                                 )}
                             </div>
                         </div>
 
-                        {/* Right Side (Feature Image - Desktop) */}
+                        {/* Right Side Image (Desktop) */}
                         {featureImage && (
-                            <div className="hidden sm:block w-48 h-full relative overflow-hidden min-h-[12rem]">
-                                <div className="absolute inset-0 bg-gradient-to-l from-transparent to-white/10 z-10" />
+                            <div className="hidden md:block w-48 shrink-0 relative m-2 rounded-xl overflow-hidden bg-slate-100 dark:bg-slate-800/50">
                                 <NextImage
                                     src={featureImage}
                                     alt="Preview"
                                     fill
-                                    className="object-cover transition-transform duration-700 group-hover:scale-110"
+                                    className="object-cover transition-transform duration-500 group-hover:scale-105"
                                     unoptimized={!featureImage.startsWith('https://firebasestorage.googleapis.com')}
                                 />
                             </div>
                         )}
 
-                        {/* Mobile Image (Banner) */}
+                        {/* Mobile Image (Banner) - Only show if no desktop image or generic fallback? Actually better to just standardise */}
                         {featureImage && (
-                            <div className="sm:hidden w-full h-40 relative overflow-hidden order-first">
+                            <div className="md:hidden w-full h-48 relative overflow-hidden order-first bg-slate-100 dark:bg-slate-800">
                                 <NextImage
                                     src={featureImage}
                                     alt="Preview"
@@ -174,6 +172,7 @@ export function PostCard({ post, currentUserId }: PostCardProps) {
                                 />
                             </div>
                         )}
+
                     </div>
                 </Card>
             </motion.div>
@@ -199,6 +198,6 @@ function getRoleColor(role: string) {
     switch (role) {
         case 'teacher': return 'bg-indigo-100 text-indigo-700';
         case 'admin': return 'bg-rose-100 text-rose-700';
-        default: return 'bg-gradient-to-br from-blue-500 to-purple-500 text-white';
+        default: return 'bg-blue-100 text-blue-700';
     }
 }

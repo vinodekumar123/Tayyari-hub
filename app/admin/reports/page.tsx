@@ -783,7 +783,7 @@ export default function AdminReportsPage() {
 
                                     <div className="space-y-4">
                                         <div className="prose dark:prose-invert max-w-none text-sm bg-gray-50 dark:bg-white/5 p-4 rounded-xl border border-gray-100 dark:border-white/5">
-                                            <div dangerouslySetInnerHTML={{ __html: questionDetails?.questionText || selectedReport.questionText }} />
+                                            <div className="question-content" dangerouslySetInnerHTML={{ __html: questionDetails?.questionText || selectedReport.questionText }} />
                                             {/* Images */}
                                             {questionDetails?.images && questionDetails.images.length > 0 && (
                                                 <div className="mt-4 grid gap-2">

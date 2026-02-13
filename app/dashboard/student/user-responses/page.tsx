@@ -364,7 +364,7 @@ const UserResponsesPageContent: React.FC = () => {
                         <CardTitle className="text-base md:text-lg font-semibold text-foreground flex gap-2 items-start leading-relaxed w-full min-w-0">
                             <span className="text-primary font-bold min-w-[2rem] md:min-w-[2.5rem] shrink-0">Q{idx + 1}.</span>
                             <div className="flex-1 min-w-0 overflow-hidden break-words">
-                                <div className="break-words overflow-x-auto no-scrollbar" dangerouslySetInnerHTML={{ __html: q.questionText }} />
+                                <div className="break-words overflow-x-auto no-scrollbar question-content" dangerouslySetInnerHTML={{ __html: q.questionText }} />
                             </div>
                         </CardTitle>
                         <div className="flex flex-wrap items-center gap-2 mt-3 md:mt-0 w-full md:w-auto md:self-auto shrink-0">

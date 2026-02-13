@@ -447,7 +447,7 @@ const ResultPageContent: React.FC = () => {
                         <CardTitle className="text-lg font-semibold text-foreground flex gap-2 items-start leading-relaxed w-full min-w-0">
                             <span className="text-primary font-bold min-w-[2.5rem] shrink-0">Q{idx + 1}.</span>
                             <div className="flex-1 min-w-0 overflow-hidden">
-                                <div className="break-words" dangerouslySetInnerHTML={{ __html: q.questionText }} />
+                                <div className="break-words question-content" dangerouslySetInnerHTML={{ __html: q.questionText }} />
                                 {q.graceMark && <span className="ml-2 text-xs bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded border border-yellow-200 font-normal inline-block">Grace Mark Awarded</span>}
                             </div>
                         </CardTitle>

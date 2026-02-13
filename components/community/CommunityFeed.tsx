@@ -11,8 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
-import { MessageSquare, Search, Plus, Filter, Image as ImageIcon, X, Megaphone, Loader2 } from 'lucide-react';
-import { Skeleton } from '@/components/ui/skeleton';
+import { Search, Plus, Filter, Image as ImageIcon, X, Megaphone, Loader2 } from 'lucide-react';
 import { useUserStore } from '@/stores/useUserStore';
 import { PostCard } from './PostCard';
 import { glassmorphism } from '@/lib/design-tokens';
@@ -20,6 +19,7 @@ import { Card } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { RichTextEditor } from '@/components/RichTextEditor';
+import { Skeleton } from '@/components/ui/skeleton';
 
 const PROVINCES = [
     'Punjab', 'Sindh', 'KPK', 'Balochistan',
@@ -49,7 +49,7 @@ export function CommunityFeed({ role, canCreate = true, initialShowDeleted = fal
     const [isAsking, setAsking] = useState(false);
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const [newTitle, setNewTitle] = useState('');
-    const [newContent, setNewContent] = useState(''); // Now Rich Text (HTML)
+    const [newContent, setNewContent] = useState('');
     const [newSubject, setNewSubject] = useState('');
     const [newProvince, setNewProvince] = useState('');
     const [newChapter, setNewChapter] = useState('');
@@ -62,12 +62,10 @@ export function CommunityFeed({ role, canCreate = true, initialShowDeleted = fal
     const selectedSubjectData = subjects.find(s => s.name === newSubject);
     const availableChapters = Array.isArray(selectedSubjectData?.chapters) ? selectedSubjectData.chapters : [];
 
-    // Reset chapter when subject changes
     useEffect(() => {
         setNewChapter('');
     }, [newSubject]);
 
-    // Privileged roles for announcements
     const canMakeAnnouncement = role === 'admin' || role === 'teacher';
 
     useEffect(() => {
@@ -82,13 +80,12 @@ export function CommunityFeed({ role, canCreate = true, initialShowDeleted = fal
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [sortBy, showDeleted, subjectFilter]);
 
-    // Ref for file input
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files[0]) {
             const file = e.target.files[0];
-            if (file.size > 5 * 1024 * 1024) { // 5MB limit
+            if (file.size > 5 * 1024 * 1024) {
                 toast.error('Image size should be less than 5MB');
                 return;
             }
@@ -114,7 +111,7 @@ export function CommunityFeed({ role, canCreate = true, initialShowDeleted = fal
         try {
             if (!loadMore) {
                 setLoading(true);
-                setPosts([]); // Clear previous posts on new filter
+                setPosts([]);
             } else {
                 setLoadingMore(true);
             }
@@ -125,15 +122,13 @@ export function CommunityFeed({ role, canCreate = true, initialShowDeleted = fal
                 constraints.push(where('isDeleted', '!=', true));
             }
 
-            // Subject Filter
             if (subjectFilter !== 'all') {
                 constraints.push(where('subject', '==', subjectFilter));
             }
 
-            // Apply different sorting/filtering strategies
             switch (sortBy) {
                 case 'newest':
-                    constraints.push(orderBy('isPinned', 'desc')); // Keep pinned on top for newest
+                    constraints.push(orderBy('isPinned', 'desc'));
                     constraints.push(orderBy('createdAt', 'desc'));
                     break;
                 case 'popular':
@@ -180,12 +175,11 @@ export function CommunityFeed({ role, canCreate = true, initialShowDeleted = fal
                 setSubjects(subjectsSnap.docs.map(d => ({ id: d.id, ...d.data() } as Subject)));
             }
 
-            // Update pagination state
             setLastVisible(postsSnap.docs[postsSnap.docs.length - 1]);
             setHasMore(postsSnap.docs.length === 20);
         } catch (error) {
             console.error(error);
-            toast.error('Failed to load community feed. Try refreshing or clearing filters.');
+            toast.error('Failed to load community feed');
         } finally {
             setLoading(false);
             setLoadingMore(false);
@@ -223,14 +217,13 @@ export function CommunityFeed({ role, canCreate = true, initialShowDeleted = fal
                     imageUrls.push(url);
                 } catch (error: any) {
                     console.error("Image upload error:", error);
-                    toast.error(`Failed to upload image: ${error.message || 'Unknown error'}`);
+                    toast.error(`Image upload failed`);
                     setIsUploading(false);
                     return;
                 }
                 setIsUploading(false);
             }
 
-            // Determine post type
             const postType = isAnnouncement ? 'announcement' : (role === 'student' ? 'question' : 'discussion');
 
             await addDoc(collection(db, 'forum_posts'), {
@@ -254,7 +247,6 @@ export function CommunityFeed({ role, canCreate = true, initialShowDeleted = fal
                 createdAt: serverTimestamp()
             });
 
-            // Award points for creating post (only for students, not announcements)
             if (role === 'student' && !isAnnouncement) {
                 await awardPoints(user.uid, POINTS.CREATE_POST, 'Created a question post');
                 toast.success('Question Posted! +5 points');
@@ -281,147 +273,66 @@ export function CommunityFeed({ role, canCreate = true, initialShowDeleted = fal
     };
 
     const filteredPosts = posts.filter(p => {
-        // Basic naive search on content string (works for simple HTML)
         const matchSearch = p.title.toLowerCase().includes(search.toLowerCase()) || p.content.toLowerCase().includes(search.toLowerCase());
         const matchSubject = subjectFilter === 'all' || p.subject === subjectFilter;
         return matchSearch && matchSubject;
     });
 
     return (
-        <div className="space-y-6">
-            {/* Header / Action Bar */}
-            <div className={`sticky top-2 z-30 flex flex-col md:flex-row gap-4 justify-between items-center ${glassmorphism.light} p-4 rounded-xl border border-white/20 dark:border-white/10 shadow-sm backdrop-blur-md transition-all duration-300`}>
-                {/* Search & Filter Group */}
-                <div className="flex flex-col sm:flex-row flex-1 w-full gap-3">
-                    <div className="relative flex-1 min-w-[200px]">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                        <Input
-                            placeholder="Search questions..."
-                            className="pl-9 bg-white/50 dark:bg-slate-900/50 border-slate-200 dark:border-slate-800 focus:ring-purple-500 rounded-full"
-                            value={search}
-                            onChange={e => setSearch(e.target.value)}
-                        />
-                    </div>
-
-                    {/* Modern Subject Pills Filter */}
-                    {/* Modern Subject Pills Filter - Desktop & Mobile Adaptive */}
-                    <div className="w-full">
-                        {/* Mobile View: Dropdown */}
-                        <div className="md:hidden w-full mb-2">
-                            <Select value={subjectFilter} onValueChange={setSubjectFilter}>
-                                <SelectTrigger className="w-full bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800">
-                                    <SelectValue placeholder="Select Topic" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="all">All Topics</SelectItem>
-                                    {subjects.map((subject) => (
-                                        <SelectItem key={subject.id} value={subject.name}>
-                                            {subject.name}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
-
-                        {/* Desktop View: Pills */}
-                        <div className="hidden md:flex flex-wrap gap-2">
-                            <button
-                                onClick={() => setSubjectFilter('all')}
-                                className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all
-                                    ${subjectFilter === 'all'
-                                        ? 'bg-purple-600 text-white shadow-lg shadow-purple-500/30 ring-2 ring-purple-600 ring-offset-2 dark:ring-offset-slate-900'
-                                        : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700'
-                                    }`}
-                            >
-                                All Topics
-                            </button>
-                            {subjects.map((subject) => (
-                                <button
-                                    key={subject.id}
-                                    onClick={() => setSubjectFilter(subject.name)}
-                                    className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all whitespace-nowrap
-                                        ${subjectFilter === subject.name
-                                            ? 'bg-purple-600 text-white shadow-lg shadow-purple-500/30 ring-2 ring-purple-600 ring-offset-2 dark:ring-offset-slate-900'
-                                            : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700'
-                                        }`}
-                                >
-                                    {subject.name}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-                    <div className="grid grid-cols-2 sm:flex gap-2 w-full sm:w-auto">
-                        <Select value={sortBy} onValueChange={(value) => {
-                            setSortBy(value);
-                            setPosts([]);
-                            setLastVisible(null);
-                            setHasMore(true);
-                        }}>
-                            <SelectTrigger className="w-full sm:w-[150px] bg-white/50 dark:bg-slate-900/50 border-slate-200 dark:border-slate-800 rounded-full">
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="newest">Newest</SelectItem>
-                                <SelectItem value="popular">Most Upvoted</SelectItem>
-                                <SelectItem value="replies">Most Replies</SelectItem>
-                                <SelectItem value="unanswered">Unanswered</SelectItem>
-                                <SelectItem value="solved">Solved</SelectItem>
-                            </SelectContent>
-                        </Select>
-                    </div>
+        <div className="space-y-8">
+            {/* Action Bar */}
+            <div className="flex flex-col md:flex-row gap-4 justify-between items-start md:items-center">
+                <div className="flex-1 w-full relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 pointer-events-none" />
+                    <Input
+                        placeholder="Search questions, topics..."
+                        className="pl-10 h-12 text-base rounded-2xl bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-sm focus:ring-2 focus:ring-purple-500/20 transition-shadow"
+                        value={search}
+                        onChange={e => setSearch(e.target.value)}
+                    />
                 </div>
 
-                {/* Right Side Actions */}
-                <div className="flex flex-wrap items-center gap-3 w-full md:w-auto justify-end">
-
-                    {/* Sort Filter - Compact */}
+                <div className="flex gap-2 w-full md:w-auto">
                     <Select value={sortBy} onValueChange={setSortBy}>
-                        <SelectTrigger className="w-[140px] h-9 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 rounded-lg text-xs">
-                            <Filter className="w-3.5 h-3.5 mr-2 text-slate-500" />
-                            <SelectValue />
+                        <SelectTrigger className="w-[160px] h-12 rounded-xl bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800">
+                            <SelectValue placeholder="Sort By" />
                         </SelectTrigger>
                         <SelectContent>
                             <SelectItem value="newest">Newest First</SelectItem>
-                            <SelectItem value="votes">Most Voted</SelectItem>
+                            <SelectItem value="popular">Most Upvoted</SelectItem>
+                            <SelectItem value="replies">Most Active</SelectItem>
                             <SelectItem value="unanswered">Unanswered</SelectItem>
+                            <SelectItem value="solved">Solved</SelectItem>
                         </SelectContent>
                     </Select>
 
                     {role === 'admin' && (
-                        <div className="flex items-center gap-2 mr-2">
+                        <div className="flex items-center gap-2 px-4 h-12 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl">
                             <Switch id="show-deleted" checked={showDeleted} onCheckedChange={setShowDeleted} />
-                            <Label htmlFor="show-deleted" className="text-sm font-medium whitespace-nowrap cursor-pointer">
-                                Hidden
-                            </Label>
+                            <Label htmlFor="show-deleted" className="whitespace-nowrap cursor-pointer">Hidden</Label>
                         </div>
                     )}
 
                     {canCreate && (
                         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
                             <DialogTrigger asChild>
-                                <Button className="w-full md:w-auto bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white rounded-full shadow-lg shadow-purple-500/20 transition-all hover:scale-105">
-                                    <Plus className="mr-2 h-5 w-5" />
-                                    {role === 'student' ? 'Ask Doubt' : 'New Post'}
+                                <Button className="h-12 w-12 md:w-auto px-0 md:px-6 rounded-xl bg-purple-600 hover:bg-purple-700 text-white shadow-lg shadow-purple-500/25 transition-all hover:scale-105">
+                                    <Plus className="h-6 w-6 md:mr-2" />
+                                    <span className="hidden md:inline font-medium">Ask Question</span>
                                 </Button>
                             </DialogTrigger>
-                            <DialogContent className="w-[95vw] max-w-[90vw] h-[90vh] max-h-[90vh] overflow-y-auto sm:max-w-[700px] sm:h-auto rounded-xl">
+                            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
                                 <DialogHeader>
-                                    <DialogTitle className="text-xl sm:text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-purple-600 to-blue-600">
-                                        {role === 'student' && !isAnnouncement ? 'Ask a Doubt' : (isAnnouncement ? 'Create Announcement' : 'Start Discussion')}
+                                    <DialogTitle className="text-2xl font-bold">
+                                        {role === 'student' && !isAnnouncement ? 'Ask the Community' : (isAnnouncement ? 'Create Announcement' : 'Start Discussion')}
                                     </DialogTitle>
                                 </DialogHeader>
-                                <div className="space-y-4 py-4">
-                                    {/* Announcement Toggle for Admin/Teacher */}
+                                <div className="space-y-5 py-4">
                                     {canMakeAnnouncement && (
-                                        <div className="flex items-center gap-2 p-3 bg-yellow-50 dark:bg-yellow-900/10 border border-yellow-200 dark:border-yellow-800 rounded-lg">
-                                            <Switch
-                                                id="announcement-mode"
-                                                checked={isAnnouncement}
-                                                onCheckedChange={setIsAnnouncement}
-                                            />
-                                            <Label htmlFor="announcement-mode" className="flex items-center gap-2 font-semibold cursor-pointer">
-                                                <Megaphone className="h-4 w-4 text-yellow-600" />
-                                                Post as Announcement
+                                        <div className="flex items-center gap-2 p-3 bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800 rounded-lg">
+                                            <Switch id="announcement-mode" checked={isAnnouncement} onCheckedChange={setIsAnnouncement} />
+                                            <Label htmlFor="announcement-mode" className="font-semibold text-amber-800 dark:text-amber-200 cursor-pointer flex items-center gap-2">
+                                                <Megaphone className="h-4 w-4" /> Post as Announcement
                                             </Label>
                                         </div>
                                     )}
@@ -431,7 +342,7 @@ export function CommunityFeed({ role, canCreate = true, initialShowDeleted = fal
                                         <Input
                                             value={newTitle}
                                             onChange={e => setNewTitle(e.target.value)}
-                                            placeholder={role === 'student' ? "e.g. How to solve Integration by Parts?" : "Topic of discussion..."}
+                                            placeholder="What's your question?"
                                             className="text-lg font-medium"
                                         />
                                     </div>
@@ -459,7 +370,6 @@ export function CommunityFeed({ role, canCreate = true, initialShowDeleted = fal
                                         </div>
                                     </div>
 
-                                    {/* Only show chapters if not "Other" and subjects loaded */}
                                     {newSubject !== 'Other' && (
                                         <div className="space-y-2">
                                             <Label>Chapter (Optional)</Label>
@@ -473,25 +383,24 @@ export function CommunityFeed({ role, canCreate = true, initialShowDeleted = fal
                                     )}
 
                                     <div className="space-y-2">
-                                        <Label>Content</Label>
+                                        <Label>Details</Label>
                                         <RichTextEditor
                                             value={newContent}
                                             onChange={setNewContent}
-                                            placeholder="Describe your question or discussion in detail..."
+                                            placeholder="Explain your question in detail..."
                                             className="min-h-[200px]"
                                         />
                                     </div>
 
-                                    {/* Image Upload */}
                                     <div className="space-y-2">
                                         <Label>Attachment (Optional)</Label>
                                         {!imagePreview ? (
                                             <div
                                                 onClick={() => fileInputRef.current?.click()}
-                                                className="border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-lg p-6 flex flex-col items-center justify-center cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-900/50 transition-colors"
+                                                className="border-2 border-dashed border-slate-200 dark:border-slate-800 hover:border-purple-500 dark:hover:border-purple-500 rounded-xl p-8 flex flex-col items-center justify-center cursor-pointer transition-colors bg-slate-50 dark:bg-slate-900/50"
                                             >
                                                 <ImageIcon className="h-8 w-8 text-slate-400 mb-2" />
-                                                <span className="text-sm text-muted-foreground">Click to upload image</span>
+                                                <span className="text-sm text-slate-500 font-medium">Click to upload image</span>
                                                 <Input
                                                     ref={fileInputRef}
                                                     id="image-upload"
@@ -502,12 +411,12 @@ export function CommunityFeed({ role, canCreate = true, initialShowDeleted = fal
                                                 />
                                             </div>
                                         ) : (
-                                            <div className="relative mt-2 w-full h-48 bg-slate-100 dark:bg-slate-900 rounded-lg overflow-hidden border">
+                                            <div className="relative w-full h-48 bg-slate-100 dark:bg-slate-900 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-800 group">
                                                 <img src={imagePreview} alt="Preview" className="w-full h-full object-contain" />
                                                 <Button
                                                     size="icon"
                                                     variant="destructive"
-                                                    className="absolute top-2 right-2 h-8 w-8 rounded-full shadow-md"
+                                                    className="absolute top-2 right-2 h-8 w-8 rounded-full shadow-md opacity-0 group-hover:opacity-100 transition-opacity"
                                                     onClick={removeImage}
                                                 >
                                                     <X className="w-4 h-4" />
@@ -516,20 +425,22 @@ export function CommunityFeed({ role, canCreate = true, initialShowDeleted = fal
                                         )}
                                     </div>
 
-                                    <Button
-                                        className={`w-full text-lg py-6 ${isAnnouncement ? 'bg-yellow-600 hover:bg-yellow-700' : 'bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700'}`}
-                                        onClick={handleCreatePost}
-                                        disabled={isAsking || isUploading}
-                                    >
-                                        {isAsking || isUploading ? (
-                                            <>
-                                                <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                                                {isUploading ? 'Uploading...' : 'Posting...'}
-                                            </>
-                                        ) : (
-                                            isAnnouncement ? 'Post Announcement' : 'Post Question'
-                                        )}
-                                    </Button>
+                                    <div className="pt-2">
+                                        <Button
+                                            className="w-full h-12 text-base font-medium bg-purple-600 hover:bg-purple-700 text-white rounded-xl shadow-lg shadow-purple-500/20 transition-all hover:scale-[1.02]"
+                                            onClick={handleCreatePost}
+                                            disabled={isAsking || isUploading}
+                                        >
+                                            {isAsking || isUploading ? (
+                                                <>
+                                                    <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                                                    {isUploading ? 'Uploading Image...' : 'Posting Question...'}
+                                                </>
+                                            ) : (
+                                                'Post Question'
+                                            )}
+                                        </Button>
+                                    </div>
                                 </div>
                             </DialogContent>
                         </Dialog>
@@ -537,35 +448,52 @@ export function CommunityFeed({ role, canCreate = true, initialShowDeleted = fal
                 </div>
             </div>
 
-            {/* Warning for Filtering */}
-            {(search || subjectFilter !== 'all') && hasMore && (
-                <div className="bg-blue-50 dark:bg-blue-900/20 text-blue-800 dark:text-blue-200 px-4 py-3 rounded-xl text-sm flex items-center gap-2 border border-blue-100 dark:border-blue-900">
-                    <span className="font-bold">Info:</span>
-                    Search applies to currently loaded posts. Scroll down to load more.
-                </div>
-            )}
+            {/* Subject Filters (Pills) */}
+            <div className="flex flex-wrap gap-2 pb-2">
+                <button
+                    onClick={() => setSubjectFilter('all')}
+                    className={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-200
+                        ${subjectFilter === 'all'
+                            ? 'bg-purple-600 text-white shadow-md shadow-purple-500/30'
+                            : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800'
+                        }`}
+                >
+                    All Topics
+                </button>
+                {subjects.map((subject) => (
+                    <button
+                        key={subject.id}
+                        onClick={() => setSubjectFilter(subject.name)}
+                        className={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 whitespace-nowrap
+                            ${subjectFilter === subject.name
+                                ? 'bg-purple-600 text-white shadow-md shadow-purple-500/30'
+                                : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800'
+                            }`}
+                    >
+                        {subject.name}
+                    </button>
+                ))}
+            </div>
 
-            {/* Posts Grid */}
+            {/* Content Feed */}
             <div className="space-y-4">
                 {loading && posts.length === 0 ? (
                     // Loading Skeletons
-                    <>
-                        {[1, 2, 3].map((i) => (
-                            <Card key={i} className="p-6 rounded-2xl border-white/20 shadow-sm">
-                                <div className="flex items-start gap-4">
-                                    <Skeleton className="h-12 w-12 rounded-full" />
-                                    <div className="flex-1 space-y-3">
-                                        <div className="flex items-center gap-2">
-                                            <Skeleton className="h-4 w-24" />
-                                            <Skeleton className="h-4 w-20" />
-                                        </div>
-                                        <Skeleton className="h-6 w-3/4" />
-                                        <Skeleton className="h-24 w-full rounded-xl" />
+                    Array.from({ length: 3 }).map((_, i) => (
+                        <Card key={i} className="p-6 rounded-2xl border-slate-100 dark:border-slate-800 shadow-sm bg-white dark:bg-slate-900">
+                            <div className="flex gap-4">
+                                <Skeleton className="h-12 w-12 rounded-full" />
+                                <div className="flex-1 space-y-3">
+                                    <div className="flex gap-2">
+                                        <Skeleton className="h-4 w-24" />
+                                        <Skeleton className="h-4 w-20" />
                                     </div>
+                                    <Skeleton className="h-6 w-3/4" />
+                                    <Skeleton className="h-20 w-full rounded-xl" />
                                 </div>
-                            </Card>
-                        ))}
-                    </>
+                            </div>
+                        </Card>
+                    ))
                 ) : (
                     <>
                         {filteredPosts.map(post => (
@@ -574,12 +502,12 @@ export function CommunityFeed({ role, canCreate = true, initialShowDeleted = fal
 
                         {/* Load More */}
                         {hasMore && filteredPosts.length > 0 && (
-                            <div className="flex justify-center pt-6 pb-4">
+                            <div className="flex justify-center pt-8 pb-4">
                                 <Button
-                                    variant="outline"
+                                    variant="ghost"
                                     onClick={() => fetchData(true)}
                                     disabled={loadingMore}
-                                    className="min-w-[200px] rounded-full"
+                                    className="min-w-[160px] rounded-full text-slate-500 hover:text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-900/10"
                                 >
                                     {loadingMore ? (
                                         <>
@@ -587,17 +515,28 @@ export function CommunityFeed({ role, canCreate = true, initialShowDeleted = fal
                                             Loading...
                                         </>
                                     ) : (
-                                        'Load More Questions'
+                                        'Show More Questions'
                                     )}
                                 </Button>
                             </div>
                         )}
 
                         {filteredPosts.length === 0 && !loading && (
-                            <div className="flex flex-col items-center justify-center py-20 text-muted-foreground bg-white/40 dark:bg-white/5 rounded-3xl border border-dashed border-slate-300 dark:border-slate-700">
-                                <MessageSquare className="h-16 w-16 mb-4 opacity-20" />
-                                <h3 className="text-xl font-bold text-foreground">No posts found</h3>
-                                <p>Be the first to start a discussion!</p>
+                            <div className="flex flex-col items-center justify-center py-24 text-center">
+                                <div className="bg-slate-100 dark:bg-slate-800 p-6 rounded-full mb-4">
+                                    <Search className="h-10 w-10 text-slate-400" />
+                                </div>
+                                <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">No questions found</h3>
+                                <p className="text-slate-500 dark:text-slate-400 max-w-sm mb-6">
+                                    We couldn't find any questions matching your filters. Try adjusting your search or start a new discussion.
+                                </p>
+                                <Button
+                                    onClick={() => { setSearch(''); setSubjectFilter('all'); }}
+                                    variant="outline"
+                                    className="rounded-full"
+                                >
+                                    Clear Filters
+                                </Button>
                             </div>
                         )}
                     </>

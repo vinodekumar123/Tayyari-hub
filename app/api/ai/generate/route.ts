@@ -50,11 +50,18 @@ export async function POST(req: NextRequest) {
       Difficulty: ${difficultyText || 'Medium'}
 
       Output MUST be valid JSON format only, with no markdown code blocks.
+      
+      IMPORTANT:
+      - If the question involves "Match the following", "Compare", or tabular data, use valid HTML <table>, <tr>, <th>, <td> tags within the "questionText" field.
+      - Apply class="w-full border-collapse border border-gray-300" to the <table>.
+      - Apply class="border border-gray-300 p-2" to <th> and <td>.
+      - Use <br/> for line breaks and <strong> for bold text.
+
       Structure:
       {
         "questions": [
           {
-            "questionText": "HTML string for the question (use <p>, <strong> etc)",
+            "questionText": "HTML string for the question (use <p>, <strong>, <table>, etc)",
             "options": ["Option A", "Option B", "Option C", "Option D"],
             "correctAnswer": "The content of the correct option string exactly matching one of the options",
             "explanation": "Detailed explanation of why the answer is correct",

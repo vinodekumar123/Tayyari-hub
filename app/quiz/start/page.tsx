@@ -1060,7 +1060,7 @@ const StartQuizPageContent: React.FC = () => {
                       <div className="flex justify-between items-start gap-4">
                         <div className="text-lg font-medium prose dark:prose-invert max-w-none flex-1 group relative break-words overflow-hidden" style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}>
                           <span className="font-bold text-slate-700 dark:text-slate-300">Q{globalIdx + 1}. </span>
-                          <span dangerouslySetInnerHTML={{ __html: q.questionText }} />
+                          <span className="question-content" dangerouslySetInnerHTML={{ __html: q.questionText }} />
                           {isAdmin && (
                             <a
                               href={`/admin/questions/create?edit=${q.id}`}
@@ -1128,7 +1128,7 @@ const StartQuizPageContent: React.FC = () => {
                             <Info className="w-4 h-4" /> Explanation:
                           </p>
                           <div
-                            className="prose dark:prose-invert max-w-none break-words overflow-auto"
+                            className="prose dark:prose-invert max-w-none break-words overflow-auto question-content"
                             style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}
                             dangerouslySetInnerHTML={{ __html: q.explanation }}
                           />
