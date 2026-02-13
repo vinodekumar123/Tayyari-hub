@@ -292,8 +292,9 @@ export function CommunityFeed({ role, canCreate = true, initialShowDeleted = fal
                     </div>
 
                     {/* Modern Subject Pills Filter */}
-                    <div className="w-full overflow-x-auto pb-2 -mx-4 px-4 md:mx-0 md:px-0 md:pb-0 scrollbar-hide">
-                        <div className="flex gap-2 min-w-max">
+                    {/* Modern Subject Pills Filter - Wrapped */}
+                    <div className="w-full">
+                        <div className="flex flex-wrap gap-2">
                             <button
                                 onClick={() => setSubjectFilter('all')}
                                 className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all

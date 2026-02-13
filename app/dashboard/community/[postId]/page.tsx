@@ -20,6 +20,7 @@ import { glassmorphism } from '@/lib/design-tokens';
 import DOMPurify from 'dompurify';
 import { RichTextEditor } from '@/components/RichTextEditor';
 import { CommunityBackground } from '@/components/community/CommunityBackground';
+import { UnifiedHeader } from '@/components/unified-header';
 
 export default function ThreadPage() {
     const { postId } = useParams();
@@ -318,14 +319,22 @@ export default function ThreadPage() {
         <div className="min-h-screen bg-slate-50/[0.6] dark:bg-slate-950 relative overflow-hidden">
             <CommunityBackground />
 
-            <div className="relative z-10 p-4 md:p-8 pt-16 md:pt-8 max-w-4xl mx-auto space-y-6">
+            <UnifiedHeader
+                title="Community"
+                subtitle="Discuss, Share, Learn"
+                className="bg-transparent border-transparent backdrop-blur-none"
+            >
                 <Button
                     variant="ghost"
-                    className="pl-0 hover:pl-2 transition-all hover:bg-transparent text-muted-foreground hover:text-foreground"
+                    size="sm"
+                    className="gap-2"
                     onClick={() => router.push(backLink)}
                 >
-                    <ArrowLeft className="mr-2 h-4 w-4" /> Back to Discussions
+                    <ArrowLeft className="h-4 w-4" /> Back
                 </Button>
+            </UnifiedHeader>
+
+            <div className="relative z-10 p-4 md:p-8 pt-4 md:pt-4 max-w-4xl mx-auto space-y-6">
 
                 {/* Main Post Card */}
                 <Card className={`overflow-hidden shadow-2xl border-0 ring-1 ring-white/20 dark:ring-white/10
