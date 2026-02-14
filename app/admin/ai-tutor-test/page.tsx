@@ -34,6 +34,7 @@ interface StreamStatus {
 
 const QUICK_ACTIONS = [
     { label: 'Explain', icon: BookOpen, prompt: 'Explain in detail: ' },
+    { label: 'Explain Simply', icon: Sparkles, prompt: 'Explain like I am 5: ' },
     { label: 'Short Answer', icon: ListChecks, prompt: 'Briefly define: ' },
     { label: 'Compare', icon: GitCompare, prompt: 'Compare and contrast: ' },
     { label: 'MCQs (Try)', icon: HelpCircle, prompt: 'Give me 3 MCQs on: ' },
@@ -42,8 +43,8 @@ const QUICK_ACTIONS = [
 const SUGGESTED_TOPICS = [
     "What is the process of DNA replication?",
     "Explain the difference between mitosis and meiosis",
-    "Briefly define mitochondria",
-    "Detailed explanation of photosynthesis",
+    "Which cells cause cancer? (Anchoring Test)",
+    "What are autoimmune diseases? (Syllabus Test)",
 ];
 
 export default function AdminAiTutorTestPage() {
@@ -88,14 +89,17 @@ export default function AdminAiTutorTestPage() {
         setMessages(prev => [...prev, { role: 'user', content: messageToSend }]);
         setInput('');
 
+        const history = messages.map(m => ({ role: m.role, content: m.content }));
+
         const endpoint = isStudentMode ? '/api/tutor' : '/api/admin/chat-tutor';
         const body = isStudentMode ? {
             message: messageToSend,
+            history,
             streamStatus: true,
             userId: 'simulated-student',
             userName: 'Simulated Student',
             userRole: 'student'
-        } : { message: messageToSend, streamStatus: true };
+        } : { message: messageToSend, history, streamStatus: true };
 
         try {
             const res = await fetch(endpoint, {
@@ -327,8 +331,8 @@ export default function AdminAiTutorTestPage() {
                             {streamStatus && (
                                 <div className="flex justify-start">
                                     <div className={`rounded-lg p-4 border animate-pulse ${streamStatus.status === 'error'
-                                            ? 'bg-red-50 border-red-100'
-                                            : 'bg-gradient-to-r from-blue-50 to-cyan-50 border-blue-100'
+                                        ? 'bg-red-50 border-red-100'
+                                        : 'bg-gradient-to-r from-blue-50 to-cyan-50 border-blue-100'
                                         }`}>
                                         <div className="flex items-center gap-2">
                                             {streamStatus.status !== 'error' && <Loader2 className="h-5 w-5 animate-spin text-blue-500" />}

@@ -1,5 +1,6 @@
 import { adminDb } from '@/lib/firebase-admin';
 import crypto from 'crypto';
+import { scrubPII } from './privacyUtils';
 
 // In-memory cache for query results (resets on cold start)
 const memoryCache = new Map<string, { response: string; timestamp: number; sources: any[] }>();
@@ -97,7 +98,7 @@ export function detectSubject(query: string): string | null {
 /**
  * Classify query intent
  */
-export type QueryIntent = 'factual' | 'procedural' | 'comparative' | 'practice' | 'concise' | 'detailed' | 'general';
+export type QueryIntent = 'factual' | 'procedural' | 'comparative' | 'practice' | 'concise' | 'detailed' | 'remedial' | 'advanced' | 'visual' | 'general';
 
 export function classifyQueryIntent(query: string): QueryIntent {
     const lowerQuery = query.toLowerCase();
@@ -122,9 +123,19 @@ export function classifyQueryIntent(query: string): QueryIntent {
         return 'procedural';
     }
 
-    // Comparative: difference, compare, contrast, vs
-    if (/difference|compare|contrast|vs\.?|versus|between .* and/i.test(lowerQuery)) {
-        return 'comparative';
+    // Visual: diagram, table, compare, chart, list
+    if (/table|compare|contrast|chart|diagram|list items|list features/i.test(lowerQuery)) {
+        return 'visual';
+    }
+
+    // Advanced: deep dive, complex, advanced, expert, mechanism
+    if (/deep dive|complex|advanced|expert|mechanism|detailed analysis|molecular level/i.test(lowerQuery)) {
+        return 'advanced';
+    }
+
+    // Remedial: basics, simple, explain like I'm 5, for beginners, easy
+    if (/basics|simple|eli5|explain like i'm 5|beginner|easy|starting with/i.test(lowerQuery)) {
+        return 'remedial';
     }
 
     // Factual: What is, explain, describe
@@ -150,6 +161,12 @@ export function getFormatInstructions(intent: QueryIntent): string {
             return 'Use a table to compare and contrast the items. Highlight key differences.';
         case 'practice':
             return 'Provide 2-3 MCQ-style practice questions with answers and brief explanations.';
+        case 'visual':
+            return 'Use a Markdown Table or an organized list to present information visually. Highlight key properties clearly.';
+        case 'advanced':
+            return 'Provide a high-level, complex explanation focusing on mechanisms, molecular details, and advanced conceptual connections.';
+        case 'remedial':
+            return 'Explain the core basics as if teaching a beginner. Use simple analogies and avoid overly dense jargon.';
         case 'factual':
             return 'Give a direct, concise definition followed by key points.';
         default:
@@ -174,10 +191,13 @@ export async function logConversation(data: {
     feedback?: 'helpful' | 'not_helpful' | null;
 }) {
     try {
-        const docRef = await adminDb.collection('ai_tutor_logs').add({
+        const scrubbedData = {
             ...data,
+            query: scrubPII(data.query),
+            response: scrubPII(data.response),
             timestamp: new Date(),
-        });
+        };
+        const docRef = await adminDb.collection('ai_tutor_logs').add(scrubbedData);
         return docRef.id;
     } catch (error) {
         console.error('Failed to log conversation:', error);
