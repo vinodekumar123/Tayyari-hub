@@ -10,8 +10,17 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Loader2, Wand2, Save, Check, Trash2, FileText, UploadCloud, BrainCircuit, Library, BookOpen } from 'lucide-react';
+import { Loader2, Wand2, Save, Check, Trash2, FileText, UploadCloud, BrainCircuit, Library, BookOpen, Download, Copy, AlertCircle, Sparkles, ChevronDown } from 'lucide-react';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuLabel,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import parse from 'html-react-parser';
+import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 
 import { db } from '@/app/firebase';
@@ -20,6 +29,8 @@ import { Progress } from '@/components/ui/progress';
 import { splitPdfClientSide, getPdfPageCount } from '@/lib/pdfClientProcessor';
 import { analyzeDocument } from '@/app/actions/knowledgeBase';
 import { getAllSubjectsWithChapters, getChapterContent } from '@/app/actions/knowledgeBaseManagement';
+import { exportToPDF, exportToWord } from '@/lib/exportUtils';
+import { findExactDuplicates, findSemanticDuplicatesWithAI } from '@/lib/deduplicationUtils';
 
 interface GeneratedQuestion {
     question: string;
@@ -51,8 +62,8 @@ const QUESTION_TYPES = [
 
 export default function AIGeneratorPage() {
     const [inputMethod, setInputMethod] = useState('text');
-    const [text, setText] = useState('');
-    const [file, setFile] = useState<File | null>(null);
+    const [textInput, setTextInput] = useState('');
+    const [pdfFile, setPdfFile] = useState<File | null>(null);
     const [count, setCount] = useState('5');
     const [difficulty, setDifficulty] = useState('Medium');
     const [selectedTypes, setSelectedTypes] = useState<string[]>(['single_correct']);
@@ -60,6 +71,8 @@ export default function AIGeneratorPage() {
 
     const [isGenerating, setIsGenerating] = useState(false);
     const [generatedQuestions, setGeneratedQuestions] = useState<GeneratedQuestion[]>([]);
+    const [selectedQuestionIds, setSelectedQuestionIds] = useState<Set<number>>(new Set());
+    const [isScanningDuplicates, setIsScanningDuplicates] = useState(false);
 
     // Progress State
     const [progress, setProgress] = useState(0);
@@ -106,7 +119,7 @@ export default function AIGeneratorPage() {
                 toast.error("Only PDF files are supported");
                 return;
             }
-            setFile(selectedFile);
+            setPdfFile(selectedFile);
             toast.success(`Selected: ${selectedFile.name}`);
             setLogs([]);
             setProgress(0);
@@ -125,10 +138,10 @@ export default function AIGeneratorPage() {
 
     const handleGenerate = async () => {
         // Validation
-        if (inputMethod === 'text' && !text.trim()) {
+        if (inputMethod === 'text' && !textInput.trim()) {
             toast.error("Please enter some text content"); return;
         }
-        if (inputMethod === 'pdf' && !file) {
+        if (inputMethod === 'pdf' && !pdfFile) {
             toast.error("Please upload a PDF file"); return;
         }
         if (inputMethod === 'knowledge_base' && (!subject || !chapter)) {
@@ -150,7 +163,7 @@ export default function AIGeneratorPage() {
             // --- STEP 1: Content Retrieval ---
 
             if (inputMethod === 'text') {
-                finalContent = text;
+                finalContent = textInput;
             }
             else if (inputMethod === 'knowledge_base') {
                 setCurrentStep(`Fetching content for ${subject} - ${chapter}...`);
@@ -163,13 +176,13 @@ export default function AIGeneratorPage() {
                 finalContent = kbResult.content;
                 addLog(`✅ Loaded ${finalContent.length} characters from Knowledge Base.`);
             }
-            else if (inputMethod === 'pdf' && file) {
+            else if (inputMethod === 'pdf' && pdfFile) {
                 // PDF Processing (Gemini Vision)
-                addLog(`📄 Processing PDF: ${file.name}`);
+                addLog(`📄 Processing PDF: ${pdfFile.name}`);
                 setCurrentStep('Scanning PDF structure...');
 
-                const pageCount = await getPdfPageCount(file);
-                const splitResult = await splitPdfClientSide(file);
+                const pageCount = await getPdfPageCount(pdfFile);
+                const splitResult = await splitPdfClientSide(pdfFile);
 
                 if (!splitResult.success || !splitResult.pages) throw new Error("Failed to split PDF");
 
@@ -251,6 +264,12 @@ export default function AIGeneratorPage() {
                 // Progress Update for Batches
                 const batchProgress = Math.round((batchNum / batches) * 100);
                 setProgress(batchProgress);
+
+                // Batch Delay to prevent rate limits (except for the last batch)
+                if (batchNum < batches) {
+                    addLog(`⏳ Cooldown (2s) to prevent rate limits...`);
+                    await new Promise(resolve => setTimeout(resolve, 2000));
+                }
             }
 
             addLog(`🎉 All done! Generated ${allQuestions.length} questions.`);
@@ -258,11 +277,86 @@ export default function AIGeneratorPage() {
 
         } catch (error: any) {
             console.error(error);
-            addLog(`❌ Critical Error: ${error.message}`);
-            toast.error(error.message || "Failed to generate questions");
+            toast.error(error.message || "Generation failed");
         } finally {
             setIsGenerating(false);
-            setCurrentStep('Ready');
+            setProgress(0);
+            setCurrentStep('');
+        }
+    };
+
+    const handleDeduplicate = async (mode: 'exact' | 'deep') => {
+        if (generatedQuestions.length < 2) {
+            toast.error("Not enough questions to scan for duplicates");
+            return;
+        }
+
+        setIsScanningDuplicates(true);
+        addLog(`🔍 Starting ${mode} deduplication scan...`);
+
+        try {
+            let duplicateGroups: number[][] = [];
+
+            if (mode === 'exact') {
+                duplicateGroups = findExactDuplicates(generatedQuestions);
+            } else {
+                duplicateGroups = await findSemanticDuplicatesWithAI(generatedQuestions);
+            }
+
+            if (duplicateGroups.length === 0) {
+                toast.success("No duplicates found!");
+                addLog("✅ No duplicates found.");
+            } else {
+                const duplicatesToSelect = new Set<number>();
+                duplicateGroups.forEach(group => {
+                    // Select all except the first one in each group
+                    group.slice(1).forEach(idx => duplicatesToSelect.add(idx));
+                });
+
+                setSelectedQuestionIds(duplicatesToSelect);
+                toast.success(`Found and selected ${duplicatesToSelect.size} duplicates!`);
+                addLog(`✨ Found ${duplicatesToSelect.size} potential duplicates.`);
+            }
+        } catch (error) {
+            console.error(error);
+            toast.error("Deduplication scan failed");
+        } finally {
+            setIsScanningDuplicates(false);
+        }
+    };
+
+    const handleDeleteSelected = () => {
+        if (selectedQuestionIds.size === 0) return;
+        const nextQuestions = generatedQuestions.filter((_, idx) => !selectedQuestionIds.has(idx));
+        setGeneratedQuestions(nextQuestions);
+        setSelectedQuestionIds(new Set());
+        toast.success(`Removed ${selectedQuestionIds.size} questions`);
+    };
+
+    const toggleSelection = (idx: number) => {
+        const next = new Set(selectedQuestionIds);
+        if (next.has(idx)) next.delete(idx);
+        else next.add(idx);
+        setSelectedQuestionIds(next);
+    };
+
+    const handleExport = async (format: 'pdf' | 'docx') => {
+        if (generatedQuestions.length === 0) return;
+
+        const subTitle = subject || "TayyariHub";
+        const chapTitle = chapter || "Questions";
+        const title = `${subTitle}_${chapTitle}`;
+
+        try {
+            if (format === 'pdf') {
+                await exportToPDF(generatedQuestions, title);
+            } else {
+                await exportToWord(generatedQuestions, title);
+            }
+            toast.success(`Downloaded ${format.toUpperCase()}`);
+        } catch (e) {
+            console.error(e);
+            toast.error("Export failed");
         }
     };
 
@@ -335,10 +429,10 @@ export default function AIGeneratorPage() {
 
                                 <TabsContent value="text" className="mt-0">
                                     <Textarea
-                                        placeholder="Paste content here..."
-                                        className="min-h-[200px] font-mono text-sm"
-                                        value={text}
-                                        onChange={(e) => setText(e.target.value)}
+                                        placeholder="Paste your source text here..."
+                                        className="h-[200px] text-sm resize-none"
+                                        value={textInput}
+                                        onChange={(e) => setTextInput(e.target.value)}
                                     />
                                 </TabsContent>
 
@@ -349,94 +443,69 @@ export default function AIGeneratorPage() {
                                     >
                                         <input
                                             type="file"
-                                            accept="application/pdf"
                                             hidden
                                             ref={fileInputRef}
+                                            id="pdf-upload"
+                                            className="hidden"
+                                            accept=".pdf"
                                             onChange={handleFileChange}
                                         />
-                                        <div className="w-10 h-10 bg-purple-100 dark:bg-purple-900/30 rounded-full flex items-center justify-center mb-2">
-                                            <UploadCloud className="w-5 h-5 text-purple-600" />
-                                        </div>
-                                        <p className="font-medium text-sm">
-                                            {file ? file.name : "Click to Upload PDF"}
-                                        </p>
+                                        <label htmlFor="pdf-upload" className="cursor-pointer flex flex-col items-center">
+                                            {pdfFile ? (
+                                                <>
+                                                    <Check className="w-10 h-10 text-green-500 mb-2" />
+                                                    <span className="text-sm font-medium">{pdfFile.name}</span>
+                                                    <span className="text-xs text-muted-foreground mt-1">{(pdfFile.size / 1024 / 1024).toFixed(2)} MB</span>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <UploadCloud className="w-10 h-10 text-slate-400 mb-2" />
+                                                    <span className="text-sm font-medium">Click to upload PDF</span>
+                                                    <span className="text-xs text-muted-foreground mt-1">Maximum 50MB</span>
+                                                </>
+                                            )}
+                                        </label>
                                     </div>
                                 </TabsContent>
 
                                 <TabsContent value="knowledge_base" className="mt-0 space-y-4">
-                                    <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-100 dark:border-blue-900">
-                                        <div className="flex gap-2 text-blue-700 dark:text-blue-300 mb-2">
-                                            <Library className="w-5 h-5" />
-                                            <span className="font-semibold text-sm">Select Chapter Content</span>
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div className="space-y-1.5">
+                                            <Label className="text-xs">Subject</Label>
+                                            <Select value={subject} onValueChange={setSubject}>
+                                                <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Select Subject" /></SelectTrigger>
+                                                <SelectContent>
+                                                    {subjects.map(s => (
+                                                        <SelectItem key={s.id} value={s.name}>{s.name}</SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
                                         </div>
-                                        <p className="text-xs text-muted-foreground">The AI will read ALL uploaded content for this chapter.</p>
-                                    </div>
-                                    {/* Selectors moved to taxonomy section but required here logic-wise */}
-                                    <div className="p-2 border rounded bg-background/50 text-xs text-muted-foreground text-center">
-                                        Use the Taxonomy selectors below to pick the chapter.
+                                        <div className="space-y-1.5">
+                                            <Label className="text-xs">Chapter</Label>
+                                            <Select value={chapter} onValueChange={setChapter} disabled={!subject}>
+                                                <SelectTrigger className="h-9 text-xs">
+                                                    <SelectValue placeholder={subject ? "Select Chapter" : "← Select Subject"} />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {availableChapters.map(c => (
+                                                        <SelectItem key={c} value={c}>{c}</SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
                                     </div>
                                 </TabsContent>
                             </Tabs>
-
-                            {/* Progress & Logs */}
-                            {(isGenerating || logs.length > 0) && (
-                                <div className="mt-4 p-3 bg-slate-50 dark:bg-slate-900 rounded-lg border text-sm">
-                                    {isGenerating && (
-                                        <div className="mb-2 space-y-1">
-                                            <div className="flex justify-between text-xs text-muted-foreground">
-                                                <span>{currentStep}</span>
-                                                <span>{progress}%</span>
-                                            </div>
-                                            <Progress value={progress} className="h-1.5" />
-                                        </div>
-                                    )}
-                                    <div className="h-24 overflow-y-auto font-mono text-[10px] text-muted-foreground p-2 bg-background rounded border mt-2">
-                                        {logs.map((log, i) => (
-                                            <div key={i} className="py-0.5">{log}</div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
                         </CardContent>
                     </Card>
 
-                    {/* Taxonomy & Config */}
+                    {/* Generation Settings */}
                     <Card className="border-border/50 shadow-sm">
                         <CardHeader className="pb-3 px-4 pt-4">
                             <CardTitle className="text-base">2. Configuration</CardTitle>
                         </CardHeader>
                         <CardContent className="p-4 pt-0 space-y-4">
-
-                            {/* Taxonomy Selectors */}
-                            <div className="grid grid-cols-2 gap-3">
-                                <div className="space-y-1.5">
-                                    <Label className="text-xs">Subject</Label>
-                                    <Select value={subject} onValueChange={setSubject}>
-                                        <SelectTrigger className="h-9 text-xs">
-                                            <SelectValue placeholder="Select Subject" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {subjects.map(s => (
-                                                <SelectItem key={s.id} value={s.name}>{s.name}</SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                                <div className="space-y-1.5">
-                                    <Label className="text-xs">Chapter</Label>
-                                    <Select value={chapter} onValueChange={setChapter} disabled={!subject}>
-                                        <SelectTrigger className="h-9 text-xs">
-                                            <SelectValue placeholder="Select Chapter" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {availableChapters.map(c => (
-                                                <SelectItem key={c} value={c}>{c}</SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                            </div>
-
                             <div className="grid grid-cols-2 gap-3">
                                 <div className="space-y-1.5">
                                     <Label className="text-xs">Count</Label>
@@ -450,6 +519,9 @@ export default function AIGeneratorPage() {
                                             <SelectItem value="50">50 Questions (Bulk)</SelectItem>
                                             <SelectItem value="75">75 Questions (Bulk)</SelectItem>
                                             <SelectItem value="100">100 Questions (Bulk)</SelectItem>
+                                            <SelectItem value="200">200 Questions (Bulk)</SelectItem>
+                                            <SelectItem value="300">300 Questions (Bulk)</SelectItem>
+                                            <SelectItem value="500">500 Questions (Bulk)</SelectItem>
                                         </SelectContent>
                                     </Select>
                                 </div>
@@ -500,12 +572,40 @@ export default function AIGeneratorPage() {
                             </Button>
                         </CardContent>
                     </Card>
+
+                    {/* Activity Log */}
+                    <Card className="border-border/50 shadow-sm">
+                        <CardHeader className="py-3 px-4 flex-row items-center justify-between">
+                            <CardTitle className="text-sm">Activity Log</CardTitle>
+                            <span className="text-[10px] font-mono opacity-50">{currentStep}</span>
+                        </CardHeader>
+                        <CardContent className="p-4 pt-0">
+                            {isGenerating && (
+                                <div className="mb-4 space-y-1.5">
+                                    <div className="flex justify-between text-[10px] font-medium">
+                                        <span>Overall Progress</span>
+                                        <span>{progress}%</span>
+                                    </div>
+                                    <Progress value={progress} className="h-1.5" />
+                                </div>
+                            )}
+                            <div className="bg-slate-950 text-slate-300 p-3 rounded-lg font-mono text-[10px] h-[120px] overflow-y-auto border border-white/5 space-y-1 custom-scrollbar">
+                                {logs.length === 0 && <div className="opacity-30 italic">No activity yet...</div>}
+                                {logs.map((log, i) => (
+                                    <div key={i} className="flex gap-2">
+                                        <span className="text-slate-600 shrink-0">[{new Date().toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })}]</span>
+                                        <span>{log}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </CardContent>
+                    </Card>
                 </div>
 
                 {/* Right Output Column */}
                 <div className="xl:col-span-7 h-full flex flex-col">
-                    <Card className="border-border/50 shadow-sm flex-1 flex flex-col h-[calc(100vh-120px)]">
-                        <CardHeader className="flex flex-row items-center justify-between pb-4 px-6 pt-6">
+                    <Card className="border-border/50 shadow-sm flex-1 flex flex-col h-[calc(100vh-120px)] overflow-hidden">
+                        <CardHeader className="flex flex-row items-center justify-between pb-4 px-6 pt-6 shrink-0">
                             <div>
                                 <CardTitle>Generated Exam</CardTitle>
                                 <CardDescription>Review questions before saving to bank</CardDescription>
@@ -526,7 +626,7 @@ export default function AIGeneratorPage() {
                             </div>
                         </CardHeader>
 
-                        <div className="flex-1 overflow-y-auto p-6 pt-0 space-y-6">
+                        <div className="flex-1 overflow-y-auto p-6 pt-0">
                             {generatedQuestions.length === 0 ? (
                                 <div className="h-full flex flex-col items-center justify-center text-center opacity-40">
                                     <FileText className="w-16 h-16 mb-4" />
@@ -534,79 +634,159 @@ export default function AIGeneratorPage() {
                                     <p className="text-sm">Select source and settings to begin</p>
                                 </div>
                             ) : (
-                                generatedQuestions.map((q, idx) => (
-                                    <div key={idx} className="bg-slate-50 dark:bg-slate-900/40 p-5 rounded-xl border border-border group hover:border-violet-200 dark:hover:border-violet-900 transition-colors">
-                                        <div className="flex justify-between items-start mb-3">
-                                            <div className="flex gap-3">
-                                                <span className="flex-shrink-0 w-6 h-6 rounded-full bg-violet-100 dark:bg-violet-900 text-violet-700 dark:text-violet-300 text-xs font-bold flex items-center justify-center mt-0.5">
-                                                    {idx + 1}
-                                                </span>
-                                                <div>
-                                                    <div className="flex flex-wrap items-center gap-2 mb-1.5">
-                                                        <span className="text-[10px] uppercase font-bold tracking-wider text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-900/20 px-1.5 py-0.5 rounded">
-                                                            {q.type?.replace(/_/g, ' ') || 'MCQ'}
-                                                        </span>
-                                                        {q.tags && q.tags.map(tag => (
-                                                            <span key={tag} className="text-[10px] text-slate-500 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">#{tag}</span>
-                                                        ))}
-                                                    </div>
-                                                    <div className="font-medium text-base text-foreground leading-snug prose dark:prose-invert max-w-none question-content">
-                                                        {typeof q.question === 'string' ? parse(q.question) : q.question}
-                                                    </div>
-                                                </div>
+                                <div className="space-y-6">
+                                    {generatedQuestions.map((q, idx) => (
+                                        <div key={idx} className={`p-4 rounded-xl border transition-all duration-300 relative group ${selectedQuestionIds.has(idx) ? 'border-orange-500 bg-orange-50/20 ring-1 ring-orange-500' : 'bg-slate-50 dark:bg-slate-900/40 border-slate-200 dark:border-slate-800'}`}>
+                                            <div className="absolute top-4 left-4 z-10">
+                                                <Checkbox
+                                                    checked={selectedQuestionIds.has(idx)}
+                                                    onCheckedChange={() => toggleSelection(idx)}
+                                                />
                                             </div>
-                                            <Button size="icon" variant="ghost" className="h-6 w-6 text-slate-400 hover:text-red-500" onClick={() => {
-                                                setGeneratedQuestions(prev => prev.filter((_, i) => i !== idx));
-                                            }}>
-                                                <Trash2 className="w-3 h-3" />
-                                            </Button>
-                                        </div>
-
-                                        <div className="grid grid-cols-1 gap-2 pl-9 mb-3">
-                                            {q.options.map((opt, oIdx) => (
-                                                <div
-                                                    key={oIdx}
-                                                    className={`px-3 py-2 rounded-lg text-sm border transition-all flex items-center
-                                                        ${opt === q.answer
-                                                            ? 'bg-green-50/50 border-green-200 text-green-900 dark:bg-green-900/10 dark:border-green-800 dark:text-green-100'
-                                                            : 'bg-white dark:bg-slate-950 border-border/40'}
-                                                    `}
+                                            <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    className="text-red-500 h-8 w-8 p-0"
+                                                    onClick={() => {
+                                                        const next = generatedQuestions.filter((_, i) => i !== idx);
+                                                        setGeneratedQuestions(next);
+                                                        setSelectedQuestionIds(new Set());
+                                                    }}
                                                 >
-                                                    <span className="font-mono text-xs font-bold mr-3 opacity-40 w-4">{String.fromCharCode(65 + oIdx)}</span>
-                                                    <span className="flex-1">{opt}</span>
-                                                    {opt === q.answer && <Check className="w-3.5 h-3.5 ml-2 text-green-600" />}
-                                                </div>
-                                            ))}
-                                        </div>
+                                                    <Trash2 className="w-4 h-4" />
+                                                </Button>
+                                            </div>
 
-                                        {
-                                            q.explanation && (
-                                                <div className="ml-9 text-xs text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-800/50 p-3 rounded-lg flex gap-2">
-                                                    <div className="shrink-0 mt-0.5"><BookOpen className="w-3.5 h-3.5 text-violet-500" /></div>
-                                                    <div><span className="font-semibold text-violet-600 dark:text-violet-400">Explanation:</span> {typeof q.explanation === 'string' ? parse(q.explanation) : q.explanation}</div>
+                                            <div className="ml-7 space-y-3">
+                                                <div className="flex items-start gap-3">
+                                                    <span className="shrink-0 flex items-center justify-center w-7 h-7 rounded-lg bg-primary/10 text-primary text-xs font-bold mt-0.5">
+                                                        {idx + 1}
+                                                    </span>
+                                                    <div className="flex-1">
+                                                        <div className="flex flex-wrap items-center gap-2 mb-2">
+                                                            <span className="text-[10px] uppercase font-bold tracking-wider text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-900/20 px-1.5 py-0.5 rounded">
+                                                                {q.type?.replace(/_/g, ' ') || 'MCQ'}
+                                                            </span>
+                                                            {q.tags && q.tags.map(tag => (
+                                                                <span key={tag} className="text-[10px] text-slate-500 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">#{tag}</span>
+                                                            ))}
+                                                        </div>
+                                                        <div className="font-medium text-base text-foreground leading-snug prose dark:prose-invert max-w-none question-content">
+                                                            {parse(q.question)}
+                                                        </div>
+                                                    </div>
                                                 </div>
-                                            )
-                                        }
-                                    </div>
-                                ))
+
+                                                <div className="grid grid-cols-1 gap-2 pl-10">
+                                                    {q.options.map((opt, oIdx) => (
+                                                        <div
+                                                            key={oIdx}
+                                                            className={`px-3 py-2 rounded-lg text-sm border transition-all flex items-center
+                                                                ${opt === q.answer
+                                                                    ? 'bg-green-50/50 border-green-200 text-green-900 dark:bg-green-900/10 dark:border-green-800 dark:text-green-100'
+                                                                    : 'bg-white dark:bg-slate-950 border-border/40'}
+                                                            `}
+                                                        >
+                                                            <span className="font-mono text-xs font-bold mr-3 opacity-40 w-4">{String.fromCharCode(65 + oIdx)}</span>
+                                                            <span className="flex-1">{opt}</span>
+                                                            {opt === q.answer && <Check className="w-3.5 h-3.5 ml-2 text-green-600" />}
+                                                        </div>
+                                                    ))}
+                                                </div>
+
+                                                {q.explanation && (
+                                                    <div className="ml-10 text-xs text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-800/50 p-3 rounded-lg flex gap-2">
+                                                        <div className="shrink-0 mt-0.5"><BookOpen className="w-3.5 h-3.5 text-violet-500" /></div>
+                                                        <div><span className="font-semibold text-violet-600 dark:text-violet-400">Explanation:</span> {typeof q.explanation === 'string' ? parse(q.explanation) : q.explanation}</div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
                             )}
                         </div>
 
                         {generatedQuestions.length > 0 && (
-                            <div className="p-4 border-t bg-slate-50/80 dark:bg-slate-900/80 flex justify-between items-center rounded-b-xl backdrop-blur-sm sticky bottom-0">
-                                <span className="text-xs text-muted-foreground font-mono">
-                                    Total: {generatedQuestions.length} Questions
-                                </span>
-                                <div className="flex gap-3">
-                                    <Button variant="ghost" size="sm" onClick={() => setGeneratedQuestions([])}>
-                                        Discard
-                                    </Button>
+                            <div className="p-4 border-t bg-slate-50/80 dark:bg-slate-900/80 flex justify-between items-center rounded-b-xl backdrop-blur-sm sticky bottom-0 z-20">
+                                <div className="flex flex-col sm:flex-row items-center gap-2">
+                                    <span className="text-xs text-muted-foreground font-mono">
+                                        Total: {generatedQuestions.length} Qs
+                                    </span>
+                                    {selectedQuestionIds.size > 0 && (
+                                        <Badge variant="outline" className="text-orange-600 border-orange-200 bg-orange-50 animate-in fade-in slide-in-from-left-2">
+                                            {selectedQuestionIds.size} Selected
+                                        </Badge>
+                                    )}
+                                </div>
+                                <div className="flex gap-2">
+                                    {selectedQuestionIds.size > 0 ? (
+                                        <Button
+                                            variant="destructive"
+                                            size="sm"
+                                            onClick={handleDeleteSelected}
+                                            className="gap-2"
+                                        >
+                                            <Trash2 className="w-4 h-4" />
+                                            Remove
+                                        </Button>
+                                    ) : (
+                                        <Button variant="ghost" size="sm" onClick={() => setGeneratedQuestions([])}>
+                                            Discard All
+                                        </Button>
+                                    )}
+
+                                    <DropdownMenu>
+                                        <DropdownMenuTrigger asChild>
+                                            <Button variant="outline" size="sm" className="gap-2">
+                                                <Download className="w-4 h-4" />
+                                                Export
+                                            </Button>
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent align="end" className="w-48">
+                                            <DropdownMenuLabel>Choose Format</DropdownMenuLabel>
+                                            <DropdownMenuSeparator />
+                                            <DropdownMenuItem onClick={() => handleExport('pdf')}>
+                                                <FileText className="w-4 h-4 mr-2 text-red-500" /> PDF Document
+                                            </DropdownMenuItem>
+                                            <DropdownMenuItem onClick={() => handleExport('docx')}>
+                                                <FileText className="w-4 h-4 mr-2 text-blue-500" /> Word (.docx)
+                                            </DropdownMenuItem>
+                                        </DropdownMenuContent>
+                                    </DropdownMenu>
+
+                                    <DropdownMenu>
+                                        <DropdownMenuTrigger asChild>
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                disabled={isScanningDuplicates}
+                                                className="text-violet-600 border-violet-200 hover:bg-violet-50 gap-2"
+                                            >
+                                                {isScanningDuplicates ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                                                Scan Duplicates
+                                            </Button>
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent align="end" className="w-48">
+                                            <DropdownMenuLabel>Deduplication Mode</DropdownMenuLabel>
+                                            <DropdownMenuSeparator />
+                                            <DropdownMenuItem onClick={() => handleDeduplicate('exact')}>
+                                                <Copy className="w-4 h-4 mr-2" /> Fast (Exact Match)
+                                            </DropdownMenuItem>
+                                            <DropdownMenuItem onClick={() => handleDeduplicate('deep')}>
+                                                <BrainCircuit className="w-4 h-4 mr-2" /> Deep (AI Semantic)
+                                            </DropdownMenuItem>
+                                        </DropdownMenuContent>
+                                    </DropdownMenu>
+
                                     <Button
                                         size="sm"
                                         onClick={handleSaveToBank}
-                                        className="bg-green-600 hover:bg-green-700 text-white shadow-md"
+                                        disabled={generatedQuestions.length === 0}
+                                        className="bg-green-600 hover:bg-green-700 text-white shadow-md gap-2"
                                     >
-                                        <Save className="w-4 h-4 mr-2" />
+                                        <Save className="w-4 h-4" />
                                         Save All
                                     </Button>
                                 </div>
@@ -614,8 +794,7 @@ export default function AIGeneratorPage() {
                         )}
                     </Card>
                 </div>
-            </div >
-        </div >
+            </div>
+        </div>
     );
 }
-
