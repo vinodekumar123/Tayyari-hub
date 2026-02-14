@@ -47,6 +47,7 @@ export function AiBulkGenerateDialog({
     const [strategy, setStrategy] = useState<'auto' | 'strict'>('auto');
     const [correctGrammar, setCorrectGrammar] = useState(true);
     const [strictPreservation, setStrictPreservation] = useState(false);
+    const [enableFormatting, setEnableFormatting] = useState(true);
     const [loading, setLoading] = useState(false);
     const [progress, setProgress] = useState(0);
 
@@ -86,6 +87,7 @@ export function AiBulkGenerateDialog({
                     strictMode: strategy === 'strict',
                     correctGrammar: strictPreservation ? false : correctGrammar, // Strict overrides grammar
                     strictPreservation,
+                    enableFormatting, // Pass formatting state
                     metadata: defaultMetadata,
                     validChapters
                 })
@@ -243,6 +245,22 @@ export function AiBulkGenerateDialog({
                                 <Switch
                                     checked={correctGrammar}
                                     onCheckedChange={setCorrectGrammar}
+                                />
+                            </div>
+
+                            <div className={`flex items-center justify-between transition-opacity ${strictPreservation ? 'opacity-40 pointer-events-none' : ''}`}>
+                                <div className="flex items-center gap-2">
+                                    <FileText className="w-5 h-5 text-green-600" />
+                                    <div className="space-y-0.5">
+                                        <Label className="text-base">Enable Formatting</Label>
+                                        <p className="text-xs text-muted-foreground">
+                                            Use bold, lists, and HTML formatting
+                                        </p>
+                                    </div>
+                                </div>
+                                <Switch
+                                    checked={enableFormatting}
+                                    onCheckedChange={setEnableFormatting}
                                 />
                             </div>
                         </div>

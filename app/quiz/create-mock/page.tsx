@@ -138,7 +138,6 @@ function CreateUserQuizPageOriginal() {
   const [questionsPerSubject, setQuestionsPerSubject] = useState<Record<string, number>>({});
   const [duration, setDuration] = useState<number>(60);
   const [title, setTitle] = useState<string>('');
-  const [title, setTitle] = useState<string>('');
   const [isPending, startTransition] = useTransition();
   // const [creating, setCreating] = useState(false); // Removed in favor of isPending
   const [error, setError] = useState<string | null>(null);

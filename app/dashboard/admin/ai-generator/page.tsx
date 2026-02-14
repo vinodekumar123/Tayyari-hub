@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Switch } from "@/components/ui/switch";
 import { Checkbox } from '@/components/ui/checkbox';
 import { Loader2, Wand2, Save, Check, Trash2, FileText, UploadCloud, BrainCircuit, Library, BookOpen, Download, Copy, AlertCircle, Sparkles, ChevronDown } from 'lucide-react';
 import {
@@ -68,6 +69,7 @@ export default function AIGeneratorPage() {
     const [difficulty, setDifficulty] = useState('Medium');
     const [selectedTypes, setSelectedTypes] = useState<string[]>(['single_correct']);
     const [targetBank, setTargetBank] = useState<'questions' | 'mock_questions'>('questions');
+    const [enableFormatting, setEnableFormatting] = useState(true);
 
     const [isGenerating, setIsGenerating] = useState(false);
     const [generatedQuestions, setGeneratedQuestions] = useState<GeneratedQuestion[]>([]);
@@ -235,6 +237,7 @@ export default function AIGeneratorPage() {
                 formData.append('difficulty', difficulty);
                 formData.append('types', JSON.stringify(selectedTypes));
                 formData.append('text', finalContent);
+                formData.append('enableFormatting', String(enableFormatting));
 
                 // Add retry logic
                 let retries = 0;
@@ -537,6 +540,15 @@ export default function AIGeneratorPage() {
                                         </SelectContent>
                                     </Select>
                                 </div>
+                            </div>
+
+                            <div className="flex items-center space-x-2 pt-2">
+                                <Switch
+                                    id="formatting-mode"
+                                    checked={enableFormatting}
+                                    onCheckedChange={setEnableFormatting}
+                                />
+                                <Label htmlFor="formatting-mode" className="cursor-pointer">Enable AI Formatting (Bold, Lists, Tables)</Label>
                             </div>
 
                             <div className="space-y-2 pt-2">

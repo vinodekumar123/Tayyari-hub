@@ -8,7 +8,7 @@ export const maxDuration = 300; // Allow 5 minutes for generation
 
 export async function POST(req: NextRequest) {
     try {
-        const { prompt, count, metadata, strictMode, correctGrammar, strictPreservation, validChapters, action = 'generate' } = await req.json();
+        const { prompt, count, metadata, strictMode, correctGrammar, strictPreservation, enableFormatting = true, validChapters, action = 'generate' } = await req.json();
 
         if (!process.env.GEMINI_API_KEY) {
             return NextResponse.json({ error: 'GEMINI_API_KEY not configured' }, { status: 500 });
@@ -68,7 +68,8 @@ export async function POST(req: NextRequest) {
             1. Ensure options are distinct.
       2. Ensure correctAnswer matches one option exactly.
       3. No Markdown formatting in the explanation.
-      4. HTML FORMATTING(STRICT):
+            4. HTML FORMATTING(STRICT):
+         ${enableFormatting ? `
          - ** Tables **: For "Match the following", "Compare", or any tabular data, you MUST use HTML < table > tags.
                 Example:
             <table style="width: 100%; border-collapse: collapse; border: 1px solid #ddd;" >
@@ -80,8 +81,14 @@ export async function POST(req: NextRequest) {
                         </tbody>
                         </table>
                         - ** Lists **: Use < ul > or<ol> for lists of items.Use<li> for each item.
+           **CRITICAL**: If the input text has inline lists like "1. Item A 2. Item B", you MUST convert them to a proper list structure.
          - ** Keys / Labeling **: Wrap keys like "Statement 1:", "List I:", "Reason:" in <strong>tags(e.g., <strong>Statement 1: </strong>).
          - ** Newlines **: Use < br /> for line breaks where lists or paragraphs are not used.
+         ` : `
+         - ** NO HTML **: Do NOT use any HTML tags like <table>, <ul>, <li>, <br/>, <strong>.
+         - ** Lists **: Use simple text numbering (1., 2.) or bullet points (-).
+         - ** Newlines **: Use standard newline characters (\\n).
+         `}
 
       8. NEGATIVE CONSTRAINTS(CRITICAL):
          - ** Do NOT ** refer to the input text as "the document", "the passage", "the text", or "the provided content".

@@ -37,6 +37,7 @@ export async function POST(req: Request) {
         const count = formData.get('count') || '5';
         const difficulty = formData.get('difficulty') || 'Medium';
         const typesJson = formData.get('types') as string;
+        const enableFormatting = formData.get('enableFormatting') === 'true';
 
         let contentToProcess = '';
 
@@ -142,6 +143,7 @@ Tone:
 - Push students to “aha!” moments where they connect ideas in new ways.
 
 Formatting Instructions:
+         ${enableFormatting ? `
 - **Keys**: Wrap keys like "List I:", "Statement 1:" in <strong> tags (e.g., <strong>List I:</strong>).
 - **Match the Following**: You MUST use HTML <table> tags for matching lists.
   Example:
@@ -154,8 +156,14 @@ Formatting Instructions:
     </tbody>
   </table>
 - **Lists/Sequences**: Use <ul> or <ol> for lists and <li> for each item. 
+  **CRITICAL**: If the input text has inline lists like "1. Item A 2. Item B", you MUST convert them to a proper list structure.
 - **Newlines**: Use <br/> for standard line breaks.
 - Note: The platform uses HTML rendering (dangerouslySetInnerHTML) in student quizzes, so strictly use HTML tags for formatting. Do not use Markdown.
+         ` : `
+         - ** NO HTML **: Do NOT use any HTML tags like <table>, <ul>, <li>, <br/>, <strong>.
+         - ** Lists **: Use simple text numbering (1., 2.) or bullet points (-).
+         - ** Newlines **: Use standard newline characters (\\n).
+         `}
 
 5. **Negative Constraints (CRITICAL)**:
    - **Do NOT** refer to the input text as "the document", "the passage", "the text", or "the provided content".
