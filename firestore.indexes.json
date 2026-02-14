@@ -255,6 +255,52 @@
                     "order": "DESCENDING"
                 }
             ]
+        },
+        {
+            "collectionGroup": "knowledge_base",
+            "queryScope": "COLLECTION",
+            "fields": [
+                {
+                    "fieldPath": "metadata.subject",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "metadata.uploadedAt",
+                    "order": "DESCENDING"
+                }
+            ]
+        },
+        {
+            "collectionGroup": "knowledge_base",
+            "queryScope": "COLLECTION",
+            "fields": [
+                {
+                    "fieldPath": "metadata.type",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "metadata.uploadedAt",
+                    "order": "DESCENDING"
+                }
+            ]
+        },
+        {
+            "collectionGroup": "knowledge_base",
+            "queryScope": "COLLECTION",
+            "fields": [
+                {
+                    "fieldPath": "metadata.subject",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "metadata.chapter",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "metadata.uploadedAt",
+                    "order": "DESCENDING"
+                }
+            ]
         }
     ],
     "fieldOverrides": []

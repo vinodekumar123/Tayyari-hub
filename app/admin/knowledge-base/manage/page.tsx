@@ -95,9 +95,12 @@ export default function ManageKnowledgeBasePage() {
                 setDocuments(docsRes.documents || []);
                 setLastDocId(docsRes.lastDocId);
                 setHasMore(docsRes.hasMore || false);
+            } else {
+                console.error("Filter Error:", docsRes.error);
+                toast.error(`Filter failed: ${docsRes.error}`);
             }
-        } catch (error) {
-            toast.error('Failed to filter');
+        } catch (error: any) {
+            toast.error(`Failed to filter: ${error.message || 'Unknown error'}`);
         } finally {
             setLoading(false);
         }
