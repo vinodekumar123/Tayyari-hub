@@ -23,21 +23,27 @@ export async function POST(req: NextRequest) {
         if (action === 'parse') {
             finalPrompt = `
            You are an expert data extraction AI.
-           Your task is to PARSE, STRUCTURE, and CLASSIFY the following raw text containing multiple-choice questions.
-           CRITICAL: You must Analyze the content of each question and assign it to the most appropriate 'chapter' from the provided list below.
+           Your task is to PARSE, STRUCTURE, and CLASSIFY the following raw text containing multiple - choice questions.
+
+           CRITICAL INSTRUCTIONS FOR NOISE REMOVAL:
+            1. ** Ignore Page Numbers **: The text contains page numbers like "2 / 50", "3 / 50".COMPLETELY IGNORE THESE.
+           2. ** Remove Numbering **: Remove leading question numbers(e.g., "1.", "2.").The "questionText" should start with the actual question content.
+           3. ** Remove Option Labels **: Remove leading option labels(e.g., "a)", "b)", "A.", "B.").The "option1", "option2", etc., should contain ONLY the answer text.
+           4. ** Extract Answer Key **: Look for "KEY", "Answer:", or similar indicators at the end of each question to identify the correct answer.
+           5. ** Ignore Formatting Noise **: Ignore random headers like "FORCE AND MOTION" unless they are part of a question.
 
            RAW TEXT:
-           """
+            """
            ${prompt}
-           """
+            """
 
            Output format MUST be a strict JSON Array of objects.
-           Extract as many valid questions as found in the text.
+            Extract as many valid questions as found in the text.
            `;
         } else {
             finalPrompt = `
            You are an expert exam question generator.
-           Generate ${count} multiple-choice questions on the topic: "${prompt}".
+           Generate ${count} multiple - choice questions on the topic: "${prompt}".
            
            Output format MUST be a strict JSON Array of objects.
            `;
@@ -45,56 +51,56 @@ export async function POST(req: NextRequest) {
 
         finalPrompt += `
       Each object must have:
-      - questionText (string)
-      - option1 (string)
-      - option2 (string)
-      - option3 (string)
-      - option4 (string)
-      - correctAnswer (string) - MUST be exactly equal to one of the options.
-      - explanation (string) - Brief explanation.
-      - difficulty (string) - Detect from text or default to "Medium".
-      - chapter (string) - MUST be selected from the valid chapters list below.
-      - subject (string) - The subject of the content.
+            - questionText(string)
+                - option1(string)
+                - option2(string)
+                - option3(string)
+                - option4(string)
+                - correctAnswer(string) - MUST be exactly equal to one of the options.
+      - explanation(string) - Brief explanation.
+      - difficulty(string) - Detect from text or default to "Medium".
+      - chapter(string) - MUST be selected from the valid chapters list below.
+      - subject(string) - The subject of the content.
 
-      Constraints:
-      1. Ensure options are distinct.
+                Constraints:
+            1. Ensure options are distinct.
       2. Ensure correctAnswer matches one option exactly.
       3. No Markdown formatting in the explanation.
-      4. HTML FORMATTING (STRICT):
-         - **Tables**: For "Match the following", "Compare", or any tabular data, you MUST use HTML <table> tags.
-           Example:
-           <table style="width: 100%; border-collapse: collapse; border: 1px solid #ddd;">
-             <thead>
-               <tr><th style="border: 1px solid #ddd; padding: 8px;">List I</th><th style="border: 1px solid #ddd; padding: 8px;">List II</th></tr>
-             </thead>
-             <tbody>
-               <tr><td style="border: 1px solid #ddd; padding: 8px;">A</td><td style="border: 1px solid #ddd; padding: 8px;">1</td></tr>
-             </tbody>
-           </table>
-         - **Lists**: Use <ul> or <ol> for lists of items. Use <li> for each item.
-         - **Keys/Labeling**: Wrap keys like "Statement 1:", "List I:", "Reason:" in <strong> tags (e.g., <strong>Statement 1:</strong>).
-         - **Newlines**: Use <br/> for line breaks where lists or paragraphs are not used.
+      4. HTML FORMATTING(STRICT):
+         - ** Tables **: For "Match the following", "Compare", or any tabular data, you MUST use HTML < table > tags.
+                Example:
+            <table style="width: 100%; border-collapse: collapse; border: 1px solid #ddd;" >
+                <thead>
+                <tr><th style="border: 1px solid #ddd; padding: 8px;" > List I < /th><th style="border: 1px solid #ddd; padding: 8px;">List II</th > </tr>
+                    </thead>
+                    < tbody >
+                    <tr><td style="border: 1px solid #ddd; padding: 8px;" > A < /td><td style="border: 1px solid #ddd; padding: 8px;">1</td > </tr>
+                        </tbody>
+                        </table>
+                        - ** Lists **: Use < ul > or<ol> for lists of items.Use<li> for each item.
+         - ** Keys / Labeling **: Wrap keys like "Statement 1:", "List I:", "Reason:" in <strong>tags(e.g., <strong>Statement 1: </strong>).
+         - ** Newlines **: Use < br /> for line breaks where lists or paragraphs are not used.
 
-      8. NEGATIVE CONSTRAINTS (CRITICAL):
-         - **Do NOT** refer to the input text as "the document", "the passage", "the text", or "the provided content".
-         - **Do NOT** use phrases like "According to the passage", "As mentioned in the text", "Based on the document", or "In the provided material".
-         - **Do NOT** mention the source file or author unless explicitly asked.
-         - The questions must stand alone as general knowledge or context-independent problems.
+      8. NEGATIVE CONSTRAINTS(CRITICAL):
+         - ** Do NOT ** refer to the input text as "the document", "the passage", "the text", or "the provided content".
+         - ** Do NOT ** use phrases like "According to the passage", "As mentioned in the text", "Based on the document", or "In the provided material".
+         - ** Do NOT ** mention the source file or author unless explicitly asked.
+         - The questions must stand alone as general knowledge or context - independent problems.
     `;
 
         if (validChapters && Array.isArray(validChapters) && validChapters.length > 0) {
             finalPrompt += `
-      4. CHAPTER SELECTION (CRITICAL):
+            4. CHAPTER SELECTION(CRITICAL):
          You MUST categorize each question into one of the following chapters.
-         Do NOT invent new chapters. Use the closest match from this list:
+         Do NOT invent new chapters.Use the closest match from this list:
          VALID CHAPTERS: ${JSON.stringify(validChapters)}
-      `;
+            `;
         }
 
         if (strictPreservation) {
             finalPrompt += `
-      5. STRICT PRESERVATION MODE (CRITICAL):
-         - DO NOT MODIFY THE QUESTION TEXT OR OPTIONS.
+            5. STRICT PRESERVATION MODE(CRITICAL):
+            - DO NOT MODIFY THE QUESTION TEXT OR OPTIONS.
          - DO NOT CORRECT GRAMMAR OR SPELLING.
          - EXTRACT EXACTLY AS PROVIDED.
          - IGNORE ANY INSTRUCTIONS TO MODIFY OR GENERATE CONTENT.
@@ -104,8 +110,8 @@ export async function POST(req: NextRequest) {
 
         // Unified Metadata Handling
         finalPrompt += `
-      6. METADATA HANDLING:
-         - Subject: "${metadata.subject}" (Set 'subject' field to this value for ALL questions).
+            6. METADATA HANDLING:
+            - Subject: "${metadata.subject}"(Set 'subject' field to this value for ALL questions).
       `;
 
         if (metadata.chapter && metadata.chapter !== 'All Chapters' && metadata.chapter !== 'All') {
@@ -122,7 +128,7 @@ export async function POST(req: NextRequest) {
 
         if (correctGrammar && !strictPreservation) {
             finalPrompt += `
-      7. GRAMMAR: Ensure strict academic English.
+            7. GRAMMAR: Ensure strict academic English.
       `;
         }
 
