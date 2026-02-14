@@ -56,6 +56,7 @@ export async function POST(req: NextRequest) {
       - Apply class="w-full border-collapse border border-gray-300" to the <table>.
       - Apply class="border border-gray-300 p-2" to <th> and <td>.
       - Use <br/> for line breaks and <strong> for bold text.
+      - Do NOT refer to phrases like "in the text", "according to the prompt", or "as requested". The questions must be standalone.
 
       Structure:
       {

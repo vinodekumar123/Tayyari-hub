@@ -155,7 +155,13 @@ Formatting Instructions:
   </table>
 - **Lists/Sequences**: Use <ul> or <ol> for lists and <li> for each item. 
 - **Newlines**: Use <br/> for standard line breaks.
-- Note: The platform uses HTML rendering (dangerouslySetInnerHTML) in student quizzes, so strictly use HTML tags for formatting. Do not use Markdown.`;
+- Note: The platform uses HTML rendering (dangerouslySetInnerHTML) in student quizzes, so strictly use HTML tags for formatting. Do not use Markdown.
+
+5. **Negative Constraints (CRITICAL)**:
+   - **Do NOT** refer to the input text as "the document", "the passage", "the text", or "the provided content".
+   - **Do NOT** use phrases like "According to the passage", "As mentioned in the text", "Based on the document", or "In the provided material".
+   - **Do NOT** mention the source file or author unless explicitly asked.
+   - The questions must stand alone as general knowledge or context-independent problems (even though they are based on the text).`;
 
         const userPrompt = `Content to generate from:\n\n${contentToProcess}`;
 

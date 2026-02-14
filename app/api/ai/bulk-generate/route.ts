@@ -74,6 +74,12 @@ export async function POST(req: NextRequest) {
          - **Lists**: Use <ul> or <ol> for lists of items. Use <li> for each item.
          - **Keys/Labeling**: Wrap keys like "Statement 1:", "List I:", "Reason:" in <strong> tags (e.g., <strong>Statement 1:</strong>).
          - **Newlines**: Use <br/> for line breaks where lists or paragraphs are not used.
+
+      8. NEGATIVE CONSTRAINTS (CRITICAL):
+         - **Do NOT** refer to the input text as "the document", "the passage", "the text", or "the provided content".
+         - **Do NOT** use phrases like "According to the passage", "As mentioned in the text", "Based on the document", or "In the provided material".
+         - **Do NOT** mention the source file or author unless explicitly asked.
+         - The questions must stand alone as general knowledge or context-independent problems.
     `;
 
         if (validChapters && Array.isArray(validChapters) && validChapters.length > 0) {
