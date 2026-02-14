@@ -4,6 +4,8 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
 
+export const maxDuration = 300; // Allow 5 minutes for generation
+
 export async function POST(req: NextRequest) {
     try {
         const { prompt, count, metadata, strictMode, correctGrammar, strictPreservation, validChapters, action = 'generate' } = await req.json();

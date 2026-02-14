@@ -138,7 +138,7 @@ function CreateUserQuizPageOriginal() {
   const [questionsPerSubject, setQuestionsPerSubject] = useState<Record<string, number>>({});
   const [duration, setDuration] = useState<number>(60);
   const [title, setTitle] = useState<string>('');
-  const [questionsPerPage, setQuestionsPerPage] = useState<number>(5);
+  const [title, setTitle] = useState<string>('');
   const [isPending, startTransition] = useTransition();
   // const [creating, setCreating] = useState(false); // Removed in favor of isPending
   const [error, setError] = useState<string | null>(null);
@@ -560,10 +560,7 @@ function CreateUserQuizPageOriginal() {
       toast.error(`Total questions cannot exceed ${MAX_QUESTIONS}.`);
       return;
     }
-    if (!questionsPerPage || questionsPerPage <= 0) {
-      toast.error('Questions per page must be at least 1.');
-      return;
-    }
+
 
     startTransition(async () => {
       try {
@@ -572,7 +569,7 @@ function CreateUserQuizPageOriginal() {
           subjects: selectedSubjects,
           chapters: selectedChapters,
           questionsPerSubject,
-          questionsPerPage,
+          questionsPerPage: totalSelectedQuestions, // FORCE SINGLE PAGE
           duration,
           title
         });
@@ -581,7 +578,12 @@ function CreateUserQuizPageOriginal() {
           toast.success("Quiz created successfully!");
           router.push(`/quiz/start-user-quiz?id=${result.quizId}`);
         } else {
-          throw new Error(result.error || 'Unknown error');
+          try {
+            throw new Error(result.error || 'Unknown error');
+          } catch (e: any) {
+            console.error(e);
+            toast.error(e.message || 'Failed to create test.');
+          }
         }
       } catch (err: any) {
         console.error('Error creating user quiz', err);
@@ -906,28 +908,7 @@ function CreateUserQuizPageOriginal() {
 
                     <div className="h-px bg-primary/5 mx-2" />
 
-                    <div className="space-y-2">
-                      <div className="flex justify-between items-center group/item">
-                        <label className="text-sm font-semibold flex items-center gap-2">
-                          <Layers className="w-4 h-4 text-primary" />
-                          Questions / Page
-                        </label>
-                        <div className="relative">
-                          <Input
-                            type="number"
-                            value={questionsPerPage}
-                            onChange={(e) => setQuestionsPerPage(parseInt(e.target.value))}
-                            className="w-20 h-9 text-right bg-background border-primary/10 focus:ring-primary font-bold pr-2 rounded-xl [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                            min={1}
-                            max={totalQuestions}
-                          />
-                          <div className="absolute right-0 top-0 h-full flex items-center pr-1 opacity-0 group-hover/item:opacity-100 transition-opacity">
-                            <Info className="w-3 h-3 text-primary/50" />
-                          </div>
-                        </div>
-                      </div>
-                      <p className="text-[10px] text-muted-foreground italic px-1">How many questions per screen.</p>
-                    </div>
+
                   </div>
 
                   {/* Usage Indicator */}

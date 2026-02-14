@@ -173,7 +173,6 @@ const StartUserQuizPageContent: React.FC = () => {
 
         const quizData = quizSnap.data() as UserQuizDoc;
         setQuiz(quizData);
-        setQuestionsPerPage(quizData.questionsPerPage || 1);
 
         const loadedQuestions: Question[] = (quizData.selectedQuestions || []).map((q: any) => ({
           id: q.id,
@@ -186,6 +185,7 @@ const StartUserQuizPageContent: React.FC = () => {
           difficulty: q.difficulty,
         }));
         setQuestions(loadedQuestions);
+        setQuestionsPerPage(loadedQuestions.length || 1); // Force all on one page
 
         setLoadingStep(2); // Restoring progress
         const attemptDocRef = doc(db, 'users', user.uid, 'user-quizattempts', quizId);
@@ -201,7 +201,7 @@ const StartUserQuizPageContent: React.FC = () => {
           const at = attemptSnap.data();
           setAnswers(at.answers || {});
           setFlags(at.flags || {});
-          setCurrentPage(at.currentIndex ? Math.floor(at.currentIndex / (quizData.questionsPerPage || 1)) : 0);
+          setCurrentPage(0); // Always page 0 as it's single page now
           setTimeLeft(at.remainingTime ?? quizData.duration * 60);
           setAttemptCount(at.attemptNumber || 0);
         } else {
@@ -707,28 +707,32 @@ const StartUserQuizPageContent: React.FC = () => {
         {/* Floating Navigation Controls */}
         <div className="fixed bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-background via-background/95 to-transparent z-40 sm:relative sm:bg-none sm:p-0">
           <div className="max-w-3xl mx-auto flex items-center justify-between gap-4 bg-card sm:bg-transparent border border-primary/10 sm:border-0 p-3 sm:p-0 rounded-2xl shadow-2xl sm:shadow-none backdrop-blur-sm sm:backdrop-blur-none transition-all">
-            <Button
-              variant="outline"
-              size="lg"
-              className="h-12 sm:h-14 rounded-xl px-4 sm:px-8 border-primary/20 hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:border-primary transition-all font-bold disabled:opacity-30"
-              onClick={() => {
-                setCurrentPage(prev => Math.max(0, prev - 1));
-                window.scrollTo({ top: 0, behavior: 'smooth' });
-              }}
-              disabled={currentPage === 0 || isSubmitting}
-            >
-              <ArrowLeft className="mr-0 sm:mr-3 h-5 w-5" />
-              <span className="hidden sm:inline">Previous Section</span>
-            </Button>
+            {totalPages > 1 && (
+              <Button
+                variant="outline"
+                size="lg"
+                className="h-12 sm:h-14 rounded-xl px-4 sm:px-8 border-primary/20 hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:border-primary transition-all font-bold disabled:opacity-30"
+                onClick={() => {
+                  setCurrentPage(prev => Math.max(0, prev - 1));
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }}
+                disabled={currentPage === 0 || isSubmitting}
+              >
+                <ArrowLeft className="mr-0 sm:mr-3 h-5 w-5" />
+                <span className="hidden sm:inline">Previous Section</span>
+              </Button>
+            )}
 
-            <div className="flex items-center gap-2">
-              {Array.from({ length: totalPages }).map((_, i) => (
-                <div
-                  key={i}
-                  className={`h-1.5 w-1.5 rounded-full transition-all duration-300 ${i === currentPage ? 'w-4 bg-blue-600' : 'bg-muted'}`}
-                />
-              ))}
-            </div>
+            {totalPages > 1 && (
+              <div className="flex items-center gap-2">
+                {Array.from({ length: totalPages }).map((_, i) => (
+                  <div
+                    key={i}
+                    className={`h-1.5 w-1.5 rounded-full transition-all duration-300 ${i === currentPage ? 'w-4 bg-blue-600' : 'bg-muted'}`}
+                  />
+                ))}
+              </div>
+            )}
 
             <Button
               size="lg"

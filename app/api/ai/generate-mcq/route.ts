@@ -10,7 +10,7 @@ const openai = new OpenAI({
 
 // Configure 2MB limit for Vercel/Next.js body parsing if needed, 
 // though generally handled by runtime. 
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 // Helper to parse PDF buffer
 const parsePDF = async (buffer: Buffer): Promise<string> => {
