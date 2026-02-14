@@ -1635,7 +1635,7 @@ function CreateQuizContent() {
                                 <div className="flex-1 space-y-2 w-full">
                                   <div className="flex flex-col sm:flex-row items-start justify-between gap-2 sm:gap-4">
                                     <div
-                                      className="font-medium text-foreground text-sm sm:text-base line-clamp-2"
+                                      className="font-medium text-foreground text-sm sm:text-base mb-2"
                                       dangerouslySetInnerHTML={{ __html: question.questionText || 'Untitled Question' }}
                                     />
                                     <div className="flex flex-row sm:flex-col gap-2 shrink-0 self-start sm:self-auto">

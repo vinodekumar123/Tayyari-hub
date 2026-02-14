@@ -695,7 +695,7 @@ const CreateQuestionPageContent = () => {
                         <Card key={i} className="bg-muted/50">
                           <CardHeader className="pb-2">
                             <div className="flex justify-between items-start">
-                              <CardTitle className="text-base line-clamp-2 question-content" dangerouslySetInnerHTML={{ __html: q.questionText || '' }} />
+                              <CardTitle className="text-base question-content" dangerouslySetInnerHTML={{ __html: q.questionText || '' }} />
                               <Button size="sm" onClick={() => applyAiQuestion(q)}>Apply</Button>
                             </div>
                           </CardHeader>

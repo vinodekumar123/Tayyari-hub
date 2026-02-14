@@ -769,7 +769,7 @@ function CreateQuestionPageContent() {
                               </Button>
                             </CardHeader>
                             <CardContent className="py-3 px-4">
-                              <div className="text-xs text-gray-600 dark:text-gray-300 line-clamp-3 mb-2" dangerouslySetInnerHTML={{ __html: h.questionText }} />
+                              <div className="text-xs text-gray-600 dark:text-gray-300 mb-2" dangerouslySetInnerHTML={{ __html: h.questionText }} />
                               <div className="flex flex-wrap gap-1">
                                 <Badge variant="outline" className="text-[10px] py-0">{h.difficulty}</Badge>
                                 <Badge variant="outline" className="text-[10px] py-0">{h.subject}</Badge>

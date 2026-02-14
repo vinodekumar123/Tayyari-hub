@@ -83,7 +83,7 @@ export async function POST(req: Request) {
                 case 'assertion_reason': return '- Assertion-Reason (A/R): Provide two statements (Assertion and Reason). Options: A) Both true & R explains A, B) Both true but R does not explain A, C) A true R false, D) A false R true.';
                 case 'true_false': return '- True / False: Mark correct biological statement. Options: A) True, B) False.';
                 case 'fill_blanks': return '- Fill in the Blank: Correct biological term or name. Options must be the terms.';
-                case 'match_following': return '- Match the Following: Present two lists in the question text. Options should be combinations (e.g. A-1, B-2).';
+                case 'match_following': return '- Match the Following: You MUST provide the two lists (List I and List II) clearly WITHIN the question text field using an HTML table. Options must be combinations of these lists (e.g., A-1, B-2, C-3, D-4).';
                 case 'chronological': return '- Sequence / Process Order: Steps of biological process (e.g., mitosis). Options are sequences.';
                 case 'case_study': return '- Case Study: A short clinical or scenario vignette provided in the question text.';
                 case 'statement_based': return '- Statement Based: "Consider statements I, II, III". Options: "Only I and II are correct", etc.';
@@ -166,7 +166,8 @@ Formatting Instructions:
                 { role: "user", content: userPrompt }
             ],
             response_format: { type: "json_object" },
-            temperature: 0.7, // Increased for creativity
+            temperature: 0.7,
+            max_tokens: 4096,
         });
 
         const content = completion.choices[0].message.content;
