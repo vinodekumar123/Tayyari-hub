@@ -248,7 +248,7 @@ export function AiBulkGenerateDialog({
                                 />
                             </div>
 
-                            <div className={`flex items-center justify-between transition-opacity ${strictPreservation ? 'opacity-40 pointer-events-none' : ''}`}>
+                            <div className="flex items-center justify-between transition-opacity">
                                 <div className="flex items-center gap-2">
                                     <FileText className="w-5 h-5 text-green-600" />
                                     <div className="space-y-0.5">
