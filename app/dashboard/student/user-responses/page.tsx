@@ -240,6 +240,7 @@ const UserResponsesPageContent: React.FC = () => {
                 status: 'pending',
                 createdAt: serverTimestamp(),
                 quizId: quizId,
+                source: 'mock_question'
             });
 
             toast.success("Report submitted successfully.");

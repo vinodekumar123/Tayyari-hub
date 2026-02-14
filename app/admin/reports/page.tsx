@@ -52,7 +52,9 @@ interface Report {
     createdAt: any;
     resolvedAt?: any;
     quizId: string;
+    source?: 'question_bank' | 'mock_question';
 }
+
 
 interface QuestionDetails {
     explanation?: string;
@@ -182,16 +184,41 @@ export default function AdminReportsPage() {
                         newCache[doc.id] = { subject: data.subject || 'Unknown', topic: data.topic, questionType: 'question_bank' };
                     });
 
-                    // For IDs not found in questions, check mock_questions
+                    // For IDs not found in questions, check mock_questions. 
+                    // Optimization: If report has source, we can skip one query
                     const notFound = chunk.filter(id => !newCache[id]);
+
                     if (notFound.length > 0) {
-                        const qMockQuestions = query(collection(db, 'mock_questions'), where(documentId(), 'in', notFound));
-                        const mockSnap = await getDocs(qMockQuestions);
-                        mockSnap.forEach(doc => {
-                            const data = doc.data();
-                            newCache[doc.id] = { subject: data.subject || 'Unknown', topic: data.topic, questionType: 'mock_question' };
+                        // Check reports first to see if we have source hint
+                        const reportsWithId = reports.filter(r => notFound.includes(r.questionId));
+
+                        const mockIds = notFound.filter(id => {
+                            const r = reportsWithId.find(rep => rep.questionId === id);
+                            return r?.source === 'mock_question';
                         });
+
+                        const potentialQuestionBankIds = notFound.filter(id => !mockIds.includes(id));
+
+                        if (mockIds.length > 0) {
+                            const qMockQuestions = query(collection(db, 'mock_questions'), where(documentId(), 'in', mockIds));
+                            const mockSnap = await getDocs(qMockQuestions);
+                            mockSnap.forEach(doc => {
+                                const data = doc.data();
+                                newCache[doc.id] = { subject: data.subject || 'Unknown', topic: data.topic, questionType: 'mock_question' };
+                            });
+                        }
+
+                        // Fallback safely for legacy
+                        if (potentialQuestionBankIds.length > 0) {
+                            const qMockQuestions = query(collection(db, 'mock_questions'), where(documentId(), 'in', potentialQuestionBankIds));
+                            const mockSnap = await getDocs(qMockQuestions);
+                            mockSnap.forEach(doc => {
+                                const data = doc.data();
+                                newCache[doc.id] = { subject: data.subject || 'Unknown', topic: data.topic, questionType: 'mock_question' };
+                            });
+                        }
                     }
+
 
                     // Mark remaining as Unknown
                     chunk.forEach(id => {
@@ -233,11 +260,21 @@ export default function AdminReportsPage() {
 
         const fetchDetails = async () => {
             try {
-                const docSnap = await getDoc(doc(db, 'questions', selectedReport.questionId));
+                const isMock = selectedReport.source === 'mock_question' || questionsCache[selectedReport.questionId]?.questionType === 'mock_question';
+                const collectionName = isMock ? 'mock_questions' : 'questions';
+
+                const docSnap = await getDoc(doc(db, collectionName, selectedReport.questionId));
                 if (docSnap.exists()) {
                     setQuestionDetails(docSnap.data() as QuestionDetails);
                 } else {
-                    setQuestionDetails(null);
+                    // Fallback to try other collection if source was wrong/missing (legacy)
+                    const otherCollection = isMock ? 'questions' : 'mock_questions';
+                    const retrySnap = await getDoc(doc(db, otherCollection, selectedReport.questionId));
+                    if (retrySnap.exists()) {
+                        setQuestionDetails(retrySnap.data() as QuestionDetails);
+                    } else {
+                        setQuestionDetails(null);
+                    }
                 }
             } catch (error) {
                 console.error("Failed to fetch details", error);
@@ -731,11 +768,12 @@ export default function AdminReportsPage() {
                                                 {report.questionText.replace(/<[^>]+>/g, '')}
                                             </TableCell>
                                             <TableCell>
-                                                <Badge variant="outline" className={questionsCache[report.questionId]?.questionType === 'mock_question'
-                                                    ? 'bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-400 border-purple-200 dark:border-purple-800'
-                                                    : 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-800'
+                                                <Badge variant="outline" className={
+                                                    (report.source === 'mock_question' || questionsCache[report.questionId]?.questionType === 'mock_question')
+                                                        ? 'bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-400 border-purple-200 dark:border-purple-800'
+                                                        : 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-800'
                                                 }>
-                                                    {questionsCache[report.questionId]?.questionType === 'mock_question' ? 'Mock Question' : 'Question Bank'}
+                                                    {(report.source === 'mock_question' || questionsCache[report.questionId]?.questionType === 'mock_question') ? 'Mock Question' : 'Question Bank'}
                                                 </Badge>
                                             </TableCell>
                                             <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
@@ -822,12 +860,13 @@ export default function AdminReportsPage() {
                                         <div className="flex flex-wrap gap-2 pt-2">
                                             {(questionDetails?.subject || selectedReport.subject) && <Badge variant="outline">{questionDetails?.subject || selectedReport.subject}</Badge>}
                                             {(questionDetails?.topic || selectedReport.topic) && <Badge variant="outline">{questionDetails?.topic || selectedReport.topic}</Badge>}
-                                            {questionsCache[selectedReport.questionId]?.questionType && (
-                                                <Badge variant="outline" className={questionsCache[selectedReport.questionId]?.questionType === 'mock_question'
-                                                    ? 'bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-400 border-purple-200 dark:border-purple-800'
-                                                    : 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-800'
+                                            {(selectedReport.source || questionsCache[selectedReport.questionId]?.questionType) && (
+                                                <Badge variant="outline" className={
+                                                    (selectedReport.source === 'mock_question' || questionsCache[selectedReport.questionId]?.questionType === 'mock_question')
+                                                        ? 'bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-400 border-purple-200 dark:border-purple-800'
+                                                        : 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-800'
                                                 }>
-                                                    {questionsCache[selectedReport.questionId]?.questionType === 'mock_question' ? 'Mock Question' : 'Question Bank'}
+                                                    {(selectedReport.source === 'mock_question' || questionsCache[selectedReport.questionId]?.questionType === 'mock_question') ? 'Mock Question' : 'Question Bank'}
                                                 </Badge>
                                             )}
                                         </div>
@@ -838,15 +877,15 @@ export default function AdminReportsPage() {
                                                 variant="outline"
                                                 className="w-full"
                                                 onClick={() => {
-                                                    const type = questionsCache[selectedReport.questionId]?.questionType;
-                                                    const url = type === 'mock_question'
+                                                    const isMock = selectedReport.source === 'mock_question' || questionsCache[selectedReport.questionId]?.questionType === 'mock_question';
+                                                    const url = isMock
                                                         ? `/admin/mockquestions/create?id=${selectedReport.questionId}`
                                                         : `/admin/questions/create?id=${selectedReport.questionId}`;
                                                     window.open(url, '_blank');
                                                 }}
                                             >
                                                 <Edit className="w-4 h-4 mr-2" />
-                                                Edit Question in {questionsCache[selectedReport.questionId]?.questionType === 'mock_question' ? 'Mock Questions' : 'Question Bank'}
+                                                Edit Question in {(selectedReport.source === 'mock_question' || questionsCache[selectedReport.questionId]?.questionType === 'mock_question') ? 'Mock Questions' : 'Question Bank'}
                                             </Button>
                                         </div>
                                     </div>

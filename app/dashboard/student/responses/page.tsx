@@ -277,7 +277,8 @@ const ResultPageContent: React.FC = () => {
                 issue: reportIssue,
                 status: 'pending',
                 createdAt: serverTimestamp(),
-                type: 'quiz_result_report'
+                type: 'quiz_result_report',
+                source: 'question_bank'
             });
             toast.success("Report Submitted", { description: "Admins will review this question." });
             setReportModalOpen(false);
