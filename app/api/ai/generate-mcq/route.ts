@@ -142,10 +142,20 @@ Tone:
 - Push students to “aha!” moments where they connect ideas in new ways.
 
 Formatting Instructions:
-- **Keys**: BOLD the keys (e.g., **List I**, **Statement 1**).
-- **Match the Following**: Use a Markdown Table for the matching lists.
-- **Lists/Sequences**: Use separate lines for each item.
-- Note: The frontend uses Markdown rendering, so use standard Markdown syntax (tables, bold, lists).`;
+- **Keys**: Wrap keys like "List I:", "Statement 1:" in <strong> tags (e.g., <strong>List I:</strong>).
+- **Match the Following**: You MUST use HTML <table> tags for matching lists.
+  Example:
+  <table style="width: 100%; border-collapse: collapse; border: 1px solid #ddd;">
+    <thead>
+      <tr><th style="border: 1px solid #ddd; padding: 8px;">List I</th><th style="border: 1px solid #ddd; padding: 8px;">List II</th></tr>
+    </thead>
+    <tbody>
+      <tr><td style="border: 1px solid #ddd; padding: 8px;">(i) Mitochondria</td><td style="border: 1px solid #ddd; padding: 8px;">(a) ATP production</td></tr>
+    </tbody>
+  </table>
+- **Lists/Sequences**: Use <ul> or <ol> for lists and <li> for each item. 
+- **Newlines**: Use <br/> for standard line breaks.
+- Note: The platform uses HTML rendering (dangerouslySetInnerHTML) in student quizzes, so strictly use HTML tags for formatting. Do not use Markdown.`;
 
         const userPrompt = `Content to generate from:\n\n${contentToProcess}`;
 

@@ -62,8 +62,15 @@ export async function POST(req: NextRequest) {
       3. No Markdown formatting in the explanation.
       4. HTML FORMATTING (STRICT):
          - **Tables**: For "Match the following", "Compare", or any tabular data, you MUST use HTML <table> tags.
-           - Add style="width: 100%; border-collapse: collapse; border: 1px solid #ddd;" to the <table>.
-           - Add style="border: 1px solid #ddd; padding: 8px;" to every <th> and <td>.
+           Example:
+           <table style="width: 100%; border-collapse: collapse; border: 1px solid #ddd;">
+             <thead>
+               <tr><th style="border: 1px solid #ddd; padding: 8px;">List I</th><th style="border: 1px solid #ddd; padding: 8px;">List II</th></tr>
+             </thead>
+             <tbody>
+               <tr><td style="border: 1px solid #ddd; padding: 8px;">A</td><td style="border: 1px solid #ddd; padding: 8px;">1</td></tr>
+             </tbody>
+           </table>
          - **Lists**: Use <ul> or <ol> for lists of items. Use <li> for each item.
          - **Keys/Labeling**: Wrap keys like "Statement 1:", "List I:", "Reason:" in <strong> tags (e.g., <strong>Statement 1:</strong>).
          - **Newlines**: Use <br/> for line breaks where lists or paragraphs are not used.

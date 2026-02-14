@@ -18,6 +18,8 @@ import {
 } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import Papa from 'papaparse';
+import parse from 'html-react-parser';
+
 import { Button } from '@/components/ui/button';
 import {
     Dialog,
@@ -447,7 +449,9 @@ export function CsvImporter({
                                                         </TableCell>
                                                         <TableCell className="text-xs text-muted-foreground">{i + 1}</TableCell>
                                                         <TableCell className="max-w-[400px]">
-                                                            <div className="whitespace-pre-wrap font-medium pr-2">{row.questionText}</div>
+                                                            <div className="font-medium pr-2 prose dark:prose-invert max-w-none question-content overflow-x-auto">
+                                                                {typeof row.questionText === 'string' ? parse(row.questionText) : row.questionText}
+                                                            </div>
                                                             {row.chapter && <Badge variant="outline" className="text-[10px] mt-1">{row.chapter}</Badge>}
                                                         </TableCell>
                                                         <TableCell className="text-xs text-muted-foreground max-w-[250px] whitespace-pre-wrap">

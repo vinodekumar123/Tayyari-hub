@@ -11,10 +11,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Loader2, Wand2, Save, Check, Trash2, FileText, UploadCloud, BrainCircuit, Library, BookOpen } from 'lucide-react';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
-
+import parse from 'html-react-parser';
 import { toast } from 'sonner';
+
 import { db } from '@/app/firebase';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { Progress } from '@/components/ui/progress';
@@ -552,9 +551,7 @@ export default function AIGeneratorPage() {
                                                         ))}
                                                     </div>
                                                     <div className="font-medium text-base text-foreground leading-snug prose dark:prose-invert max-w-none question-content">
-                                                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                                                            {q.question}
-                                                        </ReactMarkdown>
+                                                        {typeof q.question === 'string' ? parse(q.question) : q.question}
                                                     </div>
                                                 </div>
                                             </div>
@@ -586,7 +583,7 @@ export default function AIGeneratorPage() {
                                             q.explanation && (
                                                 <div className="ml-9 text-xs text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-800/50 p-3 rounded-lg flex gap-2">
                                                     <div className="shrink-0 mt-0.5"><BookOpen className="w-3.5 h-3.5 text-violet-500" /></div>
-                                                    <div><span className="font-semibold text-violet-600 dark:text-violet-400">Explanation:</span> {q.explanation}</div>
+                                                    <div><span className="font-semibold text-violet-600 dark:text-violet-400">Explanation:</span> {typeof q.explanation === 'string' ? parse(q.explanation) : q.explanation}</div>
                                                 </div>
                                             )
                                         }

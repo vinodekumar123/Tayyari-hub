@@ -695,14 +695,16 @@ const CreateQuestionPageContent = () => {
                         <Card key={i} className="bg-muted/50">
                           <CardHeader className="pb-2">
                             <div className="flex justify-between items-start">
-                              <CardTitle className="text-base line-clamp-2" dangerouslySetInnerHTML={{ __html: q.questionText || '' }} />
+                              <CardTitle className="text-base line-clamp-2 question-content" dangerouslySetInnerHTML={{ __html: q.questionText || '' }} />
                               <Button size="sm" onClick={() => applyAiQuestion(q)}>Apply</Button>
                             </div>
                           </CardHeader>
                           <CardContent>
                             <ul className="text-sm list-disc pl-4 space-y-1">
                               {q.options?.map((opt, idx) => (
-                                <li key={idx} className={opt === q.correctAnswer ? "text-green-600 font-medium" : ""}>{opt}</li>
+                                <li key={idx} className={opt === q.correctAnswer ? "text-green-600 font-medium" : ""}>
+                                  <span dangerouslySetInnerHTML={{ __html: opt }} />
+                                </li>
                               ))}
                             </ul>
                           </CardContent>
