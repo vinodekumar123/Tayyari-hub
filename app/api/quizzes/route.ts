@@ -1,60 +1,87 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/app/firebase';
-import { collection, query, where, getDocs, limit, orderBy } from 'firebase/firestore';
+import { adminAuth, adminDb } from '@/lib/firebase-admin';
+import { Query } from 'firebase-admin/firestore';
+
+export const dynamic = 'force-dynamic';
 
 // GET /api/quizzes - Get paginated list of quizzes
 export async function GET(request: NextRequest) {
     try {
+        // 1. Auth Check
+        const authHeader = request.headers.get('Authorization');
+        if (!authHeader?.startsWith('Bearer ')) {
+            return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+        }
+        const token = authHeader.split('Bearer ')[1];
+
+        let decodedToken;
+        try {
+            decodedToken = await adminAuth.verifyIdToken(token);
+        } catch (e) {
+            return NextResponse.json({ success: false, error: 'Unauthorized: Invalid token' }, { status: 401 });
+        }
+
+        // 2. Parse Params
         const searchParams = request.nextUrl.searchParams;
-        const page = parseInt(searchParams.get('page') || '1');
-        const pageSize = parseInt(searchParams.get('limit') || '20');
+        const limitStr = searchParams.get('limit') || '20';
+        const limitVal = parseInt(limitStr);
+        const startAfterId = searchParams.get('startAfter');
+
         const quizType = searchParams.get('type'); // 'admin' or 'user'
         const subject = searchParams.get('subject');
 
-        // Build base query
-        let constraints: any[] = [
-            orderBy('createdDate', 'desc'),
-            limit(pageSize * page)
-        ];
+        // 3. Build Query
+        let queryRef: Query = adminDb.collection('quizes');
 
-        // Add filters
+        // Apply filters
         if (quizType) {
-            constraints.unshift(where('quizType', '==', quizType));
+            queryRef = queryRef.where('quizType', '==', quizType);
         }
-
         if (subject) {
-            constraints.unshift(where('subject', '==', subject));
+            queryRef = queryRef.where('subject', '==', subject);
         }
 
-        const q = query(collection(db, 'quizes'), ...constraints);
+        // Apply Sort (Default: createdDate desc)
+        queryRef = queryRef.orderBy('createdDate', 'desc');
 
-        // Execute query
-        const snapshot = await getDocs(q);
+        // Cursor Pagination
+        if (startAfterId) {
+            const startAfterDoc = await adminDb.collection('quizes').doc(startAfterId).get();
+            if (startAfterDoc.exists) {
+                queryRef = queryRef.startAfter(startAfterDoc);
+            }
+        }
 
-        const quizzes = snapshot.docs.map(doc => ({
-            id: doc.id,
-            title: doc.data().title || '',
-            subject: doc.data().subject || '',
-            quizType: doc.data().quizType || 'admin',
-            totalQuestions: doc.data().questions?.length || 0,
-            duration: doc.data().duration || 0,
-            createdDate: doc.data().createdDate?.toDate?.()?.toISOString() || null,
-            createdBy: doc.data().createdBy || '',
-            isActive: doc.data().isActive !== false,
-        }));
+        queryRef = queryRef.limit(limitVal);
 
-        // Client-side pagination
-        const startIndex = (page - 1) * pageSize;
-        const paginatedQuizzes = quizzes.slice(startIndex, startIndex + pageSize);
+        const snapshot = await queryRef.get();
+
+        const quizzes = snapshot.docs.map(doc => {
+            const data = doc.data();
+            return {
+                id: doc.id,
+                title: data.title || '',
+                subject: data.subject || '',
+                quizType: data.quizType || 'admin',
+                totalQuestions: data.questions?.length || 0,
+                duration: data.duration || 0,
+                createdDate: data.createdDate?.toDate?.()?.toISOString() || null,
+                createdBy: data.createdBy || '',
+                isActive: data.isActive !== false,
+            };
+        });
+
+        // Get last doc for next cursor
+        const lastDoc = snapshot.docs[snapshot.docs.length - 1];
 
         return NextResponse.json({
             success: true,
-            data: paginatedQuizzes,
+            data: quizzes,
             pagination: {
-                page,
-                pageSize,
-                total: quizzes.length,
-                hasMore: quizzes.length === pageSize * page,
+                limit: limitVal,
+                count: quizzes.length,
+                nextCursor: lastDoc ? lastDoc.id : null,
+                hasMore: quizzes.length === limitVal // Approximation
             },
         });
     } catch (error: any) {

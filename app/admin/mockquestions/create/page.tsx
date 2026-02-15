@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { onAuthStateChanged } from 'firebase/auth';
 import dynamic from 'next/dynamic';
 import { CsvImporter } from '@/components/admin/CsvImporter';
+import { SanitizedContent } from '@/components/SanitizedContent';
 import 'react-quill-new/dist/quill.snow.css';
 import { generateSearchTokens } from '@/lib/searchUtils';
 
@@ -366,11 +367,18 @@ function CreateQuestionPageContent() {
     return true;
   }, [questionData]);
 
+  const getAuthHeader = async () => {
+    const token = await auth.currentUser?.getIdToken();
+    if (!token) throw new Error('Not authenticated');
+    return { Authorization: `Bearer ${token}` };
+  };
+
   const syncToAlgolia = async (id: string, data: any) => {
     try {
+      const authHeader = await getAuthHeader();
       await fetch('/api/admin/sync-algolia', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeader },
         body: JSON.stringify({ questionId: id, data, type: 'mock' })
       });
     } catch (e) {
@@ -480,7 +488,7 @@ function CreateQuestionPageContent() {
       } else if (part.startsWith('$') && part.endsWith('$')) {
         return <InlineMath key={i} math={part.slice(1, -1)} />;
       }
-      return <span key={i} dangerouslySetInnerHTML={{ __html: part }} />;
+      return <SanitizedContent key={i} as="span" content={part} />;
     });
   };
 
@@ -496,9 +504,10 @@ function CreateQuestionPageContent() {
       if (type === 'explanation') prompt = `Based on this question: "${questionData.questionText}" and correct answer: "${questionData.correctAnswer}", generate a detailed explanation. Return ONLY the explanation text.`;
       if (type === 'simplify') prompt = `Simplify the language of this question: "${questionData.questionText}". Return ONLY the simplified text.`;
 
+      const authHeader = await getAuthHeader();
       const response = await fetch('/api/ai/generate', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeader },
         body: JSON.stringify({
           prompt,
           subject: questionData.subject,
@@ -534,10 +543,12 @@ function CreateQuestionPageContent() {
     setIsGeneratingAI(true);
 
     try {
+      const authHeader = await getAuthHeader();
       const res = await fetch('/api/ai/generate', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          ...authHeader,
         },
         body: JSON.stringify({
           prompt: aiPrompt,
@@ -769,7 +780,7 @@ function CreateQuestionPageContent() {
                               </Button>
                             </CardHeader>
                             <CardContent className="py-3 px-4">
-                              <div className="text-xs text-gray-600 dark:text-gray-300 mb-2" dangerouslySetInnerHTML={{ __html: h.questionText }} />
+                              <SanitizedContent className="text-xs text-gray-600 dark:text-gray-300 mb-2" content={h.questionText} />
                               <div className="flex flex-wrap gap-1">
                                 <Badge variant="outline" className="text-[10px] py-0">{h.difficulty}</Badge>
                                 <Badge variant="outline" className="text-[10px] py-0">{h.subject}</Badge>

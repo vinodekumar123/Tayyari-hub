@@ -1,10 +1,11 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { useUserStore } from '@/stores/useUserStore';
 import { ModeToggle } from '@/components/mode-toggle';
 import { NotificationBell } from '@/components/notifications/NotificationBell';
-import { Sun, Moon, Coffee, Sparkles, CloudSun, Sunset, Menu } from 'lucide-react';
+import { Sun, Moon, Coffee, Sparkles, CloudSun, Sunset, Menu, ArrowLeft } from 'lucide-react';
 import { glassmorphism } from '@/lib/design-tokens';
 
 
@@ -19,6 +20,7 @@ interface UnifiedHeaderProps {
     children?: React.ReactNode;
     icon?: React.ReactNode;
     className?: string;
+    backUrl?: string;
 }
 
 export function UnifiedHeader({
@@ -28,8 +30,10 @@ export function UnifiedHeader({
     studentName,
     children,
     icon,
-    className = ""
+    className = "",
+    backUrl
 }: UnifiedHeaderProps) {
+    const router = useRouter();
     const { user } = useUserStore();
     const { toggleSidebar } = useUIStore();
     const [mounted, setMounted] = useState(false);
@@ -85,6 +89,17 @@ export function UnifiedHeader({
                         </div>
                     ) : (
                         <div className="flex items-center gap-3 overflow-hidden">
+                            {backUrl && (
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => router.push(backUrl)}
+                                    className="hidden md:flex ml-1 mr-[-8px] text-muted-foreground hover:text-foreground"
+                                    aria-label="Go back"
+                                >
+                                    <ArrowLeft className="w-5 h-5" />
+                                </Button>
+                            )}
                             {icon && (
                                 <div className="flex-shrink-0 p-2 rounded-lg bg-primary/10 text-primary hidden sm:flex items-center justify-center">
                                     <div className="w-5 h-5 flex items-center justify-center">

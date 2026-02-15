@@ -2,9 +2,80 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Allow admin users full access
+    
+    // --- Helper Functions ---
+    
+    function isAdmin() {
+      return request.auth != null && (
+        (request.auth.token.keys().hasAny(['role']) && request.auth.token.role == 'admin') ||
+        (request.auth.token.keys().hasAny(['admin']) && request.auth.token.admin == true) ||
+        (request.auth.token.keys().hasAny(['superadmin']) && request.auth.token.superadmin == true)
+      );
+    }
+    
+    function isOwner(userId) {
+      return request.auth != null && request.auth.uid == userId;
+    }
+    
+    function isAuthenticated() {
+        return request.auth != null;
+    }
+
+    // --- Rules ---
+
+    // Default Deny for everything else not matched below
     match /{document=**} {
-      allow read, write: if request.auth != null;
+      allow read, write: if isAdmin();
+    }
+
+    // 1. Users Collection
+    match /users/{userId} {
+      // Users can read/write their own profile (stats, etc updation often happens from client in this app)
+      allow read, write: if isOwner(userId) || isAdmin();
+
+      // Subcollections for Quiz Attempts
+      match /quizAttempts/{attemptId} {
+        allow read, write: if isOwner(userId) || isAdmin();
+      }
+      match /user-quizattempts/{attemptId} {
+        allow read, write: if isOwner(userId) || isAdmin();
+      }
+    }
+
+    // 2. Official Quizzes (Admin Created)
+    match /quizes/{quizId} {
+      allow read: if isAuthenticated(); // Students need to read to take tests
+      allow write: if isAdmin();
+    }
+
+    // 3. User Quizzes (Custom)
+    match /user-quizzes/{quizId} {
+      // Allow create if auth
+      allow create: if isAuthenticated() && request.resource.data.uid == request.auth.uid;
+      // Allow read/write if owner
+      allow read, update, delete: if isOwner(resource.data.uid) || isAdmin();
+    }
+
+    // 4. Content Metadata (Publicly readable or Auth readable)
+    match /courses/{docId} { allow read: if true; allow write: if isAdmin(); }
+    match /series/{docId} { allow read: if true; allow write: if isAdmin(); }
+    match /bundles/{docId} { allow read: if true; allow write: if isAdmin(); }
+    match /subjects/{docId} { allow read: if true; allow write: if isAdmin(); }
+    
+    // 5. Questions (Bank) - Needed for client-side quiz taking if not fully using API
+    match /questions/{questionId} {
+        allow read: if isAuthenticated();
+        allow write: if isAdmin();
+    }
+    match /mock-questions/{questionId} {
+        allow read: if isAuthenticated();
+        allow write: if isAdmin();
+    }
+
+    // 6. Enrollments
+    match /enrollments/{enrollmentId} {
+        allow read: if isAuthenticated() && (resource.data.studentId == request.auth.uid || isAdmin());
+        allow write: if isAdmin();
     }
   }
 }

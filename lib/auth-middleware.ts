@@ -5,17 +5,39 @@ export interface AuthenticatedRequest extends NextRequest {
     userId?: string;
     userEmail?: string;
     isSuperadmin?: boolean;
+    isAdmin?: boolean;
+    isTeacher?: boolean;
 }
+
+type RequestLike = NextRequest | Request;
+
+const normalizeBool = (value: any) => value === true || value === 'true';
+
+const getRoleFlags = (userData: any) => {
+    const role = userData?.role;
+    const isSuperadmin = normalizeBool(userData?.superadmin) || role === 'superadmin';
+    const isAdmin = isSuperadmin || normalizeBool(userData?.admin) || role === 'admin';
+    const subjects = userData?.subjects;
+    const hasSubjects =
+        Array.isArray(subjects) ? subjects.length > 0 :
+            subjects && typeof subjects === 'object' ? Object.keys(subjects).length > 0 :
+                false;
+    const isTeacher = role === 'teacher' || hasSubjects;
+    return { isSuperadmin, isAdmin, isTeacher };
+};
 
 /**
  * Middleware to authenticate requests using Firebase ID token
  * Verifies the user is authenticated and checks superadmin status
  */
-export async function authenticateRequest(request: NextRequest): Promise<{
+export async function authenticateRequest(request: RequestLike): Promise<{
     authenticated: boolean;
     userId?: string;
     userEmail?: string;
+    userName?: string;
     isSuperadmin?: boolean;
+    isAdmin?: boolean;
+    isTeacher?: boolean;
     error?: string;
 }> {
     try {
@@ -54,14 +76,18 @@ export async function authenticateRequest(request: NextRequest): Promise<{
             };
         }
 
-        const userData = userDoc.data();
-        const isSuperadmin = userData?.superadmin === true;
+        const userData = userDoc.data() || {};
+        const { isSuperadmin, isAdmin, isTeacher } = getRoleFlags(userData);
+        const userName = userData?.fullName || userEmail || 'Admin';
 
         return {
             authenticated: true,
             userId,
             userEmail,
+            userName,
             isSuperadmin,
+            isAdmin,
+            isTeacher,
         };
     } catch (error: any) {
         console.error('Authentication error:', error);
@@ -75,12 +101,13 @@ export async function authenticateRequest(request: NextRequest): Promise<{
 /**
  * Middleware to require superadmin access
  */
-export async function requireSuperadmin(request: NextRequest): Promise<{
+export async function requireSuperadmin(request: RequestLike): Promise<{
     authorized: boolean;
     userId?: string;
     userEmail?: string;
     userName?: string;
     error?: string;
+    status?: number;
 }> {
     const authResult = await authenticateRequest(request);
 
@@ -88,6 +115,7 @@ export async function requireSuperadmin(request: NextRequest): Promise<{
         return {
             authorized: false,
             error: authResult.error || 'Authentication failed',
+            status: 401,
         };
     }
 
@@ -95,22 +123,84 @@ export async function requireSuperadmin(request: NextRequest): Promise<{
         return {
             authorized: false,
             error: 'Insufficient permissions. Superadmin access required.',
+            status: 403,
+        };
+    }
+    return {
+        authorized: true,
+        userId: authResult.userId,
+        userEmail: authResult.userEmail,
+        userName: authResult.userName || 'Admin',
+        status: 200,
+    };
+}
+
+export async function requireAdmin(request: RequestLike): Promise<{
+    authorized: boolean;
+    userId?: string;
+    userEmail?: string;
+    userName?: string;
+    error?: string;
+    status?: number;
+}> {
+    const authResult = await authenticateRequest(request);
+
+    if (!authResult.authenticated) {
+        return {
+            authorized: false,
+            error: authResult.error || 'Authentication failed',
+            status: 401,
         };
     }
 
-    // Get user's full name for audit logging
-    let userName = 'Admin';
-    try {
-        const userDoc = await adminDb.collection('users').doc(authResult.userId!).get();
-        userName = userDoc.data()?.fullName || userDoc.data()?.email || 'Admin';
-    } catch (error) {
-        console.warn('Failed to get user name:', error);
+    if (!authResult.isAdmin) {
+        return {
+            authorized: false,
+            error: 'Insufficient permissions. Admin access required.',
+            status: 403,
+        };
     }
 
     return {
         authorized: true,
         userId: authResult.userId,
         userEmail: authResult.userEmail,
-        userName,
+        userName: authResult.userName || 'Admin',
+        status: 200,
+    };
+}
+
+export async function requireStaff(request: RequestLike): Promise<{
+    authorized: boolean;
+    userId?: string;
+    userEmail?: string;
+    userName?: string;
+    error?: string;
+    status?: number;
+}> {
+    const authResult = await authenticateRequest(request);
+
+    if (!authResult.authenticated) {
+        return {
+            authorized: false,
+            error: authResult.error || 'Authentication failed',
+            status: 401,
+        };
+    }
+
+    if (!authResult.isAdmin && !authResult.isTeacher) {
+        return {
+            authorized: false,
+            error: 'Insufficient permissions. Staff access required.',
+            status: 403,
+        };
+    }
+
+    return {
+        authorized: true,
+        userId: authResult.userId,
+        userEmail: authResult.userEmail,
+        userName: authResult.userName || 'Admin',
+        status: 200,
     };
 }

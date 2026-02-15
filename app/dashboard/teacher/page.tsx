@@ -33,6 +33,7 @@ import {
     TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { SanitizedContent } from '@/components/SanitizedContent';
 import { formatDistanceToNow } from 'date-fns';
 
 // --- Types ---
@@ -457,7 +458,7 @@ export default function TeacherDashboard() {
                                     recentQuestions.map((q) => (
                                         <TableRow key={q.id} className="hover:bg-white/50 dark:hover:bg-slate-800/50 border-white/10 dark:border-slate-800 transition-colors">
                                             <TableCell className="font-medium max-w-[300px] truncate">
-                                                <div dangerouslySetInnerHTML={{ __html: q.questionText?.substring(0, 60) + (q.questionText?.length > 60 ? '...' : '') }} />
+                                                <SanitizedContent content={q.questionText?.substring(0, 60) + (q.questionText?.length > 60 ? '...' : '')} />
                                             </TableCell>
                                             <TableCell>
                                                 <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-800">

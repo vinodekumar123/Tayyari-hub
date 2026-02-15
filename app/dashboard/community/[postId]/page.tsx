@@ -21,7 +21,7 @@ import { UnifiedHeader } from '@/components/unified-header';
 import { RichTextEditor } from '@/components/RichTextEditor';
 import { checkSeriesEnrollment, awardPoints, POINTS, sendNotification } from '@/lib/community';
 import Image from 'next/image';
-import DOMPurify from 'dompurify';
+import { SanitizedContent } from '@/components/SanitizedContent';
 
 export default function ThreadPage() {
     const { postId } = useParams();
@@ -489,7 +489,7 @@ export default function ThreadPage() {
                                     {post.title}
                                 </h1>
                                 <div className="prose prose-lg dark:prose-invert max-w-none text-slate-700 dark:text-slate-300">
-                                    <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(post.content) }} />
+                                    <SanitizedContent content={post.content} />
                                 </div>
                                 {post.images && post.images.length > 0 && (
                                     <div className="rounded-xl overflow-hidden bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
@@ -557,7 +557,7 @@ export default function ThreadPage() {
                                             </div>
 
                                             <div className="prose prose-sm dark:prose-invert text-slate-700 dark:text-slate-300">
-                                                <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(reply.content) }} />
+                                                <SanitizedContent content={reply.content} />
                                             </div>
 
                                             {reply.imageUrl && (

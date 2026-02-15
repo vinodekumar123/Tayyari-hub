@@ -20,6 +20,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Wand2, Loader2, Sparkles, SpellCheck, FileText, Bot } from 'lucide-react';
 import { toast } from 'sonner';
 import { Progress } from '@/components/ui/progress';
+import { auth } from '@/app/firebase';
 
 interface AiBulkGenerateDialogProps {
     isOpen: boolean;
@@ -77,9 +78,17 @@ export function AiBulkGenerateDialog({
 
         setLoading(true);
         try {
+            const token = await auth.currentUser?.getIdToken();
+            if (!token) {
+                throw new Error('Not authenticated');
+            }
+
             const response = await fetch('/api/ai/bulk-generate', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
                 body: JSON.stringify({
                     prompt,
                     action: mode,

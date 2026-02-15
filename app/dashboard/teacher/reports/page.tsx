@@ -7,6 +7,7 @@ import { onAuthStateChanged, User } from 'firebase/auth';
 import { useRouter } from 'next/navigation';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { SanitizedContent } from '@/components/SanitizedContent';
 import { Button } from '@/components/ui/button';
 import {
     Table,
@@ -512,7 +513,7 @@ export default function TeacherReportsPage() {
                                         <BookOpen className="w-4 h-4 text-indigo-500" /> Question Context
                                     </h3>
                                     <div className="prose dark:prose-invert text-sm p-4 bg-muted/30 rounded-lg border border-gray-100 dark:border-white/5">
-                                        <div dangerouslySetInnerHTML={{ __html: questionDetails?.questionText || selectedReport.questionText }} />
+                                        <SanitizedContent content={questionDetails?.questionText || selectedReport.questionText} />
                                     </div>
                                 </div>
                                 <div className="space-y-4">

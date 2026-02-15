@@ -68,6 +68,19 @@ export function CommunityFeed({ role, canCreate = true, initialShowDeleted = fal
     const canMakeAnnouncement = role === 'admin' || role === 'teacher';
 
     useEffect(() => {
+        // Fetch subjects once on mount
+        const fetchSubjects = async () => {
+            try {
+                const subjectsSnap = await getDocs(collection(db, 'subjects'));
+                setSubjects(subjectsSnap.docs.map(d => ({ id: d.id, ...d.data() } as Subject)));
+            } catch (error) {
+                console.error("Failed to load subjects", error);
+            }
+        };
+        fetchSubjects();
+    }, []);
+
+    useEffect(() => {
         fetchData();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
@@ -157,10 +170,8 @@ export function CommunityFeed({ role, canCreate = true, initialShowDeleted = fal
                 constraints.push(startAfter(lastVisible));
             }
 
-            const [postsSnap, subjectsSnap] = await Promise.all([
-                getDocs(query(collection(db, 'forum_posts'), ...constraints)),
-                !loadMore ? getDocs(collection(db, 'subjects')) : Promise.resolve({ docs: subjects.map(s => ({ id: s.id, data: () => s })) })
-            ]);
+            // OPTIMIZATION: Only fetch posts, subjects are already loaded
+            const postsSnap = await getDocs(query(collection(db, 'forum_posts'), ...constraints));
 
             let newPosts = postsSnap.docs.map(d => ({ id: d.id, ...d.data() } as ForumPost));
 
@@ -168,10 +179,6 @@ export function CommunityFeed({ role, canCreate = true, initialShowDeleted = fal
                 setPosts(prev => [...prev, ...newPosts]);
             } else {
                 setPosts(newPosts);
-            }
-
-            if (!loadMore) {
-                setSubjects(subjectsSnap.docs.map(d => ({ id: d.id, ...d.data() } as Subject)));
             }
 
             setLastVisible(postsSnap.docs[postsSnap.docs.length - 1]);
@@ -272,9 +279,10 @@ export function CommunityFeed({ role, canCreate = true, initialShowDeleted = fal
     };
 
     const filteredPosts = posts.filter(p => {
+        // Optimization: Subject is already filtered by Firestore query.
+        // Only apply client-side search content filtering
         const matchSearch = p.title.toLowerCase().includes(search.toLowerCase()) || p.content.toLowerCase().includes(search.toLowerCase());
-        const matchSubject = subjectFilter === 'all' || p.subject === subjectFilter;
-        return matchSearch && matchSubject;
+        return matchSearch;
     });
 
     return (

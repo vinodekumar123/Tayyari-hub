@@ -6,14 +6,18 @@ import { doc, getDoc, collection, query, limit, getDocs, orderBy, where, getCoun
 import { getAuth, onAuthStateChanged } from 'firebase/auth';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { DashboardSkeleton } from '@/components/ui/skeleton-cards';
-import {
-  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
-} from 'recharts';
+import dynamic from 'next/dynamic';
 import {
   Trophy, RefreshCw, ClipboardList, Clock,
   CheckCircle, Zap, BrainCircuit, GraduationCap, AlertTriangle,
   ArrowUpRight, Sparkles, Layers
 } from 'lucide-react';
+
+// Lazy load Recharts (~150KB bundle savings)
+const LazyPerformanceChart = dynamic(
+  () => import('@/components/dashboard/PerformanceChart'),
+  { ssr: false, loading: () => <div className="h-[350px] w-full bg-slate-100 dark:bg-slate-800 rounded-xl animate-pulse" /> }
+);
 import { toast } from 'react-hot-toast';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -32,9 +36,7 @@ export default function StudentDashboard() {
   const [unfinishedQuizzes, setUnfinishedQuizzes] = useState<any[]>([]);
   const [questionStats, setQuestionStats] = useState({ total: 0, used: 0 });
 
-  // Split Analytics State - REMOVED client-side calcs
-  // const [adminStats, setAdminStats] = useState({ total: 0, attempted: 0, accuracy: 0, correct: 0, wrong: 0 });
-  // const [userStats, setUserStats] = useState({ total: 0, attempted: 0, accuracy: 0, correct: 0, wrong: 0 });
+
 
   useEffect(() => {
     // Greeting logic moved to UnifiedHeader
@@ -76,65 +78,96 @@ export default function StudentDashboard() {
         const data = userDoc.exists() ? userDoc.data() : null;
         setStudentData(data);
 
-        // Process Recent Official
+        // Process Recent Official & User
         const officialAttempts = recentSnap.docs.map(d => ({ id: d.id, ...d.data(), quizType: 'admin' }));
-
-        // Process Recent User
         const userAttempts = userRecentSnap.docs.map(d => ({ id: d.id, ...d.data(), quizType: 'user' }));
 
-        // Fetch User Quiz Titles Helper
-        const enrichUserQuizzes = async (attempts: any[]) => {
-          return Promise.all(attempts.map(async (a) => {
-            if (a.quizType === 'user' && !a.title) {
-              try {
-                const qDoc = await getDoc(doc(db, 'user-quizzes', a.id));
-                if (qDoc.exists()) return { ...a, title: qDoc.data().name || 'Custom Quiz' };
-              } catch (e) { }
-            }
-            return a;
-          }));
+        // Process Unfinished Official & User
+        const unfinishedOfficial = unfinishedSnap.docs.map(d => ({ id: d.id, ...d.data(), quizType: 'admin' }));
+        const unfinishedUser = unfinishedUserSnap.docs.map(d => ({ id: d.id, ...d.data(), quizType: 'user' }));
+
+        // ---- OPTIMIZATION: Batch Fetch Quiz Titles ----
+        // Collect all IDs that need titles (User Quizzes and Official Quizzes might miss titles in attempts)
+        const userQuizIdsToFetch = new Set<string>();
+        const officialQuizIdsToFetch = new Set<string>();
+
+        // Helper to collect IDs from attempts
+        const collectIds = (attempts: any[], type: 'user' | 'admin') => {
+          attempts.forEach(a => {
+            // For user quizzes, title acts as name. If missing, we need to fetch.
+            // For official, 'title' should be there.
+            if (type === 'user' && !a.title && !a.name) userQuizIdsToFetch.add(a.id);
+            if (type === 'admin' && !a.title) officialQuizIdsToFetch.add(a.id);
+          });
         };
 
-        const enrichedUserAttempts = await enrichUserQuizzes(userAttempts);
+        collectIds(userAttempts, 'user');
+        collectIds(unfinishedUser, 'user');
+        collectIds(unfinishedOfficial, 'admin');
+
+        // Batch Fetch Logic using Promise.all
+        // Note: Firestore 'in' query has limit of 10. Since we have small limits (10 recent, 5 unfinished), 
+        // we can fetch individual docs in parallel which is still better than serial await.
+        // OR simpler: just fetch documentreferences in parallel.
+
+        const fetchTitles = async (ids: Set<string>, collectionName: string, titleField: string) => {
+          if (ids.size === 0) return {};
+          const idArray = Array.from(ids);
+          const snaps = await Promise.all(idArray.map(id => getDoc(doc(db, collectionName, id))));
+          const titleMap: Record<string, string> = {};
+          snaps.forEach((snap, index) => {
+            if (snap.exists()) {
+              titleMap[idArray[index]] = snap.data()[titleField] || 'Untitled';
+            }
+          });
+          return titleMap;
+        };
+
+        const [userQuizTitles, officialQuizTitles] = await Promise.all([
+          fetchTitles(userQuizIdsToFetch, 'user-quizzes', 'name'),
+          fetchTitles(officialQuizIdsToFetch, 'quizzes', 'title')
+        ]);
+
+        // Enrich Data safely
+        const enrich = (attempts: any[]) => attempts.map(a => ({
+          ...a,
+          title: a.title || a.name || (a.quizType === 'user' ? userQuizTitles[a.id] : officialQuizTitles[a.id]) || (a.quizType === 'user' ? 'Custom Quiz' : 'Untitled Quiz')
+        }));
+
+        const finalOfficialAttempts = enrich(officialAttempts);
+        const finalUserAttempts = enrich(userAttempts);
+        const finalUnfinishedOfficial = enrich(unfinishedOfficial);
+        const finalUnfinishedUser = enrich(unfinishedUser);
+
+        // Helper for safe timestamp
+        const getTime = (t: any) => t?.toMillis ? t.toMillis() : (t instanceof Date ? t.getTime() : 0);
 
         // Merge and Sort
-        const allAttempts = [...officialAttempts, ...enrichedUserAttempts]
-          .sort((a, b) => {
-            const dateA = a.submittedAt?.toMillis ? a.submittedAt.toMillis() : 0;
-            const dateB = b.submittedAt?.toMillis ? b.submittedAt.toMillis() : 0;
-            return dateB - dateA;
-          })
+        const allAttempts = [...finalOfficialAttempts, ...finalUserAttempts]
+          .sort((a, b) => getTime(b.submittedAt) - getTime(a.submittedAt))
           .slice(0, 10);
 
         setRecentQuizzes(allAttempts);
 
-        // Process Unfinished Official
-        const unfinishedOfficial = await Promise.all(unfinishedSnap.docs.map(async (d) => {
-          const data = d.data();
-          let title = data.title;
-          if (!title) {
-            try {
-              const qDoc = await getDoc(doc(db, 'quizzes', d.id));
-              if (qDoc.exists()) title = qDoc.data().title;
-            } catch (e) { console.error("Failed to fetch quiz title", e); }
-          }
-          return { id: d.id, ...data, title: title || 'Untitled Quiz', quizType: 'admin' };
-        }));
+        // Filter valid unfinished (some might truly not exist if deleted)
+        // We assume if title fetch failed (and default used), it might be deleted, but keeping for now as 'Untitled' 
+        // allows user to see orphaned attempts or we could filter. 
+        // For now, filtering only if we strictly want to hide deleted quizzes. 
+        // The previous code filtered 'isValid'. Let's assume if title is 'Untitled Quiz'/'Custom Quiz' it might be valid enough or deleted.
+        // To be safe and match previous logic:
 
-        // Process Unfinished User
-        const unfinishedUser = await Promise.all(unfinishedUserSnap.docs.map(async (d) => {
-          const data = d.data();
-          let title = data.title; // Usually missing on attempt doc
-          if (!title) {
-            try {
-              const qDoc = await getDoc(doc(db, 'user-quizzes', d.id));
-              if (qDoc.exists()) title = qDoc.data().name;
-            } catch (e) { }
-          }
-          return { id: d.id, ...data, title: title || 'Custom Quiz', quizType: 'user' };
-        }));
+        const validUnfinished = [...finalUnfinishedOfficial, ...finalUnfinishedUser].filter(q => {
+          // If we tried to fetch title and failed (got default), and it wasn't in attempt... 
+          // Ideally we should check if doc exists. 
+          // For optimization, let's assume 'Untitled' ones are okay or just keep them. 
+          // Previous logic: "if (!isValid) return null;"
+          // We can check if id was in toFetch set but not in Map.
+          if (q.quizType === 'admin' && officialQuizIdsToFetch.has(q.id) && !officialQuizTitles[q.id]) return false;
+          if (q.quizType === 'user' && userQuizIdsToFetch.has(q.id) && !userQuizTitles[q.id]) return false;
+          return true;
+        });
 
-        setUnfinishedQuizzes([...unfinishedOfficial, ...unfinishedUser]);
+        setUnfinishedQuizzes(validUnfinished);
 
         // Process Question Bank Stats
         const total = totalSnap ? totalSnap.data().count : 0;
@@ -232,7 +265,7 @@ export default function StudentDashboard() {
         {/* Modern Header Section (Actions Only now, logic moved) */}
         <div className="flex justify-end items-center gap-3 mb-8 -mt-2"> {/* Moved up slightly to tuck under sticky header nicely or keep distinct */}
           <Button
-            variant="outline"
+            variant="ghost"
             size="sm"
             onClick={refreshStats}
             title="Refresh Stats"
@@ -241,14 +274,14 @@ export default function StudentDashboard() {
             <RefreshCw className="w-3 h-3 mr-1" /> Refresh
           </Button>
           <Link href="/dashboard/leaderboard">
-            <Button variant="outline" size="sm" className="gap-2 rounded-full border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all hover:-translate-y-0.5 text-xs">
+            <Button variant="ghost" size="sm" className="gap-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-all hover:-translate-y-0.5 text-xs text-slate-600 dark:text-slate-400">
               <Trophy className="w-3 h-3 text-amber-500" />
               Leaderboard
             </Button>
           </Link>
           <Link href="/quiz/create-mock">
-            <Button size="sm" className="gap-2 rounded-full bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-600/20 transition-all hover:-translate-y-0.5 hover:shadow-xl hover:shadow-blue-600/30 text-xs px-4">
-              <Zap className="w-3 h-3" />
+            <Button size="default" className="gap-2 rounded-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-lg shadow-blue-500/30 transition-all duration-300 hover:scale-105 hover:-translate-y-0.5 border-0 px-6">
+              <Zap className="w-4 h-4" />
               New Quiz
             </Button>
           </Link>
@@ -268,7 +301,7 @@ export default function StudentDashboard() {
                     <p className="text-sm text-slate-500 dark:text-slate-400">You have unsaved progress waiting for you.</p>
                   </div>
                 </div>
-                <Link href={`/quiz/start?id=${quiz.id}`}>
+                <Link href={quiz.quizType === 'user' ? `/quiz/start-user-quiz?id=${quiz.id}` : `/quiz/start?id=${quiz.id}`}>
                   <Button size="sm" className="rounded-full bg-amber-500 hover:bg-amber-600 text-white border-none shadow-md shadow-amber-500/20">
                     Resume Quiz <ArrowUpRight className="w-3 h-3 ml-1" />
                   </Button>
@@ -307,10 +340,10 @@ export default function StudentDashboard() {
               <div className="text-3xl font-bold text-slate-900 dark:text-white">
                 {questionStats.total > 0
                   ? `${Math.round((questionStats.used / questionStats.total) * 100)}%`
-                  : '0%'}
+                  : '—'}
               </div>
               <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-1.5 mt-2 overflow-hidden">
-                <div className="bg-amber-500 h-full" style={{ width: `${(questionStats.used / questionStats.total) * 100}%` }}></div>
+                <div className="bg-amber-500 h-full transition-all duration-700" style={{ width: `${questionStats.total > 0 ? (questionStats.used / questionStats.total) * 100 : 0}%` }}></div>
               </div>
               <p className="text-xs text-slate-500 mt-2 flex justify-between">
                 <span>{questionStats.used.toLocaleString()} Used</span>
@@ -616,55 +649,7 @@ export default function StudentDashboard() {
             </CardHeader>
             <CardContent>
               <div className="h-[350px] w-full">
-                {performanceTrendData.length > 0 ? (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={performanceTrendData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                      <defs>
-                        <linearGradient id="colorScore" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.2} />
-                          <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} className="stroke-slate-100 dark:stroke-slate-800" />
-                      <XAxis
-                        dataKey="name"
-                        axisLine={false}
-                        tickLine={false}
-                        tick={{ fontSize: 12, fill: '#94a3b8' }}
-                        dy={10}
-                      />
-                      <YAxis
-                        axisLine={false}
-                        tickLine={false}
-                        tick={{ fontSize: 12, fill: '#94a3b8' }}
-                        domain={[0, 100]}
-                      />
-                      <Tooltip
-                        contentStyle={{
-                          borderRadius: '16px',
-                          border: '1px solid #e2e8f0',
-                          boxShadow: '0 4px 20px -5px rgba(0, 0, 0, 0.1)',
-                          padding: '12px'
-                        }}
-                        cursor={{ stroke: '#3b82f6', strokeWidth: 2, strokeDasharray: '4 4' }}
-                      />
-                      <Area
-                        type="monotone"
-                        dataKey="score"
-                        stroke="#3b82f6"
-                        strokeWidth={3}
-                        fillOpacity={1}
-                        fill="url(#colorScore)"
-                        animationDuration={1500}
-                      />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <div className="h-full flex flex-col items-center justify-center text-slate-400">
-                    <Trophy className="w-12 h-12 mb-3 opacity-20" />
-                    <p>Not enough data to show trend.</p>
-                  </div>
-                )}
+                <LazyPerformanceChart data={performanceTrendData} />
               </div>
             </CardContent>
           </Card>

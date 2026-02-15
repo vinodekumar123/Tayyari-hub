@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { GoogleGenerativeAI, Part } from '@google/generative-ai';
+import { requireStaff } from '@/lib/auth-middleware';
 
 // Initialize Gemini
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
@@ -60,6 +61,11 @@ function stripHtml(html: string): string {
 
 export async function POST(req: Request) {
     try {
+        const authResult = await requireStaff(req);
+        if (!authResult.authorized) {
+            return NextResponse.json({ error: 'Unauthorized', details: authResult.error }, { status: authResult.status ?? 401 });
+        }
+
         if (!process.env.GEMINI_API_KEY) {
             console.error("GEMINI_API_KEY is missing in server environment variables");
             return NextResponse.json({ error: 'Server Misconfiguration: GEMINI_API_KEY is missing' }, { status: 500 });

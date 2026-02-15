@@ -6,18 +6,15 @@ import { Inter } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
 import { SpeedInsights } from '@vercel/speed-insights/next'
 
-
-
+// Core imports (critical path)
 import { NavigationLoader } from '@/components/ui/navigation-loader';
 import { LoadingOverlay } from '@/components/ui/loading-overlay';
 import { Toaster } from "@/components/ui/sonner";
 import { ThemeProvider } from "@/components/theme-provider";
-import { GoodNewsPopup } from "@/components/ui/good-news-popup";
-import { SplashScreen } from "@/components/ui/splash-screen";
 
-import { GlobalAuthListener } from '@/components/global-auth-listener';
+// Client-only dynamic imports (ssr: false requires 'use client' boundary)
+import { ClientProviders } from '@/components/ClientProviders';
 
-import { HelpChatWidget } from '@/components/HelpChatWidget';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -58,16 +55,13 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <GlobalAuthListener />
-          <SplashScreen />
+          <ClientProviders />
           <React.Suspense fallback={null}>
             <NavigationLoader />
             <LoadingOverlay />
           </React.Suspense>
           {children}
           <Toaster />
-          <HelpChatWidget />
-          <GoodNewsPopup />
           {process.env.NODE_ENV === 'production' && (
             <>
               <Analytics />

@@ -12,6 +12,7 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Loader2, Trash2, CheckCircle, Search, AlertTriangle, ChevronRight, ChevronDown, XCircle, RefreshCcw, Eye, BrainCircuit, CheckSquare, Copy, Settings2, AlertCircle, FileWarning } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
+import { SanitizedContent } from '@/components/SanitizedContent';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -790,9 +791,9 @@ export default function DeduplicatePage() {
                         <div className="space-y-6">
                             <div>
                                 <h4 className="text-xs font-bold text-slate-400 uppercase mb-3 tracking-wider">Question Statement</h4>
-                                <div
+                                <SanitizedContent
                                     className="text-lg font-medium text-slate-800 dark:text-slate-100 leading-relaxed"
-                                    dangerouslySetInnerHTML={{ __html: viewingQuestion?.questionText }}
+                                    content={viewingQuestion?.questionText}
                                 />
                             </div>
 
@@ -812,9 +813,9 @@ export default function DeduplicatePage() {
                                                     }`}>
                                                     {String.fromCharCode(65 + idx)}
                                                 </div>
-                                                <div
+                                                <SanitizedContent
                                                     className="text-sm font-medium text-slate-700 dark:text-slate-300"
-                                                    dangerouslySetInnerHTML={{ __html: opt }}
+                                                    content={opt}
                                                 />
                                             </div>
                                         </div>
@@ -828,9 +829,9 @@ export default function DeduplicatePage() {
                                         <BrainCircuit className="w-4 h-4" />
                                         Detailed Explanation
                                     </h4>
-                                    <div
+                                    <SanitizedContent
                                         className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed"
-                                        dangerouslySetInnerHTML={{ __html: viewingQuestion.explanation }}
+                                        content={viewingQuestion.explanation}
                                     />
                                 </div>
                             )}

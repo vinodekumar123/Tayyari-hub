@@ -31,6 +31,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { SanitizedContent } from '@/components/SanitizedContent';
 import {
   Dialog,
   DialogContent,
@@ -332,6 +333,12 @@ const CreateQuestionPageContent = () => {
     setOptions(newOptions);
   };
 
+  const getAuthHeader = async () => {
+    const token = await auth.currentUser?.getIdToken();
+    if (!token) throw new Error('Not authenticated');
+    return { Authorization: `Bearer ${token}` };
+  };
+
   const addOption = () => {
     setOptions([...options, '']);
   };
@@ -345,10 +352,12 @@ const CreateQuestionPageContent = () => {
     if (!aiPrompt.trim()) return;
     setIsAiGenerating(true);
     try {
+      const authHeader = await getAuthHeader();
       const response = await fetch('/api/ai/generate', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          ...authHeader,
         },
         body: JSON.stringify({ prompt: aiPrompt }),
       });
@@ -380,9 +389,10 @@ const CreateQuestionPageContent = () => {
 
   const syncToAlgolia = async (id: string, data: any, type: 'official' | 'mock' = 'official') => {
     try {
+      const authHeader = await getAuthHeader();
       await fetch('/api/admin/sync-algolia', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeader },
         body: JSON.stringify({ questionId: id, data, type })
       });
     } catch (e) {
@@ -695,7 +705,7 @@ const CreateQuestionPageContent = () => {
                         <Card key={i} className="bg-muted/50">
                           <CardHeader className="pb-2">
                             <div className="flex justify-between items-start">
-                              <CardTitle className="text-base question-content" dangerouslySetInnerHTML={{ __html: q.questionText || '' }} />
+                              <SanitizedContent as="div" className="text-base question-content font-bold" content={q.questionText || ''} />
                               <Button size="sm" onClick={() => applyAiQuestion(q)}>Apply</Button>
                             </div>
                           </CardHeader>
@@ -703,7 +713,7 @@ const CreateQuestionPageContent = () => {
                             <ul className="text-sm list-disc pl-4 space-y-1">
                               {q.options?.map((opt, idx) => (
                                 <li key={idx} className={opt === q.correctAnswer ? "text-green-600 font-medium" : ""}>
-                                  <span dangerouslySetInnerHTML={{ __html: opt }} />
+                                  <SanitizedContent as="span" content={opt} />
                                 </li>
                               ))}
                             </ul>

@@ -29,6 +29,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { SanitizedContent } from '@/components/SanitizedContent';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -872,7 +873,7 @@ export default function MockQuestionBankPage() {
                   <TableCell className="max-w-[400px]">
                     <div className="space-y-1 py-2">
                       <div className="font-medium text-gray-900 dark:text-gray-100 group-hover:text-blue-700 dark:group-hover:text-blue-400 transition-colors whitespace-normal break-words prose prose-sm dark:prose-invert">
-                        <div dangerouslySetInnerHTML={{ __html: question.questionText }} />
+                        <SanitizedContent content={question.questionText} />
                       </div>
                       <div className="flex gap-2 text-xs text-gray-500 dark:text-gray-400">
                         <span className="font-mono bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded">ID: {question.id.slice(0, 6)}</span>
@@ -1041,7 +1042,7 @@ export default function MockQuestionBankPage() {
               </div>
 
               <div className="prose prose-sm dark:prose-invert max-w-none">
-                <div dangerouslySetInnerHTML={{ __html: previewQuestion.questionText }} />
+                <SanitizedContent content={previewQuestion.questionText} />
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -1068,7 +1069,7 @@ export default function MockQuestionBankPage() {
                 <div className="mt-6 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800 rounded-lg">
                   <h4 className="font-semibold text-sm text-blue-900 dark:text-blue-300 mb-2">Explanation</h4>
                   <div className="prose prose-sm dark:prose-invert max-w-none">
-                    <div dangerouslySetInnerHTML={{ __html: previewQuestion.explanation }} />
+                    <SanitizedContent content={previewQuestion.explanation} />
                   </div>
                 </div>
               )}

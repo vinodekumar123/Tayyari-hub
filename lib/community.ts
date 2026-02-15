@@ -22,6 +22,9 @@ export const sendNotification = async (recipientId: string, title: string, messa
     }
 };
 
+// TODO: SECURITY: This function is vulnerable to client-side manipulation.
+// Move this logic to a secure backend environment (e.g., Firebase Cloud Functions or Next.js API route) 
+// to prevent users from arbitrarily awarding themselves points.
 export const awardPoints = async (userId: string, amount: number, reason: string) => {
     try {
         const userRef = doc(db, 'users', userId);

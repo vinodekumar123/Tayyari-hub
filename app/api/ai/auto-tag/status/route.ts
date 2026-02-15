@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { initializeApp, getApps, cert } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
+import { requireStaff } from '@/lib/auth-middleware';
 
 // Initialize Firebase Admin if not already initialized
 // Initialize Firebase Admin if not already initialized
@@ -29,6 +30,11 @@ function getAdminDb() {
 
 export async function GET(req: Request) {
     try {
+        const authResult = await requireStaff(req);
+        if (!authResult.authorized) {
+            return NextResponse.json({ error: 'Unauthorized', details: authResult.error }, { status: authResult.status ?? 401 });
+        }
+
         const { searchParams } = new URL(req.url);
         const jobId = searchParams.get('jobId');
 

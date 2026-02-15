@@ -1,8 +1,8 @@
 import React from 'react';
 import { Flag, Edit, Info } from 'lucide-react';
-import DOMPurify from 'dompurify';
 import { toast } from 'sonner';
 import { Question } from '@/types';
+import { SanitizedContent } from '@/components/SanitizedContent';
 
 interface QuestionCardProps {
     question: Question;
@@ -39,7 +39,11 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({
                     style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}
                 >
                     <span className="font-bold text-slate-700 dark:text-slate-300">Q{totalIndex + 1}. </span>
-                    <div className="question-content inline" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(q.questionText || '') }} />
+                    <SanitizedContent
+                        as="div"
+                        className="question-content inline"
+                        content={q.questionText || ''}
+                    />
 
                     {isAdmin && (
                         <a
@@ -102,10 +106,11 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({
                                 <div className="flex items-center justify-center w-6 h-6 rounded-full bg-slate-100 dark:bg-slate-700 text-xs font-bold text-slate-500 dark:text-slate-300 group-hover:bg-blue-100 dark:group-hover:bg-blue-900/50 group-hover:text-blue-300 transition-colors flex-shrink-0">
                                     {['A', 'B', 'C', 'D'][i]}
                                 </div>
-                                <span
+                                <SanitizedContent
+                                    as="span"
                                     className="prose max-w-none"
                                     style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}
-                                    dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(opt) }}
+                                    content={opt}
                                 />
                             </div>
                             {isCorrect && (
@@ -119,7 +124,7 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({
             {isCorrectAnswerVisible && q.explanation && (
                 <div className="mt-4 p-4 bg-green-50 border border-green-100 rounded-lg text-sm text-green-800 animate-in fade-in slide-in-from-top-2">
                     <p className="font-bold flex items-center gap-2 mb-1"><Info className="w-4 h-4" /> Explanation:</p>
-                    <p>{q.explanation}</p>
+                    <SanitizedContent content={q.explanation} />
                 </div>
             )}
         </div>

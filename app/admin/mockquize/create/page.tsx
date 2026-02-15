@@ -22,6 +22,7 @@ import {
   CardContent,
 } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { SanitizedContent } from '@/components/SanitizedContent';
 import {
   Select,
   SelectTrigger,
@@ -452,9 +453,9 @@ export default function CreateMockQuiz() {
                         className="!w-7 !h-7 mt-1 border-2 border-blue-500"
                       />
                       <div className="flex-1">
-                        <div
+                        <SanitizedContent
                           className="text-gray-800 text-base"
-                          dangerouslySetInnerHTML={{ __html: q.questionText }}
+                          content={q.questionText}
                         />
                         <div className="text-xs text-gray-500 mt-1">
                           Created: {q.createdAt ? formatDate(q.createdAt) : 'N/A'}

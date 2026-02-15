@@ -1,8 +1,14 @@
 import { NextResponse } from 'next/server';
 import { adminDb, isAdminInitialized, getInitializationError } from '@/lib/firebase-admin';
+import { requireStaff } from '@/lib/auth-middleware';
 
 export async function POST(req: Request) {
     try {
+        const authResult = await requireStaff(req);
+        if (!authResult.authorized) {
+            return NextResponse.json({ error: 'Unauthorized', details: authResult.error }, { status: authResult.status ?? 401 });
+        }
+
         const body = await req.json();
         const {
             courseId,
@@ -87,6 +93,8 @@ export async function POST(req: Request) {
         }
 
         // Create the job document
+        const createdBy = authResult.userId || userId || 'anonymous';
+
         const jobData = {
             status: 'pending',
             courseId,
@@ -112,7 +120,7 @@ export async function POST(req: Request) {
             updatedAt: new Date(),
 
             // User
-            createdBy: userId || 'anonymous'
+            createdBy
         };
 
         const jobRef = await db.collection('tagging_jobs').add(jobData);
@@ -126,9 +134,15 @@ export async function POST(req: Request) {
             : 'http://localhost:3000');
 
         // Start processing asynchronously (fire and forget)
+        const internalKey = process.env.INTERNAL_JOB_KEY;
+        const processHeaders: Record<string, string> = { 'Content-Type': 'application/json' };
+        if (internalKey) {
+            processHeaders['x-internal-job-key'] = internalKey;
+        }
+
         fetch(`${baseUrl}/api/ai/auto-tag/process`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: processHeaders,
             body: JSON.stringify({ jobId })
         }).catch(err => console.error('[Auto-Tag] Failed to trigger process:', err));
 

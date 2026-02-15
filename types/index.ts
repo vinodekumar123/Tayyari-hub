@@ -299,3 +299,20 @@ export interface ForumReply {
     isFlagged?: boolean;
 }
 
+export interface Report {
+    id: string;
+    questionId: string;
+    questionText: string;
+    options?: string[];
+    correctAnswer?: string;
+    subject?: string;
+    topic?: string;
+
+    issue: string;
+    status: 'pending' | 'resolved' | 'ignored';
+    adminReply?: string;
+    adminName?: string;
+    createdAt: any;
+    quizId: string;
+    studentId?: string; // Added for completeness
+}

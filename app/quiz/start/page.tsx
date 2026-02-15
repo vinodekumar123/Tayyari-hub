@@ -18,6 +18,7 @@ import { ModeToggle } from '@/components/mode-toggle';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { addHeader, addFooter, sanitizeText } from '@/utils/pdf-style-helper';
+import { SanitizedContent } from '@/components/SanitizedContent';
 
 // --- Type Definitions ---
 interface Question {
@@ -1060,7 +1061,7 @@ const StartQuizPageContent: React.FC = () => {
                       <div className="flex justify-between items-start gap-4">
                         <div className="text-lg font-medium prose dark:prose-invert max-w-none flex-1 group relative break-words overflow-hidden" style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}>
                           <span className="font-bold text-slate-700 dark:text-slate-300">Q{globalIdx + 1}. </span>
-                          <span className="question-content" dangerouslySetInnerHTML={{ __html: q.questionText }} />
+                          <SanitizedContent as="span" className="question-content" content={q.questionText} />
                           {isAdmin && (
                             <a
                               href={`/admin/questions/create?edit=${q.id}`}
@@ -1114,7 +1115,12 @@ const StartQuizPageContent: React.FC = () => {
                                 <div className="flex items-center justify-center w-6 h-6 shrink-0 rounded-full bg-slate-100 dark:bg-slate-700 text-xs font-bold text-slate-500 dark:text-slate-300 group-hover:bg-blue-100 dark:group-hover:bg-blue-900/50 group-hover:text-blue-600 transition-colors">
                                   {['A', 'B', 'C', 'D'][i]}
                                 </div>
-                                <span className="prose dark:prose-invert max-w-none break-words" style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }} dangerouslySetInnerHTML={{ __html: opt }} />
+                                <SanitizedContent
+                                  as="span"
+                                  className="prose dark:prose-invert max-w-none break-words"
+                                  style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}
+                                  content={opt}
+                                />
                               </div>
                               {isCorrect && <div className="absolute right-0 top-0 bottom-0 w-1.5 bg-green-500" />}
                             </label>
@@ -1130,7 +1136,7 @@ const StartQuizPageContent: React.FC = () => {
                           <div
                             className="prose dark:prose-invert max-w-none break-words overflow-auto question-content"
                             style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}
-                            dangerouslySetInnerHTML={{ __html: q.explanation }}
+                            content={q.explanation}
                           />
                         </div>
                       )}

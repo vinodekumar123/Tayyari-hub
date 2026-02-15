@@ -1,16 +1,30 @@
 import { NextResponse } from 'next/server';
 import OpenAI from 'openai';
 import PDFParser from 'pdf2json';
+import { requireStaff } from '@/lib/auth-middleware';
+import { isOpenAIEnabled } from '@/lib/validateEnv';
 
 export const runtime = 'nodejs';
 
-const openai = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY || 'dummy_key_for_build', // Fallback for build time
-});
+const createAIUnavailableResponse = () =>
+    NextResponse.json(
+        {
+            error: 'AI service unavailable',
+            message: 'OpenAI API key not configured',
+            suggestion: 'Please contact support or try generating a basic quiz instead',
+        },
+        { status: 503 }
+    );
 
 // Configure 2MB limit for Vercel/Next.js body parsing if needed, 
 // though generally handled by runtime. 
 export const maxDuration = 300;
+
+const createOpenAIClient = () => {
+    const apiKey = process.env.OPENAI_API_KEY?.trim();
+    if (!apiKey) return null;
+    return new OpenAI({ apiKey });
+};
 
 // Helper to parse PDF buffer
 const parsePDF = async (buffer: Buffer): Promise<string> => {
@@ -31,6 +45,15 @@ const parsePDF = async (buffer: Buffer): Promise<string> => {
 
 export async function POST(req: Request) {
     try {
+        const authResult = await requireStaff(req);
+        if (!authResult.authorized) {
+            return NextResponse.json({ error: 'Unauthorized', details: authResult.error }, { status: authResult.status ?? 401 });
+        }
+
+        if (!isOpenAIEnabled()) {
+            return createAIUnavailableResponse();
+        }
+
         const formData = await req.formData();
         const textInput = formData.get('text') as string;
         const file = formData.get('file') as File;
@@ -173,7 +196,12 @@ Formatting Instructions:
 
         const userPrompt = `Content to generate from:\n\n${contentToProcess}`;
 
-        const completion = await openai.chat.completions.create({
+        const openaiClient = createOpenAIClient();
+        if (!openaiClient) {
+            return createAIUnavailableResponse();
+        }
+
+        const completion = await openaiClient.chat.completions.create({
             model: "gpt-4o",
             messages: [
                 { role: "system", content: systemPrompt },

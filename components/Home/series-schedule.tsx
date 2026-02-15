@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { freshersClassXII, freshersClassXI, improversS1, improversS2, freshersCards, flpPhases } from './schedule-data';
 import { generateSchedulePDF } from '../../utils/generate-schedule-pdf';
+import { SanitizedContent } from '@/components/SanitizedContent';
 
 interface SeriesScheduleProps {
     defaultTab?: 'improver' | 'fresher' | 'flp';
@@ -106,7 +107,7 @@ const SeriesSchedule = ({ defaultTab = 'improver', hideTabs = false, expandSerie
                                                 </span>
                                             </td>
                                             <td className="p-4 text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
-                                                <div dangerouslySetInnerHTML={{ __html: test.syllabus }} className="[&>b]:text-slate-900 [&>b]:dark:text-white [&>b]:font-semibold" />
+                                                <SanitizedContent content={test.syllabus} className="[&>b]:text-slate-900 [&>b]:dark:text-white [&>b]:font-semibold" />
                                             </td>
                                         </tr>
                                     ))}
@@ -147,7 +148,7 @@ const SeriesSchedule = ({ defaultTab = 'improver', hideTabs = false, expandSerie
                                 <td className="p-5 text-slate-900 dark:text-white font-medium">{item.date}</td>
                                 <td className="p-5 text-slate-500 dark:text-slate-400 text-sm">{item.day}</td>
                                 <td className="p-5 text-slate-600 dark:text-slate-300 text-sm leading-relaxed">
-                                    <div dangerouslySetInnerHTML={{ __html: item.topics }} className="[&>b]:text-slate-900 [&>b]:dark:text-white [&>b]:font-semibold" />
+                                    <SanitizedContent content={item.topics} className="[&>b]:text-slate-900 [&>b]:dark:text-white [&>b]:font-semibold" />
                                 </td>
                             </tr>
                         ))}
@@ -169,10 +170,7 @@ const SeriesSchedule = ({ defaultTab = 'improver', hideTabs = false, expandSerie
                                 </h4>
                             </div>
                         </div>
-                        <div
-                            className="text-sm text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-slate-950 p-4 rounded-xl [&>b]:text-slate-900 [&>b]:dark:text-white [&>b]:block [&>b]:mb-1 [&>b]:mt-2 [&>b]:first:mt-0"
-                            dangerouslySetInnerHTML={{ __html: item.topics }}
-                        />
+                        <SanitizedContent content={item.topics} className="text-sm text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-slate-950 p-4 rounded-xl [&>b]:text-slate-900 [&>b]:dark:text-white [&>b]:block [&>b]:mb-1 [&>b]:mt-2 [&>b]:first:mt-0" />
                     </div>
                 ))}
             </div>

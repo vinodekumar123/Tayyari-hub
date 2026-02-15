@@ -27,10 +27,14 @@ export function findExactDuplicates(questions: any[]) {
 /**
  * Uses AI to find semantically similar questions in a list.
  */
-export async function findSemanticDuplicatesWithAI(questions: any[]) {
+export async function findSemanticDuplicatesWithAI(questions: any[], idToken?: string) {
     // Process in batches of 20 to fit in model context and avoid timeouts
     const BATCH_SIZE = 20;
     const allDuplicateGroups: number[][] = [];
+
+    if (!idToken) {
+        throw new Error('Authentication required for AI deduplication');
+    }
 
     // We compare questions in overlapping or full list batches?
     // For 500 questions, an N^2 comparison is impossible.
@@ -42,6 +46,10 @@ export async function findSemanticDuplicatesWithAI(questions: any[]) {
 
         const response = await fetch('/api/ai/deduplicate-preview', {
             method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${idToken}`
+            },
             body: JSON.stringify({ questions: batch.map((q, idx) => ({ id: i + idx, text: q.question })) })
         });
 

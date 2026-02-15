@@ -12,24 +12,25 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/lib/firebase-admin';
 import { generateSearchTokens } from '@/lib/searchUtils';
+import { requireSuperadmin } from '@/lib/auth-middleware';
 
 export async function GET(request: NextRequest) {
     try {
-        // Security check: Verify the request is from an admin
-        // You should implement proper authentication here
-        const authHeader = request.headers.get('authorization');
-
-        // For now, require a simple token (you should change this!)
-        const MIGRATION_TOKEN = process.env.MIGRATION_TOKEN || 'change-me-in-production';
-        const providedToken = request.headers.get('x-migration-token');
         const searchParams = request.nextUrl.searchParams;
         const targetCollection = searchParams.get('collection') || 'questions';
 
-        if (providedToken !== MIGRATION_TOKEN) {
-            return NextResponse.json(
-                { error: 'Unauthorized. Provide x-migration-token header.' },
-                { status: 401 }
-            );
+        const migrationToken = process.env.MIGRATION_TOKEN;
+        const providedToken = request.headers.get('x-migration-token');
+        const hasMigrationToken = !!(migrationToken && providedToken === migrationToken);
+
+        if (!hasMigrationToken) {
+            const authResult = await requireSuperadmin(request);
+            if (!authResult.authorized) {
+                return NextResponse.json(
+                    { error: 'Unauthorized', details: authResult.error },
+                    { status: authResult.status ?? 401 }
+                );
+            }
         }
 
         if (!['questions', 'mock-questions'].includes(targetCollection)) {

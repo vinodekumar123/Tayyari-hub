@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { initializeApp, getApps, cert } from 'firebase-admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { GoogleGenerativeAI, Part } from '@google/generative-ai';
+import { requireStaff } from '@/lib/auth-middleware';
 
 // --- Shared Helpers (Duplicated from auto-tag/route.ts for isolation) ---
 
@@ -83,6 +84,17 @@ export async function POST(req: Request) {
     let jobId = '';
 
     try {
+        const internalKey = process.env.INTERNAL_JOB_KEY;
+        const providedKey = req.headers.get('x-internal-job-key');
+        const isInternal = !!(internalKey && providedKey === internalKey);
+
+        if (!isInternal) {
+            const authResult = await requireStaff(req);
+            if (!authResult.authorized) {
+                return NextResponse.json({ error: 'Unauthorized', details: authResult.error }, { status: authResult.status ?? 401 });
+            }
+        }
+
         const body = await req.json();
         jobId = body.jobId;
 
@@ -331,10 +343,16 @@ function triggerNextBatch(jobId: string) {
     const host = process.env.VERCEL_URL || 'localhost:3000';
     const url = `${scheme}://${host}/api/ai/auto-tag/process`;
 
+    const internalKey = process.env.INTERNAL_JOB_KEY;
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (internalKey) {
+        headers['x-internal-job-key'] = internalKey;
+    }
+
     // Fire and forget
     fetch(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({ jobId })
     }).catch(e => console.error("Chain fetch failed", e));
 }

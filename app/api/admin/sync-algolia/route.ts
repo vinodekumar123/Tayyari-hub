@@ -1,12 +1,18 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminClient, QUESTIONS_INDEX, MOCK_QUESTIONS_INDEX } from '@/lib/algolia-admin';
+import { requireAdmin } from '@/lib/auth-middleware';
 
 // Force dynamic to prevent build-time evaluation
 export const dynamic = 'force-dynamic';
 
 export async function POST(request: NextRequest) {
     try {
+        const authResult = await requireAdmin(request);
+        if (!authResult.authorized) {
+            return NextResponse.json({ error: 'Unauthorized', details: authResult.error }, { status: authResult.status ?? 401 });
+        }
+
         const { questionId, questionIds, data, type, action } = await request.json();
 
         if (!type || (!questionId && !questionIds)) {

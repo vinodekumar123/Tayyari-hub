@@ -28,6 +28,7 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { toast } from 'sonner';
+import { SanitizedContent } from '@/components/SanitizedContent';
 
 interface Question {
   id: string;
@@ -291,7 +292,7 @@ const ResultPageContent: React.FC = () => {
             <div className="py-4">
               <div className="mb-4 p-3 bg-gray-50 rounded text-sm text-gray-600 italic">
                 {selectedQuestionForReport && (
-                  <div dangerouslySetInnerHTML={{ __html: selectedQuestionForReport.questionText }} />
+                  <SanitizedContent content={selectedQuestionForReport.questionText} />
                 )}
               </div>
               <Textarea
@@ -355,7 +356,7 @@ const ResultPageContent: React.FC = () => {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="mb-4 text-lg font-medium text-gray-800" dangerouslySetInnerHTML={{ __html: q.questionText }} />
+                <SanitizedContent className="mb-4 text-lg font-medium text-gray-800" content={q.questionText} />
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   {q.options.map((opt, i) => {
@@ -390,7 +391,7 @@ const ResultPageContent: React.FC = () => {
 
                 <div className="mt-4 pt-4 border-t border-gray-100">
                   <p className="text-sm font-semibold text-gray-500 uppercase tracking-wide">Explanation:</p>
-                  <div className="mt-1 text-gray-700 bg-blue-50/50 p-3 rounded-md" dangerouslySetInnerHTML={{ __html: q.explanation || 'No explanation provided.' }} />
+                  <SanitizedContent className="mt-1 text-gray-700 bg-blue-50/50 p-3 rounded-md" content={q.explanation || 'No explanation provided.'} />
                 </div>
               </CardContent>
             </Card>

@@ -33,6 +33,7 @@ import { format, subDays, isWithinInterval, startOfDay, endOfDay } from 'date-fn
 import { toast } from 'sonner';
 import { glassmorphism, brandColors } from '@/lib/design-tokens';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend } from 'recharts';
+import { SanitizedContent } from '@/components/SanitizedContent';
 
 interface Report {
     id: string;
@@ -821,7 +822,7 @@ export default function AdminReportsPage() {
 
                                     <div className="space-y-4">
                                         <div className="prose dark:prose-invert max-w-none text-sm bg-gray-50 dark:bg-white/5 p-4 rounded-xl border border-gray-100 dark:border-white/5">
-                                            <div className="question-content" dangerouslySetInnerHTML={{ __html: questionDetails?.questionText || selectedReport.questionText }} />
+                                            <SanitizedContent className="question-content" content={questionDetails?.questionText || selectedReport.questionText} />
                                             {/* Images */}
                                             {questionDetails?.images && questionDetails.images.length > 0 && (
                                                 <div className="mt-4 grid gap-2">
@@ -852,7 +853,7 @@ export default function AdminReportsPage() {
                                         {questionDetails?.explanation && (
                                             <div className="bg-blue-50 dark:bg-blue-900/10 p-4 rounded-xl border border-blue-100 dark:border-blue-900/20 space-y-2">
                                                 <div className="text-xs font-bold text-blue-700 dark:text-blue-400 uppercase tracking-wider">Explanation</div>
-                                                <div className="text-sm prose dark:prose-invert max-w-none" dangerouslySetInnerHTML={{ __html: questionDetails.explanation }} />
+                                                <SanitizedContent className="text-sm prose dark:prose-invert max-w-none" content={questionDetails.explanation} />
                                             </div>
                                         )}
 

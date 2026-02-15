@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { adminDb } from '@/lib/firebase-admin';
+import { requireAdmin } from '@/lib/auth-middleware';
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
 
@@ -23,6 +24,11 @@ interface ChapterResult {
 
 export async function POST(req: NextRequest) {
     try {
+        const authResult = await requireAdmin(req);
+        if (!authResult.authorized) {
+            return NextResponse.json({ error: 'Unauthorized', details: authResult.error }, { status: authResult.status ?? 401 });
+        }
+
         const body = await req.json();
         const {
             subject,

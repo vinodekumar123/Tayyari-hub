@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { geminiFlashModel, generateEmbedding } from '@/lib/gemini';
 import { adminDb } from '@/lib/firebase-admin';
+import { requireAdmin } from '@/lib/auth-middleware';
 import {
     generateCacheKey,
     getCachedResponse,
@@ -28,6 +29,11 @@ export async function POST(req: NextRequest) {
     const startTime = Date.now();
 
     try {
+        const authResult = await requireAdmin(req);
+        if (!authResult.authorized) {
+            return NextResponse.json({ error: 'Unauthorized', details: authResult.error }, { status: authResult.status ?? 401 });
+        }
+
         const { message, history = [], streamStatus = true } = await req.json();
 
         if (!message) {

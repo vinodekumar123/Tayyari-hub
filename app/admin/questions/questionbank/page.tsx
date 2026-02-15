@@ -30,6 +30,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { SanitizedContent } from '@/components/SanitizedContent';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -1214,7 +1215,7 @@ export default function QuestionBankPage() {
                   <TableCell className="max-w-[400px]">
                     <div className="space-y-1 py-2">
                       <div className="font-medium text-gray-900 dark:text-gray-100 group-hover:text-blue-700 dark:group-hover:text-blue-400 transition-colors whitespace-normal break-words prose prose-sm dark:prose-invert">
-                        <div dangerouslySetInnerHTML={{ __html: question.questionText }} />
+                        <SanitizedContent content={question.questionText} />
                       </div>
                       <div className="flex flex-wrap gap-2 text-xs text-gray-500 dark:text-gray-400 mt-1">
                         <span className="font-mono bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded">ID: {question.id.slice(0, 6)}</span>
@@ -1420,7 +1421,7 @@ export default function QuestionBankPage() {
 
               {/* Question Text */}
               <div className="prose prose-sm dark:prose-invert max-w-none">
-                <div dangerouslySetInnerHTML={{ __html: previewQuestion.questionText }} />
+                <SanitizedContent content={previewQuestion.questionText} />
               </div>
 
               {/* Options */}
@@ -1447,9 +1448,9 @@ export default function QuestionBankPage() {
                   <h4 className="font-bold text-blue-800 dark:text-blue-300 text-sm mb-2 flex items-center gap-2">
                     <Eye className="h-4 w-4" /> Explanation
                   </h4>
-                  <div
+                  <SanitizedContent
                     className="text-sm text-blue-700 dark:text-blue-400 prose prose-sm dark:prose-invert max-w-none"
-                    dangerouslySetInnerHTML={{ __html: previewQuestion.explanation }}
+                    content={previewQuestion.explanation}
                   />
                 </div>
               )}

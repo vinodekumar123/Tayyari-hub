@@ -21,6 +21,7 @@ import { onAuthStateChanged, User } from 'firebase/auth';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { SanitizedContent } from '@/components/SanitizedContent';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -787,9 +788,9 @@ export default function SyncPage() {
                                                     onCheckedChange={() => toggleQuestion(question.id)}
                                                 />
                                                 <div className="flex-1 min-w-0">
-                                                    <div
+                                                    <SanitizedContent
                                                         className="text-sm text-gray-800 dark:text-gray-200 line-clamp-2"
-                                                        dangerouslySetInnerHTML={{ __html: question.questionText }}
+                                                        content={question.questionText}
                                                     />
                                                     <div className="flex items-center gap-2 mt-1">
                                                         {question.subject && (

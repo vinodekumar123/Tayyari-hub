@@ -24,7 +24,7 @@ import parse from 'html-react-parser';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 
-import { db } from '@/app/firebase';
+import { db, auth } from '@/app/firebase';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { Progress } from '@/components/ui/progress';
 import { splitPdfClientSide, getPdfPageCount } from '@/lib/pdfClientProcessor';
@@ -244,8 +244,14 @@ export default function AIGeneratorPage() {
                 let success = false;
                 while (retries < 2 && !success) {
                     try {
+                        const token = await auth.currentUser?.getIdToken();
+                        if (!token) throw new Error("You must be logged in to use AI generation.");
+
                         const response = await fetch('/api/ai/generate-mcq', {
                             method: 'POST',
+                            headers: {
+                                'Authorization': `Bearer ${token}`
+                            },
                             body: formData,
                         });
                         const data = await response.json();
@@ -303,7 +309,9 @@ export default function AIGeneratorPage() {
             if (mode === 'exact') {
                 duplicateGroups = findExactDuplicates(generatedQuestions);
             } else {
-                duplicateGroups = await findSemanticDuplicatesWithAI(generatedQuestions);
+                const token = await auth.currentUser?.getIdToken();
+                if (!token) throw new Error("You must be logged in to run AI deduplication.");
+                duplicateGroups = await findSemanticDuplicatesWithAI(generatedQuestions, token);
             }
 
             if (duplicateGroups.length === 0) {

@@ -22,6 +22,7 @@ import {
 import { useAutoSave, QuizProgress } from '../start/hooks/useAutoSave';
 import { toast } from 'sonner';
 import { ModeToggle } from '@/components/mode-toggle';
+import { SanitizedContent } from '@/components/SanitizedContent';
 
 interface Question {
   id: string;
@@ -651,8 +652,10 @@ const StartUserQuizPageContent: React.FC = () => {
                     <span className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-600 bg-blue-50 dark:bg-blue-900/20 px-2 py-0.5 rounded">
                       Question {startIdx + idx + 1}
                     </span>
-                    <div className="text-lg font-bold leading-relaxed prose dark:prose-invert max-w-none pt-2"
-                      dangerouslySetInnerHTML={{ __html: q.questionText }} />
+                    <SanitizedContent
+                      className="text-lg font-bold leading-relaxed prose dark:prose-invert max-w-none pt-2"
+                      content={q.questionText}
+                    />
                   </div>
                   <Button
                     variant="ghost"
@@ -692,8 +695,10 @@ const StartUserQuizPageContent: React.FC = () => {
                              `}>
                             {String.fromCharCode(65 + i)}
                           </span>
-                          <div className={`text-sm sm:text-base prose dark:prose-invert max-w-none ${isSelected ? 'font-semibold text-blue-900 dark:text-blue-300' : 'text-foreground'}`}
-                            dangerouslySetInnerHTML={{ __html: opt }} />
+                          <SanitizedContent
+                            className={`text-sm sm:text-base prose dark:prose-invert max-w-none ${isSelected ? 'font-semibold text-blue-900 dark:text-blue-300' : 'text-foreground'}`}
+                            content={opt}
+                          />
                         </div>
                       </label>
                     );
