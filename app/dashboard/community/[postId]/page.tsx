@@ -77,7 +77,6 @@ export default function ThreadPage() {
         const q = query(
             collection(db, 'forum_replies'),
             where('postId', '==', postId),
-            orderBy('isVerified', 'desc'),
             orderBy('createdAt', 'asc')
         );
 
@@ -86,6 +85,15 @@ export default function ThreadPage() {
                 id: doc.id,
                 ...doc.data()
             } as ForumReply));
+
+            // Client-side sort: Verified first, then by date
+            repliesData.sort((a, b) => {
+                if (a.isVerified === b.isVerified) {
+                    return 0; // maintain createdAt order from query
+                }
+                return a.isVerified ? -1 : 1;
+            });
+
             setReplies(repliesData);
         });
 
