@@ -1,9 +1,6 @@
 'use client';
 
-import { useEffect, useState, useMemo } from 'react';
-import { db } from '@/app/firebase';
-import { doc, getDoc, collection, query, limit, getDocs, orderBy, where, getCountFromServer } from 'firebase/firestore';
-import { getAuth, onAuthStateChanged } from 'firebase/auth';
+import { useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { DashboardSkeleton } from '@/components/ui/skeleton-cards';
 import dynamic from 'next/dynamic';
@@ -13,247 +10,49 @@ import {
   ArrowUpRight, Sparkles, Layers
 } from 'lucide-react';
 
-// Lazy load Recharts (~150KB bundle savings)
+// Lazy load heavy components
 const LazyPerformanceChart = dynamic(
   () => import('@/components/dashboard/PerformanceChart'),
   { ssr: false, loading: () => <div className="h-[350px] w-full bg-slate-100 dark:bg-slate-800 rounded-xl animate-pulse" /> }
 );
-import { toast } from 'react-hot-toast';
+const LazyEnrollmentPopup = dynamic(
+  () => import('@/components/student/EnrollmentPromptPopup').then(m => ({ default: m.EnrollmentPromptPopup })),
+  { ssr: false }
+);
+const LazyFeaturePopup = dynamic(
+  () => import('@/components/student/FeatureAnnouncementPopup').then(m => ({ default: m.FeatureAnnouncementPopup })),
+  { ssr: false }
+);
+
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import Link from 'next/link';
-
 import { UnifiedHeader } from '@/components/unified-header';
-import { EnrollmentPromptPopup } from '@/components/student/EnrollmentPromptPopup';
-import { FeatureAnnouncementPopup } from '@/components/student/FeatureAnnouncementPopup';
+import { useStudentDashboard } from '@/hooks/useStudentDashboard';
 
 export default function StudentDashboard() {
-  // const [greeting, setGreeting] = useState(''); // Moved to Header
-  const [uid, setUid] = useState<string | null>(null);
-  const [studentData, setStudentData] = useState<any | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [recentQuizzes, setRecentQuizzes] = useState<any[]>([]);
-  const [unfinishedQuizzes, setUnfinishedQuizzes] = useState<any[]>([]);
-  const [questionStats, setQuestionStats] = useState({ total: 0, used: 0 });
-
-
-
-  useEffect(() => {
-    // Greeting logic moved to UnifiedHeader
-
-    const auth = getAuth();
-    const unsub = onAuthStateChanged(auth, (user) => {
-      if (user) setUid(user.uid);
-      else setLoading(false);
-    });
-    return () => unsub();
-  }, []);
-
-  useEffect(() => {
-    if (!uid) return;
-
-    const fetchData = async () => {
-      setLoading(true);
-      try {
-        // Parallelize all independent fetches
-        const [
-          userDoc,
-          recentSnap,
-          userRecentSnap,
-          unfinishedSnap,
-          unfinishedUserSnap,
-          totalSnap
-        ] = await Promise.all([
-          getDoc(doc(db, 'users', uid)),
-          getDocs(query(collection(db, 'users', uid, 'quizAttempts'), orderBy('submittedAt', 'desc'), limit(10))),
-          getDocs(query(collection(db, 'users', uid, 'user-quizattempts'), orderBy('submittedAt', 'desc'), limit(10))),
-          getDocs(query(collection(db, 'users', uid, 'quizAttempts'), where('completed', '==', false), limit(5))),
-          getDocs(query(collection(db, 'users', uid, 'user-quizattempts'), where('completed', '==', false), limit(5))),
-          getCountFromServer(collection(db, 'mock-questions')).catch(e => {
-            console.error("Failed to fetch question stats", e);
-            return null;
-          })
-        ]);
-
-        const data = userDoc.exists() ? userDoc.data() : null;
-        setStudentData(data);
-
-        // Process Recent Official & User
-        const officialAttempts = recentSnap.docs.map(d => ({ id: d.id, ...d.data(), quizType: 'admin' }));
-        const userAttempts = userRecentSnap.docs.map(d => ({ id: d.id, ...d.data(), quizType: 'user' }));
-
-        // Process Unfinished Official & User
-        const unfinishedOfficial = unfinishedSnap.docs.map(d => ({ id: d.id, ...d.data(), quizType: 'admin' }));
-        const unfinishedUser = unfinishedUserSnap.docs.map(d => ({ id: d.id, ...d.data(), quizType: 'user' }));
-
-        // ---- OPTIMIZATION: Batch Fetch Quiz Titles ----
-        // Collect all IDs that need titles (User Quizzes and Official Quizzes might miss titles in attempts)
-        const userQuizIdsToFetch = new Set<string>();
-        const officialQuizIdsToFetch = new Set<string>();
-
-        // Helper to collect IDs from attempts
-        const collectIds = (attempts: any[], type: 'user' | 'admin') => {
-          attempts.forEach(a => {
-            // For user quizzes, title acts as name. If missing, we need to fetch.
-            // For official, 'title' should be there.
-            if (type === 'user' && !a.title && !a.name) userQuizIdsToFetch.add(a.id);
-            if (type === 'admin' && !a.title) officialQuizIdsToFetch.add(a.id);
-          });
-        };
-
-        collectIds(userAttempts, 'user');
-        collectIds(unfinishedUser, 'user');
-        collectIds(unfinishedOfficial, 'admin');
-
-        // Batch Fetch Logic using Promise.all
-        // Note: Firestore 'in' query has limit of 10. Since we have small limits (10 recent, 5 unfinished), 
-        // we can fetch individual docs in parallel which is still better than serial await.
-        // OR simpler: just fetch documentreferences in parallel.
-
-        const fetchTitles = async (ids: Set<string>, collectionName: string, titleField: string) => {
-          if (ids.size === 0) return {};
-          const idArray = Array.from(ids);
-          const snaps = await Promise.all(idArray.map(id => getDoc(doc(db, collectionName, id))));
-          const titleMap: Record<string, string> = {};
-          snaps.forEach((snap, index) => {
-            if (snap.exists()) {
-              titleMap[idArray[index]] = snap.data()[titleField] || 'Untitled';
-            }
-          });
-          return titleMap;
-        };
-
-        const [userQuizTitles, officialQuizTitles] = await Promise.all([
-          fetchTitles(userQuizIdsToFetch, 'user-quizzes', 'name'),
-          fetchTitles(officialQuizIdsToFetch, 'quizzes', 'title')
-        ]);
-
-        // Enrich Data safely
-        const enrich = (attempts: any[]) => attempts.map(a => ({
-          ...a,
-          title: a.title || a.name || (a.quizType === 'user' ? userQuizTitles[a.id] : officialQuizTitles[a.id]) || (a.quizType === 'user' ? 'Custom Quiz' : 'Untitled Quiz')
-        }));
-
-        const finalOfficialAttempts = enrich(officialAttempts);
-        const finalUserAttempts = enrich(userAttempts);
-        const finalUnfinishedOfficial = enrich(unfinishedOfficial);
-        const finalUnfinishedUser = enrich(unfinishedUser);
-
-        // Helper for safe timestamp
-        const getTime = (t: any) => t?.toMillis ? t.toMillis() : (t instanceof Date ? t.getTime() : 0);
-
-        // Merge and Sort
-        const allAttempts = [...finalOfficialAttempts, ...finalUserAttempts]
-          .sort((a, b) => getTime(b.submittedAt) - getTime(a.submittedAt))
-          .slice(0, 10);
-
-        setRecentQuizzes(allAttempts);
-
-        // Filter valid unfinished (some might truly not exist if deleted)
-        // We assume if title fetch failed (and default used), it might be deleted, but keeping for now as 'Untitled' 
-        // allows user to see orphaned attempts or we could filter. 
-        // For now, filtering only if we strictly want to hide deleted quizzes. 
-        // The previous code filtered 'isValid'. Let's assume if title is 'Untitled Quiz'/'Custom Quiz' it might be valid enough or deleted.
-        // To be safe and match previous logic:
-
-        const validUnfinished = [...finalUnfinishedOfficial, ...finalUnfinishedUser].filter(q => {
-          // If we tried to fetch title and failed (got default), and it wasn't in attempt... 
-          // Ideally we should check if doc exists. 
-          // For optimization, let's assume 'Untitled' ones are okay or just keep them. 
-          // Previous logic: "if (!isValid) return null;"
-          // We can check if id was in toFetch set but not in Map.
-          if (q.quizType === 'admin' && officialQuizIdsToFetch.has(q.id) && !officialQuizTitles[q.id]) return false;
-          if (q.quizType === 'user' && userQuizIdsToFetch.has(q.id) && !userQuizTitles[q.id]) return false;
-          return true;
-        });
-
-        setUnfinishedQuizzes(validUnfinished);
-
-        // Process Question Bank Stats
-        const total = totalSnap ? totalSnap.data().count : 0;
-        const usedCount = data?.usedMockQuestionIds?.length || 0;
-        setQuestionStats({ total, used: usedCount });
-
-      } catch (err) {
-        console.error(err);
-        toast.error('Error loading dashboard');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchData();
-  }, [uid]);
-
-
-  const stats = {
-    ...studentData?.stats,
-    totalQuizzes: studentData?.stats?.totalQuizzes || 0,
-    totalQuestions: studentData?.stats?.totalQuestions || 0,
-    overallAccuracy: studentData?.stats?.overallAccuracy || 0
-  };
-
-  // Performance Trend Data
-  // Performance Trend Data
-  const performanceTrendData = useMemo(() => {
-    return [...recentQuizzes]
-      .reverse()
-      .map((q, i) => {
-        const rawScore = q.total > 0 ? (q.score / q.total) * 100 : 0;
-        const score = isNaN(rawScore) ? 0 : parseFloat(rawScore.toFixed(1));
-
-        return {
-          name: `Q${i + 1}`,
-          score: score,
-          title: q.title || 'Untitled',
-          type: q.quizType === 'user' ? 'Custom' : 'Official'
-        };
-      });
-  }, [recentQuizzes]);
-
-  // Subject Stats Data (Admin)
-  const subjectBreakdownAdmin = useMemo(() => {
-    const sStats = studentData?.stats?.subjectStats || {};
-    return Object.entries(sStats)
-      .filter(([subject]) => subject !== 'Uncategorized' && subject !== 'General')
-      .map(([subject, data]: [string, any]) => ({
-        subject,
-        accuracy: data.accuracy || 0,
-        attempted: data.attempted || 0,
-        correct: data.correct || 0,
-        wrong: (data.attempted || 0) - (data.correct || 0)
-      })).sort((a, b) => b.attempted - a.attempted);
-  }, [studentData]);
-
-  // Subject Stats Data (User/Custom)
-  const subjectBreakdownUser = useMemo(() => {
-    const sStats = studentData?.stats?.userSubjectStats || {};
-    return Object.entries(sStats)
-      .filter(([subject]) => subject !== 'Uncategorized' && subject !== 'General')
-      .map(([subject, data]: [string, any]) => ({
-        subject,
-        accuracy: data.accuracy || 0,
-        attempted: data.attempted || 0,
-        correct: data.correct || 0,
-        wrong: (data.attempted || 0) - (data.correct || 0)
-      })).sort((a, b) => b.attempted - a.attempted);
-  }, [studentData]);
-
-
-  const refreshStats = () => {
-    if (uid) window.location.reload();
-  };
+  const {
+    loading,
+    studentData,
+    recentQuizzes,
+    unfinishedQuizzes,
+    questionStats,
+    stats,
+    performanceTrendData,
+    subjectBreakdownAdmin,
+    subjectBreakdownUser,
+    refresh,
+  } = useStudentDashboard();
 
   if (loading) return <DashboardSkeleton />;
 
   return (
     <div className="min-h-screen bg-slate-50/[0.6] dark:bg-slate-950 font-sans text-slate-900 dark:text-slate-100">
-      {/* Enrollment Popup for Unenrolled Students */}
-      <EnrollmentPromptPopup />
-      {/* Feature Announcement Popup */}
-      <FeatureAnnouncementPopup />
+      {/* Lazy-loaded popups — don't block initial render */}
+      <LazyEnrollmentPopup />
+      <LazyFeaturePopup />
 
-      {/* 1. New Top Header - Full Width */}
+      {/* Header */}
       <UnifiedHeader
         greeting
         studentName={studentData?.fullName}
@@ -262,12 +61,12 @@ export default function StudentDashboard() {
 
       <div className="max-w-7xl mx-auto p-4 md:p-8 space-y-8">
 
-        {/* Modern Header Section (Actions Only now, logic moved) */}
-        <div className="flex justify-end items-center gap-3 mb-8 -mt-2"> {/* Moved up slightly to tuck under sticky header nicely or keep distinct */}
+        {/* Action Buttons */}
+        <div className="flex justify-end items-center gap-3 mb-8 -mt-2">
           <Button
             variant="ghost"
             size="sm"
-            onClick={refreshStats}
+            onClick={refresh}
             title="Refresh Stats"
             className="rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-transform active:scale-95 text-xs text-muted-foreground"
           >
@@ -322,13 +121,11 @@ export default function StudentDashboard() {
             </CardHeader>
             <CardContent>
               <div className="text-3xl font-bold text-slate-900 dark:text-white">{stats.totalQuizzes}</div>
-              <p className="text-xs text-slate-500 mt-1 font-medium">
-                Tests Taken
-              </p>
+              <p className="text-xs text-slate-500 mt-1 font-medium">Tests Taken</p>
             </CardContent>
           </Card>
 
-          {/* New Question Bank Stats Card */}
+          {/* Question Bank Stats Card */}
           <Card className="border border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-md transition-all duration-300 group">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium text-slate-500 dark:text-slate-400">Question Bank</CardTitle>
@@ -361,11 +158,10 @@ export default function StudentDashboard() {
             </CardHeader>
             <CardContent>
               <div className="text-3xl font-bold text-slate-900 dark:text-white">{stats.totalQuestions}</div>
-              <p className="text-xs text-slate-500 mt-1">
-                Across all subjects
-              </p>
+              <p className="text-xs text-slate-500 mt-1">Across all subjects</p>
             </CardContent>
           </Card>
+
           <Card className="border border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-md transition-all duration-300 group">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium text-slate-500 dark:text-slate-400">Overall Accuracy</CardTitle>
