@@ -132,7 +132,7 @@ export function CommunityFeed({ role, canCreate = true, initialShowDeleted = fal
             const constraints: QueryConstraint[] = [];
 
             if (!showDeleted) {
-                constraints.push(where('isDeleted', '!=', true));
+                constraints.push(where('isDeleted', '==', false));
             }
 
             if (subjectFilter !== 'all') {
