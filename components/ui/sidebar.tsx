@@ -147,6 +147,7 @@ export function Sidebar() {
         { icon: BookOpen, label: 'Knowledge Base', href: '/admin/knowledge-base' },
         { icon: Database, label: 'Manage KB', href: '/admin/knowledge-base/manage' },
         { icon: Flag, label: 'Reported Questions', href: '/admin/reports' },
+        { icon: Database, label: 'Firestore Indexes', href: '/admin/indexes' },
       ],
     },
     // AI Tools Section

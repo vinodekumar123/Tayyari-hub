@@ -22,6 +22,7 @@ import { RichTextEditor } from '@/components/RichTextEditor';
 import { checkSeriesEnrollment, awardPoints, POINTS, sendNotification } from '@/lib/community';
 import Image from 'next/image';
 import { SanitizedContent } from '@/components/SanitizedContent';
+import { FirestoreIndexAlert } from '@/components/FirestoreIndexAlert';
 
 export default function ThreadPage() {
     const { postId } = useParams();
@@ -32,6 +33,7 @@ export default function ThreadPage() {
     const [replyContent, setReplyContent] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<any>(null);
 
     // Edit Post State
     const [isEditingPost, setIsEditingPost] = useState(false);
@@ -87,6 +89,10 @@ export default function ThreadPage() {
                 ...doc.data()
             } as ForumReply));
             setReplies(repliesData);
+            setError(null);
+        }, (err) => {
+            console.error("Firestore Error:", err);
+            setError(err);
         });
 
         return () => unsubscribe();
@@ -518,6 +524,7 @@ export default function ThreadPage() {
 
                 {/* Answers Section */}
                 <div className="space-y-6">
+                    <FirestoreIndexAlert error={error} className="mb-4" />
                     <h3 className="text-xl font-bold flex items-center gap-2">
                         <MessageSquare className="w-5 h-5" />
                         {replies.length} Answers
