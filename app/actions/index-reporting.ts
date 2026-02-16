@@ -59,12 +59,9 @@ export async function reportMissingIndex(errorDetails: {
         }
 
         // Generate a unique ID based on the link (it contains the index definition)
-        // We can use a simple hash or just the link itself sanitized
-        // The link is long, so let's hash it or use a cleans version.
-        // Actually, the link contains `create_composite_index?...` 
-        // We can use the collection + fields signature if we parse it, 
-        // but to be safe and simple: Base64 or hash the link.
-        const id = Buffer.from(createLink).toString('base64').replace(/[/+=]/g, '_').substring(0, 100);
+        // Use SHA-256 to ensure uniqueness even if links share a long prefix.
+        const { createHash } = await import('crypto');
+        const id = createHash('sha256').update(createLink).digest('hex');
 
         const docRef = collectionRef.doc(id);
         const docSnap = await docRef.get();
