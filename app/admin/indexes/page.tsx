@@ -1,7 +1,7 @@
 'use client';
 
 import { UnifiedHeader } from '@/components/unified-header';
-import indexesData from '../../../../firestore.indexes.json';
+import indexesData from '../../../firestore.indexes.json';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Database, AlertTriangle } from 'lucide-react';
