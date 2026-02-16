@@ -11,6 +11,7 @@ import { NavigationLoader } from '@/components/ui/navigation-loader';
 import { LoadingOverlay } from '@/components/ui/loading-overlay';
 import { Toaster } from "@/components/ui/sonner";
 import { ThemeProvider } from "@/components/theme-provider";
+import { IndexMonitorProvider } from "@/components/providers/index-monitor-provider";
 
 // Client-only dynamic imports (ssr: false requires 'use client' boundary)
 import { ClientProviders } from '@/components/ClientProviders';
@@ -60,7 +61,9 @@ export default function RootLayout({
             <NavigationLoader />
             <LoadingOverlay />
           </React.Suspense>
-          {children}
+          <IndexMonitorProvider>
+            {children}
+          </IndexMonitorProvider>
           <Toaster />
           {process.env.NODE_ENV === 'production' && (
             <>

@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { db, storage } from '@/app/firebase';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { collection, query, orderBy, limit, getDocs, addDoc, serverTimestamp, startAfter, QueryConstraint, where } from 'firebase/firestore';
+import { safeGetDocs } from '@/lib/firestore-monitor';
 import { ForumPost, Subject } from '@/types';
 import { checkSeriesEnrollment, awardPoints, POINTS } from '@/lib/community';
 import { Button } from '@/components/ui/button';
@@ -71,7 +72,7 @@ export function CommunityFeed({ role, canCreate = true, initialShowDeleted = fal
         // Fetch subjects once on mount
         const fetchSubjects = async () => {
             try {
-                const subjectsSnap = await getDocs(collection(db, 'subjects'));
+                const subjectsSnap = await safeGetDocs(collection(db, 'subjects'), 'fetchSubjects');
                 setSubjects(subjectsSnap.docs.map(d => ({ id: d.id, ...d.data() } as Subject)));
             } catch (error) {
                 console.error("Failed to load subjects", error);
@@ -171,7 +172,7 @@ export function CommunityFeed({ role, canCreate = true, initialShowDeleted = fal
             }
 
             // OPTIMIZATION: Only fetch posts, subjects are already loaded
-            const postsSnap = await getDocs(query(collection(db, 'forum_posts'), ...constraints));
+            const postsSnap = await safeGetDocs(query(collection(db, 'forum_posts'), ...constraints), 'fetchPosts');
 
             let newPosts = postsSnap.docs.map(d => ({ id: d.id, ...d.data() } as ForumPost));
 

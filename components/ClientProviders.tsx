@@ -5,6 +5,7 @@ import { GlobalAuthListener } from '@/components/global-auth-listener';
 import { SplashScreen } from '@/components/ui/splash-screen';
 import { GoodNewsPopup } from '@/components/ui/good-news-popup';
 import { HelpChatWidget } from '@/components/HelpChatWidget';
+import { GlobalSessionManager } from '@/components/GlobalSessionManager';
 
 export function ClientProviders() {
     const [mounted, setMounted] = useState(false);
@@ -20,6 +21,7 @@ export function ClientProviders() {
                 <>
                     <SplashScreen />
                     <HelpChatWidget />
+                    <GlobalSessionManager />
                     <GoodNewsPopup />
                 </>
             )}

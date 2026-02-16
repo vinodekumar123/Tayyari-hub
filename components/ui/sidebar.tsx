@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
@@ -10,25 +10,14 @@ import {
 } from 'lucide-react';
 import logo from "../../app/assets/logo.png";
 import Image from "next/image";
-import { getAuth, onAuthStateChanged, signOut } from 'firebase/auth';
-import { getFirestore, doc, getDoc } from 'firebase/firestore';
+import { getAuth, signOut } from 'firebase/auth';
 import { app } from '../../app/firebase';
-import { ensureSessionActive, subscribeToSession, updateSessionHeartbeat, logoutUserSession, isLoginInProgress } from '@/lib/sessionUtils';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { ModeToggle } from '@/components/mode-toggle';
-import { NotificationBell } from '@/components/notifications/NotificationBell';
 import { useFcmToken } from '@/hooks/useFcmToken';
-import { useUIStore } from '@/stores/useUIStore'; // Added import
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from '@/components/ui/dialog';
-import { AlertTriangle } from 'lucide-react';
+import { useUIStore } from '@/stores/useUIStore';
+import { useUserStore } from '@/stores/useUserStore';
+import { logoutUserSession } from '@/lib/sessionUtils';
 
 type MenuItem = {
   icon: React.ElementType;
@@ -44,56 +33,87 @@ type Section = {
   items: MenuItem[];
 };
 
+// Static Student Menu - Defined outside to avoid re-creation
+const STUDENT_MENU: Section[] = [
+  {
+    section: 'main_nav',
+    title: 'Main Navigation',
+    items: [
+      { icon: Home, label: 'Dashboard', href: '/dashboard/student' },
+      { icon: Calendar, label: 'Quiz Schedule', href: '/dashboard/student/schedule' },
+      { icon: HelpCircle, label: 'How to Register', href: '/dashboard/student/how-to-register' },
+    ],
+  },
+  {
+    section: 'learning',
+    title: 'Learning / Study Tools',
+    items: [
+      { icon: BookOpen, label: 'Syllabus', href: '/dashboard/student/syllabus' },
+      { icon: BookOpen, label: 'Study Zone', href: '/dashboard/study' },
+      { icon: BookOpen, label: 'Flashcards', href: '/dashboard/student/flashcards' },
+    ],
+  },
+  {
+    section: 'practice',
+    title: 'Practice / Testing',
+    items: [
+      { icon: Trophy, label: 'Quizzes', href: '/dashboard/student/quiz-bank' },
+      { icon: Plus, label: 'Create Your Own Test', href: '/quiz/create-mock' },
+      { icon: Trophy, label: 'Your Created Tests', href: '/dashboard/student/user-created-quizzes' },
+    ],
+  },
+  {
+    section: 'community',
+    title: 'Community / Engagement',
+    items: [
+      { icon: Users, label: 'Community', href: '/dashboard/student/community' },
+      { icon: Trophy, label: 'Leaderboard', href: '/dashboard/leaderboard' },
+    ],
+  },
+  {
+    section: 'performance',
+    title: 'Performance / Reports',
+    items: [
+      { icon: ClipboardList, label: 'Results', href: '/dashboard/student/results' },
+      { icon: Flag, label: 'My Reports', href: '/dashboard/student/reports' },
+    ],
+  },
+  {
+    section: 'account',
+    title: 'Account',
+    items: [
+      { icon: Settings, label: 'Settings & Security', href: '/dashboard/student/settings' },
+    ],
+  },
+];
+
 export function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
 
-  // Global UI Store
-  const { sidebarOpen, setSidebarOpen, sidebarCollapsed, setSidebarCollapsed, sidebarTriggerHidden } = useUIStore();
+  // Global Stores
+  const { sidebarOpen, setSidebarOpen, sidebarCollapsed, setSidebarCollapsed, sidebarTriggerHidden, setLoading } = useUIStore();
+  const { user } = useUserStore();
 
-  // Map global state to local variable names for compatibility
+  // Local State
   const mobileOpen = sidebarOpen;
   const setMobileOpen = setSidebarOpen;
   const collapsed = sidebarCollapsed;
-  const setCollapsed = setSidebarCollapsed;
 
   const [expandedSections, setExpandedSections] = useState<string[]>(['main', 'content', 'users', 'ai', 'settings', 'student', 'main_nav', 'learning', 'practice', 'community', 'performance', 'account']);
-  // removed local state for collapsed and mobileOpen
   const [showSignOutDialog, setShowSignOutDialog] = useState(false);
-  const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
-  const [isSuperAdmin, setIsSuperAdmin] = useState<boolean>(false);
-  const [sessionExpiredOpen, setSessionExpiredOpen] = useState(false);
-  const { setLoading } = useUIStore();
 
-  useEffect(() => {
-    if (mobileOpen) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = '';
-    }
-    return () => {
-      document.body.style.overflow = '';
-    };
-  }, [mobileOpen]);
-
-  // Refs for cleanup
-  const unsubscribeSessionRef = useRef<() => void | null>(null);
-  const heartbeatIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  // FIX #4: Separate interval for faster revocation detection
-  const revocationCheckIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const loginTimeRef = useRef<number>(0);
-
-  // Initialize FCM Token
+  // Initialize FCM Token (safe to keep here)
   useFcmToken();
 
-  const [userRole, setUserRole] = useState<string>('student');
+  // Derived State from Store
+  const userRole = user?.role || 'student';
+  const isAdminOrTeacher = userRole === 'admin' || userRole === 'superadmin' || userRole === 'teacher' || user?.admin === true;
+  const isSuperAdmin = userRole === 'superadmin' || user?.superadmin === true;
+  const isTeacher = userRole === 'teacher';
 
-  useEffect(() => {
-    // Sync role state when admin/superadmin changes (simplified)
-    // Ideally we fetch this in the auth effect
-  }, [isAdmin, isSuperAdmin]);
-
-  const adminMenu: Section[] = [
+  // Memoized Admin Menu
+  const adminMenu = useMemo<Section[]>(() => [
     {
       section: 'main',
       title: 'Dashboard',
@@ -101,40 +121,36 @@ export function Sidebar() {
         {
           icon: Home,
           label: 'Dashboard',
-          href: userRole === 'teacher' ? '/dashboard/teacher' : '/dashboard/admin'
+          href: isTeacher ? '/dashboard/teacher' : '/dashboard/admin'
         },
         ...(isSuperAdmin ? [{ icon: BarChart3, label: 'Analytics & Stats', href: '/admin/statistics' }] : []),
-        ...(userRole === 'teacher' ? [
+        ...(isTeacher ? [
           { icon: ClipboardList, label: 'My Tasks', href: '/dashboard/teacher/tasks' },
           { icon: Flag, label: 'Reports', href: '/dashboard/teacher/reports' },
           { icon: BarChart3, label: 'My Performance', href: '/dashboard/teacher/stats' }
         ] : [
-          // Admins also get personal tasks/stats
           { icon: ClipboardList, label: 'My Assigned Tasks', href: '/dashboard/admin/my-tasks' },
           { icon: BarChart3, label: 'My Revenue', href: '/dashboard/admin/my-stats' }
         ])
       ],
     },
-    // Admin Task Management
-    ...(!userRole.includes('teacher') ? [{
+    ...(!isTeacher ? [{
       section: 'tasks',
       title: 'Task Management',
       items: [
         { icon: ClipboardList, label: 'Manage Tasks', href: '/admin/tasks' }
       ]
     }] : []),
-
     {
       section: 'content',
       title: 'Content Management',
       items: [
-        // Courses: Admin/SuperAdmin only
-        ...(!userRole.includes('teacher') ? [{ icon: BookOpen, label: 'Courses', href: '/admin/courses' }] : []),
-        ...(!userRole.includes('teacher') ? [{ icon: BookOpen, label: 'Bundle Management', href: '/admin/bundles' }] : []),
-        ...(userRole.includes('teacher') ? [{ icon: Users, label: 'Community', href: '/dashboard/teacher/community' }] : []),
+        ...(!isTeacher ? [{ icon: BookOpen, label: 'Courses', href: '/admin/courses' }] : []),
+        ...(!isTeacher ? [{ icon: BookOpen, label: 'Bundle Management', href: '/admin/bundles' }] : []),
+        ...(isTeacher ? [{ icon: Users, label: 'Community', href: '/dashboard/teacher/community' }] : []),
 
         { icon: BookOpen, label: 'Content Hub', href: '/admin/content' },
-        ...(!userRole.includes('teacher') ? [{ icon: Users, label: 'Community', href: '/dashboard/admin/community' }] : []),
+        ...(!isTeacher ? [{ icon: Users, label: 'Community', href: '/dashboard/admin/community' }] : []),
 
         { icon: Database, label: 'Question Bank', href: '/admin/questions/questionbank' },
         { icon: Plus, label: 'Add Question', href: '/admin/questions/create' },
@@ -150,7 +166,6 @@ export function Sidebar() {
         { icon: Database, label: 'Firestore Indexes', href: '/admin/indexes' },
       ],
     },
-    // AI Tools Section
     {
       section: 'ai',
       title: 'AI Intelligence Hub',
@@ -163,8 +178,7 @@ export function Sidebar() {
         { icon: Wand2, label: 'AI MCQ Generator', href: '/dashboard/admin/ai-generator' },
       ],
     },
-    // User Management: Admin/SuperAdmin only
-    ...(!userRole.includes('teacher') ? [{
+    ...(!isTeacher ? [{
       section: 'users',
       title: 'User Management',
       items: [
@@ -178,189 +192,24 @@ export function Sidebar() {
       title: 'Profile',
       items: [{ icon: Settings, label: 'Settings', href: '/admin/settings' }],
     },
-  ];
+  ], [isSuperAdmin, isTeacher, userRole]); // Dependencies
 
-  const studentMenu: Section[] = [
-    {
-      section: 'main_nav',
-      title: 'Main Navigation',
-      items: [
-        { icon: Home, label: 'Dashboard', href: '/dashboard/student' },
-        { icon: Calendar, label: 'Quiz Schedule', href: '/dashboard/student/schedule' },
-        { icon: HelpCircle, label: 'How to Register', href: '/dashboard/student/how-to-register' },
-      ],
-    },
-    {
-      section: 'learning',
-      title: 'Learning / Study Tools',
-      items: [
-        { icon: BookOpen, label: 'Syllabus', href: '/dashboard/student/syllabus' },
-        { icon: BookOpen, label: 'Study Zone', href: '/dashboard/study' },
-        { icon: BookOpen, label: 'Flashcards', href: '/dashboard/student/flashcards' },
-      ],
-    },
-    {
-      section: 'practice',
-      title: 'Practice / Testing',
-      items: [
-        { icon: Trophy, label: 'Quizzes', href: '/dashboard/student/quiz-bank' },
-        { icon: Plus, label: 'Create Your Own Test', href: '/quiz/create-mock' },
-        { icon: Trophy, label: 'Your Created Tests', href: '/dashboard/student/user-created-quizzes' },
-      ],
-    },
-    {
-      section: 'community',
-      title: 'Community / Engagement',
-      items: [
-        { icon: Users, label: 'Community', href: '/dashboard/student/community' },
-        { icon: Trophy, label: 'Leaderboard', href: '/dashboard/leaderboard' },
-      ],
-    },
-    {
-      section: 'performance',
-      title: 'Performance / Reports',
-      items: [
-        { icon: ClipboardList, label: 'Results', href: '/dashboard/student/results' },
-        { icon: Flag, label: 'My Reports', href: '/dashboard/student/reports' },
-      ],
-    },
-    {
-      section: 'account',
-      title: 'Account',
-      items: [
-        { icon: Settings, label: 'Settings & Security', href: '/dashboard/student/settings' },
-      ],
-    },
-  ];
-
+  // Effects
   useEffect(() => {
-    // Force expand 'content' section for admin so they see the new Report link
-    if (isAdmin) {
+    if (mobileOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => { document.body.style.overflow = ''; };
+  }, [mobileOpen]);
+
+  // Expand sections for admin
+  useEffect(() => {
+    if (isAdminOrTeacher) {
       setExpandedSections(prev => prev.includes('content') ? prev : [...prev, 'content']);
     }
-  }, [isAdmin]);
-
-  useEffect(() => {
-    const auth = getAuth(app);
-    const db = getFirestore(app);
-
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      if (user) {
-        loginTimeRef.current = Date.now(); // Mark login time to allow grace period
-        const userRef = doc(db, 'users', user.uid);
-        const snap = await getDoc(userRef);
-        if (snap.exists()) {
-          // Auto-ensure session is active (Initial Check)
-          ensureSessionActive(user).catch((err) => {
-            if (err.message && (err.message.includes("revoked") || err.message.includes("blocked"))) {
-              setSessionExpiredOpen(true);
-            }
-          });
-
-          // Real-time Session Status Listener
-          const unsub = subscribeToSession(user, (status) => {
-            if (status === 'revoked') {
-              setSessionExpiredOpen(true);
-            }
-          });
-          // @ts-ignore
-          unsubscribeSessionRef.current = unsub;
-
-          // Heartbeat: Update session active timestamp every 5 minutes
-          const hbInterval = setInterval(() => {
-            updateSessionHeartbeat(user);
-          }, 5 * 60 * 1000);
-          heartbeatIntervalRef.current = hbInterval;
-
-          // FIX #4: Faster revocation check every 30 seconds
-          // This ensures admin force-logout is detected quickly without overwhelming Firestore
-          const revocationInterval = setInterval(() => {
-            // Grace period: skip check within 30 seconds of login OR if login is in progress
-            if (Date.now() - loginTimeRef.current < 30000 || isLoginInProgress()) {
-              return;
-            }
-
-            ensureSessionActive(user).catch((err) => {
-              if (err.message && (err.message.includes("revoked") || err.message.includes("blocked"))) {
-                setSessionExpiredOpen(true);
-              }
-            });
-          }, 30 * 1000); // 30 seconds
-          revocationCheckIntervalRef.current = revocationInterval;
-
-          const data = snap.data();
-          const role = data.role || (data.superadmin ? 'superadmin' : (data.admin ? 'admin' : 'student'));
-          setUserRole(role);
-
-          const isAdminOrTeacher = role === 'admin' || role === 'superadmin' || role === 'teacher' || data.admin === true;
-
-          setIsAdmin(isAdminOrTeacher);
-          setIsSuperAdmin(role === 'superadmin' || data.superadmin === true);
-          const isAdminUser = data.admin === true || data.role === 'admin' || data.role === 'superadmin';
-          const isSuperAdminUser = data.superadmin === true || data.role === 'superadmin';
-          const isTeacherUser = data.role === 'teacher';
-
-          setIsAdmin(isAdminUser || isTeacherUser); // Teachers can access Admin Layout
-          setIsSuperAdmin(isSuperAdminUser);
-
-          // Store role for menu logic
-          // A better approach is to store the whole user object or specific role state
-          // For now, we rely on local variables inside the effect, but we need state for rendering.
-          // Let's add a state for role.
-        } else {
-          // User exists but has no document (New user/Onboarding pending)
-          setIsAdmin(false);
-          setIsSuperAdmin(false);
-          setUserRole('student');
-        }
-      } else {
-        // User logged out: Cleanup listeners immediately
-        if (unsubscribeSessionRef.current) {
-          // @ts-ignore
-          unsubscribeSessionRef.current();
-          unsubscribeSessionRef.current = null;
-        }
-        if (heartbeatIntervalRef.current) {
-          clearInterval(heartbeatIntervalRef.current);
-          heartbeatIntervalRef.current = null;
-        }
-        // FIX #4: Cleanup revocation check interval
-        if (revocationCheckIntervalRef.current) {
-          clearInterval(revocationCheckIntervalRef.current);
-          revocationCheckIntervalRef.current = null;
-        }
-
-        setIsAdmin(false);
-        setIsSuperAdmin(false);
-        setUserRole('student'); // Default to student if no user
-      }
-    });
-
-    return () => {
-      unsubscribe();
-      if (unsubscribeSessionRef.current) {
-        // @ts-ignore
-        unsubscribeSessionRef.current();
-      }
-      if (heartbeatIntervalRef.current) {
-        clearInterval(heartbeatIntervalRef.current);
-      }
-      // FIX #4: Cleanup revocation check interval
-      if (revocationCheckIntervalRef.current) {
-        clearInterval(revocationCheckIntervalRef.current);
-      }
-    };
-  }, []); // Empty dependency array means runs once. But adminMenu accesses state. 
-  // IMPORTANT: adminMenu is defined inside component body, so on every render it effectively captures current isSuperAdmin.
-  // The useEffect sets state, triggering re-render, which re-defines adminMenu with correct items.
-  // The only issue is `setExpandedSections` in useEffect references `adminMenu`. 
-  // Since `adminMenu` depends on `isSuperAdmin` which is false initially, it won't expand validly on first load.
-  // Let's fix that by moving setExpandedSections to a separate effect or just relying on isAdminUser check inside the effect. 
-  // Actually, the previous code used `adminMenu` inside useEffect. Since adminMenu is const in function body, it's newly created on every render.
-  // Inside useEffect (closure), `adminMenu` refers to the one created during the *first* render (where isSuperAdmin is false).
-  // So initial expansion might miss the new item, but that's fine.
-
-
+  }, [isAdminOrTeacher]);
 
   const toggleSection = (section: string) => {
     setExpandedSections((prev) =>
@@ -371,13 +220,8 @@ export function Sidebar() {
   const isActive = (href?: string) => {
     if (!href) return false;
     if (pathname === href) return true;
-
-    // Dashboard roots should only be active on exact match
     const isDashboardRoot = href === '/dashboard/student' || href === '/dashboard/admin' || href === '/dashboard/teacher';
     if (isDashboardRoot) return false;
-
-    // Sub-path matching (e.g. /quiz-bank active on /quiz-bank/detail)
-    // Ensures we don't match /dashboard/stud for /dashboard/student
     return pathname.startsWith(href) && (pathname[href.length] === '/' || pathname.length === href.length);
   };
 
@@ -390,19 +234,24 @@ export function Sidebar() {
     router.push('/');
   };
 
-  const handleSessionExpiredConfirm = async () => {
-    const auth = getAuth(app);
-    await signOut(auth);
-    window.location.href = '/auth/login';
-  };
+  // Decide which menu to show
+  // Note: Originally `isAdmin` was nullable. Now we derive from store.
+  // If user is loading, store `user` is null. 
+  // Should we show nothing? Or skeleton?
+  // Old code: `if (isAdmin === null) return null;`
+  // We can check if user is loaded.
+  // user object is null initially.
+  // We should wait until we know?
+  // But `useUserStore` has `isLoading`.
+  // If no user, we might be logged out or loading.
+  // Given Sidebar is usually protected, we assume user is present or loading.
 
-  if (isAdmin === null) return null;
+  if (!user) return null; // Or return skeleton? null matches old behavior (isAdmin === null)
 
-  const menu = isAdmin ? adminMenu : studentMenu;
+  const menu = isAdminOrTeacher ? adminMenu : STUDENT_MENU;
 
   return (
     <>
-      {/* Mobile Menu Button */}
       <div className="md:hidden fixed top-4 left-4 z-[100]">
         {!mobileOpen && !sidebarTriggerHidden && (
           <Button variant="ghost" size="icon" onClick={() => setMobileOpen(true)}>
@@ -411,14 +260,12 @@ export function Sidebar() {
         )}
       </div>
 
-      {/* Sidebar */}
       <div
         className={`fixed top-0 left-0 h-full z-[100] bg-background border-r border-border flex flex-col transition-transform duration-300
           ${collapsed ? 'w-16' : 'w-64'}
           ${mobileOpen ? 'translate-x-0' : '-translate-x-full'}
           md:translate-x-0 md:static md:flex shrink-0`}
       >
-        {/* Header */}
         <div className="p-4 border-b flex items-center justify-between">
           {!collapsed ? (
             <div className="flex items-center space-x-3">
@@ -435,7 +282,6 @@ export function Sidebar() {
           </div>
         </div>
 
-        {/* Navigation */}
         <nav className="flex-1 overflow-y-auto p-4 space-y-10">
           {menu.map((section) => (
             <div key={section.section}>
@@ -492,7 +338,6 @@ export function Sidebar() {
             </div>
           ))}
 
-          {/* Sign Out */}
           <div
             onClick={() => setShowSignOutDialog(true)}
             className="flex items-center justify-between px-3 py-2 rounded-sm text-sm cursor-pointer transition-all duration-200 text-muted-foreground hover:bg-red-100 hover:text-red-700 dark:hover:bg-red-900/30"
@@ -505,12 +350,10 @@ export function Sidebar() {
         </nav>
       </div>
 
-      {/* Backdrop */}
       {mobileOpen && (
         <div className="fixed inset-0 z-[90] bg-black/30 md:hidden" onClick={() => setMobileOpen(false)} />
       )}
 
-      {/* Sign Out Dialog */}
       {showSignOutDialog && (
         <div className="fixed inset-0 z-[200] bg-black/40 flex items-center justify-center">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-6">
@@ -527,31 +370,6 @@ export function Sidebar() {
           </div>
         </div>
       )}
-
-      {/* Session Expired Dialog - BLOCKING */}
-      <Dialog open={sessionExpiredOpen} onOpenChange={(open) => {
-        // FORCE OPEN: Do not match 'open' state if it's trying to close (false)
-        // Only allow closing via the specific confirm button logic if we wanted, 
-        // but here `onOpenChange` is triggered by clicking outside. We explicitly IGNORE false to keep it open.
-        if (open) setSessionExpiredOpen(true);
-      }}>
-        <DialogContent className="sm:max-w-md [&>button]:hidden"> {/* Hide defaults close X button via CSS if needed, or preventDefault */}
-          <DialogHeader>
-            <div className="mx-auto bg-red-100 p-3 rounded-full w-fit mb-2">
-              <AlertTriangle className="h-6 w-6 text-red-600" />
-            </div>
-            <DialogTitle className="text-center text-xl">Session Expired</DialogTitle>
-            <DialogDescription className="text-center pt-2">
-              Your session has been expired or revoked by an administrator.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="sm:justify-center mt-4">
-            <Button onClick={handleSessionExpiredConfirm} className="w-full sm:w-auto bg-red-600 hover:bg-red-700 text-white">
-              Okay, Log in
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </>
   );
 }
